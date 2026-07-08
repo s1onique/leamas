@@ -66,17 +66,21 @@ go vet ./...
 
 ### Results
 
-- [ ] All tests pass (pending)
-- [ ] Factorize passes (pending)
-- [ ] Binary builds successfully (pending)
-- [ ] Forbidden-pattern verifier passes (pending)
-- [ ] LLM-friendly checks pass (pending)
+- [x] All tests pass
+- [x] Factorize passes
+- [x] Binary builds successfully
+- [x] Forbidden-pattern verifier passes
+- [x] LLM-friendly checks pass
+- [x] make gate passes
+- [x] go test ./... passes
+- [x] go vet ./... passes
 
 ## Decisions Made
 
 1. **File type separation**: Explicitly separate Go production files from text policy files
 2. **Cross-platform paths**: Handle both forward slash and backslash for Windows compatibility
 3. **Minimal refactor**: Keep changes scoped to the bug fix, not a broader rewrite
+4. **AGENTS/.clinerules policy**: AGENTS.md and .clinerules/ are policy documents, not production code. They may mention forbidden terms. Agent context enforcement is handled by the agent-context verifier and LLM-friendliness gate.
 
 ## Agent Doctrine Impact
 
