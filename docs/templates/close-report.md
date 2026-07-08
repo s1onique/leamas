@@ -1,55 +1,57 @@
 # Close Report Template
 
-Use this template when closing an ACT or Epic. Capture the outcome in concrete terms.
-
-## Summary
-
-Brief description of what was accomplished. One or two sentences maximum.
-
-## Files Changed
-
-| File | Action | Description |
-|------|--------|-------------|
-| ... | Added/Modified/Deleted | ... |
-
-## Behavior Changed
-
-What changed in the system's behavior, capability, or output?
-- Before: ...
-- After: ...
-
-## Verification
-
-Commands run and their results:
-```bash
-# commands
-```
-
-## Reviewer Feedback Addressed
-
-How did you incorporate or dismiss reviewer feedback?
-- Feedback item 1: addressed by ...
-- Feedback item 2: out of scope, reason ...
-
-## Risks / Limitations
-
-Known limitations or risks introduced:
-- ...
-- ...
-
-## Follow-up ACTs
-
-| Priority | Description | Linked Issue |
-|----------|-------------|--------------|
-| High | ... | ... |
-| Medium | ... | ... |
-| Low | ... | ... |
-
-## Commit / Reference
-
-- Commit hash: ...
-- Related documentation: ...
+> Record what was done, how it was verified, and what comes next.
 
 ---
 
-*Template version: 1.0*
+## ACT Reference
+
+<!-- Link to the ACT that this report closes -->
+
+## Summary
+
+<!-- 1-2 sentence description of what was accomplished -->
+
+## Files Changed
+
+<!-- List of files created, modified, or deleted -->
+
+| File | Change |
+|------|--------|
+|      |        |
+
+## Behavior Changed
+
+<!-- What changed from user perspective -->
+
+## Verification
+
+### Commands Run
+
+```bash
+# Commands and their outputs
+```
+
+### Results
+
+- [ ] Tests pass
+- [ ] Quality gate passes
+- [ ] Manual verification (if applicable)
+
+## Decisions Made
+
+<!-- Any new ADRs or doctrine changes -->
+
+## Open Questions
+
+<!-- Unresolved issues, follow-up needed -->
+
+## Follow-up ACTs
+
+| ACT | Description | Priority |
+|-----|-------------|----------|
+|     |             |          |
+
+## Notes
+
+<!-- Additional context, caveats, or learnings -->

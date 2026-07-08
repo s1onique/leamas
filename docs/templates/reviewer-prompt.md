@@ -1,68 +1,59 @@
 # Reviewer Prompt Template
 
-> Give a reusable prompt for reviewing an ACT or epic patch.
+> Guidance for reviewers on what to focus on.
 
 ---
 
-## Review Target
+## For Code Review
 
-<!-- What is being reviewed? (e.g., "ACT: Add user authentication", "Epic: Platform migration") -->
+### Focus Areas
 
-## Context
+1. **Correctness**
+   - Does the code do what the ACT specifies?
+   - Are edge cases handled?
 
-<!-- Brief context for the reviewer: Why does this work exist? What problem does it solve? -->
+2. **Safety**
+   - Are there security concerns?
+   - Could this break existing functionality?
 
-## Scope to Inspect
+3. **Style**
+   - Does it follow existing patterns?
+   - Is it readable?
 
-<!-- What aspects should the reviewer focus on? -->
+### Red Flags
 
-- [ ] <!-- Specific area 1 -->
-- [ ] <!-- Specific area 2 -->
-- [ ] <!-- Specific area 3 -->
+- ❌ Missing error handling
+- ❌ Hardcoded values that should be configurable
+- ❌ Duplicate code that could be refactored
+- ❌ Missing tests for critical paths
 
-## Required Checks
+### Green Flags
 
-<!-- Mandatory checks the reviewer must perform before approving -->
+- ✅ Clear function/variable names
+- ✅ Appropriate comments for complex logic
+- ✅ Tests for new functionality
+- ✅ Updates to documentation
 
-1. **Correctness** — Does the change do what it claims? Is the logic sound?
-2. **Completeness** — Are acceptance criteria met? Is the close report accurate?
-3. **Safety** — Are there regressions, data risks, or security concerns?
-4. **Clarity** — Is the change understandable to future maintainers?
-5. **Verification** — Did the author run and document verification?
+---
 
-## Rejection Triggers
+## For Documentation Review
 
-<!-- Conditions that must result in rejection (request changes before merge) -->
+### Focus Areas
 
-- [ ] Incorrect behavior or broken logic
-- [ ] Missing or incomplete acceptance criteria
-- [ ] Verification commands fail or are absent
-- [ ] Security, privacy, or safety violations
-- [ ] Reviewer concerns unaddressed
+1. **Clarity**
+   - Can a new developer understand this?
+   - Are there ambiguous terms?
 
-## Output Format
+2. **Completeness**
+   - Are all steps covered?
+   - Are edge cases documented?
 
-<!-- Expected format for the review output -->
+3. **Accuracy**
+   - Does this match the implementation?
+   - Are links valid?
 
-```
-## Review Summary
-<!-- One-paragraph overview -->
+### Questions to Ask
 
-## Findings
-
-### Must Fix
-<!-- Issues that block approval -->
-
-### Should Fix
-<!-- Issues that should be addressed, but don't block -->
-
-### Considerations
-<!-- Optional improvements or suggestions -->
-
-## Verdict
-APPROVE / REQUEST CHANGES / REJECT
-
-## Sign-off
-Reviewer: <!-- Name -->
-Date: <!-- YYYY-MM-DD -->
-```
+- Would I know how to use this if I came back in 6 months?
+- Is the "why" explained, not just the "what"?
+- Are there examples where helpful?
