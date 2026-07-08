@@ -33,6 +33,7 @@ echo "Checking required documentation files..."
 check_file "README.md"
 check_file "docs/README.md"
 check_file "docs/doctrine/README.md"
+check_file "docs/doctrine/agent-assisted-development.md"
 check_file "docs/adr/0001-local-first-single-binary.md"
 check_file "docs/adr/0002-go-only-for-v0.md"
 check_file "docs/adr/0003-web-first-local-cockpit.md"
@@ -47,6 +48,7 @@ check_file "docs/epics/.gitkeep"
 check_file "docs/acts/.gitkeep"
 check_file "scripts/make_targeted_digest.sh"
 check_file "scripts/verify_doctrine_inventory.sh"
+check_file "scripts/verify_doctrine_agent_contracts.sh"
 check_file "scripts/verify_factory_docs.sh"
 check_file "scripts/verify_forbidden_patterns.sh"
 check_file "scripts/verify_single_language.sh"
@@ -67,6 +69,18 @@ done
 # 2. Run factory verifiers
 echo ""
 echo "Running factory verifiers..."
+
+# Doctrine agent contracts
+if [[ -x scripts/verify_doctrine_agent_contracts.sh ]]; then
+    echo ""
+    echo "--- Doctrine Agent Contracts ---"
+    if scripts/verify_doctrine_agent_contracts.sh; then
+        echo -e "${GREEN}✓${NC} Doctrine agent contracts passed"
+    else
+        echo -e "${RED}✗${NC} Doctrine agent contracts failed"
+        failed=1
+    fi
+fi
 
 # Doctrine inventory
 if [[ -x scripts/verify_doctrine_inventory.sh ]]; then

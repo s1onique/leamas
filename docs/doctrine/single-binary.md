@@ -47,6 +47,29 @@ Binary is "single binary" compliant when:
 - Running without any config files produces useful output
 - No external dependencies required at runtime
 
+## Agent Contract
+
+### Always
+
+- Build with `CGO_ENABLED=0` to ensure static linking.
+- Test the binary runs without any setup.
+- Include sensible defaults so the tool works on first run.
+
+### Never
+
+- Require users to run an init command before first use.
+- Create hidden config directories or files automatically.
+- Add runtime dependencies on shared libraries.
+
+### Ask / Escalate
+
+- If a feature genuinely requires external configuration files.
+- If initialization logic appears necessary.
+
+### Verification Hooks
+
+- `scripts/verify_static_binary_intent.sh`
+
 ## References
 
 - ADR-0001: Local-first single binary

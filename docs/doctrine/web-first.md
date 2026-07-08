@@ -45,6 +45,29 @@ Developers interact with Leamas through a web browser running on localhost. This
 - No Java compilation or bundling required
 - Works with `curl` as fallback for headless environments
 
+## Agent Contract
+
+### Always
+
+- Ensure the web interface is embedded in the single binary.
+- Test the web UI locally before claiming it works.
+- Use localhost (127.0.0.1) for the web server.
+
+### Never
+
+- Add external CDN dependencies for web assets.
+- Require internet connectivity for the web UI.
+- Add Electron, Tauri, or other desktop wrapper frameworks.
+
+### Ask / Escalate
+
+- If a feature requires a build step for the web UI.
+- If headless operation is unclear for a feature.
+
+### Verification Hooks
+
+- `scripts/verify_static_binary_intent.sh` (checks embedded assets)
+
 ## References
 
 - ADR-0003: Web-first local cockpit

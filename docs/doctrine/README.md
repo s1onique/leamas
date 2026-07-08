@@ -2,7 +2,27 @@
 
 Core principles guiding Leamas development.
 
+## Agent Use
+
+Doctrine files are written for both humans and LLM/agent-assisted development.
+
+Agents must treat doctrine as active project instructions:
+
+- use doctrine to constrain implementation plans
+- use Agent Contract sections during patch generation and review
+- preserve Always/Never boundaries unless an ACT explicitly changes doctrine
+- report conflicts instead of silently resolving them
+- use Verification Hooks to decide what to run before closure
+
+A doctrine is not complete until it is understandable by a future maintainer and operationally useful to an agent.
+
 ## The Leamas Way
+
+### Agent-Assisted Development
+
+LLMs and agents may help with Leamas, but their claims must be grounded in evidence and bounded by ACT scope.
+
+→ See [agent-assisted-development.md](agent-assisted-development.md)
 
 ### Local First
 

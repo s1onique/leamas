@@ -42,6 +42,10 @@
 
 <!-- Any new ADRs or doctrine changes -->
 
+## Agent Doctrine Impact
+
+<!-- Did this ACT add/change any agent-facing doctrine or verifier behavior? -->
+
 ## Open Questions
 
 <!-- Unresolved issues, follow-up needed -->

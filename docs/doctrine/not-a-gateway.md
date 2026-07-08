@@ -71,6 +71,33 @@ Only if a compelling use case emerges that:
 - Maintains local-first principles
 - Doesn't introduce enterprise complexity
 
+## Agent Contract
+
+### Always
+
+- Treat local proxy work as evidence capture only.
+- Preserve pass-through semantics unless a future ACT explicitly changes this.
+- Keep provider-management features out of scope.
+
+### Never
+
+- Add provider routing.
+- Add virtual keys.
+- Add budget tracking.
+- Add fallback/failover policy.
+- Claim Leamas replaces LiteLLM.
+
+### Ask / Escalate
+
+- If an ACT requires non-local proxying.
+- If provider abstraction appears necessary.
+- If capture would require modifying request semantics.
+
+### Verification Hooks
+
+- `scripts/verify_forbidden_patterns.sh`
+- `scripts/verify_doctrine_agent_contracts.sh` (checks for gateway behavior)
+
 ## References
 
 - ADR-0005: Not an LLM gateway

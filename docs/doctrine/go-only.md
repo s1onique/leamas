@@ -47,6 +47,29 @@ A file is "Go only" compliant when:
 
 Production code directories should only contain `.go` files.
 
+## Agent Contract
+
+### Always
+
+- Write production code in Go only.
+- Use shell scripts for build/CI automation.
+- Use standard library when possible before external dependencies.
+
+### Never
+
+- Add Python, JavaScript, or other runtime language support.
+- Add plugin systems in non-Go languages.
+- Add FFI to other languages in production code.
+
+### Ask / Escalate
+
+- If a feature genuinely requires a different language runtime.
+- If an external tool cannot be invoked via `exec`.
+
+### Verification Hooks
+
+- `scripts/verify_single_language.sh`
+
 ## References
 
 - ADR-0002: Go only for v0

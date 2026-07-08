@@ -1,6 +1,6 @@
 # Leamas Makefile
 
-.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static
+.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 
 # Colors
 RED=\033[0;31m
@@ -16,11 +16,12 @@ help:
 	@echo "  make digest         - Generate targeted digest of staged changes"
 	@echo "  make factorize      - Run factory verifiers (doctrine, factory docs, patterns)"
 	@echo "  make verify-*       - Run individual verifiers:"
-	@echo "    make verify-doctrine      Doctrine inventory check"
-	@echo "    make verify-factory       Factory docs check"
-	@echo "    make verify-forbidden     Forbidden patterns check"
-	@echo "    make verify-single-lang   Single language check"
-	@echo "    make verify-static        Static binary intent check"
+	@echo "    make verify-agent-doctrine  Agent doctrine contract check"
+	@echo "    make verify-doctrine         Doctrine inventory check"
+	@echo "    make verify-factory          Factory docs check"
+	@echo "    make verify-forbidden        Forbidden patterns check"
+	@echo "    make verify-single-lang      Single language check"
+	@echo "    make verify-static           Static binary intent check"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make help           - Show this help"
 
@@ -47,11 +48,16 @@ digest:
 		exit 1; \
 	fi
 
-factorize: verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static
+factorize: verify-agent-doctrine verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static
 	@echo ""
 	@echo -e "$(GREEN)=========================================="
 	@echo -e "Factory factorize PASSED"
 	@echo -e "==========================================$(NC)"
+
+verify-agent-doctrine:
+	@chmod +x scripts/verify_doctrine_agent_contracts.sh
+	@echo "Running doctrine agent contract verifier..."
+	@./scripts/verify_doctrine_agent_contracts.sh
 
 verify-doctrine:
 	@chmod +x scripts/verify_doctrine_inventory.sh

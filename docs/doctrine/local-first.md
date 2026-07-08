@@ -27,6 +27,29 @@ A feature is "local first" when:
 2. It requires no external services to function
 3. Its behavior is identical locally vs. remotely (when both are available)
 
+## Agent Contract
+
+### Always
+
+- Design and test features locally before assuming remote/cloud behavior is equivalent.
+- Verify features work without network connectivity.
+- Flag any feature that requires external services to function.
+
+### Never
+
+- Introduce features that require cloud infrastructure for basic operation.
+- Add network dependency assumptions without explicit documentation.
+- Assume cloud deployment is equivalent to local behavior without verification.
+
+### Ask / Escalate
+
+- If a feature cannot be reasonably tested without external services.
+- If local operation would require significant architectural changes.
+
+### Verification Hooks
+
+- `scripts/verify_forbidden_patterns.sh` (checks for cloud-specific dependencies)
+
 ## References
 
 - ADR-0001: Local-first single binary

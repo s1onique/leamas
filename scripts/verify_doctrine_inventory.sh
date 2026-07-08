@@ -19,6 +19,7 @@ cd "$repo_root"
 # Required doctrine documents
 REQUIRED_DOCTRINE_FILES=(
     "docs/doctrine/README.md"
+    "docs/doctrine/agent-assisted-development.md"
     "docs/doctrine/local-first.md"
     "docs/doctrine/web-first.md"
     "docs/doctrine/go-only.md"

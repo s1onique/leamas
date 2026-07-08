@@ -54,6 +54,30 @@ Enterprise features may be considered when:
 3. A maintainer volunteers to own it
 4. It doesn't complicate the core use case
 
+## Agent Contract
+
+### Always
+
+- Reject features that add enterprise complexity by default.
+- Keep Leamas focused on single-user, local operation.
+- Document any exception that requires enterprise features.
+
+### Never
+
+- Add OAuth, OIDC, LDAP, or SAML support.
+- Add RBAC, ABAC, or permission matrices.
+- Add database dependencies (SQL or NoSQL).
+- Add Kubernetes, Helm, or Terraform manifests for Leamas itself.
+
+### Ask / Escalate
+
+- If a requested feature appears to require enterprise infrastructure.
+- If multi-user or multi-tenant behavior is implied.
+
+### Verification Hooks
+
+- `scripts/verify_forbidden_patterns.sh`
+
 ## References
 
 - ADR-0004: No OIDC until shared rig
