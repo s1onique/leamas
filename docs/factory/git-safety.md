@@ -1,96 +1,99 @@
-# Git Safety: Force-Push Prevention
+# Git Safety
 
-**ACT**: ACT-LEAMAS-FACTORY-PREVENT-FORCE-PUSH-GO-VERIFY01
+**ACT**: ACT-LEAMAS-FACTORY-REMOTE-BRANCH-PROTECTION01
 
 ## Overview
 
-Leamas Factory enforces local Git safety rails that prevent accidental force-pushes and protected-branch deletions from Leamas working copies.
+Remote branch protection prevents destructive Git operations and ensures Factory gates pass before changes reach protected branches.
 
-## Policy
+## Branch Protection Policy
 
-Normal Leamas Factory development must not use:
+### Default Branch: `main`
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| **Force Push** | DISABLED | Prevents force-push rewrites per Factory doctrine |
+| **Branch Deletion** | DISABLED | Preserves history integrity |
+| **Required Status Checks** | `Factory` | Requires CI to pass |
+| **Required Reviews** | None | Single-maintainer project for v0 |
+
+## Required Status Checks
+
+The `Factory` CI workflow must pass before merging to `main`:
+
+```yaml
+# .github/workflows/factory.yml
+name: Factory
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+```
+
+### Status Checks Run:
+
+1. `make factorize` - Factory verifiers
+2. `make gate` - Full quality gate
+3. `./bin/leamas factory verify llm-friendly` - LLM-friendliness
+4. `./bin/leamas factory verify agent-context` - Agent context
+5. `./bin/leamas factory verify forbidden-patterns` - Forbidden patterns
+6. `go test ./...` - Unit tests
+7. `go vet ./...` - Go vet
+
+## Configuration
+
+### GitHub Settings
+
+To configure branch protection in GitHub:
+
+1. Go to repository **Settings** → **Branches**
+2. Add rule for `main`
+3. Enable:
+   - ✅ **Protect matching branches**
+   - ✅ **Require a pull request before merging**
+   - ✅ **Require status checks to pass before merging**
+   - ✅ **Require branches to be up to date before merging**
+   - ✅ **Do not allow bypassing the above settings**
+   - ❌ **Allow force pushes** (disabled)
+   - ❌ **Allow deletions** (disabled)
+
+### CLI Configuration (gh)
 
 ```bash
-git push --force
-git push --force-with-lease
-git push +branch
-non-fast-forward pushes to protected branches
-deletion of protected branches
+# View current protection
+gh api repos/{owner}/{repo}/branches/main/protection
+
+# Update protection
+gh api --method PUT repos/{owner}/{repo}/branches/main/protection \
+  -f required_status_checks='{"strict":true,"contexts":["Factory"]}' \
+  -f enforce_admins=true \
+  -f allow_force_pushes=false \
+  -f allow_deletions=false
 ```
 
-### Protected Branch Refs
+## Local Pre-Push Prevention
 
-```text
-refs/heads/main
-refs/heads/master
-refs/heads/release/*
-```
-
-## Implementation
-
-### Pre-Push Hook
-
-The `githooks/pre-push` hook prevents:
-
-- Non-fast-forward pushes to protected branches
-- Deletion of protected branches
-- Force-push operations to protected branches
-
-The hook uses `git merge-base --is-ancestor` to detect non-fast-forward pushes.
-
-### Hook Installation
-
-Install the Git hooks:
+A local pre-push hook (`githooks/pre-push`) prevents force-pushes before they reach remote:
 
 ```bash
-make install-git-hooks
+#!/bin/bash
+# githooks/pre-push - Prevents force-push to protected branches
 ```
 
-Or manually:
+This provides defense-in-depth alongside remote protection.
 
-```bash
-chmod +x scripts/install_git_hooks.sh
-./scripts/install_git_hooks.sh
-```
+## Doctrine Alignment
 
-This sets `core.hooksPath` to `githooks` in the local repository config.
+This policy aligns with:
+- **Factory Meta-Loop**: Self-verification requires unrewritable history
+- **No Force-Push Doctrine**: Forward-corrective commits only
+- **Verification Witness**: Evidence requires immutable audit trail
 
-## Verification
+## References
 
-Verify Git hooks are properly installed and configured:
-
-```bash
-make verify-git-hooks
-```
-
-Or directly:
-
-```bash
-go run ./cmd/leamas factory verify git-hooks
-```
-
-## Important Limitation
-
-Local Git hooks are safety rails, not absolute enforcement.
-
-They can be bypassed by:
-
-- Changing local Git config (`git config core.hooksPath ""`)
-- Using another clone without the hook
-- Pushing from another machine
-- Using remote APIs or web interfaces
-- Deliberately bypassing local workflows
-
-## Future Remote Enforcement
-
-Authoritative enforcement requires remote branch protection and required status checks once CI exists:
-
-- Enable branch protection rules on GitHub/GitLab
-- Require PR reviews and status checks
-- Disable force-push on protected branches in repository settings
-- Add CI checks that reject force-push workflows
-
-## See Also
-
-- [Tooling Boundaries](./tooling-boundaries.md)
-- [Go-Only Doctrine](../doctrine/go-only.md)
+- [Go-verified Force-Push Prevention](../close-reports/ACT-LEAMAS-FACTORY-PREVENT-FORCE-PUSH-GO-VERIFY01.md)
+- [CI Status Checks](../close-reports/ACT-LEAMAS-FACTORY-CI-STATUS-CHECKS01.md)
+- [Factory Meta-Loop Doctrine](../doctrine/factory-meta-loop.md)
