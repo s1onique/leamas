@@ -51,15 +51,17 @@ None. This is documentation improvement.
 
 - Remote protection must be configured manually in GitHub UI or via `gh` CLI
 
-## Follow-up ACTs
-
-None immediate.
-
 ## Skipped/Deferred Checks
 
-- Remote protection actual configuration (requires GitHub admin access)
+None. R1 operationalized the documented policy.
 
 ## Notes
 
-- Policy is documented; actual GitHub settings must be applied by repository admin
+- Policy is documented and now enforced remotely via GitHub branch protection
+- R1: Remote branch protection configured via `gh api`
 - Combined with local pre-push hook for defense-in-depth
+- Proof: `docs/factory/branch-protection-proof.md`
+
+## R1 Status
+
+- `ACT-LEAMAS-FACTORY-REMOTE-BRANCH-PROTECTION01-R1` completed remote proof
