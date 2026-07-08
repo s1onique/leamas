@@ -2,7 +2,11 @@
 
 ## Summary
 
-Added local release build, install verification, and checksum packaging for the Leamas static binary. The release workflow produces deterministic artifacts under `dist/` without requiring hosted automation.
+Added local release build, binary and checksum verification, and checksum packaging for the Leamas static binary. The release workflow produces deterministic artifacts under `dist/` without requiring hosted automation.
+
+## R1 Correction
+
+R1 corrected documentation wording: the ACT verifies release artifacts, binary execution, and checksums; it does not perform `make install` verification.
 
 ## Files Changed
 

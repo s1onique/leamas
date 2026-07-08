@@ -149,7 +149,7 @@ The `release.txt` file contains build information:
 ```
 version=0.1.0
 commit=083fb1cf7da1
-build_date=2026-08-07T19:51:00Z
+build_date=YYYY-MM-DDTHH:MM:SSZ
 goos=darwin
 goarch=arm64
 ```
