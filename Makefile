@@ -4,11 +4,21 @@
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
 .PHONY: verify-git-hooks install-git-hooks build digest install
+.PHONY: release release-build release-checksum release-verify release-clean
 
 # Install variables (GNU conventions)
 PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 INSTALL ?= install
+
+# Release variables
+VERSION ?= dev
+COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
+DIST_DIR ?= dist
+GOOS ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
+ARTIFACT_DIR = $(DIST_DIR)/leamas_$(VERSION)_$(GOOS)_$(GOARCH)
 
 # Digest target: generate targeted digest for review
 # Uses smart default: dirty digest when working tree has changes, previous commit digest when clean
@@ -136,3 +146,57 @@ install: build
 	@$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
 	@$(INSTALL) -m 0755 bin/leamas "$(DESTDIR)$(BINDIR)/leamas"
 	@echo "Done. Installed: $(DESTDIR)$(BINDIR)/leamas"
+
+# Release targets
+
+release-build:
+	@echo "Building release for version $(VERSION)..."
+	@mkdir -p "$(ARTIFACT_DIR)"
+	@CGO_ENABLED=0 go build -trimpath \
+		-ldflags "-s -w" \
+		-o "$(ARTIFACT_DIR)/leamas" ./cmd/leamas
+	@echo "version=$(VERSION)" > "$(ARTIFACT_DIR)/release.txt"
+	@echo "commit=$(COMMIT)" >> "$(ARTIFACT_DIR)/release.txt"
+	@echo "build_date=$(BUILD_DATE)" >> "$(ARTIFACT_DIR)/release.txt"
+	@echo "goos=$(GOOS)" >> "$(ARTIFACT_DIR)/release.txt"
+	@echo "goarch=$(GOARCH)" >> "$(ARTIFACT_DIR)/release.txt"
+	@echo "Done. Artifact: $(ARTIFACT_DIR)/leamas"
+
+release-checksum:
+	@echo "Generating checksums for $(ARTIFACT_DIR)..."
+	@if command -v sha256sum >/dev/null 2>&1; then \
+		(cd "$(ARTIFACT_DIR)" && sha256sum leamas > SHA256SUMS); \
+	elif command -v shasum >/dev/null 2>&1; then \
+		(cd "$(ARTIFACT_DIR)" && shasum -a 256 leamas > SHA256SUMS); \
+	else \
+		echo "ERROR: Neither sha256sum nor shasum found"; \
+		exit 1; \
+	fi
+	@echo "Done. Checksum: $(ARTIFACT_DIR)/SHA256SUMS"
+
+release-verify:
+	@echo "Verifying release artifacts..."
+	@if [ ! -x "$(ARTIFACT_DIR)/leamas" ]; then \
+		echo "ERROR: $(ARTIFACT_DIR)/leamas is not executable"; \
+		exit 1; \
+	fi
+	@$(ARTIFACT_DIR)/leamas version
+	@if [ -f "$(ARTIFACT_DIR)/SHA256SUMS" ]; then \
+		if command -v sha256sum >/dev/null 2>&1; then \
+			(cd "$(ARTIFACT_DIR)" && sha256sum -c SHA256SUMS); \
+		elif command -v shasum >/dev/null 2>&1; then \
+			(cd "$(ARTIFACT_DIR)" && shasum -a 256 -c SHA256SUMS); \
+		else \
+			echo "WARNING: Cannot verify checksums (no sha256sum or shasum)"; \
+		fi; \
+	else \
+		echo "WARNING: SHA256SUMS not found, skipping checksum verification"; \
+	fi
+	@echo "Verification complete."
+
+release-clean:
+	@echo "Cleaning release artifacts..."
+	@rm -rf "$(DIST_DIR)"
+	@echo "Done."
+
+release: release-build release-checksum release-verify

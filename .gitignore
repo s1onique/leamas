@@ -5,3 +5,6 @@ build/
 bin/
 *.test
 coverage.out
+
+# Release artifacts
+dist/
