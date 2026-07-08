@@ -13,6 +13,7 @@ Added GNU conventions-compliant `make install` target that builds a static binar
 | File | Change |
 |------|--------|
 | `Makefile` | Added install variables, `.PHONY: install`, `install` target, and help entry |
+| `docs/close-reports/ACT-LEAMAS-FACTORY-INSTALL-TARGET01.md` | NEW - Close report |
 
 ## Behavior Changed
 
