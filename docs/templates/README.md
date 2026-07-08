@@ -8,6 +8,7 @@ Document templates for Leamas workflow.
 |----------|---------|
 | [epic.md](epic.md) | High-level feature or capability description |
 | [act.md](act.md) | Specific implementation task derived from an epic |
+| [adr.md](adr.md) | Architecture decision record |
 | [close-report.md](close-report.md) | Summary report when closing an act or epic |
 | [reviewer-prompt.md](reviewer-prompt.md) | Prompt guidance for code reviewers |
 
@@ -27,6 +28,14 @@ For specific, bounded implementation tasks.
 
 ```bash
 cp docs/templates/act.md docs/acts/YOUR-ACT-NAME.md
+```
+
+### ADR (Architecture Decision Record)
+
+For documenting significant technical decisions.
+
+```bash
+cp docs/templates/adr.md docs/adr/XXXX-YOUR-DECISION.md
 ```
 
 ### Close Report

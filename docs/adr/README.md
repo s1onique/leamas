@@ -20,7 +20,7 @@ ADRs follow a standard format:
 
 ## Adding New ADRs
 
-1. Copy `docs/templates/adr.md` (TBD - to be created)
+1. Copy [docs/templates/adr.md](../templates/adr.md)
 2. Number sequentially
 3. Include all sections, even if brief
 4. Set status to "Proposed" initially

@@ -15,6 +15,7 @@ When an ACT or Epic is closed, a close report should be created to:
 | Close Report | ACT/Epic | Date |
 |--------------|----------|------|
 | [seed-documentation.md](seed-documentation.md) | Seed empty Leamas repo | ... |
+| [seed-hygiene-review-patch.md](seed-hygiene-review-patch.md) | Fix Leamas seed hygiene findings | 2026-06-06 |
 
 ## Format
 

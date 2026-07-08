@@ -256,16 +256,7 @@ print_file_entry() {
 
   echo
   echo "## Workflow anchors"
-  for file in "${FILES[@]}"; do
-    [[ -f "$file" ]] || continue
-    case "$file" in
-      frontend/src/App.tsx|frontend/src/__tests__/app.test.tsx|frontend/src/index.css)
-        echo
-        echo "### ANCHORS IN: $file"
-        grep -nE 'WORKFLOW_LANES|Diagnose now|Diagnose Now|Work next checks|Work Next Checks|Improve the system|Improve the System|ExecutionHistoryPanel|ReviewEnrichmentPanel|ProviderExecutionPanel|LLMActivityPanel|LLMPolicyPanel|Proposal' "$file" || true
-        ;;
-    esac
-  done
+  echo "No workflow anchors configured."
 } >"$OUT"
 
 echo "$OUT"
