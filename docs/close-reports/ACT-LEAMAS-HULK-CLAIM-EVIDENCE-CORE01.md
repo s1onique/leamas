@@ -2,7 +2,7 @@
 
 > **ACT Reference:** ACT-LEAMAS-HULK-CLAIM-EVIDENCE-CORE01
 > **Status:** Closed
-> **Date:** 2026-09-07
+> **Date:** 2026-07-08
 
 ## Summary
 
@@ -14,7 +14,11 @@ The core provides typed identifiers, narrow status/kind types, core model types,
 | File | Change |
 |------|--------|
 | `internal/hulk/claimevidence/claimevidence.go` | Created - core domain types and validation |
-| `internal/hulk/claimevidence/claimevidence_test.go` | Created - comprehensive validation tests |
+| `internal/hulk/claimevidence/claimevidence_test.go` | Created - general validation tests |
+| `internal/hulk/claimevidence/claim_test.go` | Created - claim validation tests |
+| `internal/hulk/claimevidence/evidence_test.go` | Created - evidence validation tests |
+| `internal/hulk/claimevidence/source_test.go` | Created - source validation tests |
+| `internal/hulk/claimevidence/helpers_test.go` | Created - helper validity function tests |
 | `docs/factory/claim-evidence-core.md` | Created - core documentation |
 | `docs/close-reports/ACT-LEAMAS-HULK-CLAIM-EVIDENCE-CORE01.md` | Created - this close report |
 
