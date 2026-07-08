@@ -1,6 +1,6 @@
 # Leamas Makefile
 
-.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine
+.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine verify-tooling-boundaries
 
 # Colors
 RED=\033[0;31m
@@ -22,6 +22,7 @@ help:
 	@echo "    make verify-forbidden        Forbidden patterns check"
 	@echo "    make verify-single-lang      Single language check"
 	@echo "    make verify-static           Static binary intent check"
+	@echo "    make verify-tooling-boundaries Tooling language boundaries check"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make help           - Show this help"
 
@@ -48,7 +49,7 @@ digest:
 		exit 1; \
 	fi
 
-factorize: verify-agent-doctrine verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static
+factorize: verify-agent-doctrine verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries
 	@echo ""
 	@echo -e "$(GREEN)=========================================="
 	@echo -e "Factory factorize PASSED"
@@ -83,6 +84,11 @@ verify-static:
 	@chmod +x scripts/verify_static_binary_intent.sh
 	@echo "Running static binary intent verifier..."
 	@./scripts/verify_static_binary_intent.sh
+
+verify-tooling-boundaries:
+	@chmod +x scripts/verify_tooling_boundaries.sh
+	@echo "Running tooling boundary verifier..."
+	@./scripts/verify_tooling_boundaries.sh
 
 # Build target with static linking
 build:

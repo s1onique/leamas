@@ -32,6 +32,7 @@ REQUIRED_FACTORY_DOCS=(
     "docs/templates/epic.md"
     "docs/acts/.gitkeep"
     "docs/epics/.gitkeep"
+    "docs/factory/tooling-boundaries.md"
 )
 
 echo "=========================================="

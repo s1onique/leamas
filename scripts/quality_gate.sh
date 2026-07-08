@@ -53,6 +53,8 @@ check_file "scripts/verify_factory_docs.sh"
 check_file "scripts/verify_forbidden_patterns.sh"
 check_file "scripts/verify_single_language.sh"
 check_file "scripts/verify_static_binary_intent.sh"
+check_file "scripts/verify_tooling_boundaries.sh"
+check_file "docs/factory/tooling-boundaries.md"
 
 echo ""
 echo "Checking scripts executability..."
@@ -138,6 +140,18 @@ if [[ -x scripts/verify_static_binary_intent.sh ]]; then
         echo -e "${GREEN}✓${NC} Static binary intent passed"
     else
         echo -e "${RED}✗${NC} Static binary intent failed"
+        failed=1
+    fi
+fi
+
+# Tooling boundaries
+if [[ -x scripts/verify_tooling_boundaries.sh ]]; then
+    echo ""
+    echo "--- Tooling Boundaries ---"
+    if scripts/verify_tooling_boundaries.sh; then
+        echo -e "${GREEN}✓${NC} Tooling boundaries passed"
+    else
+        echo -e "${RED}✗${NC} Tooling boundaries failed"
         failed=1
     fi
 fi

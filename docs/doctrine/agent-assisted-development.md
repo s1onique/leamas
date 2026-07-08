@@ -6,6 +6,14 @@ LLMs and agents are useful Factory participants, but they are not trusted author
 
 Agents may propose, edit, and review, but every claim must be grounded in evidence.
 
+## Tooling Language Rules for Agents
+
+Agents must not create Python files.
+
+Agents must not create long Bash scripts.
+
+If an automation task is too large for a tiny Bash wrapper, agents must implement it in Go or ask for an ACT/ADR update.
+
 ## Agent Contract
 
 ### Always
@@ -17,6 +25,9 @@ Agents may propose, edit, and review, but every claim must be grounded in eviden
 - Report verification honestly, including skipped or deferred checks.
 - Prefer small corrective R1/R2 patches when review finds drift.
 - Link decisions to ADRs or propose ADR updates when behavior changes.
+- Prefer Go for substantial automation.
+- Keep Bash wrappers small and boring.
+- Treat Python as forbidden unless a future ADR changes doctrine.
 
 ### Never
 
@@ -26,6 +37,9 @@ Agents may propose, edit, and review, but every claim must be grounded in eviden
 - Weaken a verifier or quality gate to make a patch pass.
 - Convert Leamas into a generic LLM gateway, provider router, or control plane.
 - Hide uncertainty or silently broaden the ACT.
+- Create `*.py` files.
+- Create new Bash scripts over 50 meaningful LOC.
+- Hide implementation logic in shell helpers.
 
 ### Ask / Escalate
 
