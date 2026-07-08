@@ -28,6 +28,7 @@ If an automation task is too large for a tiny Bash wrapper, agents must implemen
 - Prefer Go for substantial automation.
 - Keep Bash wrappers small and boring.
 - Treat Python as forbidden unless a future ADR changes doctrine.
+- Implement all verifiers in Go. Bash verifier scripts are forbidden.
 
 ### Never
 

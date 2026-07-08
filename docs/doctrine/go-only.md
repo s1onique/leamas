@@ -95,12 +95,14 @@ Use `scripts/verify_tooling_boundaries.sh` to enforce Python ban and Bash LOC li
 - Enforce the no-Python rule everywhere.
 - Use shell scripts only for build/CI automation.
 - Use standard library when possible before external dependencies.
+- Implement all verifiers in Go. Bash verifier scripts are forbidden.
 
 ### Never
 
 - Add Python files anywhere in the repository.
 - Add new executable Bash scripts over 50 meaningful LOC.
-- Implement labs or substantial Factory logic in Bash.
+- Implement verifiers or substantial Factory logic in Bash.
+- Create Bash scripts that verify code, documentation, or policy compliance.
 - Add plugin systems in non-Go languages.
 - Add FFI to other languages in production code.
 

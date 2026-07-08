@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
+	"github.com/s1onique/leamas/internal/factory/githooks"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
 )
 
@@ -38,6 +39,8 @@ func main() {
 				runLLMFriendlyCheck()
 			case "agent-context":
 				runAgentContextCheck()
+			case "git-hooks":
+				runGitHooksCheck()
 			default:
 				fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", os.Args[3])
 				printFactoryVerifyUsage()
@@ -77,6 +80,7 @@ func printFactoryUsage() {
 	fmt.Println("Available verifiers:")
 	fmt.Println("  llm-friendly    Check repository LLM-friendliness")
 	fmt.Println("  agent-context   Check agent context files")
+	fmt.Println("  git-hooks       Check Git hook installation")
 }
 
 func printFactoryVerifyUsage() {
@@ -85,6 +89,7 @@ func printFactoryVerifyUsage() {
 	fmt.Println("Available checks:")
 	fmt.Println("  llm-friendly    Check repository LLM-friendliness")
 	fmt.Println("  agent-context   Check agent context files")
+	fmt.Println("  git-hooks       Check Git hook installation")
 }
 
 func runLLMFriendlyCheck() {
@@ -121,6 +126,25 @@ func runAgentContextCheck() {
 	}
 
 	fmt.Println("Agent context verification FAILED")
+	for _, f := range findings {
+		fmt.Printf("%s: %s: %s\n", f.Path, f.Kind, f.Message)
+	}
+	os.Exit(1)
+}
+
+func runGitHooksCheck() {
+	findings, err := githooks.CheckRepo(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Git hooks verification ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(findings) == 0 {
+		fmt.Println("Git hooks verification PASSED")
+		os.Exit(0)
+	}
+
+	fmt.Println("Git hooks verification FAILED")
 	for _, f := range findings {
 		fmt.Printf("%s: %s: %s\n", f.Path, f.Kind, f.Message)
 	}

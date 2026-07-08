@@ -41,6 +41,33 @@ Migration criteria:
 3. `verify_tooling_boundaries.sh` allowlist updated
 4. Quality gate updated to use Go verifiers
 
+## Allowed Bash Glue
+
+The following Git hooks and installers are permitted as tiny Bash glue (≤50 LOC):
+
+| Script | Purpose | LOC |
+|--------|---------|-----|
+| `githooks/pre-push` | Pre-push hook to prevent force-pushes | ~24 |
+| `scripts/install_git_hooks.sh` | Hook installer wrapper | ~6 |
+
+These are allowed because Git hooks must be executable programs and `core.hooksPath` points to a directory of executables.
+
+## Verifiers Must Be Go
+
+All verifiers must be implemented in Go. Bash verifier scripts are forbidden.
+
+This includes:
+- LLM-friendliness checks
+- Agent context checks
+- Git hooks verification
+- Doctrine checks
+- All Factory verification logic
+
+Bash may only be used for:
+- Tiny wrappers/installers
+- Git hooks (executable programs in hooks directory)
+- Shell glue ≤50 LOC
+
 ## No New Long Bash Scripts
 
 No new Bash scripts over 50 meaningful LOC may be added.

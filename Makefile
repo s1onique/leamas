@@ -1,6 +1,9 @@
 # Leamas Makefile
 
-.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine verify-tooling-boundaries verify-llm-friendly verify-agent-context
+.PHONY: help gate test clean digest factorize verify-doctrine verify-factory
+.PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
+.PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
+.PHONY: verify-git-hooks install-git-hooks
 
 # Colors
 RED=\033[0;31m
@@ -25,6 +28,8 @@ help:
 	@echo "    make verify-static             Static binary intent check"
 	@echo "    make verify-tooling-boundaries Tooling language boundaries check"
 	@echo "    make verify-llm-friendly      LLM-friendliness check"
+	@echo "    make verify-git-hooks        Git hooks check"
+	@echo "  make install-git-hooks - Install Git hooks"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make help           - Show this help"
 
@@ -51,7 +56,7 @@ digest:
 		exit 1; \
 	fi
 
-factorize: verify-agent-doctrine verify-agent-context verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries verify-llm-friendly
+factorize: verify-agent-doctrine verify-agent-context verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries verify-llm-friendly verify-git-hooks
 	@echo ""
 	@echo -e "$(GREEN)=========================================="
 	@echo -e "Factory factorize PASSED"
@@ -101,6 +106,14 @@ verify-agent-context:
 	@chmod +x scripts/verify_agent_context.sh
 	@echo "Running agent context verifier..."
 	@./scripts/verify_agent_context.sh
+
+verify-git-hooks:
+	@echo "Running Git hooks verifier..."
+	@go run ./cmd/leamas factory verify git-hooks
+
+install-git-hooks:
+	@chmod +x scripts/install_git_hooks.sh
+	@./scripts/install_git_hooks.sh
 
 # Build target with static linking
 build:

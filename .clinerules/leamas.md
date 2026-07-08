@@ -16,8 +16,9 @@ Leamas uses Factory discipline. Doctrine lives under `docs/doctrine/`.
 
 - No Python anywhere.
 - Go for product code, labs, verifiers, digest tools, and substantial automation.
-- Bash only for tiny glue.
+- Bash only for tiny glue and Git hooks.
 - New executable Bash scripts must be ≤50 meaningful LOC.
+- All verifiers must be in Go. Bash verifier scripts are forbidden.
 
 ## LLM-Friendliness
 

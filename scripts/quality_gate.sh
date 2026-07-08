@@ -63,6 +63,10 @@ check_file "AGENTS.md"
 check_file ".clinerules/leamas.md"
 check_file "scripts/verify_agent_context.sh"
 check_file "internal/factory/agentcontext/check.go"
+check_file "githooks/pre-push"
+check_file "scripts/install_git_hooks.sh"
+check_file "internal/factory/githooks/check.go"
+check_file "docs/factory/git-safety.md"
 
 echo ""
 echo "Checking scripts executability..."
@@ -184,6 +188,18 @@ if [[ -f "go.mod" ]] && [[ -x scripts/verify_agent_context.sh ]]; then
         echo -e "${GREEN}✓${NC} Agent context files passed"
     else
         echo -e "${RED}✗${NC} Agent context files failed"
+        failed=1
+    fi
+fi
+
+# Git hooks (if Go module exists)
+if [[ -f "go.mod" ]]; then
+    echo ""
+    echo "--- Git Hooks ---"
+    if go run ./cmd/leamas factory verify git-hooks; then
+        echo -e "${GREEN}✓${NC} Git hooks passed"
+    else
+        echo -e "${RED}✗${NC} Git hooks failed"
         failed=1
     fi
 fi
