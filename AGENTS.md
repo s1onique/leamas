@@ -51,7 +51,7 @@ CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 All verifiers must be implemented in Go. Bash verifier scripts are forbidden.
 
 - Use `leamas factory verify` for all verification.
-- Do not create Bash scripts to verify code, docs, or policy.
+- Bash `scripts/verify_*.sh` files are compatibility wrappers only (≤50 LOC).
 - Git hooks may be Bash (they are executable programs).
 
 ## Close Reports

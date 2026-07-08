@@ -57,5 +57,6 @@ If an automation task is too large for a tiny Bash wrapper, agents must implemen
 - `scripts/verify_factory_docs.sh`
 - `scripts/verify_llm_friendliness.sh`
 - `make verify-llm-friendly`
+- `leamas factory digest` for targeted change review
 - close reports
 - future claim-grounding verifier

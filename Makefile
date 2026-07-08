@@ -3,7 +3,13 @@
 .PHONY: help gate test clean digest factorize verify-doctrine verify-factory
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
-.PHONY: verify-git-hooks install-git-hooks
+.PHONY: verify-git-hooks install-git-hooks build digest
+
+# Digest target: generate targeted digest for review
+digest:
+	@mkdir -p build
+	@go run ./cmd/leamas factory digest --dirty --output build/leamas-digest.txt
+	@cat build/leamas-digest.txt
 
 # Colors
 RED=\033[0;31m
@@ -14,29 +20,35 @@ NC=\033[0m
 help:
 	@echo "Leamas - Make targets"
 	@echo ""
-	@echo "  make gate           - Run quality gate (documentation + tests + Go checks)"
-	@echo "  make test           - Run Go tests (if module exists)"
-	@echo "  make digest         - Generate targeted digest of staged changes"
-	@echo "  make factorize      - Run factory verifiers (doctrine, factory docs, patterns)"
-	@echo "  make verify-*       - Run individual verifiers:"
-	@echo "    make verify-agent-doctrine     Agent doctrine contract check"
-	@echo "    make verify-agent-context      Agent context files check"
-	@echo "    make verify-doctrine           Doctrine inventory check"
-	@echo "    make verify-factory            Factory docs check"
-	@echo "    make verify-forbidden          Forbidden patterns check"
-	@echo "    make verify-single-lang        Single language check"
-	@echo "    make verify-static             Static binary intent check"
-	@echo "    make verify-tooling-boundaries Tooling language boundaries check"
-	@echo "    make verify-llm-friendly      LLM-friendliness check"
-	@echo "    make verify-git-hooks        Git hooks check"
+	@echo "  make gate           - Run quality gate (verifiers + Go toolchain)"
+	@echo "  make factorize     - Run factory verifiers only (no toolchain)"
+	@echo "  make test          - Run Go tests (if module exists)"
+	@echo "  make build         - Build static binary to bin/leamas"
+	@echo "  make clean         - Clean build artifacts"
+	@echo ""
+	@echo "  make verify-*      - Run individual verifiers:"
+	@echo "    make verify-agent-doctrine     Doctrine Agent Contract check"
+	@echo "    make verify-agent-context     Agent context files check"
+	@echo "    make verify-doctrine          Doctrine inventory check"
+	@echo "    make verify-factory          Factory docs check"
+	@echo "    make verify-forbidden        Forbidden patterns check"
+	@echo "    make verify-single-lang      Single language check"
+	@echo "    make verify-static          Static binary intent check"
+	@echo "    make verify-tooling-boundaries Tooling boundaries check"
+	@echo "    make verify-llm-friendly   LLM-friendliness check"
+	@echo "    make verify-git-hooks      Git hooks check"
+	@echo ""
 	@echo "  make install-git-hooks - Install Git hooks"
-	@echo "  make clean          - Clean build artifacts"
-	@echo "  make help           - Show this help"
 
-gate: scripts/quality_gate.sh
+gate:
 	@echo "Running quality gate..."
 	@chmod +x scripts/quality_gate.sh
-	./scripts/quality_gate.sh
+	@./scripts/quality_gate.sh
+
+factorize:
+	@echo "Running factory factorize..."
+	@chmod +x scripts/verify_*.sh
+	@go run ./cmd/leamas factory factorize
 
 test:
 	@if [ -f go.mod ]; then \
@@ -46,21 +58,18 @@ test:
 		echo "Go module not initialized yet; skipping go test."; \
 	fi
 
-digest:
-	@if [ -f scripts/make_targeted_digest.sh ]; then \
-		chmod +x scripts/make_targeted_digest.sh; \
-		./scripts/make_targeted_digest.sh --staged --output /tmp/digest.md; \
-		cat /tmp/digest.md; \
-	else \
-		echo "make_targeted_digest.sh not found"; \
-		exit 1; \
-	fi
+build:
+	@echo "Building Leamas (static binary)..."
+	@mkdir -p bin
+	@CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
+	@echo "Done. Binary: bin/leamas"
 
-factorize: verify-agent-doctrine verify-agent-context verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries verify-llm-friendly verify-git-hooks
-	@echo ""
-	@echo -e "$(GREEN)=========================================="
-	@echo -e "Factory factorize PASSED"
-	@echo -e "==========================================$(NC)"
+clean:
+	@echo "Cleaning..."
+	@rm -rf bin/
+	@rm -f leamas
+	@find . -name '*.test' -delete 2>/dev/null || true
+	@echo "Done."
 
 verify-agent-doctrine:
 	@chmod +x scripts/verify_doctrine_agent_contracts.sh
@@ -114,16 +123,3 @@ verify-git-hooks:
 install-git-hooks:
 	@chmod +x scripts/install_git_hooks.sh
 	@./scripts/install_git_hooks.sh
-
-# Build target with static linking
-build:
-	@echo "Building Leamas (static binary)..."
-	@CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
-	@echo "Done. Binary: bin/leamas"
-
-clean:
-	@echo "Cleaning..."
-	@rm -rf bin/
-	@rm -f leamas
-	@find . -name '*.test' -delete 2>/dev/null || true
-	@echo "Done."

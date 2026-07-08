@@ -1,99 +1,103 @@
-# Tooling Boundaries: Grandfathered Bash
+# Tooling Boundaries
 
-**ACT**: ACT-LEAMAS-FACTORY-TOOLING-BOUNDARIES01
+**ACT**: ACT-LEAMAS-FACTORY-GO-VERIFIERS01
 
 ## Overview
 
-The Leamas Factory now forbids new executable Bash scripts over 50 meaningful LOC.
-
-Existing long Bash Factory scripts are temporarily grandfathered because they were created before the tooling-boundary verifier existed.
+All Factory verification logic is now implemented in Go. Bash verifier scripts are forbidden.
 
 ## Policy
 
 - **Python**: Immediate and absolute ban everywhere in the repository.
 - **Bash >50 LOC**: Forbidden for new scripts immediately.
-- **Existing long Bash**: Temporarily grandfathered until migrated to Go.
+- **All verifiers**: Must be implemented in Go under `leamas factory verify ...`.
 
-## Grandfathered Scripts
+## Verifiers Are Go
 
-The following Factory scripts are currently over 50 meaningful LOC and are temporarily allowed:
+All verifiers are Go commands under `leamas factory verify ...`.
 
-| Script | Meaningful LOC | Reason for Grandfathering | Migration Target |
-|--------|---------------|---------------------------|------------------|
-| `scripts/verify_tooling_boundaries.sh` | ~114 | This ACT's bootstrapping exception | Go verifier |
-| `scripts/quality_gate.sh` | ~218 | Quality gate runner with multiple verifiers | Go subcommand |
-| `scripts/make_targeted_digest.sh` | ~211 | Digest generation for staged changes | Go subcommand |
-| `scripts/verify_doctrine_agent_contracts.sh` | ~105 | Agent contract verification | Go verifier |
-| `scripts/verify_single_language.sh` | ~70 | Single language enforcement | Go verifier |
-| `scripts/verify_forbidden_patterns.sh` | ~67 | Forbidden pattern detection | Go verifier |
-| `scripts/verify_static_binary_intent.sh` | ~60 | Static binary intent check | Go verifier |
-| `scripts/verify_factory_docs.sh` | ~58 | Factory docs structure verification | Go verifier |
+```bash
+leamas factory verify doctrine
+leamas factory verify doctrine-agent-contracts
+leamas factory verify docs
+leamas factory verify forbidden-patterns
+leamas factory verify language
+leamas factory verify static-binary
+leamas factory verify tooling-boundaries
+leamas factory verify llm-friendly
+leamas factory verify agent-context
+leamas factory verify git-hooks
+```
 
-## Migration Requirements
+## Bash Wrappers (Tiny Glue Only)
 
-All grandfathered scripts must be migrated to Go under:
+Bash `scripts/verify_*.sh` files are compatibility wrappers only. Each is ≤50 meaningful LOC and delegates to `leamas factory verify ...`.
 
-**`ACT-LEAMAS-FACTORY-GO-VERIFIERS01`**
+```bash
+scripts/verify_doctrine_inventory.sh
+scripts/verify_doctrine_agent_contracts.sh
+scripts/verify_factory_docs.sh
+scripts/verify_forbidden_patterns.sh
+scripts/verify_single_language.sh
+scripts/verify_static_binary_intent.sh
+scripts/verify_tooling_boundaries.sh
+```
 
-Migration criteria:
-1. Functionality moved into Go subcommands under `cmd/`
-2. Original Bash scripts removed or reduced to trivial wrappers
-3. `verify_tooling_boundaries.sh` allowlist updated
-4. Quality gate updated to use Go verifiers
+These wrappers:
+- Do not contain verification logic
+- Delegate to `go run ./cmd/leamas factory verify ...` or `./bin/leamas factory verify ...`
+- Pass the tooling-boundaries check
 
 ## Allowed Bash Glue
 
-The following Git hooks and installers are permitted as tiny Bash glue (≤50 LOC):
+The following Git hooks and installers are permitted as tiny Bash glue:
 
 | Script | Purpose | LOC |
 |--------|---------|-----|
 | `githooks/pre-push` | Pre-push hook to prevent force-pushes | ~24 |
 | `scripts/install_git_hooks.sh` | Hook installer wrapper | ~6 |
 
-These are allowed because Git hooks must be executable programs and `core.hooksPath` points to a directory of executables.
+## Quality Gate
 
-## Verifiers Must Be Go
-
-All verifiers must be implemented in Go. Bash verifier scripts are forbidden.
-
-This includes:
-- LLM-friendliness checks
-- Agent context checks
-- Git hooks verification
-- Doctrine checks
-- All Factory verification logic
-
-Bash may only be used for:
-- Tiny wrappers/installers
-- Git hooks (executable programs in hooks directory)
-- Shell glue ≤50 LOC
-
-## No New Long Bash Scripts
-
-No new Bash scripts over 50 meaningful LOC may be added.
-
-If an automation task is too large for a tiny Bash wrapper:
-1. Implement the substantial logic in Go
-2. Keep the Bash wrapper minimal (dispatch, environment setup)
-3. If in doubt, ask for an ACT/ADR update
-
-## Verification
-
-Run `scripts/verify_tooling_boundaries.sh` to check compliance:
+The quality gate is now implemented in Go:
 
 ```bash
-chmod +x scripts/verify_tooling_boundaries.sh
-./scripts/verify_tooling_boundaries.sh
+leamas factory gate
 ```
 
 Or via Make:
 
 ```bash
-make verify-tooling-boundaries
+make gate
 ```
+
+## Factory Factorize
+
+Factory verifiers run without toolchain checks:
+
+```bash
+leamas factory factorize
+```
+
+Or via Make:
+
+```bash
+make factorize
+```
+
+## Factory Digest
+
+Targeted digest generation is now implemented in Go:
+
+```bash
+leamas factory digest --dirty --output build/digest.txt
+leamas factory digest --staged --output build/staged-digest.txt
+```
+
+The Bash wrapper `scripts/make_targeted_digest.sh` is a tiny glue script that delegates to `leamas factory digest`.
 
 ## References
 
-- [ACT-LEAMAS-FACTORY-TOOLING-BOUNDARIES01](../close-reports/ACT-LEAMAS-FACTORY-TOOLING-BOUNDARIES01.md)
-- [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html)
+- [ACT-LEAMAS-FACTORY-GO-VERIFIERS01](../close-reports/ACT-LEAMAS-FACTORY-GO-VERIFIERS01.md)
 - [Go-only Doctrine](../doctrine/go-only.md)
+- [Agent-Assisted Development](../doctrine/agent-assisted-development.md)

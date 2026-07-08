@@ -86,6 +86,7 @@ The tools that build Leamas must also verify Leamas. The Factory is part of the 
 - `scripts/verify_forbidden_patterns.sh`
 - `scripts/verify_llm_friendliness.sh` - LLM-friendliness gate
 - `make verify-llm-friendly`
+- `leamas factory digest` - Generate targeted change digest for review
 
 ## References
 
