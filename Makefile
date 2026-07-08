@@ -6,9 +6,10 @@
 .PHONY: verify-git-hooks install-git-hooks build digest
 
 # Digest target: generate targeted digest for review
+# Uses smart default: dirty digest when working tree has changes, previous commit digest when clean
 digest:
 	@mkdir -p build
-	@go run ./cmd/leamas factory digest --dirty --output build/leamas-digest.txt
+	@go run ./cmd/leamas factory digest --output build/leamas-digest.txt
 	@cat build/leamas-digest.txt
 
 # Colors

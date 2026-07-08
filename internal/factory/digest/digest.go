@@ -12,16 +12,6 @@ import (
 	"time"
 )
 
-// Mode represents the digest generation mode.
-type Mode string
-
-const (
-	// ModeDirty includes all unstaged, staged, and untracked changes.
-	ModeDirty Mode = "dirty"
-	// ModeStaged includes only staged changes.
-	ModeStaged Mode = "staged"
-)
-
 // Options configures digest generation.
 type Options struct {
 	// RepoRoot is the absolute path to the Git repository root.
@@ -30,6 +20,8 @@ type Options struct {
 	Mode Mode
 	// Output is the path to write the digest file.
 	Output string
+	// Range is the commit range for ModeRange (e.g., "HEAD~1..HEAD").
+	Range string
 }
 
 // ChangedFile represents a file with changes.
@@ -52,30 +44,60 @@ func Generate(opts Options) (string, error) {
 		}
 	}
 
-	// Get changed files based on mode
-	var files []ChangedFile
-	var err error
-
 	mode := opts.Mode
 	if mode == "" {
-		mode = ModeDirty // default mode
+		mode = ModeAuto // default to auto mode
 	}
 
+	// Handle auto mode
+	if mode == ModeAuto {
+		resolved, err := ResolveAutoMode(repoRoot)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve auto mode: %w", err)
+		}
+
+		if resolved.Mode == ModeDirty {
+			files, err := GetDirtyFiles(repoRoot)
+			if err != nil {
+				return "", fmt.Errorf("failed to get dirty files: %w", err)
+			}
+			return RenderDigestWithResolved(ModeDirty, repoRoot, files, resolved, false)
+		}
+
+		// Clean working tree: use range mode with HEAD~1..HEAD
+		files, err := GetRangeFiles(repoRoot, resolved.Range)
+		if err != nil {
+			return "", fmt.Errorf("failed to get range files: %w", err)
+		}
+		return RenderRangeDigestWithResolved(repoRoot, files, resolved)
+	}
+
+	// Handle explicit modes
 	switch mode {
 	case ModeDirty:
-		files, err = GetDirtyFiles(repoRoot)
+		files, err := GetDirtyFiles(repoRoot)
+		if err != nil {
+			return "", fmt.Errorf("failed to get dirty files: %w", err)
+		}
+		return RenderDigest(mode, repoRoot, files)
 	case ModeStaged:
-		files, err = GetStagedFiles(repoRoot)
+		files, err := GetStagedFiles(repoRoot)
+		if err != nil {
+			return "", fmt.Errorf("failed to get staged files: %w", err)
+		}
+		return RenderDigest(mode, repoRoot, files)
+	case ModeRange:
+		if opts.Range == "" {
+			return "", fmt.Errorf("ModeRange requires --range option")
+		}
+		files, err := GetRangeFiles(repoRoot, opts.Range)
+		if err != nil {
+			return "", fmt.Errorf("failed to get range files: %w", err)
+		}
+		return RenderRangeDigest(repoRoot, files, opts.Range)
 	default:
 		return "", fmt.Errorf("unsupported mode: %s", mode)
 	}
-
-	if err != nil {
-		return "", fmt.Errorf("failed to get changed files: %w", err)
-	}
-
-	// Generate the digest
-	return RenderDigest(opts.Mode, repoRoot, files)
 }
 
 // Write generates a digest and writes it to the output file.
@@ -103,29 +125,32 @@ func Write(opts Options) error {
 
 // GetDirtyFiles returns all changed files for dirty mode.
 func GetDirtyFiles(repoRoot string) ([]ChangedFile, error) {
-	// Get staged files
-	stagedFiles, err := RunGit(repoRoot, []string{"diff", "--cached", "--name-only"})
+	// Get staged files using NUL delimiter
+	stagedOutput, err := RunGit(repoRoot, []string{"diff", "--cached", "--name-only", "-z"})
 	if err != nil {
 		return nil, err
 	}
+	stagedFiles := splitNULList(stagedOutput)
 
-	// Get unstaged files
-	unstagedFiles, err := RunGit(repoRoot, []string{"diff", "--name-only"})
+	// Get unstaged files using NUL delimiter
+	unstagedOutput, err := RunGit(repoRoot, []string{"diff", "--name-only", "-z"})
 	if err != nil {
 		return nil, err
 	}
+	unstagedFiles := splitNULList(unstagedOutput)
 
-	// Get untracked files
-	untrackedFiles, err := RunGit(repoRoot, []string{"ls-files", "--others", "--exclude-standard"})
+	// Get untracked files using NUL delimiter
+	untrackedOutput, err := RunGit(repoRoot, []string{"ls-files", "--others", "--exclude-standard", "-z"})
 	if err != nil {
 		return nil, err
 	}
+	untrackedFiles := splitNULList(untrackedOutput)
 
 	// Build a map of all files with their status
 	fileMap := make(map[string]*ChangedFile)
 
 	// Process staged files
-	for _, path := range strings.Fields(stagedFiles) {
+	for _, path := range stagedFiles {
 		if path == "" {
 			continue
 		}
@@ -141,7 +166,7 @@ func GetDirtyFiles(repoRoot string) ([]ChangedFile, error) {
 	}
 
 	// Process unstaged files
-	for _, path := range strings.Fields(unstagedFiles) {
+	for _, path := range unstagedFiles {
 		if path == "" {
 			continue
 		}
@@ -157,7 +182,7 @@ func GetDirtyFiles(repoRoot string) ([]ChangedFile, error) {
 	}
 
 	// Process untracked files
-	for _, path := range strings.Fields(untrackedFiles) {
+	for _, path := range untrackedFiles {
 		if path == "" {
 			continue
 		}
@@ -190,13 +215,13 @@ func GetDirtyFiles(repoRoot string) ([]ChangedFile, error) {
 
 // GetStagedFiles returns only staged changed files.
 func GetStagedFiles(repoRoot string) ([]ChangedFile, error) {
-	// Get staged files
-	stagedOutput, err := RunGit(repoRoot, []string{"diff", "--cached", "--name-only"})
+	// Get staged files using NUL delimiter
+	stagedOutput, err := RunGit(repoRoot, []string{"diff", "--cached", "--name-only", "-z"})
 	if err != nil {
 		return nil, err
 	}
 
-	stagedFiles := strings.Fields(stagedOutput)
+	stagedFiles := splitNULList(stagedOutput)
 	result := make([]ChangedFile, 0, len(stagedFiles))
 
 	for _, path := range stagedFiles {

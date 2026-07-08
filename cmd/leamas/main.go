@@ -203,8 +203,9 @@ func handleFactoryFactorize() {
 func handleFactoryDigest() {
 	// Parse flags manually for simplicity
 	var mode digest.Mode
-	var hasDirty, hasStaged bool
+	var hasDirty, hasStaged, hasRange bool
 	var output string
+	var rangeSpec string
 
 	args := os.Args[3:]
 	i := 0
@@ -218,6 +219,16 @@ func handleFactoryDigest() {
 			hasStaged = true
 			mode = digest.ModeStaged
 			i++
+		case "--range":
+			if i+1 >= len(args) {
+				fmt.Fprintf(os.Stderr, "ERROR: --range requires a revision range argument\n")
+				printDigestUsage()
+				os.Exit(1)
+			}
+			hasRange = true
+			rangeSpec = args[i+1]
+			mode = digest.ModeRange
+			i += 2
 		case "--output":
 			if i+1 >= len(args) {
 				fmt.Fprintf(os.Stderr, "ERROR: --output requires a path argument\n")
@@ -233,16 +244,26 @@ func handleFactoryDigest() {
 		}
 	}
 
-	// Validate mode: exactly one of --dirty or --staged required
+	// Validate: mutually exclusive modes
 	if hasDirty && hasStaged {
 		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --dirty and --staged\n")
 		printDigestUsage()
 		os.Exit(1)
 	}
-	if mode == "" {
-		fmt.Fprintf(os.Stderr, "ERROR: must specify --dirty or --staged\n")
+	if hasDirty && hasRange {
+		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --dirty and --range\n")
 		printDigestUsage()
 		os.Exit(1)
+	}
+	if hasStaged && hasRange {
+		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --staged and --range\n")
+		printDigestUsage()
+		os.Exit(1)
+	}
+
+	// If no mode specified, default to auto
+	if mode == "" {
+		mode = digest.ModeAuto
 	}
 
 	// Validate output
@@ -253,10 +274,15 @@ func handleFactoryDigest() {
 	}
 
 	// Generate digest
-	err := digest.Write(digest.Options{
+	opts := digest.Options{
 		Mode:   mode,
 		Output: output,
-	})
+	}
+	if hasRange {
+		opts.Range = rangeSpec
+	}
+
+	err := digest.Write(opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(1)
@@ -271,7 +297,12 @@ func printDigestUsage() {
 	fmt.Println("Flags:")
 	fmt.Println("  --dirty             Include unstaged, staged, and untracked changes")
 	fmt.Println("  --staged            Include only staged changes")
+	fmt.Println("  --range <rev-range> Include changes in revision range (e.g., HEAD~1..HEAD)")
 	fmt.Println("  --output <path>     Output path (required)")
+	fmt.Println()
+	fmt.Println("Default behavior (no mode flag):")
+	fmt.Println("  - If working tree has changes: generate dirty digest")
+	fmt.Println("  - If working tree is clean: generate previous commit digest (HEAD~1..HEAD)")
 }
 
 func printUsage() {
