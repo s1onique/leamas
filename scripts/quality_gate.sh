@@ -58,6 +58,11 @@ check_file "scripts/verify_llm_friendliness.sh"
 check_file "internal/factory/llmfriendly/check.go"
 check_file "docs/factory/tooling-boundaries.md"
 check_file "docs/factory/llm-friendliness.md"
+check_file "docs/factory/agent-context-files.md"
+check_file "AGENTS.md"
+check_file ".clinerules/leamas.md"
+check_file "scripts/verify_agent_context.sh"
+check_file "internal/factory/agentcontext/check.go"
 
 echo ""
 echo "Checking scripts executability..."
@@ -171,6 +176,18 @@ if [[ -f "go.mod" ]] && [[ -x scripts/verify_llm_friendliness.sh ]]; then
     fi
 fi
 
+# Agent context files (if Go module exists)
+if [[ -f "go.mod" ]] && [[ -x scripts/verify_agent_context.sh ]]; then
+    echo ""
+    echo "--- Agent Context Files ---"
+    if scripts/verify_agent_context.sh; then
+        echo -e "${GREEN}✓${NC} Agent context files passed"
+    else
+        echo -e "${RED}✗${NC} Agent context files failed"
+        failed=1
+    fi
+fi
+
 # 3. Go toolchain checks (if Go module exists)
 echo ""
 echo "Checking Go toolchain status..."
@@ -182,9 +199,14 @@ if [[ -f "go.mod" ]]; then
     echo "--- go mod tidy ---"
     if go mod tidy 2>&1; then
         echo -e "${GREEN}✓${NC} go mod tidy passed"
-        # Check if anything changed
-        if ! git diff --quiet go.mod go.sum 2>/dev/null; then
-            echo -e "${RED}✗${NC} go.mod or go.sum changed after tidy"
+        # Check if go.mod changed (go.sum may not exist yet)
+        if [[ -f go.sum ]]; then
+            if ! git diff --quiet go.mod go.sum 2>/dev/null; then
+                echo -e "${RED}✗${NC} go.mod or go.sum changed after tidy"
+                failed=1
+            fi
+        elif ! git diff --quiet go.mod 2>/dev/null; then
+            echo -e "${RED}✗${NC} go.mod changed after tidy"
             failed=1
         fi
     else

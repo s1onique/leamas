@@ -1,6 +1,6 @@
 # Leamas Makefile
 
-.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine verify-tooling-boundaries verify-llm-friendly
+.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine verify-tooling-boundaries verify-llm-friendly verify-agent-context
 
 # Colors
 RED=\033[0;31m
@@ -16,14 +16,15 @@ help:
 	@echo "  make digest         - Generate targeted digest of staged changes"
 	@echo "  make factorize      - Run factory verifiers (doctrine, factory docs, patterns)"
 	@echo "  make verify-*       - Run individual verifiers:"
-	@echo "    make verify-agent-doctrine  Agent doctrine contract check"
-	@echo "    make verify-doctrine         Doctrine inventory check"
-	@echo "    make verify-factory          Factory docs check"
-	@echo "    make verify-forbidden        Forbidden patterns check"
-	@echo "    make verify-single-lang      Single language check"
-	@echo "    make verify-static           Static binary intent check"
+	@echo "    make verify-agent-doctrine     Agent doctrine contract check"
+	@echo "    make verify-agent-context      Agent context files check"
+	@echo "    make verify-doctrine           Doctrine inventory check"
+	@echo "    make verify-factory            Factory docs check"
+	@echo "    make verify-forbidden          Forbidden patterns check"
+	@echo "    make verify-single-lang        Single language check"
+	@echo "    make verify-static             Static binary intent check"
 	@echo "    make verify-tooling-boundaries Tooling language boundaries check"
-	@echo "    make verify-llm-friendly     LLM-friendliness check"
+	@echo "    make verify-llm-friendly      LLM-friendliness check"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make help           - Show this help"
 
@@ -50,7 +51,7 @@ digest:
 		exit 1; \
 	fi
 
-factorize: verify-agent-doctrine verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries verify-llm-friendly
+factorize: verify-agent-doctrine verify-agent-context verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries verify-llm-friendly
 	@echo ""
 	@echo -e "$(GREEN)=========================================="
 	@echo -e "Factory factorize PASSED"
@@ -95,6 +96,11 @@ verify-llm-friendly:
 	@chmod +x scripts/verify_llm_friendliness.sh
 	@echo "Running LLM-friendliness verifier..."
 	@./scripts/verify_llm_friendliness.sh
+
+verify-agent-context:
+	@chmod +x scripts/verify_agent_context.sh
+	@echo "Running agent context verifier..."
+	@./scripts/verify_agent_context.sh
 
 # Build target with static linking
 build:

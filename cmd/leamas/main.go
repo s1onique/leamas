@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/s1onique/leamas/internal/factory/agentcontext"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
 )
 
@@ -35,6 +36,8 @@ func main() {
 			switch os.Args[3] {
 			case "llm-friendly":
 				runLLMFriendlyCheck()
+			case "agent-context":
+				runAgentContextCheck()
 			default:
 				fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", os.Args[3])
 				printFactoryVerifyUsage()
@@ -72,14 +75,16 @@ func printFactoryUsage() {
 	fmt.Println("  leamas factory verify <check>   Run a specific verifier")
 	fmt.Println()
 	fmt.Println("Available verifiers:")
-	fmt.Println("  llm-friendly   Check repository LLM-friendliness")
+	fmt.Println("  llm-friendly    Check repository LLM-friendliness")
+	fmt.Println("  agent-context   Check agent context files")
 }
 
 func printFactoryVerifyUsage() {
 	fmt.Println("Usage: leamas factory verify <check>")
 	fmt.Println()
 	fmt.Println("Available checks:")
-	fmt.Println("  llm-friendly   Check repository LLM-friendliness")
+	fmt.Println("  llm-friendly    Check repository LLM-friendliness")
+	fmt.Println("  agent-context   Check agent context files")
 }
 
 func runLLMFriendlyCheck() {
@@ -97,6 +102,25 @@ func runLLMFriendlyCheck() {
 
 	fmt.Println("LLM-friendliness verification FAILED")
 	// Sort and print findings deterministically
+	for _, f := range findings {
+		fmt.Printf("%s: %s: %s\n", f.Path, f.Kind, f.Message)
+	}
+	os.Exit(1)
+}
+
+func runAgentContextCheck() {
+	findings, err := agentcontext.CheckRepo(".")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Agent context verification ERROR: %v\n", err)
+		os.Exit(1)
+	}
+
+	if len(findings) == 0 {
+		fmt.Println("Agent context verification PASSED")
+		os.Exit(0)
+	}
+
+	fmt.Println("Agent context verification FAILED")
 	for _, f := range findings {
 		fmt.Printf("%s: %s: %s\n", f.Path, f.Kind, f.Message)
 	}
