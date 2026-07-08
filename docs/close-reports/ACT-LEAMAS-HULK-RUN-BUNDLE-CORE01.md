@@ -2,7 +2,7 @@
 
 > **ACT Reference:** ACT-LEAMAS-HULK-RUN-BUNDLE-CORE01
 > **Status:** Closed
-> **Date:** 2026-01-07
+> **Date:** 2026-07-08
 
 ## Summary
 
@@ -16,6 +16,7 @@ and deterministic validation without filesystem, network, or database dependenci
 |------|--------|
 | `internal/hulk/runbundle/runbundle.go` | Created - core domain types and validation |
 | `internal/hulk/runbundle/runbundle_test.go` | Created - validation tests |
+| `internal/hulk/runbundle/validation_test.go` | Created - additional validation tests |
 | `docs/factory/run-bundle-core.md` | Created - core documentation |
 | `docs/close-reports/ACT-LEAMAS-HULK-RUN-BUNDLE-CORE01.md` | Created - this close report |
 
