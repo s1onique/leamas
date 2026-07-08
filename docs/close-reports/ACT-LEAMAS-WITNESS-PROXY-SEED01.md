@@ -9,6 +9,8 @@ Seeded a local-only HTTP witness proxy that captures bounded request/response me
 ```
 A internal/witness/proxy/proxy.go
 A internal/witness/proxy/proxy_test.go
+A internal/witness/proxy/proxy_integration_test.go
+A internal/witness/proxy/proxy_redaction_test.go
 A docs/factory/witness-proxy.md
 A docs/close-reports/ACT-LEAMAS-WITNESS-PROXY-SEED01.md
 ```

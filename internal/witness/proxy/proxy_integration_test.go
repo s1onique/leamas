@@ -151,7 +151,7 @@ func TestRecordsReturnsDefensiveCopy(t *testing.T) {
 	}
 }
 
-// Test 13: upstream failure records an error witness
+// Test 13: upstream failure records an error witness with 502 status
 func TestUpstreamFailureRecordsErrorWitness(t *testing.T) {
 	resetGlobalCounter()
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -169,9 +169,28 @@ func TestUpstreamFailureRecordsErrorWitness(t *testing.T) {
 	defer proxy.Close()
 
 	client := &http.Client{Timeout: 100 * time.Millisecond}
-	_, _ = client.Get(proxy.URL)
+	resp, err := client.Get(proxy.URL)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	resp.Body.Close()
 
-	_ = p.Records()
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("expected status 502 Bad Gateway, got: %d", resp.StatusCode)
+	}
+
+	records := p.Records()
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got: %d", len(records))
+	}
+
+	if records[0].Error == "" {
+		t.Error("expected non-empty Error field when upstream fails")
+	}
+
+	if records[0].StatusCode != http.StatusBadGateway {
+		t.Errorf("expected record status 502, got: %d", records[0].StatusCode)
+	}
 }
 
 // Test 14: no provider routing behavior exists; single upstream is used

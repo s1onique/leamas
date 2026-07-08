@@ -103,7 +103,7 @@ func (p *WitnessProxy) Handler() http.Handler {
 	return http.HandlerFunc(p.serveHTTP)
 }
 
-// Records returns a defensive copy of all captured witness records.
+// Records returns a deep defensive copy of all captured witness records.
 func (p *WitnessProxy) Records() []WitnessRecord {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -112,9 +112,34 @@ func (p *WitnessProxy) Records() []WitnessRecord {
 		return nil
 	}
 
-	// Return a copy of the slice.
+	// Deep copy: slice and inner maps.
 	copied := make([]WitnessRecord, len(p.records))
-	copy(copied, p.records)
+	for i, rec := range p.records {
+		copied[i] = WitnessRecord{
+			ID:          rec.ID,
+			Method:      rec.Method,
+			Path:        rec.Path,
+			UpstreamURL: rec.UpstreamURL,
+			StatusCode:  rec.StatusCode,
+			Error:       rec.Error,
+			StartedAt:   rec.StartedAt,
+			CompletedAt: rec.CompletedAt,
+		}
+		// Deep copy request headers map.
+		if rec.RequestHeaders != nil {
+			copied[i].RequestHeaders = make(map[string][]string)
+			for k, v := range rec.RequestHeaders {
+				copied[i].RequestHeaders[k] = append([]string(nil), v...)
+			}
+		}
+		// Deep copy response headers map.
+		if rec.ResponseHeaders != nil {
+			copied[i].ResponseHeaders = make(map[string][]string)
+			for k, v := range rec.ResponseHeaders {
+				copied[i].ResponseHeaders[k] = append([]string(nil), v...)
+			}
+		}
+	}
 	return copied
 }
 
@@ -141,7 +166,7 @@ func (p *WitnessProxy) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 	start := time.Now()
 	defer func() {
-		record.CompletedAt = start.Format(time.RFC3339Nano)
+		record.CompletedAt = time.Now().Format(time.RFC3339Nano)
 		p.addRecord(record)
 	}()
 
@@ -167,10 +192,22 @@ func (p *WitnessProxy) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Capture response via wrapper.
 	recorder := &responseCapture{ResponseWriter: w, statusCode: http.StatusOK}
+
+	// Wire error handler to capture upstream failures.
+	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		record.Error = err.Error()
+		record.StatusCode = http.StatusBadGateway
+		w.WriteHeader(http.StatusBadGateway)
+	}
+
 	proxy.ServeHTTP(recorder, r)
 
 	record.StatusCode = recorder.statusCode
-	record.ResponseHeaders = p.sanitizeHeaders(recorder.Header())
+
+	// Capture response headers only if enabled.
+	if p.config.CaptureHeaders {
+		record.ResponseHeaders = p.sanitizeHeaders(recorder.Header())
+	}
 }
 
 // addRecord adds a record to the bounded ring buffer.
