@@ -22,10 +22,10 @@ Digest/trace output now redacts:
 - API keys (OpenAI, Anthropic, generic)
 - Bearer tokens
 - GitHub tokens (ghp_*)
-- AWS access keys (AKIA*)
-- Password/secret variables
+- AWS access keys (AKIA*, ASIA*)
+- Password/secret/token/api_key assignments
 - Private key headers
-- Long hex strings (40+ chars)
+- Long hex strings (40+ chars) - **REMOVED in R1: see note below**
 
 ## Verification
 
@@ -60,7 +60,7 @@ None.
 
 | ACT | Description | Priority |
 |-----|-------------|----------|
-| | | |
+| **ACT-LEAMAS-FACTORY-SECRET-REDACTION01-R1** | Wire redaction into digest output and correct over-claimed closure | Required |
 
 ## Skipped/Deferred Checks
 
@@ -72,3 +72,4 @@ None.
 - Uses regex patterns for flexibility
 - Tests cover token/password/key-like values
 - Non-secret near-misses preserved (e.g., short strings, non-secret patterns)
+- **R1 Required**: Original ACT added the redaction package but did NOT wire it into digest output boundary. The close report over-claimed. R1 corrected by wiring redaction into `digest.Write()` and removing long-hex redaction.

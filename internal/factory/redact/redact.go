@@ -16,24 +16,20 @@ type SecretPattern struct {
 // DefaultPatterns returns the default secret redaction patterns.
 func DefaultPatterns() []SecretPattern {
 	return []SecretPattern{
-		// API keys (generic patterns)
-		{Pattern: regexp.MustCompile(`(?i)(api[_-]?key|apikey)['":\s=]+['"]?([a-zA-Z0-9_\-]{20,})['"]?`), Replace: "$1='[REDACTED]"},
 		// Bearer tokens
 		{Pattern: regexp.MustCompile(`(?i)bearer\s+[a-zA-Z0-9_\-\.]{20,}`), Replace: "Bearer [REDACTED]"},
-		// OpenAI API keys
+		// OpenAI API keys (sk- prefix + 20+ chars)
 		{Pattern: regexp.MustCompile(`sk-[a-zA-Z0-9]{20,}`), Replace: "sk-[REDACTED]"},
-		// Anthropic API keys
+		// Anthropic API keys (sk-ant- prefix + 20+ chars)
 		{Pattern: regexp.MustCompile(`(?i)sk-ant-[a-zA-Z0-9]{20,}`), Replace: "sk-ant-[REDACTED]"},
-		// GitHub tokens
+		// GitHub tokens (ghp_ prefix + 36 alphanumeric chars)
 		{Pattern: regexp.MustCompile(`ghp_[a-zA-Z0-9]{36}`), Replace: "ghp_[REDACTED]"},
-		// Generic secret variables
-		{Pattern: regexp.MustCompile(`(?i)(secret|password|passwd|pwd)['":\s=]+['"]?[a-zA-Z0-9_\-]{8,}['"]?`), Replace: "$1=[REDACTED]"},
+		// Generic secret variables (secret=, password=, token=, api_key= assignments)
+		{Pattern: regexp.MustCompile(`(?i)(api[_-]?key|secret|password|passwd|pwd|token)['":\s=]+['"]?[a-zA-Z0-9_\-]{8,}['"]?`), Replace: "$1=[REDACTED]"},
 		// Private keys
 		{Pattern: regexp.MustCompile(`-----BEGIN [A-Z]+ PRIVATE KEY-----`), Replace: "-----BEGIN [REDACTED] PRIVATE KEY-----"},
-		// AWS access keys
-		{Pattern: regexp.MustCompile(`(?i)AKIA[0-9A-Z]{16}`), Replace: "AKIA[REDACTED]"},
-		// Generic long alphanumeric tokens (40+ chars, looks like a hash/token)
-		{Pattern: regexp.MustCompile(`[a-f0-9]{40,}`), Replace: "[REDACTED_HASH]"},
+		// AWS access keys (AKIA and ASIA patterns with exactly 16 chars after prefix)
+		{Pattern: regexp.MustCompile(`(?i)\b(AKIA|ASIA)[A-Z0-9]{16}\b`), Replace: "[REDACTED_AWS_KEY]"},
 	}
 }
 

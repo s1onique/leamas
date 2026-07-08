@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/s1onique/leamas/internal/factory/redact"
 )
 
 // Options configures digest generation.
@@ -101,11 +103,15 @@ func Generate(opts Options) (string, error) {
 }
 
 // Write generates a digest and writes it to the output file.
+// The digest content is redacted before writing to prevent secret exposure.
 func Write(opts Options) error {
 	content, err := Generate(opts)
 	if err != nil {
 		return err
 	}
+
+	// Redact secrets from digest output before writing
+	content = redact.RedactDigest(content)
 
 	// Create parent directory if needed
 	dir := filepath.Dir(opts.Output)
