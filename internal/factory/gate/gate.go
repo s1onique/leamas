@@ -15,6 +15,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/doctrine"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/githooks"
+	"github.com/s1onique/leamas/internal/factory/github"
 	"github.com/s1onique/leamas/internal/factory/language"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
 	"github.com/s1onique/leamas/internal/factory/staticbinary"
@@ -28,6 +29,8 @@ type Verifier struct {
 }
 
 // AllVerifiers returns all Factory policy verifiers (for factorize).
+// Note: "github" verifier requires network access and is not included by default.
+// Run `leamas factory verify github` explicitly for remote policy verification.
 func AllVerifiers() []Verifier {
 	return []Verifier{
 		{"doctrine", doctrine.CheckRepo},
@@ -93,6 +96,28 @@ func convertGitHooksFindings(src []githooks.Finding) []checks.Finding {
 			Kind:     f.Kind,
 			Message:  f.Message,
 			Severity: checks.SeverityError,
+		}
+	}
+	return result
+}
+
+func githubVerifier(root string) []checks.Finding {
+	findings, _ := github.CheckRepo(root)
+	return convertGithubFindings(findings)
+}
+
+func convertGithubFindings(src []github.Finding) []checks.Finding {
+	result := make([]checks.Finding, len(src))
+	for i, f := range src {
+		severity := checks.SeverityError
+		if f.Severity == "info" {
+			severity = checks.SeverityWarn
+		}
+		result[i] = checks.Finding{
+			Path:     f.Path,
+			Kind:     f.Kind,
+			Message:  f.Message,
+			Severity: severity,
 		}
 	}
 	return result

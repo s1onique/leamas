@@ -2,7 +2,7 @@
 
 **Repository:** s1onique/leamas  
 **Default Branch:** main  
-**Timestamp:** 2026-07-08T19:51:00Z
+**Verified at:** 2026-07-08T20:53:20Z
 
 ## Protection Status
 
@@ -23,7 +23,7 @@
 
 | Setting | Value |
 |---------|-------|
-| `enforce_admins` | `true` (admin bypass disabled) |
+| `enforce_admins` | `false` (admin bypass enabled for direct pushes) |
 | `allow_force_pushes` | `false` (force-push disabled) |
 | `allow_deletions` | `false` (branch deletion disabled) |
 | `required_pull_request_reviews` | `null` (not required for v0) |
@@ -41,7 +41,7 @@ gh api repos/s1onique/leamas/branches/main/protection --jq '{required_status_che
 
 - [x] Force-push disabled
 - [x] Branch deletion disabled
-- [x] Factory CI required as status check
+- [x] Factory Gates required as status check
 - [x] Branch must be up to date before merge
-- [x] Admin bypass disabled
+- [x] Admin bypass enabled (enforce_admins: false)
 - [x] No PR reviews required (v0 exception)

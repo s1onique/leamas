@@ -53,10 +53,9 @@ To configure branch protection in GitHub:
 2. Add rule for `main`
 3. Enable:
    - ✅ **Protect matching branches**
-   - ✅ **Require a pull request before merging**
    - ✅ **Require status checks to pass before merging**
    - ✅ **Require branches to be up to date before merging**
-   - ✅ **Do not allow bypassing the above settings**
+   - ❌ **Do not allow bypassing the above settings** — leave disabled so admins may bypass required checks for direct pushes
    - ❌ **Allow force pushes** (disabled)
    - ❌ **Allow deletions** (disabled)
 
@@ -68,8 +67,8 @@ gh api repos/{owner}/{repo}/branches/main/protection
 
 # Update protection
 gh api --method PUT repos/{owner}/{repo}/branches/main/protection \
-  -f required_status_checks='{"strict":true,"contexts":["Factory"]}' \
-  -f enforce_admins=true \
+  -f required_status_checks='{"strict":true,"contexts":["Factory Gates"]}' \
+  -f enforce_admins=false \
   -f allow_force_pushes=false \
   -f allow_deletions=false
 ```

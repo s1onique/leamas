@@ -12,6 +12,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/factory/githooks"
+	"github.com/s1onique/leamas/internal/factory/github"
 	"github.com/s1onique/leamas/internal/factory/language"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
 	"github.com/s1onique/leamas/internal/factory/staticbinary"
@@ -163,6 +164,19 @@ func handleFactoryVerify() {
 		f, err := githooks.CheckRepo(".")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Git hooks verification ERROR: %v\n", err)
+			os.Exit(1)
+		}
+		for _, f := range f {
+			findings = append(findings, struct {
+				path    string
+				kind    string
+				message string
+			}{f.Path, f.Kind, f.Message})
+		}
+	case "github":
+		f, err := github.CheckRepo(".")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "GitHub policy verification ERROR: %v\n", err)
 			os.Exit(1)
 		}
 		for _, f := range f {
@@ -343,4 +357,5 @@ func printFactoryVerifyUsage() {
 	fmt.Println("  llm-friendly       Check LLM-friendliness")
 	fmt.Println("  agent-context      Check agent context files")
 	fmt.Println("  git-hooks          Check Git hooks installation")
+	fmt.Println("  github             Check GitHub policy compliance")
 }
