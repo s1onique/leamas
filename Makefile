@@ -3,7 +3,12 @@
 .PHONY: help gate test clean digest factorize verify-doctrine verify-factory
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
-.PHONY: verify-git-hooks install-git-hooks build digest
+.PHONY: verify-git-hooks install-git-hooks build digest install
+
+# Install variables (GNU conventions)
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+INSTALL ?= install
 
 # Digest target: generate targeted digest for review
 # Uses smart default: dirty digest when working tree has changes, previous commit digest when clean
@@ -40,6 +45,7 @@ help:
 	@echo "    make verify-git-hooks      Git hooks check"
 	@echo ""
 	@echo "  make install-git-hooks - Install Git hooks"
+	@echo "  make install        - Build and install leamas to $(PREFIX)/bin"
 
 gate:
 	@echo "Running quality gate..."
@@ -124,3 +130,9 @@ verify-git-hooks:
 install-git-hooks:
 	@chmod +x scripts/install_git_hooks.sh
 	@./scripts/install_git_hooks.sh
+
+install: build
+	@echo "Installing Leamas to $(DESTDIR)$(BINDIR)/leamas"
+	@$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
+	@$(INSTALL) -m 0755 bin/leamas "$(DESTDIR)$(BINDIR)/leamas"
+	@echo "Done. Installed: $(DESTDIR)$(BINDIR)/leamas"
