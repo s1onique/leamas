@@ -74,7 +74,11 @@ func ResolveAutoMode(repoRoot string) (*ResolvedMode, error) {
 	parentCheck, err := RunGit(repoRoot, []string{"rev-parse", "--verify", "HEAD~1"})
 	if err != nil {
 		// No parent - initial commit
-		return nil, fmt.Errorf("clean repository has only one commit; initial-commit digest fallback not implemented yet")
+		// Use empty tree baseline (4b825dc642cb6eb9a060e54bf8d69288fbee4904) for initial commit
+		result.Range = "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD"
+		result.Mode = ModeRange
+		result.Reason = "initial commit; diffing against empty tree baseline"
+		return result, nil
 	}
 
 	parentCommit := strings.TrimSpace(parentCheck)

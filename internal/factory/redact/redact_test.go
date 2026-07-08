@@ -62,11 +62,11 @@ func TestIsSecretPattern(t *testing.T) {
 		expected bool
 	}{
 		// These match default patterns
-		{"sk-1234567890abcdefghij", true}, // OpenAI key (sk- prefix + 20+ chars)
+		{"sk-1234567890abcdefghij", true},     // OpenAI key (sk- prefix + 20+ chars)
 		{"sk-ant-1234567890abcdefghij", true}, // Anthropic key (sk-ant- prefix)
 		// These don't match the strict patterns in IsSecretPattern
-		{"hello", false},                      // Too short
-		{"normal_variable_name", false},       // Not a secret pattern
+		{"hello", false},                          // Too short
+		{"normal_variable_name", false},           // Not a secret pattern
 		{"ghp_1234567890abcdefghijklmnop", false}, // GitHub tokens need full 36 chars
 	}
 

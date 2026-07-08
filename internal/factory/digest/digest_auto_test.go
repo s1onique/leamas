@@ -162,16 +162,19 @@ func TestCleanRepoWithoutParentHandledHonestly(t *testing.T) {
 	runGit(t, tmpDir, "add", "initial.txt")
 	runGit(t, tmpDir, "commit", "-m", "initial commit")
 
-	_, err := Generate(Options{
+	result, err := Generate(Options{
 		RepoRoot: tmpDir,
 		Mode:     ModeAuto,
 	})
 
-	if err == nil {
-		t.Error("expected error for clean repo with only one commit")
+	if err != nil {
+		t.Fatalf("expected success for clean repo with only one commit, got error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "only one commit") {
-		t.Error("error should mention single commit limitation")
+	if !strings.Contains(result, "initial commit") {
+		t.Error("digest should contain initial commit content")
+	}
+	if !strings.Contains(result, "empty tree baseline") {
+		t.Error("digest should mention empty tree baseline")
 	}
 }
 
