@@ -2,6 +2,7 @@
 package digest
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -127,6 +128,143 @@ summary = "Test act"
 	}
 	if config.Anchors[0].URL != "" {
 		t.Errorf("expected empty URL, got: %s", config.Anchors[0].URL)
+	}
+}
+
+// TestLoadAnchors_MalformedMissingClosingQuote tests that missing closing quote returns error.
+func TestLoadAnchors_MalformedMissingClosingQuote(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Missing closing quote on id value
+	content := `[[anchors]]
+id = "ACT-001
+type = "act"
+summary = "Missing closing quote"
+`
+	anchorsPath := filepath.Join(tmpDir, ".leamas", "anchors.toml")
+	if err := os.MkdirAll(filepath.Dir(anchorsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(anchorsPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadAnchors(tmpDir)
+	if err == nil {
+		t.Fatal("expected error for malformed config with missing closing quote")
+	}
+	if !errors.Is(err, ErrMalformedAnchors) {
+		t.Errorf("expected ErrMalformedAnchors, got: %v", err)
+	}
+}
+
+// TestLoadAnchors_MalformedUnknownKey tests that unknown keys return error.
+func TestLoadAnchors_MalformedUnknownKey(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	content := `[[anchors]]
+id = "ACT-001"
+type = "act"
+summary = "Test act"
+unknown = "field"
+`
+	anchorsPath := filepath.Join(tmpDir, ".leamas", "anchors.toml")
+	if err := os.MkdirAll(filepath.Dir(anchorsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(anchorsPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadAnchors(tmpDir)
+	if err == nil {
+		t.Fatal("expected error for malformed config with unknown key")
+	}
+	if !errors.Is(err, ErrMalformedAnchors) {
+		t.Errorf("expected ErrMalformedAnchors, got: %v", err)
+	}
+}
+
+// TestLoadAnchors_MalformedWrongSection tests that wrong section names return error.
+func TestLoadAnchors_MalformedWrongSection(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	content := `[[wrong_section]]
+id = "ACT-001"
+`
+	anchorsPath := filepath.Join(tmpDir, ".leamas", "anchors.toml")
+	if err := os.MkdirAll(filepath.Dir(anchorsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(anchorsPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadAnchors(tmpDir)
+	if err == nil {
+		t.Fatal("expected error for malformed config with wrong section")
+	}
+	if !errors.Is(err, ErrMalformedAnchors) {
+		t.Errorf("expected ErrMalformedAnchors, got: %v", err)
+	}
+}
+
+// TestLoadAnchors_MalformedContentOutsideAnchorsBlock tests that content outside anchors block returns error.
+func TestLoadAnchors_MalformedContentOutsideAnchorsBlock(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	content := `some random text
+[[anchors]]
+id = "ACT-001"
+`
+	anchorsPath := filepath.Join(tmpDir, ".leamas", "anchors.toml")
+	if err := os.MkdirAll(filepath.Dir(anchorsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(anchorsPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := LoadAnchors(tmpDir)
+	if err == nil {
+		t.Fatal("expected error for malformed config with content outside anchors block")
+	}
+	if !errors.Is(err, ErrMalformedAnchors) {
+		t.Errorf("expected ErrMalformedAnchors, got: %v", err)
+	}
+}
+
+// TestLoadAnchors_ValidWithComments tests that comments are allowed.
+func TestLoadAnchors_ValidWithComments(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	content := `# This is a comment
+[[anchors]]
+id = "ACT-001"
+type = "act"
+summary = "Test act"
+# Another comment
+`
+	anchorsPath := filepath.Join(tmpDir, ".leamas", "anchors.toml")
+	if err := os.MkdirAll(filepath.Dir(anchorsPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(anchorsPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := LoadAnchors(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to load anchors with comments: %v", err)
+	}
+	if config == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if len(config.Anchors) != 1 {
+		t.Fatalf("expected 1 anchor, got: %d", len(config.Anchors))
+	}
+	if config.Anchors[0].ID != "ACT-001" {
+		t.Errorf("expected ID 'ACT-001', got: %s", config.Anchors[0].ID)
 	}
 }
 

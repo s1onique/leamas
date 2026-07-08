@@ -141,7 +141,9 @@ make gate
 - Anchors pass through the same digest write boundary, so any secret-like text in anchors is also redacted when written via `Write()`
 - Did not change redaction code (integration tests confirmed existing behavior)
 - Missing anchor file is not an error (consistent with original ACT design)
-- Malformed/unreadable anchor file returns an honest error
+- Malformed/unreadable anchor file returns an honest error (implemented in R2)
+
+**Note on R1 claim:** R1 claimed "Malformed/unreadable anchor file returns an honest error" but the validation was not implemented until R2. The R1 integration tests did not assert secret redaction explicitly.
 
 ## Agent Doctrine Impact
 

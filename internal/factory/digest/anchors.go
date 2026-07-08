@@ -2,10 +2,15 @@
 package digest
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// ErrMalformedAnchors is returned when the anchors config file contains malformed content.
+var ErrMalformedAnchors = errors.New("malformed anchors config")
 
 // Anchor represents a workflow anchor to include in digest output.
 type Anchor struct {
@@ -33,6 +38,7 @@ func LoadAnchors(repoRoot string) (*AnchorsConfig, error) {
 
 // LoadAnchorsFrom loads anchors from a specific file path.
 // Returns nil config if file doesn't exist.
+// Returns ErrMalformedAnchors if the file contains malformed content.
 func LoadAnchorsFrom(path string) (*AnchorsConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -59,10 +65,20 @@ func LoadAnchorsFrom(path string) (*AnchorsConfig, error) {
 	lines := splitLines(string(data))
 	var currentAnchor *Anchor
 
-	for _, line := range lines {
+	for lineNum, line := range lines {
 		line = trimLine(line)
 
-		if line == `[[anchors]]` {
+		if line == "" {
+			continue
+		}
+
+		// Validate: any section other than [[anchors]] is an error
+		if strings.HasPrefix(line, "[[") && strings.HasSuffix(line, "]]") {
+			section := line[2 : len(line)-2]
+			section = trimLine(section)
+			if section != "anchors" {
+				return nil, fmt.Errorf("%w: unsupported section [[%s]]", ErrMalformedAnchors, section)
+			}
 			if currentAnchor != nil {
 				config.Anchors = append(config.Anchors, *currentAnchor)
 			}
@@ -71,6 +87,11 @@ func LoadAnchorsFrom(path string) (*AnchorsConfig, error) {
 		}
 
 		if currentAnchor == nil {
+			// Lines outside of [[anchors]] block that aren't empty are errors
+			// (but allow comments starting with #)
+			if !strings.HasPrefix(line, "#") {
+				return nil, fmt.Errorf("%w: unexpected content outside [[anchors]] block at line %d", ErrMalformedAnchors, lineNum+1)
+			}
 			continue
 		}
 
@@ -88,6 +109,7 @@ func LoadAnchorsFrom(path string) (*AnchorsConfig, error) {
 				value := trimLine(line[eqIdx+1:])
 				value = trimQuotes(value)
 
+				// Validate: only supported keys are allowed
 				switch key {
 				case "id":
 					currentAnchor.ID = value
@@ -97,7 +119,19 @@ func LoadAnchorsFrom(path string) (*AnchorsConfig, error) {
 					currentAnchor.Summary = value
 				case "url":
 					currentAnchor.URL = value
+				default:
+					return nil, fmt.Errorf("%w: unsupported key '%s' in [[anchors]] block", ErrMalformedAnchors, key)
 				}
+			}
+		} else if !strings.HasPrefix(line, "#") {
+			// Malformed line (not a key="value" line, not empty, not a comment)
+			// Check for common mistakes
+			if strings.Contains(line, "=") && !strings.Contains(line, `"`) {
+				return nil, fmt.Errorf("%w: missing quotes around value at line %d", ErrMalformedAnchors, lineNum+1)
+			}
+			// Line looks malformed but not a clear error pattern - flag it
+			if strings.TrimSpace(line) != "" {
+				return nil, fmt.Errorf("%w: malformed line at %d: %s", ErrMalformedAnchors, lineNum+1, line)
 			}
 		}
 	}

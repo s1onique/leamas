@@ -209,7 +209,8 @@ func TestDigestAnchors_WriteRedactsAnchorSecrets(t *testing.T) {
 	tmpDir := t.TempDir()
 	initGit(t, tmpDir)
 
-	// Create anchors.toml with a URL that looks like a secret (fake value)
+	// Create anchors.toml with a URL that contains a fake secret-like value
+	// The pattern sk-[a-zA-Z0-9]{20,} should match and be redacted
 	leamasDir := filepath.Join(tmpDir, ".leamas")
 	if err := os.MkdirAll(leamasDir, 0755); err != nil {
 		t.Fatal(err)
@@ -252,16 +253,27 @@ url = "https://example.com/sk-1234567890abcdefghijklmnop"
 
 	writtenStr := string(writtenContent)
 
-	// Verify anchor is still present (not filtered out)
+	// 1. Anchor ID must remain present
 	if !strings.Contains(writtenStr, "ACT-001") {
-		t.Error("written digest should contain anchor ID")
+		t.Error("written digest should contain anchor ID 'ACT-001'")
 	}
 
-	// The secret-like URL should be redacted by the redaction pass
-	// (if the pattern matches - note: this is a URL, not a standalone secret)
-	// The anchor table should still be present
+	// 2. Anchor table header must remain present
 	if !strings.Contains(writtenStr, "| ID | Type | Summary | URL |") {
 		t.Error("written digest should contain anchors table header")
+	}
+
+	// 3. Fake secret substring must be absent from written digest
+	fakeSecret := "sk-1234567890abcdefghijklmnop"
+	if strings.Contains(writtenStr, fakeSecret) {
+		t.Errorf("written digest should NOT contain fake secret '%s'", fakeSecret)
+	}
+
+	// 4. Redaction marker must be present
+	// The redaction pattern for sk- keys is: sk-[REDACTED]
+	redactionMarker := "sk-[REDACTED]"
+	if !strings.Contains(writtenStr, redactionMarker) {
+		t.Errorf("written digest should contain redaction marker '%s'", redactionMarker)
 	}
 }
 
