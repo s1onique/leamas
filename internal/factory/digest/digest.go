@@ -344,7 +344,13 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 	}
 
 	sb.WriteString("\n## Workflow anchors\n")
-	sb.WriteString("No workflow anchors configured.\n")
+
+	// Load and render anchors
+	anchorsConfig, err := LoadAnchors(repoRoot)
+	if err != nil {
+		return "", fmt.Errorf("failed to load anchors: %w", err)
+	}
+	sb.WriteString(RenderAnchors(anchorsConfig))
 
 	return sb.String(), nil
 }
