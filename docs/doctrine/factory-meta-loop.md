@@ -81,9 +81,11 @@ The tools that build Leamas must also verify Leamas. The Factory is part of the 
 ### Verification Hooks
 
 - `make factorize` (runs all factory verifiers)
-- `scripts/verify_doctrine_*.sh`
+- `scripts/verify_*.sh`
 - `scripts/verify_factory_docs.sh`
 - `scripts/verify_forbidden_patterns.sh`
+- `scripts/verify_llm_friendliness.sh` - LLM-friendliness gate
+- `make verify-llm-friendly`
 
 ## References
 

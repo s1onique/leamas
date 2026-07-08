@@ -114,6 +114,8 @@ Use `scripts/verify_tooling_boundaries.sh` to enforce Python ban and Bash LOC li
 
 - `scripts/verify_single_language.sh`
 - `scripts/verify_tooling_boundaries.sh`
+- `scripts/verify_llm_friendliness.sh` - LLM-friendliness gate (Go implementation)
+- `make verify-llm-friendly`
 
 ## References
 

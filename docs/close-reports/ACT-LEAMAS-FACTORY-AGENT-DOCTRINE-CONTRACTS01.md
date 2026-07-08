@@ -6,7 +6,10 @@
 
 ## Summary
 
-Made Leamas Factory doctrine explicitly operational for LLM/agent-assisted development by adding Agent Contract sections to all doctrine files and creating a dedicated agent-assisted development doctrine. This ACT turns doctrine from human-readable documentation into agent-usable constraints with verifiable hooks.
+Made Leamas Factory doctrine explicitly operational for LLM/agent-assisted development
+by adding Agent Contract sections to all doctrine files and creating a dedicated
+agent-assisted development doctrine. This ACT turns doctrine from human-readable
+documentation into agent-usable constraints with verifiable hooks.
 
 ## Scope Note
 

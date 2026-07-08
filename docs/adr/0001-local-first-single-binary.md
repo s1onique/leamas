@@ -6,9 +6,15 @@ Accepted
 
 ## Context
 
-Leamas is a developer tool intended to make test and verification harnesses accountable. For maximum portability and zero-friction adoption, the tool should be easy to install and run anywhere—a developer's laptop, a CI/CD pipeline, a container, or an SSH session.
+Leamas is a developer tool intended to make test and verification harnesses
+accountable. For maximum portability and zero-friction adoption, the tool should
+be easy to install and run anywhere—a developer's laptop, a CI/CD pipeline,
+a container, or an SSH session.
 
-Traditional distribution models requiring interpreters, runtime environments, or package managers create friction. Many developers work in heterogeneous environments where installing a specific runtime (Python, Node, Java) may not be feasible.
+Traditional distribution models requiring interpreters, runtime environments,
+or package managers create friction. Many developers work in heterogeneous
+environments where installing a specific runtime (Python, Node, Java) may not
+be feasible.
 
 ## Decision
 

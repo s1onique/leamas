@@ -54,5 +54,7 @@ If an automation task is too large for a tiny Bash wrapper, agents must implemen
 - `scripts/verify_doctrine_agent_contracts.sh`
 - `scripts/verify_forbidden_patterns.sh`
 - `scripts/verify_factory_docs.sh`
+- `scripts/verify_llm_friendliness.sh`
+- `make verify-llm-friendly`
 - close reports
 - future claim-grounding verifier

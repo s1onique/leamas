@@ -54,7 +54,10 @@ check_file "scripts/verify_forbidden_patterns.sh"
 check_file "scripts/verify_single_language.sh"
 check_file "scripts/verify_static_binary_intent.sh"
 check_file "scripts/verify_tooling_boundaries.sh"
+check_file "scripts/verify_llm_friendliness.sh"
+check_file "internal/factory/llmfriendly/check.go"
 check_file "docs/factory/tooling-boundaries.md"
+check_file "docs/factory/llm-friendliness.md"
 
 echo ""
 echo "Checking scripts executability..."
@@ -152,6 +155,18 @@ if [[ -x scripts/verify_tooling_boundaries.sh ]]; then
         echo -e "${GREEN}✓${NC} Tooling boundaries passed"
     else
         echo -e "${RED}✗${NC} Tooling boundaries failed"
+        failed=1
+    fi
+fi
+
+# LLM-friendliness (if Go module exists)
+if [[ -f "go.mod" ]] && [[ -x scripts/verify_llm_friendliness.sh ]]; then
+    echo ""
+    echo "--- LLM-Friendliness ---"
+    if scripts/verify_llm_friendliness.sh; then
+        echo -e "${GREEN}✓${NC} LLM-friendliness passed"
+    else
+        echo -e "${RED}✗${NC} LLM-friendliness failed"
         failed=1
     fi
 fi

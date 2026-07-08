@@ -1,6 +1,9 @@
 # Leamas
 
-A Golang-only, local-first tool distributed as a single static binary. Leamas makes test/verification harnesses accountable. Future iterations may intercept/proxy LLM interactions so harness behavior and LLM evaluation can become part of a repeatable feedback loop.
+A Golang-only, local-first tool distributed as a single static binary.
+Leamas makes test/verification harnesses accountable.
+Future iterations may intercept/proxy LLM interactions so harness behavior and
+LLM evaluation can become part of a repeatable feedback loop.
 
 ## Status
 

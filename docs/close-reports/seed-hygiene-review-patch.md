@@ -6,7 +6,10 @@
 
 ## Summary
 
-This patch addresses seed hygiene issues discovered during a digest-driven review of the Leamas repository. The review identified documentation inconsistencies where templates referenced non-existent directories and files, and a script contained hardcoded references to frontend files from another project.
+This patch addresses seed hygiene issues discovered during a digest-driven review
+of the Leamas repository. The review identified documentation inconsistencies where
+templates referenced non-existent directories and files, and a script contained
+hardcoded references to frontend files from another project.
 
 ## Reviewer Findings Addressed
 

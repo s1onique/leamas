@@ -1,6 +1,6 @@
 # Leamas Makefile
 
-.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine verify-tooling-boundaries
+.PHONY: help gate test clean digest factorize verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-agent-doctrine verify-tooling-boundaries verify-llm-friendly
 
 # Colors
 RED=\033[0;31m
@@ -23,6 +23,7 @@ help:
 	@echo "    make verify-single-lang      Single language check"
 	@echo "    make verify-static           Static binary intent check"
 	@echo "    make verify-tooling-boundaries Tooling language boundaries check"
+	@echo "    make verify-llm-friendly     LLM-friendliness check"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make help           - Show this help"
 
@@ -49,7 +50,7 @@ digest:
 		exit 1; \
 	fi
 
-factorize: verify-agent-doctrine verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries
+factorize: verify-agent-doctrine verify-doctrine verify-factory verify-forbidden verify-single-lang verify-static verify-tooling-boundaries verify-llm-friendly
 	@echo ""
 	@echo -e "$(GREEN)=========================================="
 	@echo -e "Factory factorize PASSED"
@@ -89,6 +90,11 @@ verify-tooling-boundaries:
 	@chmod +x scripts/verify_tooling_boundaries.sh
 	@echo "Running tooling boundary verifier..."
 	@./scripts/verify_tooling_boundaries.sh
+
+verify-llm-friendly:
+	@chmod +x scripts/verify_llm_friendliness.sh
+	@echo "Running LLM-friendliness verifier..."
+	@./scripts/verify_llm_friendliness.sh
 
 # Build target with static linking
 build:
