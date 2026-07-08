@@ -67,6 +67,6 @@ make verify-tooling-boundaries
 
 ## References
 
-- [ACT-LEAMAS-FACTORY-TOOLING-BOUNDARIES01](docs/close-reports/ACT-LEAMAS-FACTORY-TOOLING-BOUNDARIES01.md)
+- [ACT-LEAMAS-FACTORY-TOOLING-BOUNDARIES01](../close-reports/ACT-LEAMAS-FACTORY-TOOLING-BOUNDARIES01.md)
 - [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html)
-- [Go-only Doctrine](docs/doctrine/go-only.md)
+- [Go-only Doctrine](../doctrine/go-only.md)
