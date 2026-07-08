@@ -61,18 +61,86 @@ var AllowedDirs = []string{
 	"docs/factory",
 	"docs/close-reports",
 	"testdata",
+	"AGENTS.md",
+	".clinerules",
 }
 
 // ScanDirs are the directories to scan for forbidden patterns.
 var ScanDirs = []string{"cmd", "internal", "scripts", "githooks"}
 
 // ScanFiles are specific files to scan.
-var ScanFiles = []string{"AGENTS.md", ".clinerules/leamas.md"}
+var ScanFiles = []string{}
 
 // SkipPatterns are path patterns to skip during scanning.
 var SkipPatterns = []string{"vendor", ".git", "testdata"}
 
-// CheckForbiddenPatterns scans Go source files for forbidden patterns.
+// shouldSkipDir returns true if the directory should be skipped during scanning.
+func shouldSkipDir(name string) bool {
+	skipDirs := []string{"vendor", ".git"}
+	for _, skip := range skipDirs {
+		if name == skip {
+			return true
+		}
+	}
+	return false
+}
+
+// isGoProductionFile returns true if the path is a Go production file to scan.
+func isGoProductionFile(relPath string) bool {
+	// Must be a .go file
+	if !strings.HasSuffix(relPath, ".go") {
+		return false
+	}
+	// Must not be a test file
+	if strings.HasSuffix(relPath, "_test.go") {
+		return false
+	}
+	// cmd/** is scanned for Go files
+	if strings.HasPrefix(relPath, "cmd/") || strings.HasPrefix(relPath, "cmd\\") {
+		return true
+	}
+	// internal/** is scanned except internal/factory/**
+	if strings.HasPrefix(relPath, "internal/") || strings.HasPrefix(relPath, "internal\\") {
+		if strings.HasPrefix(relPath, "internal/factory/") || strings.HasPrefix(relPath, "internal/factory\\") ||
+			strings.HasPrefix(relPath, "internal\\factory/") || strings.HasPrefix(relPath, "internal\\factory\\") {
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+// isTextPolicyFile returns true if the path is a text/script file to scan.
+func isTextPolicyFile(relPath string) bool {
+	// Scan scripts/** for all text files
+	if strings.HasPrefix(relPath, "scripts/") || strings.HasPrefix(relPath, "scripts\\") {
+		return true
+	}
+	// Scan githooks/** for all text files
+	if strings.HasPrefix(relPath, "githooks/") || strings.HasPrefix(relPath, "githooks\\") {
+		return true
+	}
+	return false
+}
+
+// shouldScanFile returns true if the file should be scanned for forbidden patterns.
+func shouldScanFile(relPath string) bool {
+	// Check if it's an allowed directory (policies permitted there)
+	if isInAllowedDir(relPath) {
+		return false
+	}
+	// Check Go production files
+	if isGoProductionFile(relPath) {
+		return true
+	}
+	// Check text/script files
+	if isTextPolicyFile(relPath) {
+		return true
+	}
+	return false
+}
+
+// CheckForbiddenPatterns scans files for forbidden patterns according to the scan boundary contract.
 func CheckForbiddenPatterns(root string) []checks.Finding {
 	var findings []checks.Finding
 
@@ -89,24 +157,15 @@ func CheckForbiddenPatterns(root string) []checks.Finding {
 
 			if d.IsDir() {
 				name := d.Name()
-				for _, skip := range SkipPatterns {
-					if name == skip {
-						return filepath.SkipDir
-					}
+				if shouldSkipDir(name) {
+					return filepath.SkipDir
 				}
 				return nil
 			}
 
 			relPath, _ := filepath.Rel(root, path)
 
-			// Skip internal/factory
-			if strings.HasPrefix(relPath, "internal/factory") ||
-				strings.HasPrefix(relPath, "internal\\factory") {
-				return nil
-			}
-
-			// Skip non-Go files and test files
-			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			if !shouldScanFile(relPath) {
 				return nil
 			}
 
@@ -123,7 +182,7 @@ func CheckForbiddenPatterns(root string) []checks.Finding {
 		}
 	}
 
-	// Scan special files
+	// Scan special files (AGENTS.md, .clinerules/leamas.md)
 	for _, file := range ScanFiles {
 		path := filepath.Join(root, file)
 		data, err := os.ReadFile(path)
@@ -131,21 +190,7 @@ func CheckForbiddenPatterns(root string) []checks.Finding {
 			continue
 		}
 
-		content := string(data)
-		for _, pattern := range ForbiddenPatterns {
-			if containsForbidden(content, pattern.Pattern) {
-				if pattern.Pattern == "database/sql" ||
-					pattern.Pattern == "github.com/lib/pq" ||
-					pattern.Pattern == "github.com/go-sql-driver" {
-					findings = append(findings, checks.Finding{
-						Path:     file,
-						Kind:     "forbidden_import",
-						Message:  "database driver import: " + pattern.Desc,
-						Severity: checks.SeverityError,
-					})
-				}
-			}
-		}
+		checkFilePatterns(file, string(data), &findings)
 	}
 
 	checks.SortFindings(findings)

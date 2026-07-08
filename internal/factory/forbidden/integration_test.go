@@ -3,6 +3,7 @@ package forbidden
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -216,5 +217,69 @@ func Clean() {}
 	}
 	if foundErrors {
 		t.Errorf("expected no error findings, got %d", len(findings))
+	}
+}
+
+// TestScriptsForbiddenPatternDetected verifies that scripts/ containing forbidden patterns are detected.
+// This is a regression test for ACT-LEAMAS-FACTORY-FORBIDDEN-SCOPE-CONTRACT01-R1.
+func TestScriptsForbiddenPatternDetected(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	scriptsDir := filepath.Join(tmpDir, "scripts")
+	if err := os.MkdirAll(scriptsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	badScript := filepath.Join(scriptsDir, "bad.sh")
+	badContent := `#!/bin/bash
+# Setup OIDC authentication
+echo "Setting up OIDC..."
+`
+	if err := os.WriteFile(badScript, []byte(badContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	findings := CheckForbiddenPatterns(tmpDir)
+	foundOIDC := false
+	for _, f := range findings {
+		if f.Kind == "forbidden_pattern" && strings.Contains(f.Message, "OIDC") {
+			foundOIDC = true
+			break
+		}
+	}
+	if !foundOIDC {
+		t.Error("expected to find forbidden OIDC pattern in scripts/bad.sh")
+	}
+}
+
+// TestGithooksForbiddenPatternDetected verifies that githooks/ containing forbidden patterns are detected.
+// This is a regression test for ACT-LEAMAS-FACTORY-FORBIDDEN-SCOPE-CONTRACT01-R1.
+func TestGithooksForbiddenPatternDetected(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	hooksDir := filepath.Join(tmpDir, "githooks")
+	if err := os.MkdirAll(hooksDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	badHook := filepath.Join(hooksDir, "pre-push")
+	badContent := `#!/bin/sh
+# Check for OIDC tokens
+echo "Checking OIDC tokens..."
+`
+	if err := os.WriteFile(badHook, []byte(badContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	findings := CheckForbiddenPatterns(tmpDir)
+	foundOIDC := false
+	for _, f := range findings {
+		if f.Kind == "forbidden_pattern" && strings.Contains(f.Message, "OIDC") {
+			foundOIDC = true
+			break
+		}
+	}
+	if !foundOIDC {
+		t.Error("expected to find forbidden OIDC pattern in githooks/pre-push")
 	}
 }

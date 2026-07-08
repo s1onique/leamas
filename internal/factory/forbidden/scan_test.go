@@ -5,8 +5,8 @@ import (
 )
 
 // TestScanBoundaryContract verifies the explicit scan boundary contract.
-// SCAN: cmd/, internal/ (except internal/factory/), scripts/, githooks/
-// ALLOW: internal/factory/, docs/doctrine/, docs/adr/, docs/factory/, docs/close-reports/, *_test.go, testdata/
+// SCAN: cmd/ (.go non-test), internal/ (.go non-test except factory), scripts/**, githooks/**
+// ALLOW: internal/factory/, docs/doctrine/, docs/adr/, docs/factory/, docs/close-reports/, *_test.go, testdata/, AGENTS.md, .clinerules/
 func TestScanBoundaryContract(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -14,17 +14,21 @@ func TestScanBoundaryContract(t *testing.T) {
 		shouldScan  bool
 		description string
 	}{
-		// SCAN: cmd/
-		{"cmd/main.go", "cmd/main.go", true, "cmd/ is in scan scope"},
-		// SCAN: internal/ (except internal/factory/)
-		{"internal/app/foo.go", "internal/app/foo.go", true, "internal/app/ is in scan scope"},
-		{"internal/ui/bar.go", "internal/ui/bar.go", true, "internal/ui/ is in scan scope"},
+		// SCAN: cmd/ - Go production files only
+		{"cmd/main.go", "cmd/main.go", true, "cmd/ .go files are in scan scope"},
+		{"cmd/test.sh", "cmd/test.sh", false, "cmd/ non-go files are NOT scanned"},
+		// SCAN: internal/ (except internal/factory/) - Go production files only
+		{"internal/app/foo.go", "internal/app/foo.go", true, "internal/app/ .go files are in scan scope"},
+		{"internal/ui/bar.go", "internal/ui/bar.go", true, "internal/ui/ .go files are in scan scope"},
 		{"internal/factory/auth.go", "internal/factory/auth.go", false, "internal/factory/ is EXCLUDED"},
 		{"internal/factory/forbidden/check.go", "internal/factory/forbidden/check.go", false, "internal/factory/ is EXCLUDED"},
-		// SCAN: scripts/
+		{"internal/app/readme.txt", "internal/app/readme.txt", false, "internal/ non-go files are NOT scanned"},
+		// SCAN: scripts/** - all text files
 		{"scripts/build.sh", "scripts/build.sh", true, "scripts/ is in scan scope"},
-		// SCAN: githooks/
+		{"scripts/test.sh", "scripts/test.sh", true, "scripts/ all files are scanned"},
+		// SCAN: githooks/** - all text files
 		{"githooks/pre-push", "githooks/pre-push", true, "githooks/ is in scan scope"},
+		{"githooks/pre-commit", "githooks/pre-commit", true, "githooks/ all files are scanned"},
 		// ALLOW: docs/doctrine/
 		{"docs/doctrine/test.md", "docs/doctrine/test.md", false, "docs/doctrine/ is ALLOWED"},
 		// ALLOW: docs/adr/
@@ -35,17 +39,15 @@ func TestScanBoundaryContract(t *testing.T) {
 		{"docs/close-reports/test.md", "docs/close-reports/test.md", false, "docs/close-reports/ is ALLOWED"},
 		// ALLOW: *_test.go files
 		{"internal/app/foo_test.go", "internal/app/foo_test.go", false, "_test.go files are EXCLUDED"},
+		// ALLOW: AGENTS.md - policy document
+		{"AGENTS.md", "AGENTS.md", false, "AGENTS.md is ALLOWED (policy document)"},
+		// ALLOW: .clinerules/ - policy documents
+		{".clinerules/leamas.md", ".clinerules/leamas.md", false, ".clinerules/ is ALLOWED (policy documents)"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inAllowed := isInAllowedDir(tt.relPath)
-			isInternalFactory := len(tt.relPath) >= len("internal/factory") &&
-				(tt.relPath[:len("internal/factory")] == "internal/factory" ||
-					tt.relPath[:len("internal\\factory")] == "internal\\factory")
-			isTestFile := len(tt.relPath) >= 8 && tt.relPath[len(tt.relPath)-8:] == "_test.go"
-			shouldScan := !inAllowed && !isInternalFactory && !isTestFile
-
+			shouldScan := shouldScanFile(tt.relPath)
 			if shouldScan != tt.shouldScan {
 				t.Errorf("scan boundary contract: %s: got shouldScan=%v, want %v (%s)",
 					tt.relPath, shouldScan, tt.shouldScan, tt.description)
@@ -87,17 +89,8 @@ func TestAllowedDirsAreExported(t *testing.T) {
 }
 
 func TestScanFilesAreExported(t *testing.T) {
-	expectedFiles := []string{"AGENTS.md", ".clinerules/leamas.md"}
-	for _, expected := range expectedFiles {
-		found := false
-		for _, actual := range ScanFiles {
-			if actual == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("ScanFiles missing: %s", expected)
-		}
+	// ScanFiles is empty because AGENTS.md and .clinerules/ are in AllowedDirs (policy documents)
+	if len(ScanFiles) != 0 {
+		t.Errorf("ScanFiles should be empty, got %v", ScanFiles)
 	}
 }

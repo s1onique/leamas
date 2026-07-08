@@ -40,6 +40,8 @@ func TestIsInAllowedDir(t *testing.T) {
 		{"testdata/test.go", true},
 		{"internal/app/foo.go", false},
 		{"cmd/main.go", false},
+		{"AGENTS.md", true},
+		{".clinerules/leamas.md", true},
 	}
 
 	for _, tt := range tests {

@@ -14,14 +14,12 @@ The verifier implements an explicit contract for what is scanned and what is all
 
 The following directories and files are scanned for forbidden patterns:
 
-| Path | Scope |
-|------|-------|
-| `cmd/` | All production code in cmd |
-| `internal/` (except `internal/factory/`) | All non-factory internal code |
-| `scripts/` | Shell scripts |
-| `githooks/` | Git hooks |
-| `AGENTS.md` | Agent contract file |
-| `.clinerules/leamas.md` | Cline rules file |
+| Path | Scope | File Types |
+|------|-------|------------|
+| `cmd/` | All production code in cmd | `.go` (non-test only) |
+| `internal/` (except `internal/factory/`) | All non-factory internal code | `.go` (non-test only) |
+| `scripts/` | Shell scripts | All text files |
+| `githooks/` | Git hooks | All text files |
 
 ### ALLOW (Forbidden-Policy Terms Permitted)
 
@@ -36,6 +34,8 @@ The following directories and file types are explicitly excluded from scanning:
 | `docs/close-reports/` | Close reports |
 | `*_test.go` | Test files |
 | `testdata/` | Test fixtures |
+| `AGENTS.md` | Policy document discussing forbidden terms |
+| `.clinerules/` | Policy documents discussing forbidden terms |
 
 ## Forbidden Patterns
 

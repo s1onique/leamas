@@ -8,6 +8,8 @@
 
 Made the forbidden-pattern verifier's scan boundary explicit, documented, and tested. The verifier now implements a clear contract for what is scanned and what is allowed, eliminating the implicit blind spot around `internal/factory/`.
 
+**Note:** This ACT documented the scan boundary contract. ACT-LEAMAS-FACTORY-FORBIDDEN-SCOPE-CONTRACT01-R1 fixed an implementation bug where `scripts/` and `githooks/` were not actually being scanned despite being declared in the boundary.
+
 ## Files Changed
 
 | File | Change |
@@ -25,10 +27,10 @@ Made the forbidden-pattern verifier's scan boundary explicit, documented, and te
 ### Scan Boundary Contract
 
 **SCAN:**
-- `cmd/` - All production code in cmd
-- `internal/` (except `internal/factory/`) - All non-factory internal code
-- `scripts/` - Shell scripts
-- `githooks/` - Git hooks
+- `cmd/` - All production code in cmd (`.go` non-test files)
+- `internal/` (except `internal/factory/`) - All non-factory internal code (`.go` non-test files)
+- `scripts/` - Shell scripts (all text files)
+- `githooks/` - Git hooks (all text files)
 - `AGENTS.md` - Agent contract file
 - `.clinerules/leamas.md` - Cline rules file
 
@@ -40,6 +42,10 @@ Made the forbidden-pattern verifier's scan boundary explicit, documented, and te
 - `docs/close-reports/` - Close reports
 - `*_test.go` - Test files
 - `testdata/` - Test fixtures
+
+## Known Issue
+
+**R1 Required:** The implementation initially skipped all non-Go files in ScanDirs. This was fixed in ACT-LEAMAS-FACTORY-FORBIDDEN-SCOPE-CONTRACT01-R1.
 
 ## Verification
 
