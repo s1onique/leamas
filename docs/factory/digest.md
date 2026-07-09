@@ -91,6 +91,19 @@ Digest output should be written to `build/` or another ignored artifact director
 
 **Warning**: Do not commit generated digests to version control.
 
+## Contract Header
+
+Every digest begins with a versioned contract header that provides metadata about the digest producer and format. See [Digest Contract](./digest-contract.md) for full documentation.
+
+```
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1
+LEAMAS_VERSION: <version>
+LEAMAS_COMMIT: <commit>
+LEAMAS_BUILD_TIME: <build_time>
+DIGEST_MODE: <dirty|staged|range|auto>
+DIGEST_CREATED_AT: <UTC RFC3339 timestamp>
+```
+
 ## Format
 
 The digest is generated as Markdown with the following sections:

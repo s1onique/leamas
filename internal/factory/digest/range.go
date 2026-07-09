@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/s1onique/leamas/internal/version"
 )
 
 // RangeFile represents a file changed in a commit range.
@@ -88,9 +90,23 @@ func RenderRangeDigest(repoRoot string, files []RangeFile, revRange string) (str
 func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved *ResolvedMode) (string, error) {
 	var sb strings.Builder
 
-	// Header
+	// Get version metadata and timestamp once
+	v := version.Get()
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+
+	// Contract header - prepend versioned metadata
+	headerInfo := HeaderInfo{
+		Version:   v.Version,
+		Commit:    v.Commit,
+		BuildTime: v.BuildTime,
+		Mode:      resolved.Mode,
+		CreatedAt: createdAt,
+	}
+	sb.WriteString(RenderContractHeader(headerInfo))
+
+	// Legacy header (preserved for backwards compatibility)
 	sb.WriteString("# Targeted digest\n\n")
-	sb.WriteString(fmt.Sprintf("Generated at: %s\n", time.Now().UTC().Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("Generated at: %s\n", createdAt))
 	sb.WriteString(fmt.Sprintf("Repo: %s\n", repoRoot))
 	sb.WriteString(fmt.Sprintf("Mode: %s\n", resolved.Mode))
 	sb.WriteString(fmt.Sprintf("Range: %s\n", resolved.Range))
@@ -205,9 +221,23 @@ func UniqueRangeFiles(files []RangeFile) []RangeFile {
 func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, resolved *ResolvedMode, explicit bool) (string, error) {
 	var sb strings.Builder
 
-	// Header
+	// Get version metadata and timestamp once
+	v := version.Get()
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+
+	// Contract header - prepend versioned metadata
+	headerInfo := HeaderInfo{
+		Version:   v.Version,
+		Commit:    v.Commit,
+		BuildTime: v.BuildTime,
+		Mode:      mode,
+		CreatedAt: createdAt,
+	}
+	sb.WriteString(RenderContractHeader(headerInfo))
+
+	// Legacy header (preserved for backwards compatibility)
 	sb.WriteString("# Targeted digest\n\n")
-	sb.WriteString(fmt.Sprintf("Generated at: %s\n", time.Now().UTC().Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("Generated at: %s\n", createdAt))
 	sb.WriteString(fmt.Sprintf("Repo: %s\n", repoRoot))
 	sb.WriteString(fmt.Sprintf("Mode: %s\n", mode))
 

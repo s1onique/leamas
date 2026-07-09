@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/redact"
+	"github.com/s1onique/leamas/internal/version"
 )
 
 // Options configures digest generation.
@@ -253,9 +254,23 @@ func GetStagedFiles(repoRoot string) ([]ChangedFile, error) {
 func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, error) {
 	var sb strings.Builder
 
-	// Header
+	// Get version metadata and timestamp once
+	v := version.Get()
+	createdAt := time.Now().UTC().Format(time.RFC3339)
+
+	// Contract header - prepend versioned metadata
+	headerInfo := HeaderInfo{
+		Version:   v.Version,
+		Commit:    v.Commit,
+		BuildTime: v.BuildTime,
+		Mode:      mode,
+		CreatedAt: createdAt,
+	}
+	sb.WriteString(RenderContractHeader(headerInfo))
+
+	// Legacy header (preserved for backwards compatibility)
 	sb.WriteString("# Targeted digest\n\n")
-	sb.WriteString(fmt.Sprintf("Generated at: %s\n", time.Now().UTC().Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("Generated at: %s\n", createdAt))
 	sb.WriteString(fmt.Sprintf("Repo: %s\n", repoRoot))
 	sb.WriteString(fmt.Sprintf("Mode: %s\n", mode))
 	sb.WriteString("\n")
