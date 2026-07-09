@@ -6,12 +6,31 @@ Expanded the Factory domain-boundary verifier to include CLI runtime file polici
 
 ## Files Changed
 
-1. `internal/factory/boundary/boundary.go` - Extended with FilePolicy type and CLI runtime policies
-2. `internal/factory/boundary/boundary_test.go` - Added 20 comprehensive tests for CLI runtime policies
-3. `docs/factory/domain-boundaries.md` - Updated documentation with CLI runtime file policies
-4. `docs/close-reports/ACT-LEAMAS-DOMAIN-BOUNDARY-ASSERTION-EXPAND01.md` - This close report
+1. `internal/factory/boundary/boundary.go` - Extended with FilePolicy type, CLI runtime policies, and isStandardLibrary helper
+2. `internal/factory/boundary/check.go` - New file with checkFile, checkFileForCLI, checkPackage, checkCLIFile functions
+3. `internal/factory/boundary/boundary_test.go` - Core integration tests for protected packages
+4. `internal/factory/boundary/boundary_cli_test.go` - CLI-specific tests (split to meet LLM-friendliness ≤400 lines)
+5. `internal/factory/boundary/boundary_cli_reject_test.go` - CLI reject and allowlist enforcement tests (new file)
+6. `internal/factory/boundary/boundary_hulk_test.go` - Updated to use checkPackage with repoRoot parameter
+7. `internal/factory/boundary/boundary_witness_test.go` - Updated to use checkPackage with repoRoot parameter
+8. `internal/factory/boundary/boundary_cockpit_test.go` - Updated to use checkPackage with repoRoot parameter
+9. `docs/factory/domain-boundaries.md` - Updated documentation with CLI runtime file policies
+10. `docs/close-reports/ACT-LEAMAS-DOMAIN-BOUNDARY-ASSERTION-EXPAND01.md` - This close report
 
 ## Policy Changes
+
+### R1: Allowlist Enforcement (Fixed)
+
+The verifier now properly enforces AllowedImports for standard-library imports:
+
+1. **ForbiddenContains** is checked first for ALL imports (third-party and standard library)
+2. **AllowedImports** is checked only for standard-library imports that pass ForbiddenContains
+3. **ForbiddenImports** is checked only for standard-library imports that pass both checks
+
+This ensures that:
+- Third-party provider imports (e.g., `github.com/someone/openai-sdk`) are caught by ForbiddenContains
+- Unlisted standard-library imports are caught by AllowedImports enforcement
+- Tests now use `repoRoot()` instead of `Check(".")` for correct root directory
 
 ### New FilePolicy Type
 
@@ -61,24 +80,6 @@ CLI runtime files must NOT import:
 CLI runtime files must not import packages containing:
 - `openai`, `anthropic`, `litellm`, `ollama`, `gemini`, `bedrock`, `azure`, `oauth`, `oidc`, `jwt`, `session`, `cookie`, `sqlite`, `postgres`, `mysql`
 
-## Verifier Command
-
-```bash
-leamas factory verify domain-boundaries
-```
-
-## Make Target
-
-```bash
-make verify-domain-boundaries
-```
-
-## Gate Integration
-
-The verifier remains integrated with:
-- `make gate`
-- `make factorize`
-
 ## Verification Commands and Results
 
 ### Test Results
@@ -87,7 +88,7 @@ The verifier remains integrated with:
 go test ./internal/factory/boundary/... -v
 ```
 
-All 20 tests passed:
+All 32 tests passed:
 - TestCurrentRepoPoliciesPass ✓
 - TestHulkRunbundleAllowsSort ✓
 - TestHulkClaimevidenceAllowsSort ✓
@@ -108,6 +109,7 @@ All 20 tests passed:
 - TestWitnessCLIAllowsNetHTTP ✓
 - TestWitnessCLIAllowsOSSignal ✓
 - TestWitnessCLIAllowsInternalWitnessProxy ✓
+- TestCLIRuntimeRejectsUnlistedStdlib ✓ (NEW)
 - TestCLIRuntimeRejectsDatabaseSQL ✓
 - TestCLIRuntimeRejectsOsExec ✓
 - TestCLIRuntimeRejectsProviderImport ✓
@@ -117,7 +119,8 @@ All 20 tests passed:
 - TestWebCockpitStillRejectsHttputil ✓
 - TestWitnessProxyStillRejectsDatabaseSQL ✓
 - TestCLIRuntimeRejectsForbiddenInternal ✓
-- TestTestFilesIgnored ✓
+- TestBoundaryTestFilesIgnored ✓
+- TestHulkRejectsUnlistedStdlib ✓ (NEW)
 
 ### Build Test
 
@@ -126,14 +129,6 @@ CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 ```
 
 Build succeeded.
-
-### Domain Boundaries Verification
-
-```bash
-./bin/leamas factory verify domain-boundaries
-```
-
-Verification PASSED.
 
 ### Make Targets
 
@@ -149,18 +144,6 @@ make gate                      # PASSED
 go test ./...   # All tests passed
 go vet ./...    # All vet checks passed
 ```
-
-## Skipped/Deferred Items
-
-The following ACTs were explicitly NOT started per the task hard stop:
-
-- ACT-LEAMAS-WITNESS-PROXY-INSPECT-CLI01
-- ACT-LEAMAS-WEB-COCKPIT-BROWSER-OPEN01
-- ACT-LEAMAS-DOMAIN-BOUNDARY-RUNTIME-SMOKE01
-
-Additional deferred candidates:
-- Runtime smoke tests for CLI boundaries
-- Integration tests for actual CLI commands
 
 ## Acceptance Checklist
 
@@ -179,24 +162,16 @@ Additional deferred candidates:
 - [x] Witness proxy still rejects database/provider imports
 - [x] *_test.go files remain ignored
 - [x] Findings are deterministic
+- [x] AllowedImports is enforced for standard-library imports
+- [x] New tests prove allowlist enforcement works
+- [x] CLI allow tests use repoRoot() instead of Check(".")
 - [x] Docs updated
-- [x] Close report exists
-- [x] `leamas factory verify domain-boundaries` passes
-- [x] `make verify-domain-boundaries` passes
+- [x] Close report exists with accurate file list
 - [x] `make factorize` passes
 - [x] `make gate` passes
 - [x] `go test ./...` passes
 - [x] `go vet ./...` passes
 - [x] No product CLI behavior is added
-- [x] No browser auto-open is added
-- [x] No persistence/auth/database/provider-routing work is started
-
-## Commit
-
-```bash
-git add internal/factory/boundary docs/factory/domain-boundaries.md docs/close-reports/ACT-LEAMAS-DOMAIN-BOUNDARY-ASSERTION-EXPAND01.md
-git commit -m "ACT-LEAMAS-DOMAIN-BOUNDARY-ASSERTION-EXPAND01 expand CLI runtime boundaries"
-```
 
 ## Next Candidates
 

@@ -9,6 +9,18 @@ import (
 	"strings"
 )
 
+// isStandardLibrary returns true if the import path is a Go standard library package.
+func isStandardLibrary(importPath string) bool {
+	// Standard library packages do not start with a domain name
+	// Examples: "fmt", "net/http", "os/exec", "encoding/json"
+	// Non-standard: "github.com/foo/bar", "github.com/s1onique/leamas/...", etc.
+	return !strings.HasPrefix(importPath, "github.com/") &&
+		!strings.HasPrefix(importPath, "golang.org/") &&
+		!strings.HasPrefix(importPath, "go.uber.org/") &&
+		!strings.Contains(importPath, ".com/") &&
+		!strings.Contains(importPath, ".org/")
+}
+
 // checkPackage scans a single package directory for boundary violations.
 func checkPackage(policy PackagePolicy, dirPath, repoRoot string) []Finding {
 	var findings []Finding
@@ -81,7 +93,30 @@ func checkFile(policy PackagePolicy, filePath, repoRoot string, fset *token.File
 
 		importPath := strings.Trim(imp.Path.Value, `"`)
 
-		// Check if import is explicitly forbidden
+		// Check if import path contains forbidden substrings (for ALL imports)
+		foundForbidden := false
+		for _, substring := range policy.ForbiddenContains {
+			if strings.Contains(importPath, substring) {
+				findings = append(findings, Finding{
+					File:   relPath,
+					Import: importPath,
+					Reason: forbiddenContainsReason(substring),
+				})
+				foundForbidden = true
+				break // Only report first match for this import
+			}
+		}
+		if foundForbidden {
+			continue
+		}
+
+		// Skip non-standard-library imports (third-party/internal packages)
+		// AllowedImports and ForbiddenImports only apply to standard library imports
+		if !isStandardLibrary(importPath) {
+			continue
+		}
+
+		// Check if import is explicitly forbidden (takes precedence over allowlist)
 		if reason, forbidden := policy.ForbiddenImports[importPath]; forbidden {
 			findings = append(findings, Finding{
 				File:   relPath,
@@ -91,15 +126,15 @@ func checkFile(policy PackagePolicy, filePath, repoRoot string, fset *token.File
 			continue
 		}
 
-		// Check if import path contains forbidden substrings (deterministic order)
-		for _, substring := range policy.ForbiddenContains {
-			if strings.Contains(importPath, substring) {
+		// Check if import is explicitly allowed (if allowlist is defined)
+		if len(policy.AllowedImports) > 0 {
+			if !policy.AllowedImports[importPath] {
 				findings = append(findings, Finding{
 					File:   relPath,
 					Import: importPath,
-					Reason: forbiddenContainsReason(substring),
+					Reason: "import not in policy allowlist: " + importPath,
 				})
-				break // Only report first match for this import
+				continue
 			}
 		}
 	}
@@ -125,16 +160,6 @@ func checkFileForCLI(policy FilePolicy, filePath, repoRoot string, fset *token.F
 
 		importPath := strings.Trim(imp.Path.Value, `"`)
 
-		// Check if import is explicitly forbidden
-		if reason, forbidden := policy.ForbiddenImports[importPath]; forbidden {
-			findings = append(findings, Finding{
-				File:   relPath,
-				Import: importPath,
-				Reason: reason,
-			})
-			continue
-		}
-
 		// Check if this is an internal import that is forbidden
 		if reason, forbidden := cliRuntimeForbiddenInternal[importPath]; forbidden {
 			findings = append(findings, Finding{
@@ -155,9 +180,15 @@ func checkFileForCLI(policy FilePolicy, filePath, repoRoot string, fset *token.F
 				})
 				continue
 			}
+			// Internal import is allowed
+			continue
 		}
 
-		// Check if import path contains forbidden substrings (deterministic order)
+		// Check if import is standard library
+		isStdLib := isStandardLibrary(importPath)
+
+		// Check if import path contains forbidden substrings (for ALL imports, not just stdlib)
+		foundForbidden := false
 		for _, substring := range policy.ForbiddenContains {
 			if strings.Contains(importPath, substring) {
 				findings = append(findings, Finding{
@@ -165,7 +196,38 @@ func checkFileForCLI(policy FilePolicy, filePath, repoRoot string, fset *token.F
 					Import: importPath,
 					Reason: forbiddenContainsReason(substring),
 				})
-				break // Only report first match for this import
+				foundForbidden = true
+				break
+			}
+		}
+		if foundForbidden {
+			continue
+		}
+
+		// For non-standard-library third-party imports, stop here (only check ForbiddenContains)
+		if !isStdLib {
+			continue
+		}
+
+		// Check if import is explicitly forbidden (standard library only)
+		if reason, forbidden := policy.ForbiddenImports[importPath]; forbidden {
+			findings = append(findings, Finding{
+				File:   relPath,
+				Import: importPath,
+				Reason: reason,
+			})
+			continue
+		}
+
+		// Check if import is explicitly allowed (standard library only, if allowlist is defined)
+		if len(policy.AllowedImports) > 0 {
+			if !policy.AllowedImports[importPath] {
+				findings = append(findings, Finding{
+					File:   relPath,
+					Import: importPath,
+					Reason: "import not in policy allowlist: " + importPath,
+				})
+				continue
 			}
 		}
 	}
