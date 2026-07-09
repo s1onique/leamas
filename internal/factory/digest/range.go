@@ -65,21 +65,8 @@ func GetRangeFiles(repoRoot, revRange string) ([]RangeFile, error) {
 		})
 	}
 
-	// Also get untracked files in range (not typically in diff)
-	untracked, err := RunGit(repoRoot, []string{"diff", "--name-only", "--diff-filter=A", "-z", revRange})
-	if err == nil {
-		for _, path := range splitNULList(untracked) {
-			if path != "" {
-				files = append(files, RangeFile{
-					Path:   path,
-					From:   "",
-					To:     "",
-					Status: "added",
-				})
-			}
-		}
-	}
-
+	// Deduplicate files and sort
+	files = UniqueRangeFiles(files)
 	sort.Slice(files, func(i, j int) bool {
 		return files[i].Path < files[j].Path
 	})
@@ -191,6 +178,26 @@ func splitNULList(output string) []string {
 			result = append(result, p)
 		}
 	}
+	return result
+}
+
+// UniqueRangeFiles removes duplicate files from a range file list.
+// It preserves the first-seen occurrence and maintains stable ordering.
+func UniqueRangeFiles(files []RangeFile) []RangeFile {
+	if len(files) <= 1 {
+		return files
+	}
+
+	seen := make(map[string]bool)
+	result := make([]RangeFile, 0, len(files))
+
+	for _, f := range files {
+		if !seen[f.Path] {
+			seen[f.Path] = true
+			result = append(result, f)
+		}
+	}
+
 	return result
 }
 
