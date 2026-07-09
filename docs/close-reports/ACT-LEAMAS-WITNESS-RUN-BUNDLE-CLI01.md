@@ -13,7 +13,9 @@ database persistence, or network behavior.
 |------|--------|
 | `cmd/leamas/witness.go` | Added `run-bundle` case to witness dispatch |
 | `cmd/leamas/run_bundle.go` | New file with create/list/show command handlers |
-| `cmd/leamas/run_bundle_test.go` | New file with 17 tests for CLI commands |
+| `cmd/leamas/run_bundle_test.go` | Tests for create command and dispatch |
+| `cmd/leamas/run_bundle_list_test.go` | Tests for list command |
+| `cmd/leamas/run_bundle_show_test.go` | Tests for show command |
 | `docs/factory/run-bundles.md` | Added CLI section with usage examples |
 | `docs/close-reports/ACT-LEAMAS-WITNESS-RUN-BUNDLE-CLI01.md` | This close report |
 
@@ -35,6 +37,7 @@ leamas witness run-bundle show <run-id> [--root <path>] [--json]
 - **Run ID validation**: Uses `runbundle.ValidateRunID` to reject unsafe IDs
 - **Root validation**: Rejects empty root directories
 - **Error messages**: Clear, user-facing error messages without Go stack traces
+- **Testable dispatcher**: `runWitnessRunBundle()` enables proper unit testing
 
 ## Behavior Proved
 
@@ -78,11 +81,19 @@ An operator can now:
 ### Boundary Tests
 - `TestRunBundleCLIDoesNotImportRuntimePackages`
 
+## R1 Fixes Applied
+
+1. **`ok` field is boolean**: Changed from `string` to `bool` in JSON output
+2. **No manual JSON concatenation**: Added `printRunBundleListJSON()` helper for empty list case
+3. **Split test files**: Created `run_bundle_test.go`, `run_bundle_list_test.go`, `run_bundle_show_test.go`
+4. **Testable dispatcher**: Added `runWitnessRunBundle()` function for proper unit test coverage
+
 ## Verification Commands and Results
 
 ```bash
 # Focused tests
 go test ./cmd/leamas/... -run 'RunBundle' -count=1 -v
+# Result: PASS (21 tests)
 
 # Full test suite
 go test ./...
@@ -94,8 +105,8 @@ go vet ./...
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 
 # Factory checks
-make factorize
-make gate
+make factorize && make gate
+# Result: GATE PASSED
 ```
 
 ## Skipped / Deferred
@@ -148,6 +159,8 @@ Reason: Once bundles can be created/listed/shown, the next durable evidence prim
 ```bash
 git add cmd/leamas/run_bundle.go \
       cmd/leamas/run_bundle_test.go \
+      cmd/leamas/run_bundle_list_test.go \
+      cmd/leamas/run_bundle_show_test.go \
       cmd/leamas/witness.go \
       docs/factory/run-bundles.md \
       docs/close-reports/ACT-LEAMAS-WITNESS-RUN-BUNDLE-CLI01.md
