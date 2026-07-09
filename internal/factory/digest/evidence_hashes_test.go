@@ -53,24 +53,25 @@ func TestNormalizeHashInput_EnsuresSingleFinalNewline(t *testing.T) {
 
 func TestRenderEvidenceHashes_StableKeyOrder(t *testing.T) {
 	eh := EvidenceHashes{
-		HashAlgorithm:           "sha256",
-		HashScope:               "normalized_digest_v2_sections",
-		ChangesetManifestSHA256: "aaaa",
-		ChangesetStatsSHA256:    "bbbb",
-		ReviewMapSHA256:         "cccc",
-		RiskSignalsSHA256:       "dddd",
-		PatchHygieneSHA256:      "eeee",
-		GateSummarySHA256:       "0000",
-		FileEvidenceSHA256:      "ffff",
-		DigestEvidenceSHA256:    "gggg",
+		HashAlgorithm:            "sha256",
+		HashScope:                "normalized_digest_v2_sections",
+		ChangesetManifestSHA256:  "aaaa",
+		ChangesetStatsSHA256:     "bbbb",
+		ReviewMapSHA256:          "cccc",
+		RiskSignalsSHA256:        "dddd",
+		PatchHygieneSHA256:       "eeee",
+		PublicSurfaceDeltaSHA256: "hhhh",
+		GateSummarySHA256:        "0000",
+		FileEvidenceSHA256:       "ffff",
+		DigestEvidenceSHA256:     "gggg",
 	}
 
 	result := RenderEvidenceHashes(eh)
 	lines := strings.Split(strings.TrimSpace(result), "\n")
 
-	// Check expected line count
-	if len(lines) != 11 {
-		t.Errorf("expected 11 lines, got %d", len(lines))
+	// Check expected line count (12 lines with public_surface_delta_sha256)
+	if len(lines) != 12 {
+		t.Errorf("expected 12 lines, got %d", len(lines))
 	}
 
 	// Check key order
@@ -83,6 +84,7 @@ func TestRenderEvidenceHashes_StableKeyOrder(t *testing.T) {
 		"review_map_sha256=",
 		"risk_signals_sha256=",
 		"patch_hygiene_sha256=",
+		"public_surface_delta_sha256=",
 		"gate_summary_sha256=",
 		"file_evidence_sha256=",
 		"digest_evidence_sha256=",
@@ -103,6 +105,7 @@ func TestEvidenceHashes_DoNotIncludeOwnSection(t *testing.T) {
 		"## REVIEW_MAP\nproduction:\n  - file.go\n",
 		"## RISK_SIGNALS\nproduction_without_tests=true\n",
 		"## PATCH_HYGIENE\ngit_diff_check=pass\n",
+		"## PUBLIC_SURFACE_DELTA\npackages_changed=0\n",
 		"## GATE_SUMMARY\nsource=.factory/gate-summary.json\n",
 		"## Changed files\nfile.go\n",
 	)
@@ -122,12 +125,13 @@ func TestDigestEvidenceHash_StableAcrossRepeatedRender(t *testing.T) {
 	reviewMap := "## REVIEW_MAP\nproduction:\n  - file.go\n"
 	risk := "## RISK_SIGNALS\nproduction_without_tests=true\n"
 	patch := "## PATCH_HYGIENE\ngit_diff_check=pass\n"
+	publicSurfaceDelta := "## PUBLIC_SURFACE_DELTA\npackages_changed=0\n"
 	gateSummary := "## GATE_SUMMARY\nsource=.factory/gate-summary.json\n"
 	fileEv := "## Changed files\nfile.go\n"
 
 	// Compute hashes twice
-	eh1 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, gateSummary, fileEv)
-	eh2 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, gateSummary, fileEv)
+	eh1 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, publicSurfaceDelta, gateSummary, fileEv)
+	eh2 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, publicSurfaceDelta, gateSummary, fileEv)
 
 	if eh1.DigestEvidenceSHA256 != eh2.DigestEvidenceSHA256 {
 		t.Error("digest_evidence_sha256 should be stable across renders")

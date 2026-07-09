@@ -114,6 +114,9 @@ The review evidence sections appear in this order:
 3. `## REVIEW_MAP` - Files grouped by reviewer role
 4. `## RISK_SIGNALS` - Deterministic facts for reviewer focus
 5. `## PATCH_HYGIENE` - Conflict marker and whitespace checks
+6. `## EVIDENCE_HASHES` - Deterministic SHA-256 fingerprints over digest sections
+7. `## GATE_SUMMARY` - Digest gate pass/fail status
+8. `## PUBLIC_SURFACE_DELTA` - Public Go API/CLI surface changes
 
 ### CHANGESET_MANIFEST
 
@@ -287,6 +290,9 @@ Mode: <mode>
 ## GATE_SUMMARY
 ...
 
+## PUBLIC_SURFACE_DELTA
+...
+
 ## Changed files
 ...
 
@@ -297,16 +303,15 @@ Mode: <mode>
 ...
 ```
 
-## Non-Goals (v2)
+## Future Extensions
 
-This ACT explicitly does not implement:
+Potential future sections not yet implemented:
 
-- `PUBLIC_SURFACE_DELTA` - Public API analysis
 - `DEPENDENCY_DELTA` - Dependency change tracking
 - SARIF/static-analysis ingestion
 - SBOM/provenance/attestation output
 
-These are potential future ACTs, not v2 scope.
+See [digest-public-surface-delta.md](./digest-public-surface-delta.md) for PUBLIC_SURFACE_DELTA specification.
 
 ## File Content Contract
 

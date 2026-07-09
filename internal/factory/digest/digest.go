@@ -307,6 +307,12 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 	patchHygieneSection := RenderPatchHygiene(patchHygiene)
 	sb.WriteString(patchHygieneSection)
 
+	// PUBLIC_SURFACE_DELTA section - compute before writing to include in evidence hashes
+	publicSurfaceDeltaSection := RenderEmptyPublicSurfaceDelta()
+	if delta, err := CollectPublicSurfaceDelta(mode, repoRoot, files); err == nil {
+		publicSurfaceDeltaSection = RenderPublicSurfaceDelta(delta)
+	}
+
 	// File evidence section for hashing
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
@@ -325,13 +331,14 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 		gateSummarySection = gate.RenderGateSummary(nil, nil)
 	}
 
-	// Compute evidence hashes (includes GATE_SUMMARY)
+	// Compute evidence hashes (includes PUBLIC_SURFACE_DELTA and GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection,
 		statsSection,
 		reviewMapSection,
 		riskSignalsSection,
 		patchHygieneSection,
+		publicSurfaceDeltaSection,
 		gateSummarySection,
 		fileEvidenceSection,
 	)

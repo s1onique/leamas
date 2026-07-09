@@ -17,16 +17,17 @@ const (
 
 // EvidenceHashes contains SHA-256 hashes for digest evidence sections.
 type EvidenceHashes struct {
-	HashAlgorithm           string
-	HashScope               string
-	ChangesetManifestSHA256 string
-	ChangesetStatsSHA256    string
-	ReviewMapSHA256         string
-	RiskSignalsSHA256       string
-	PatchHygieneSHA256      string
-	GateSummarySHA256       string
-	FileEvidenceSHA256      string
-	DigestEvidenceSHA256    string
+	HashAlgorithm            string
+	HashScope                string
+	ChangesetManifestSHA256  string
+	ChangesetStatsSHA256     string
+	ReviewMapSHA256          string
+	RiskSignalsSHA256        string
+	PatchHygieneSHA256       string
+	PublicSurfaceDeltaSHA256 string
+	GateSummarySHA256        string
+	FileEvidenceSHA256       string
+	DigestEvidenceSHA256     string
 }
 
 // SHA256Hex computes the SHA-256 hash of input and returns lowercase hex.
@@ -62,7 +63,7 @@ func ComputeFileEvidence(diffsContent string) string {
 
 // ComputeEvidenceHashes computes all evidence hashes from rendered sections.
 func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
-	riskSignalsSection, patchHygieneSection, gateSummarySection, fileEvidenceSection string) EvidenceHashes {
+	riskSignalsSection, patchHygieneSection, publicSurfaceDeltaSection, gateSummarySection, fileEvidenceSection string) EvidenceHashes {
 
 	var eh EvidenceHashes
 	eh.HashAlgorithm = EvidenceHashAlgorithm
@@ -73,6 +74,7 @@ func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
 	eh.ReviewMapSHA256 = ComputeSectionHash(reviewMapSection)
 	eh.RiskSignalsSHA256 = ComputeSectionHash(riskSignalsSection)
 	eh.PatchHygieneSHA256 = ComputeSectionHash(patchHygieneSection)
+	eh.PublicSurfaceDeltaSHA256 = ComputeSectionHash(publicSurfaceDeltaSection)
 	eh.GateSummarySHA256 = ComputeSectionHash(gateSummarySection)
 	eh.FileEvidenceSHA256 = ComputeSectionHash(fileEvidenceSection)
 
@@ -82,6 +84,7 @@ func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
 		reviewMapSection + "\n" +
 		riskSignalsSection + "\n" +
 		patchHygieneSection + "\n" +
+		publicSurfaceDeltaSection + "\n" +
 		gateSummarySection + "\n" +
 		fileEvidenceSection
 
@@ -108,6 +111,8 @@ func RenderEvidenceHashes(eh EvidenceHashes) string {
 	sb.WriteString(eh.RiskSignalsSHA256)
 	sb.WriteString("\npatch_hygiene_sha256=")
 	sb.WriteString(eh.PatchHygieneSHA256)
+	sb.WriteString("\npublic_surface_delta_sha256=")
+	sb.WriteString(eh.PublicSurfaceDeltaSHA256)
 	sb.WriteString("\ngate_summary_sha256=")
 	sb.WriteString(eh.GateSummarySHA256)
 	sb.WriteString("\nfile_evidence_sha256=")

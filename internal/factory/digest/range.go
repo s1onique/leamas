@@ -144,6 +144,12 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	patchHygieneSection := RenderPatchHygiene(patchHygiene)
 	sb.WriteString(patchHygieneSection)
 
+	// PUBLIC_SURFACE_DELTA section - compute before writing to include in evidence hashes
+	publicSurfaceDeltaSection := RenderEmptyPublicSurfaceDelta()
+	if delta, err := CollectRangePublicSurfaceDelta(repoRoot, files, resolved.Range); err == nil {
+		publicSurfaceDeltaSection = RenderPublicSurfaceDelta(delta)
+	}
+
 	// Build file evidence section for hashing (using shared function)
 	fileEvidenceSection := RenderRangeFileEvidence(repoRoot, files, resolved.Range)
 
@@ -162,13 +168,14 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 		gateSummarySection = gate.RenderGateSummary(nil, nil)
 	}
 
-	// Compute evidence hashes (includes GATE_SUMMARY)
+	// Compute evidence hashes (includes PUBLIC_SURFACE_DELTA and GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection,
 		statsSection,
 		reviewMapSection,
 		riskSignalsSection,
 		patchHygieneSection,
+		publicSurfaceDeltaSection,
 		gateSummarySection,
 		fileEvidenceSection,
 	)
@@ -178,6 +185,10 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 
 	// Write GATE_SUMMARY section
 	sb.WriteString(gateSummarySection)
+
+	// Write PUBLIC_SURFACE_DELTA section
+	sb.WriteString(publicSurfaceDeltaSection)
+	sb.WriteString("\n")
 
 	// Write Changed files and Diffs sections
 	sb.WriteString(fileEvidenceSection)
@@ -310,6 +321,12 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	patchHygieneSection := RenderPatchHygiene(patchHygiene)
 	sb.WriteString(patchHygieneSection)
 
+	// PUBLIC_SURFACE_DELTA section - compute before writing to include in evidence hashes
+	publicSurfaceDeltaSection := RenderEmptyPublicSurfaceDelta()
+	if delta, err := CollectPublicSurfaceDelta(mode, repoRoot, files); err == nil {
+		publicSurfaceDeltaSection = RenderPublicSurfaceDelta(delta)
+	}
+
 	// Build file evidence section for hashing (using shared function)
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
@@ -328,13 +345,14 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 		gateSummarySection = gate.RenderGateSummary(nil, nil)
 	}
 
-	// Compute evidence hashes (includes GATE_SUMMARY)
+	// Compute evidence hashes (includes PUBLIC_SURFACE_DELTA and GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection,
 		statsSection,
 		reviewMapSection,
 		riskSignalsSection,
 		patchHygieneSection,
+		publicSurfaceDeltaSection,
 		gateSummarySection,
 		fileEvidenceSection,
 	)
@@ -344,6 +362,10 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 
 	// Write GATE_SUMMARY section
 	sb.WriteString(gateSummarySection)
+
+	// Write PUBLIC_SURFACE_DELTA section
+	sb.WriteString(publicSurfaceDeltaSection)
+	sb.WriteString("\n")
 
 	// Write Changed files and Diffs sections
 	sb.WriteString(fileEvidenceSection)
