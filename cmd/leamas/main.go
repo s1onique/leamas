@@ -7,7 +7,6 @@ import (
 
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
 	"github.com/s1onique/leamas/internal/factory/boundary"
-	"github.com/s1onique/leamas/internal/factory/digest"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
@@ -42,30 +41,6 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		printUsage()
-		os.Exit(1)
-	}
-}
-
-func handleFactory() {
-	if len(os.Args) < 3 {
-		printFactoryUsage()
-		os.Exit(1)
-	}
-
-	switch os.Args[2] {
-	case "verify":
-		handleFactoryVerify()
-	case "gate":
-		handleFactoryGate()
-	case "factorize":
-		handleFactoryFactorize()
-	case "digest":
-		handleFactoryDigest()
-	case "coverage":
-		handleFactoryCoverage()
-	default:
-		fmt.Fprintf(os.Stderr, "unknown factory command: %s\n", os.Args[2])
-		printFactoryUsage()
 		os.Exit(1)
 	}
 }
@@ -227,140 +202,74 @@ func handleFactoryVerify() {
 	os.Exit(1)
 }
 
-func handleFactoryGate() {
-	exitCode := gate.RunGate(".")
-	os.Exit(exitCode)
+// usageText returns the main usage text for leamas CLI.
+func usageText() string {
+	return `Leamas - Local-first, single-binary tool orchestration
+
+Usage:
+  leamas [command]
+
+Commands:
+  leamas --help               Show this help
+  leamas version              Show version
+  leamas factory verify       Run factory verifiers
+  leamas factory gate        Run quality gate
+  leamas factory factorize   Run factory verifiers only
+  leamas factory digest      Generate targeted digest
+  leamas factory coverage    Check coverage threshold
+  leamas doctor              Run diagnostics
+  leamas cockpit             Local web cockpit
+  leamas witness             Witness proxy commands`
 }
 
-func handleFactoryFactorize() {
-	exitCode := gate.RunFactorize(".")
-	os.Exit(exitCode)
-}
-
-func handleFactoryDigest() {
-	var mode digest.Mode
-	var hasDirty, hasStaged, hasRange bool
-	var output string
-	var rangeSpec string
-
-	args := os.Args[3:]
-	i := 0
-	for i < len(args) {
-		switch args[i] {
-		case "--dirty":
-			hasDirty = true
-			mode = digest.ModeDirty
-			i++
-		case "--staged":
-			hasStaged = true
-			mode = digest.ModeStaged
-			i++
-		case "--range":
-			if i+1 >= len(args) {
-				fmt.Fprintf(os.Stderr, "ERROR: --range requires a revision range argument\n")
-				printDigestUsage()
-				os.Exit(1)
-			}
-			hasRange = true
-			rangeSpec = args[i+1]
-			mode = digest.ModeRange
-			i += 2
-		case "--output":
-			if i+1 >= len(args) {
-				fmt.Fprintf(os.Stderr, "ERROR: --output requires a path argument\n")
-				printDigestUsage()
-				os.Exit(1)
-			}
-			output = args[i+1]
-			i += 2
-		default:
-			fmt.Fprintf(os.Stderr, "ERROR: unknown flag: %s\n", args[i])
-			printDigestUsage()
-			os.Exit(1)
-		}
-	}
-
-	if hasDirty && hasStaged {
-		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --dirty and --staged\n")
-		printDigestUsage()
-		os.Exit(1)
-	}
-	if hasDirty && hasRange {
-		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --dirty and --range\n")
-		printDigestUsage()
-		os.Exit(1)
-	}
-	if hasStaged && hasRange {
-		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --staged and --range\n")
-		printDigestUsage()
-		os.Exit(1)
-	}
-
-	if mode == "" {
-		mode = digest.ModeAuto
-	}
-
-	if output == "" {
-		fmt.Fprintf(os.Stderr, "ERROR: --output is required\n")
-		printDigestUsage()
-		os.Exit(1)
-	}
-
-	opts := digest.Options{
-		Mode:   mode,
-		Output: output,
-	}
-	if hasRange {
-		opts.Range = rangeSpec
-	}
-
-	err := digest.Write(opts)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Println(output)
-}
-
-func printDigestUsage() {
-	fmt.Println("Usage: leamas factory digest [flags]")
-	fmt.Println()
-	fmt.Println("Flags:")
-	fmt.Println("  --dirty             Include unstaged, staged, and untracked changes")
-	fmt.Println("  --staged            Include only staged changes")
-	fmt.Println("  --range <rev-range> Include changes in revision range")
-	fmt.Println("  --output <path>     Output path (required)")
+// factoryUsageText returns the factory subcommand usage text.
+func factoryUsageText() string {
+	return `Factory commands:
+  leamas factory verify <check>   Run a specific verifier
+  leamas factory gate           Run full quality gate
+  leamas factory factorize      Run verifiers only (no toolchain)
+  leamas factory digest [flags] Generate targeted digest
+  leamas factory coverage        Check coverage threshold`
 }
 
 func printUsage() {
-	fmt.Println("Leamas - Local-first, single-binary tool orchestration")
+	fmt.Print(usageText())
 	fmt.Println()
-	fmt.Println("Usage:")
-	fmt.Println("  leamas [command]")
-	fmt.Println()
-	fmt.Println("Commands:")
-	fmt.Println("  leamas --help               Show this help")
-	fmt.Println("  leamas version              Show version")
-	fmt.Println("  leamas factory verify       Run factory verifiers")
-	fmt.Println("  leamas factory gate        Run quality gate")
-	fmt.Println("  leamas factory factorize   Run factory verifiers only")
-	fmt.Println("  leamas factory digest      Generate targeted digest")
-	fmt.Println("  leamas factory coverage    Check coverage threshold")
-	fmt.Println("  leamas doctor              Run diagnostics")
-	fmt.Println("  leamas cockpit             Local web cockpit")
-	fmt.Println("  leamas witness             Witness proxy commands")
 }
 
 func printFactoryUsage() {
-	fmt.Println("Factory commands:")
-	fmt.Println("  leamas factory verify <check>   Run a specific verifier")
-	fmt.Println("  leamas factory gate           Run full quality gate")
-	fmt.Println("  leamas factory factorize      Run verifiers only (no toolchain)")
-	fmt.Println("  leamas factory digest [flags] Generate targeted digest")
-	fmt.Println("  leamas factory coverage        Check coverage threshold")
+	fmt.Print(factoryUsageText())
 	fmt.Println()
 	printFactoryVerifyUsage()
+}
+
+// knownFactoryVerifyChecks returns the list of known factory verify check names.
+func knownFactoryVerifyChecks() []string {
+	return []string{
+		"doctrine",
+		"doctrine-agent-contracts",
+		"docs",
+		"forbidden-patterns",
+		"language",
+		"static-binary",
+		"tooling-boundaries",
+		"llm-friendly",
+		"agent-context",
+		"git-hooks",
+		"github",
+		"domain-boundaries",
+		"coverage",
+	}
+}
+
+// isKnownFactoryVerifyCheck returns true if the given check name is known.
+func isKnownFactoryVerifyCheck(check string) bool {
+	for _, known := range knownFactoryVerifyChecks() {
+		if check == known {
+			return true
+		}
+	}
+	return false
 }
 
 func printFactoryVerifyUsage() {
