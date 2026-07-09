@@ -30,7 +30,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    witnessAllowedImports,
 		ForbiddenImports:  witnessForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(witnessForbiddenContains),
+		ForbiddenContains: witnessForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)
@@ -72,7 +72,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    witnessAllowedImports,
 		ForbiddenImports:  witnessForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(witnessForbiddenContains),
+		ForbiddenContains: witnessForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)

@@ -27,7 +27,7 @@ type PackagePolicy struct {
 	Dir               string
 	AllowedImports    map[string]bool
 	ForbiddenImports  map[string]string
-	ForbiddenContains map[string]string
+	ForbiddenContains []string // Ordered list for deterministic checking
 }
 
 // Finding represents a boundary violation.
@@ -71,7 +71,7 @@ var hulkForbiddenImports = map[string]string{
 	"encoding/json": "Hulk domain core must not import encoding packages",
 }
 
-// Provider/control-plane substrings forbidden for Hulk.
+// Provider/control-plane substrings forbidden for Hulk (ordered for determinism).
 var hulkForbiddenContains = []string{
 	"openai",
 	"anthropic",
@@ -114,7 +114,7 @@ var witnessForbiddenImports = map[string]string{
 	"text/template": "Witness proxy must not import template packages",
 }
 
-// Provider/control-plane substrings forbidden for Witness.
+// Provider/control-plane substrings forbidden for Witness (ordered for determinism).
 var witnessForbiddenContains = []string{
 	"openai",
 	"anthropic",
@@ -157,7 +157,7 @@ var cockpitForbiddenImports = map[string]string{
 	"text/template":     "Web cockpit must not import text templates",
 }
 
-// Auth/provider/control-plane substrings forbidden for Cockpit.
+// Auth/provider/control-plane substrings forbidden for Cockpit (ordered for determinism).
 var cockpitForbiddenContains = []string{
 	"openai",
 	"anthropic",
@@ -183,35 +183,41 @@ var policies = []PackagePolicy{
 		Dir:               "internal/hulk/runbundle",
 		AllowedImports:    hulkAllowedImports,
 		ForbiddenImports:  hulkForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(hulkForbiddenContains),
+		ForbiddenContains: hulkForbiddenContains,
 	},
 	{
 		Name:              "hulk-claimevidence",
 		Dir:               "internal/hulk/claimevidence",
 		AllowedImports:    hulkAllowedImports,
 		ForbiddenImports:  hulkForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(hulkForbiddenContains),
+		ForbiddenContains: hulkForbiddenContains,
 	},
 	{
 		Name:              "witness-proxy",
 		Dir:               "internal/witness/proxy",
 		AllowedImports:    witnessAllowedImports,
 		ForbiddenImports:  witnessForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(witnessForbiddenContains),
+		ForbiddenContains: witnessForbiddenContains,
 	},
 	{
 		Name:              "web-cockpit",
 		Dir:               "internal/web/cockpit",
 		AllowedImports:    cockpitAllowedImports,
 		ForbiddenImports:  cockpitForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(cockpitForbiddenContains),
+		ForbiddenContains: cockpitForbiddenContains,
 	},
 }
 
-func forbiddenContainsToMap(list []string) map[string]string {
+// forbiddenContainsReason generates a deterministic reason for a forbidden substring.
+func forbiddenContainsReason(substring string) string {
+	return "imports provider/control-plane package containing: " + substring
+}
+
+// forbiddenContainsToMap converts ordered slice to map for test compatibility.
+func forbiddenContainsToMap(slice []string) map[string]string {
 	m := make(map[string]string)
-	for _, s := range list {
-		m[s] = "imports provider/control-plane package containing: " + s
+	for _, s := range slice {
+		m[s] = forbiddenContainsReason(s)
 	}
 	return m
 }
@@ -222,6 +228,18 @@ func Check(repoRoot string) Result {
 
 	for _, policy := range policies {
 		dirPath := filepath.Join(repoRoot, policy.Dir)
+
+		// Check if protected directory exists
+		if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+			// Report missing protected directory as a finding
+			allFindings = append(allFindings, Finding{
+				File:   policy.Dir,
+				Import: "(missing directory)",
+				Reason: "protected package directory does not exist",
+			})
+			continue
+		}
+
 		findings := checkPackage(policy, dirPath)
 		allFindings = append(allFindings, findings...)
 	}
@@ -305,15 +323,15 @@ func checkFile(policy PackagePolicy, filePath string, fset *token.FileSet) []Fin
 			continue
 		}
 
-		// Check if import path contains forbidden substrings
-		for substring, reason := range policy.ForbiddenContains {
+		// Check if import path contains forbidden substrings (deterministic order)
+		for _, substring := range policy.ForbiddenContains {
 			if strings.Contains(importPath, substring) {
 				findings = append(findings, Finding{
 					File:   relPath,
 					Import: importPath,
-					Reason: reason,
+					Reason: forbiddenContainsReason(substring),
 				})
-				break
+				break // Only report first match for this import
 			}
 		}
 	}

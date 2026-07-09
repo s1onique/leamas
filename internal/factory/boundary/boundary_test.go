@@ -1,12 +1,21 @@
+// Package boundary provides verification for domain boundary import policies.
 package boundary
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
+// repoRoot returns the absolute path to the repository root for tests.
+func repoRoot() string {
+	// internal/factory/boundary -> internal/factory -> internal -> repo root
+	return filepath.Join(os.Getenv("PWD"), "..", "..", "..")
+}
+
 // TestCurrentRepoPoliciesPass verifies that current protected packages pass.
 func TestCurrentRepoPoliciesPass(t *testing.T) {
-	result := Check(".")
+	result := Check(repoRoot())
 	if !result.OK() {
 		for _, f := range result.Findings {
 			t.Errorf("boundary violation: %s imports %s: %s", f.File, f.Import, f.Reason)
@@ -114,5 +123,40 @@ func TestResultOK(t *testing.T) {
 	}
 	if nonEmptyResult.OK() {
 		t.Error("non-empty result should not be OK")
+	}
+}
+
+// TestMissingDirectoryDetection verifies that missing protected directories are detected.
+func TestMissingDirectoryDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	result := Check(tmpDir)
+
+	// All 4 protected packages should be reported as missing
+	if len(result.Findings) != 4 {
+		t.Fatalf("expected 4 missing directory findings, got %d", len(result.Findings))
+	}
+
+	foundDirs := make(map[string]bool)
+	for _, f := range result.Findings {
+		if f.Import != "(missing directory)" {
+			t.Errorf("expected missing directory import, got: %s", f.Import)
+		}
+		if f.Reason != "protected package directory does not exist" {
+			t.Errorf("unexpected reason: %s", f.Reason)
+		}
+		foundDirs[f.File] = true
+	}
+
+	expectedDirs := []string{
+		"internal/hulk/runbundle",
+		"internal/hulk/claimevidence",
+		"internal/witness/proxy",
+		"internal/web/cockpit",
+	}
+	for _, dir := range expectedDirs {
+		if !foundDirs[dir] {
+			t.Errorf("expected missing directory finding for %s", dir)
+		}
 	}
 }

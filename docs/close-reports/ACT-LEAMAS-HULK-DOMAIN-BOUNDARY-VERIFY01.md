@@ -7,7 +7,10 @@ Added a Go-owned Factory verifier that statically checks import boundaries for H
 ## Files Changed
 
 - `internal/factory/boundary/boundary.go` - Verifier implementation using Go AST parsing
-- `internal/factory/boundary/boundary_test.go` - Comprehensive test coverage
+- `internal/factory/boundary/boundary_test.go` - Main test coverage (repo root path fix, missing dir test)
+- `internal/factory/boundary/boundary_hulk_test.go` - Hulk-specific boundary tests
+- `internal/factory/boundary/boundary_witness_test.go` - Witness proxy-specific boundary tests
+- `internal/factory/boundary/boundary_cockpit_test.go` - Cockpit-specific boundary tests
 - `cmd/leamas/main.go` - Added `domain-boundaries` to CLI verify commands
 - `internal/factory/gate/gate.go` - Added verifier to AllVerifiers()
 - `Makefile` - Added `verify-domain-boundaries` target

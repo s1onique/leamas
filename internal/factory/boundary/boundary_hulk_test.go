@@ -31,7 +31,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    hulkAllowedImports,
 		ForbiddenImports:  hulkForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(hulkForbiddenContains),
+		ForbiddenContains: hulkForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)
@@ -73,7 +73,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    hulkAllowedImports,
 		ForbiddenImports:  hulkForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(hulkForbiddenContains),
+		ForbiddenContains: hulkForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)
@@ -115,7 +115,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    hulkAllowedImports,
 		ForbiddenImports:  hulkForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(hulkForbiddenContains),
+		ForbiddenContains: hulkForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)
@@ -173,7 +173,7 @@ func TestSomething(t *testing.T) {
 		Dir:               pkgDir,
 		AllowedImports:    hulkAllowedImports,
 		ForbiddenImports:  hulkForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(hulkForbiddenContains),
+		ForbiddenContains: hulkForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)

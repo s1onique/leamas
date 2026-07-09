@@ -30,7 +30,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    cockpitAllowedImports,
 		ForbiddenImports:  cockpitForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(cockpitForbiddenContains),
+		ForbiddenContains: cockpitForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)
@@ -72,7 +72,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    cockpitAllowedImports,
 		ForbiddenImports:  cockpitForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(cockpitForbiddenContains),
+		ForbiddenContains: cockpitForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)
@@ -114,7 +114,7 @@ import (
 		Dir:               pkgDir,
 		AllowedImports:    cockpitAllowedImports,
 		ForbiddenImports:  cockpitForbiddenImports,
-		ForbiddenContains: forbiddenContainsToMap(cockpitForbiddenContains),
+		ForbiddenContains: cockpitForbiddenContains,
 	}
 
 	findings := checkPackage(policy, pkgDir)
