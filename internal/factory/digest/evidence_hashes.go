@@ -24,6 +24,7 @@ type EvidenceHashes struct {
 	ReviewMapSHA256         string
 	RiskSignalsSHA256       string
 	PatchHygieneSHA256      string
+	GateSummarySHA256       string
 	FileEvidenceSHA256      string
 	DigestEvidenceSHA256    string
 }
@@ -61,7 +62,7 @@ func ComputeFileEvidence(diffsContent string) string {
 
 // ComputeEvidenceHashes computes all evidence hashes from rendered sections.
 func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
-	riskSignalsSection, patchHygieneSection, fileEvidenceSection string) EvidenceHashes {
+	riskSignalsSection, patchHygieneSection, gateSummarySection, fileEvidenceSection string) EvidenceHashes {
 
 	var eh EvidenceHashes
 	eh.HashAlgorithm = EvidenceHashAlgorithm
@@ -72,6 +73,7 @@ func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
 	eh.ReviewMapSHA256 = ComputeSectionHash(reviewMapSection)
 	eh.RiskSignalsSHA256 = ComputeSectionHash(riskSignalsSection)
 	eh.PatchHygieneSHA256 = ComputeSectionHash(patchHygieneSection)
+	eh.GateSummarySHA256 = ComputeSectionHash(gateSummarySection)
 	eh.FileEvidenceSHA256 = ComputeSectionHash(fileEvidenceSection)
 
 	// Digest evidence is the hash of all evidence sections concatenated
@@ -80,6 +82,7 @@ func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
 		reviewMapSection + "\n" +
 		riskSignalsSection + "\n" +
 		patchHygieneSection + "\n" +
+		gateSummarySection + "\n" +
 		fileEvidenceSection
 
 	eh.DigestEvidenceSHA256 = ComputeSectionHash(digestEvidenceContent)
@@ -105,6 +108,8 @@ func RenderEvidenceHashes(eh EvidenceHashes) string {
 	sb.WriteString(eh.RiskSignalsSHA256)
 	sb.WriteString("\npatch_hygiene_sha256=")
 	sb.WriteString(eh.PatchHygieneSHA256)
+	sb.WriteString("\ngate_summary_sha256=")
+	sb.WriteString(eh.GateSummarySHA256)
 	sb.WriteString("\nfile_evidence_sha256=")
 	sb.WriteString(eh.FileEvidenceSHA256)
 	sb.WriteString("\ndigest_evidence_sha256=")

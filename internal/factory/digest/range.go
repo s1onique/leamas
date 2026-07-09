@@ -3,10 +3,12 @@ package digest
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/version"
 )
 
@@ -145,13 +147,28 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	// Build file evidence section for hashing (using shared function)
 	fileEvidenceSection := RenderRangeFileEvidence(repoRoot, files, resolved.Range)
 
-	// Compute evidence hashes
+	// GATE_SUMMARY section
+	gateSummaryPath := filepath.Join(repoRoot, ".factory", "gate-summary.json")
+	var gateSummarySection string
+	if gate.GateSummaryExists(gateSummaryPath) {
+		if gs, err := gate.ReadGateSummary(gateSummaryPath); err == nil {
+			gateSummarySection = gate.RenderGateSummary(gs)
+		} else {
+			gateSummarySection = gate.RenderGateSummary(nil)
+		}
+	} else {
+		gateSummarySection = gate.RenderGateSummary(nil)
+	}
+	sb.WriteString(gateSummarySection)
+
+	// Compute evidence hashes (includes GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection,
 		statsSection,
 		reviewMapSection,
 		riskSignalsSection,
 		patchHygieneSection,
+		gateSummarySection,
 		fileEvidenceSection,
 	)
 	sb.WriteString(RenderEvidenceHashes(evidenceHashes))
@@ -288,13 +305,28 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	// Build file evidence section for hashing (using shared function)
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
-	// Compute evidence hashes
+	// GATE_SUMMARY section
+	gateSummaryPath := filepath.Join(repoRoot, ".factory", "gate-summary.json")
+	var gateSummarySection string
+	if gate.GateSummaryExists(gateSummaryPath) {
+		if gs, err := gate.ReadGateSummary(gateSummaryPath); err == nil {
+			gateSummarySection = gate.RenderGateSummary(gs)
+		} else {
+			gateSummarySection = gate.RenderGateSummary(nil)
+		}
+	} else {
+		gateSummarySection = gate.RenderGateSummary(nil)
+	}
+	sb.WriteString(gateSummarySection)
+
+	// Compute evidence hashes (includes GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection,
 		statsSection,
 		reviewMapSection,
 		riskSignalsSection,
 		patchHygieneSection,
+		gateSummarySection,
 		fileEvidenceSection,
 	)
 	sb.WriteString(RenderEvidenceHashes(evidenceHashes))

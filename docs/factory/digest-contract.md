@@ -284,6 +284,9 @@ Mode: <mode>
 ## EVIDENCE_HASHES
 ...
 
+## GATE_SUMMARY
+...
+
 ## Changed files
 ...
 
@@ -298,7 +301,6 @@ Mode: <mode>
 
 This ACT explicitly does not implement:
 
-- `GATE_SUMMARY` - Test execution results
 - `PUBLIC_SURFACE_DELTA` - Public API analysis
 - `DEPENDENCY_DELTA` - Dependency change tracking
 - SARIF/static-analysis ingestion

@@ -60,6 +60,7 @@ func TestRenderEvidenceHashes_StableKeyOrder(t *testing.T) {
 		ReviewMapSHA256:         "cccc",
 		RiskSignalsSHA256:       "dddd",
 		PatchHygieneSHA256:      "eeee",
+		GateSummarySHA256:       "0000",
 		FileEvidenceSHA256:      "ffff",
 		DigestEvidenceSHA256:    "gggg",
 	}
@@ -68,8 +69,8 @@ func TestRenderEvidenceHashes_StableKeyOrder(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(result), "\n")
 
 	// Check expected line count
-	if len(lines) != 10 {
-		t.Errorf("expected 10 lines, got %d", len(lines))
+	if len(lines) != 11 {
+		t.Errorf("expected 11 lines, got %d", len(lines))
 	}
 
 	// Check key order
@@ -82,6 +83,7 @@ func TestRenderEvidenceHashes_StableKeyOrder(t *testing.T) {
 		"review_map_sha256=",
 		"risk_signals_sha256=",
 		"patch_hygiene_sha256=",
+		"gate_summary_sha256=",
 		"file_evidence_sha256=",
 		"digest_evidence_sha256=",
 	}
@@ -101,6 +103,7 @@ func TestEvidenceHashes_DoNotIncludeOwnSection(t *testing.T) {
 		"## REVIEW_MAP\nproduction:\n  - file.go\n",
 		"## RISK_SIGNALS\nproduction_without_tests=true\n",
 		"## PATCH_HYGIENE\ngit_diff_check=pass\n",
+		"## GATE_SUMMARY\nsource=.factory/gate-summary.json\n",
 		"## Changed files\nfile.go\n",
 	)
 
@@ -119,11 +122,12 @@ func TestDigestEvidenceHash_StableAcrossRepeatedRender(t *testing.T) {
 	reviewMap := "## REVIEW_MAP\nproduction:\n  - file.go\n"
 	risk := "## RISK_SIGNALS\nproduction_without_tests=true\n"
 	patch := "## PATCH_HYGIENE\ngit_diff_check=pass\n"
+	gateSummary := "## GATE_SUMMARY\nsource=.factory/gate-summary.json\n"
 	fileEv := "## Changed files\nfile.go\n"
 
 	// Compute hashes twice
-	eh1 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, fileEv)
-	eh2 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, fileEv)
+	eh1 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, gateSummary, fileEv)
+	eh2 := ComputeEvidenceHashes(manifest, stats, reviewMap, risk, patch, gateSummary, fileEv)
 
 	if eh1.DigestEvidenceSHA256 != eh2.DigestEvidenceSHA256 {
 		t.Error("digest_evidence_sha256 should be stable across renders")

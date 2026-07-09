@@ -18,7 +18,7 @@ func parseFactoryCommand(args []string) (string, error) {
 
 	cmd := args[0]
 	switch cmd {
-	case "verify", "gate", "factorize", "digest", "coverage":
+	case "verify", "gate", "factorize", "digest", "coverage", "gate-summary":
 		return cmd, nil
 	default:
 		return "", fmt.Errorf("unknown factory command: %s", cmd)
@@ -45,6 +45,8 @@ func handleFactory() {
 		handleFactoryDigest()
 	case "coverage":
 		handleFactoryCoverage()
+	case "gate-summary":
+		handleFactoryGateSummary()
 	}
 }
 
@@ -56,4 +58,25 @@ func handleFactoryGate() {
 func handleFactoryFactorize() {
 	exitCode := gate.RunFactorize(".")
 	os.Exit(exitCode)
+}
+
+func handleFactoryGateSummary() {
+	args := os.Args[3:] // Skip: leamas factory gate-summary
+	outputPath := ".factory/gate-summary.json"
+
+	// Parse --output flag if provided
+	for i, arg := range args {
+		if arg == "--output" && i+1 < len(args) {
+			outputPath = args[i+1]
+			break
+		}
+	}
+
+	if err := gate.WriteGateSummary(".", outputPath); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write gate summary: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Gate summary written to: %s\n", outputPath)
+	os.Exit(0)
 }
