@@ -186,6 +186,8 @@ func handleFactoryVerify() {
 		}
 	case "dupcode":
 		handleFactoryVerifyDupcode()
+	case "dupcode-baseline":
+		handleFactoryVerifyDupcodeBaseline()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", check)
 		printFactoryVerifyUsage()
@@ -252,6 +254,7 @@ func knownFactoryVerifyChecks() []string {
 		"doctrine-agent-contracts",
 		"docs",
 		"dupcode",
+		"dupcode-baseline",
 		"forbidden-patterns",
 		"language",
 		"static-binary",
@@ -281,6 +284,7 @@ func printFactoryVerifyUsage() {
 	fmt.Println("  doctrine-agent-contracts  Check Agent Contract sections")
 	fmt.Println("  docs                 Check factory documentation")
 	fmt.Println("  dupcode               Check for duplicate code")
+	fmt.Println("  dupcode-baseline      Check dupcode baseline integrity")
 	fmt.Println("  forbidden-patterns   Check for forbidden patterns")
 	fmt.Println("  language             Check Go-only enforcement")
 	fmt.Println("  static-binary        Check static binary build")

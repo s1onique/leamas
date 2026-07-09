@@ -203,8 +203,8 @@ func TestKnownFactoryVerifyChecks_IncludesDupcode(t *testing.T) {
 
 func TestKnownFactoryVerifyChecks_HasExpectedCount(t *testing.T) {
 	checks := knownFactoryVerifyChecks()
-	// We expect 14 checks based on the current implementation (added dupcode)
-	expected := 14
+	// We expect 15 checks based on the current implementation (dupcode + dupcode-baseline)
+	expected := 15
 	if len(checks) != expected {
 		t.Errorf("expected %d known checks, got %d", expected, len(checks))
 	}

@@ -183,6 +183,50 @@ Supporting multiple languages requires either:
 
 Go-only is the right scope for v1. Polyglot support is a future follow-up.
 
+## Baseline Integrity Verifier
+
+The baseline integrity verifier (`dupcode-baseline`) validates the committed baseline artifact itself:
+
+```bash
+# Run baseline integrity check
+leamas factory verify dupcode-baseline
+
+# With custom baseline path
+leamas factory verify dupcode-baseline --baseline .factory/dupcode-baseline.json
+```
+
+### What It Checks
+
+1. **Baseline presence**: Fails if `.factory/dupcode-baseline.json` is missing
+2. **Git tracking**: Fails if baseline is not tracked by git
+3. **Schema validation**: Fails on malformed JSON or unsupported schema version
+4. **Threshold policy**: Fails if thresholds don't match policy (40/400)
+5. **Path contract**: Fails on absolute paths, backslashes, parent traversal, empty paths
+6. **Line validity**: Fails on invalid line numbers (≤0, end < start)
+7. **Fingerprint contract**: Fails on empty/invalid SHA256 fingerprints or duplicates
+8. **Ordering**: Fails if findings/occurrences are not sorted
+9. **Drift check**: Re-runs scanner and fails if baseline is stale
+
+### Why It Exists
+
+Without the baseline verifier, the dupcode ratchet can become:
+- **Noisy**: Stale baseline causes false positives
+- **Toothless**: Missing/ignored baseline causes false negatives
+
+The baseline verifier protects the ratchet itself.
+
+### Command Summary
+
+| Command | Purpose |
+|---------|---------|
+| `dupcode-baseline` | Validates baseline artifact integrity |
+| `dupcode` | Enforces no new/worsened duplication |
+| `dupcode --update-baseline` | Intentionally refreshes accepted debt |
+
+### Warning
+
+Never update the baseline merely to hide new duplication. Baseline changes should be reviewed like code changes.
+
 ## References
 
 - [Go-only Doctrine](../doctrine/go-only.md)

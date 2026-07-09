@@ -15,6 +15,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/coverage"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
+	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/githooks"
 	"github.com/s1onique/leamas/internal/factory/github"
@@ -38,6 +39,7 @@ func AllVerifiers() []Verifier {
 		{"doctrine", doctrine.CheckRepo},
 		{"doctrine-agent-contracts", doctrine.CheckRepo},
 		{"docs", docs.CheckRepo},
+		{"dupcode-baseline", dupcodeBaselineVerifier},
 		{"dupcode", dupCodeVerifier},
 		{"forbidden-patterns", forbidden.CheckRepo},
 		{"language", language.CheckRepo},
@@ -108,6 +110,23 @@ func convertGitHooksFindings(src []githooks.Finding) []checks.Finding {
 func githubVerifier(root string) []checks.Finding {
 	findings, _ := github.CheckRepo(root)
 	return convertGithubFindings(findings)
+}
+
+// dupcodeBaselineVerifier validates the dupcode baseline artifact.
+func dupcodeBaselineVerifier(root string) []checks.Finding {
+	policy := dupcode.DefaultBaselinePolicy()
+	findings, err := dupcode.VerifyBaseline(root, policy)
+	if err != nil {
+		return []checks.Finding{
+			{
+				Path:     policy.Path,
+				Kind:     "baseline_verification_error",
+				Message:  fmt.Sprintf("baseline verification failed: %v", err),
+				Severity: checks.SeverityError,
+			},
+		}
+	}
+	return findings
 }
 
 func convertGithubFindings(src []github.Finding) []checks.Finding {
