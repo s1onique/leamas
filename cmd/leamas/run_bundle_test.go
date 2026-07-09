@@ -39,29 +39,37 @@ func captureRunBundleOutput(args []string, fn func([]string) int) (stdout, stder
 
 func TestRunBundleHelp(t *testing.T) {
 	args := []string{"--help"}
-	_, stderr, code := captureRunBundleOutput(args, func(a []string) int {
-		return runWitnessRunBundleList(a)
-	})
-	// --help via flag parsing causes non-zero exit
-	if code == 0 && strings.Contains(stderr, "Usage:") {
-		t.Log("help displayed usage (exit may vary by flagset)")
+	_, stderr, code := captureRunBundleOutput(args, runWitnessRunBundle)
+
+	if code != 0 {
+		t.Errorf("help should exit 0, got %d", code)
+	}
+	if !strings.Contains(stderr, "Usage:") {
+		t.Errorf("help should print usage to stderr, got: %s", stderr)
 	}
 }
 
 func TestRunBundleUnknownSubcommand(t *testing.T) {
-	oldArgs := os.Args
-	defer func() { os.Args = oldArgs }()
-	os.Args = []string{"leamas", "witness", "run-bundle", "unknown"}
+	args := []string{"unknown"}
+	_, stderr, code := captureRunBundleOutput(args, runWitnessRunBundle)
 
-	code := 1
-	for i := 4; i < len(os.Args); i++ {
-		if strings.HasPrefix(os.Args[i], "-") {
-			code = 0
-			break
-		}
+	if code == 0 {
+		t.Error("unknown subcommand should exit non-zero")
 	}
-	if code != 0 {
-		return
+	if !strings.Contains(stderr, "unknown run-bundle subcommand") {
+		t.Errorf("stderr should mention unknown subcommand, got: %s", stderr)
+	}
+}
+
+func TestRunBundleMissingSubcommand(t *testing.T) {
+	args := []string{}
+	_, stderr, code := captureRunBundleOutput(args, runWitnessRunBundle)
+
+	if code == 0 {
+		t.Error("missing subcommand should exit non-zero")
+	}
+	if !strings.Contains(stderr, "Usage:") {
+		t.Errorf("should print usage for missing subcommand, got: %s", stderr)
 	}
 }
 

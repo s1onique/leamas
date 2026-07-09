@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -10,35 +9,6 @@ import (
 
 	"github.com/s1onique/leamas/internal/witness/runbundle"
 )
-
-// captureRunBundleShowOutput captures stdout/stderr from show command.
-func captureRunBundleShowOutput(args []string) (stdout, stderr string, code int) {
-	return captureRunBundleShowFn(args, runWitnessRunBundleShow)
-}
-
-// captureRunBundleShowFn is a test helper for show command.
-func captureRunBundleShowFn(args []string, fn func([]string) int) (stdout, stderr string, code int) {
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	rStdout, wStdout, _ := os.Pipe()
-	rStderr, wStderr, _ := os.Pipe()
-	os.Stdout = wStdout
-	os.Stderr = wStderr
-
-	code = fn(args)
-
-	wStdout.Close()
-	wStderr.Close()
-
-	var bufStdout, bufStderr bytes.Buffer
-	_, _ = bufStdout.ReadFrom(rStdout)
-	_, _ = bufStderr.ReadFrom(rStderr)
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	return bufStdout.String(), bufStderr.String(), code
-}
 
 func TestRunBundleShowDisplaysMetadata(t *testing.T) {
 	tmp := t.TempDir()
@@ -54,7 +24,7 @@ func TestRunBundleShowDisplaysMetadata(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp, runID}
-	stdout, stderr, code := captureRunBundleShowOutput(args)
+	stdout, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleShow)
 
 	if code != 0 {
 		t.Fatalf("show failed with code %d, stderr: %s", code, stderr)
@@ -88,7 +58,7 @@ func TestRunBundleShowJSONOutput(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp, "--json", runID}
-	stdout, stderr, code := captureRunBundleShowOutput(args)
+	stdout, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleShow)
 
 	if code != 0 {
 		t.Fatalf("show --json failed with code %d, stderr: %s", code, stderr)
@@ -133,7 +103,7 @@ func TestRunBundleShowRejectsInvalidID(t *testing.T) {
 	for _, id := range invalidIDs {
 		t.Run(id, func(t *testing.T) {
 			args := []string{"--root", tmp, id}
-			_, stderr, code := captureRunBundleShowOutput(args)
+			_, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleShow)
 
 			if code == 0 {
 				t.Errorf("expected non-zero exit for invalid ID %q", id)
@@ -155,7 +125,7 @@ func TestRunBundleShowRejectsMissingMetadata(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp, runID}
-	_, stderr, code := captureRunBundleShowOutput(args)
+	_, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleShow)
 
 	if code == 0 {
 		t.Error("expected non-zero exit for missing metadata")
@@ -184,7 +154,7 @@ func TestRunBundleShowRejectsSchemaMismatch(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp, runID}
-	_, stderr, code := captureRunBundleShowOutput(args)
+	_, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleShow)
 
 	if code == 0 {
 		t.Error("expected non-zero exit for schema mismatch")
@@ -216,7 +186,7 @@ func TestRunBundleShowRejectsRunIDMismatch(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp, runID}
-	_, stderr, code := captureRunBundleShowOutput(args)
+	_, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleShow)
 
 	if code == 0 {
 		t.Error("expected non-zero exit for run ID mismatch")

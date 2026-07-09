@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,40 +10,11 @@ import (
 	"github.com/s1onique/leamas/internal/witness/runbundle"
 )
 
-// captureRunBundleListOutput captures stdout/stderr from list command.
-func captureRunBundleListOutput(args []string) (stdout, stderr string, code int) {
-	return captureRunBundleListFn(args, runWitnessRunBundleList)
-}
-
-// captureRunBundleListFn is a test helper for list command.
-func captureRunBundleListFn(args []string, fn func([]string) int) (stdout, stderr string, code int) {
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	rStdout, wStdout, _ := os.Pipe()
-	rStderr, wStderr, _ := os.Pipe()
-	os.Stdout = wStdout
-	os.Stderr = wStderr
-
-	code = fn(args)
-
-	wStdout.Close()
-	wStderr.Close()
-
-	var bufStdout, bufStderr bytes.Buffer
-	_, _ = bufStdout.ReadFrom(rStdout)
-	_, _ = bufStderr.ReadFrom(rStderr)
-
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	return bufStdout.String(), bufStderr.String(), code
-}
-
 func TestRunBundleListEmptyRoot(t *testing.T) {
 	tmp := t.TempDir()
 	args := []string{"--root", tmp}
 
-	stdout, stderr, code := captureRunBundleListOutput(args)
+	stdout, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleList)
 
 	if code != 0 {
 		t.Fatalf("list failed with code %d, stderr: %s", code, stderr)
@@ -67,7 +37,7 @@ func TestRunBundleListShowsCreatedBundles(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp}
-	stdout, stderr, code := captureRunBundleListOutput(args)
+	stdout, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleList)
 
 	if code != 0 {
 		t.Fatalf("list failed with code %d, stderr: %s", code, stderr)
@@ -90,14 +60,14 @@ func TestRunBundleListJSONOutput(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp, "--json"}
-	stdout, stderr, code := captureRunBundleListOutput(args)
+	stdout, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleList)
 
 	if code != 0 {
 		t.Fatalf("list --json failed with code %d, stderr: %s", code, stderr)
 	}
 
 	var output struct {
-		OK      string `json:"ok"`
+		OK      bool   `json:"ok"`
 		Root    string `json:"root"`
 		Bundles []struct {
 			RunID         string `json:"run_id"`
@@ -109,8 +79,8 @@ func TestRunBundleListJSONOutput(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &output); err != nil {
 		t.Fatalf("stdout should be valid JSON: %v\noutput: %s", err, stdout)
 	}
-	if output.OK != "true" {
-		t.Errorf("ok = %q, want %q", output.OK, "true")
+	if !output.OK {
+		t.Error("expected ok=true")
 	}
 	if len(output.Bundles) != 1 {
 		t.Fatalf("bundles count = %d, want 1", len(output.Bundles))
@@ -129,7 +99,7 @@ func TestRunBundleListIgnoresNonBundles(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp}
-	stdout, stderr, code := captureRunBundleListOutput(args)
+	stdout, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleList)
 
 	if code != 0 {
 		t.Fatalf("list failed with code %d, stderr: %s", code, stderr)
@@ -157,7 +127,7 @@ func TestRunBundleListSkipsInvalidBundles(t *testing.T) {
 	}
 
 	args := []string{"--root", tmp}
-	stdout, stderr, code := captureRunBundleListOutput(args)
+	stdout, stderr, code := captureRunBundleOutput(args, runWitnessRunBundleList)
 
 	if code != 0 {
 		t.Fatalf("list failed with code %d, stderr: %s", code, stderr)

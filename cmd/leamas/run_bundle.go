@@ -38,27 +38,37 @@ type runBundleShowOptions struct {
 	JSON bool
 }
 
-// handleWitnessRunBundle dispatches run-bundle subcommands.
+// runWitnessRunBundle is a testable dispatcher for run-bundle subcommands.
+func runWitnessRunBundle(args []string) int {
+	if len(args) < 1 {
+		printRunBundleUsage()
+		return 1
+	}
+
+	switch args[0] {
+	case "create":
+		return runWitnessRunBundleCreate(args[1:])
+	case "list":
+		return runWitnessRunBundleList(args[1:])
+	case "show":
+		return runWitnessRunBundleShow(args[1:])
+	case "--help", "-h":
+		printRunBundleUsage()
+		return 0
+	default:
+		fmt.Fprintf(os.Stderr, "unknown run-bundle subcommand: %s\n", args[0])
+		printRunBundleUsage()
+		return 1
+	}
+}
+
+// handleWitnessRunBundle dispatches run-bundle subcommands from os.Args.
 func handleWitnessRunBundle() {
 	if len(os.Args) < 4 {
 		printRunBundleUsage()
 		os.Exit(1)
 	}
-
-	var code int
-	switch os.Args[3] {
-	case "create":
-		code = runWitnessRunBundleCreate(os.Args[4:])
-	case "list":
-		code = runWitnessRunBundleList(os.Args[4:])
-	case "show":
-		code = runWitnessRunBundleShow(os.Args[4:])
-	default:
-		fmt.Fprintf(os.Stderr, "unknown run-bundle subcommand: %s\n", os.Args[3])
-		printRunBundleUsage()
-		code = 1
-	}
-	os.Exit(code)
+	os.Exit(runWitnessRunBundle(os.Args[3:]))
 }
 
 func printRunBundleUsage() {
@@ -145,6 +155,23 @@ func runWitnessRunBundleCreate(args []string) int {
 	return 0
 }
 
+// bundleInfo holds parsed bundle metadata for output formatting.
+type bundleInfo struct {
+	runID     string
+	createdAt string
+	path      string
+	schemaVer string
+	ok        bool
+}
+
+// bundleJSON is the JSON output format for a single bundle.
+type bundleJSON struct {
+	RunID         string `json:"run_id,omitempty"`
+	CreatedAt     string `json:"created_at,omitempty"`
+	Path          string `json:"path"`
+	SchemaVersion string `json:"schema_version,omitempty"`
+}
+
 // runWitnessRunBundleList handles the list subcommand.
 func runWitnessRunBundleList(args []string) int {
 	var opts runBundleListOptions
@@ -169,11 +196,7 @@ func runWitnessRunBundleList(args []string) int {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Root doesn't exist - print empty list
-			if opts.JSON {
-				fmt.Println(`{"ok":true,"root":"` + opts.Root + `","bundles":[]}`)
-			} else {
-				fmt.Println("no run bundles found")
-			}
+			printRunBundleListJSON(opts.Root, nil)
 			return 0
 		}
 		fmt.Fprintf(os.Stderr, "ERROR: cannot access root directory: %v\n", err)
@@ -189,14 +212,6 @@ func runWitnessRunBundleList(args []string) int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: cannot read root directory: %v\n", err)
 		return 1
-	}
-
-	type bundleInfo struct {
-		runID     string
-		createdAt string
-		path      string
-		schemaVer string
-		ok        bool
 	}
 
 	var bundles []bundleInfo
@@ -234,13 +249,6 @@ func runWitnessRunBundleList(args []string) int {
 
 	// Output result
 	if opts.JSON {
-		type bundleJSON struct {
-			RunID         string `json:"run_id,omitempty"`
-			CreatedAt     string `json:"created_at,omitempty"`
-			Path          string `json:"path"`
-			SchemaVersion string `json:"schema_version,omitempty"`
-		}
-
 		arr := make([]bundleJSON, 0, len(bundles))
 		for _, b := range bundles {
 			arr = append(arr, bundleJSON{
@@ -250,18 +258,7 @@ func runWitnessRunBundleList(args []string) int {
 				SchemaVersion: b.schemaVer,
 			})
 		}
-
-		output := struct {
-			OK      string       `json:"ok"`
-			Root    string       `json:"root"`
-			Bundles []bundleJSON `json:"bundles"`
-		}{
-			OK:      "true",
-			Root:    opts.Root,
-			Bundles: arr,
-		}
-		data, _ := json.MarshalIndent(output, "", "  ")
-		fmt.Println(string(data))
+		printRunBundleListJSON(opts.Root, arr)
 	} else {
 		if len(bundles) == 0 {
 			fmt.Println("no run bundles found")
@@ -277,6 +274,25 @@ func runWitnessRunBundleList(args []string) int {
 	}
 
 	return 0
+}
+
+// printRunBundleListJSON prints JSON output for list command.
+func printRunBundleListJSON(root string, bundles []bundleJSON) {
+	output := struct {
+		OK      bool         `json:"ok"`
+		Root    string       `json:"root"`
+		Bundles []bundleJSON `json:"bundles"`
+	}{
+		OK:      true,
+		Root:    root,
+		Bundles: bundles,
+	}
+	data, err := json.MarshalIndent(output, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: failed to marshal JSON: %v\n", err)
+		return
+	}
+	fmt.Println(string(data))
 }
 
 // runWitnessRunBundleShow handles the show subcommand.
