@@ -79,9 +79,9 @@ factorize:
 	@go run ./cmd/leamas factory factorize
 
 # Coverage: generate coverage profile and check threshold
-# First conservative ratchet threshold
+# Conservative ratchet threshold: raised from 60 to 64 per ACT-LEAMAS-FACTORY-GO-COVERAGE-RATCHET02
 COVERAGE_PROFILE ?= .factory/coverage.out
-COVERAGE_MIN_TOTAL ?= 60
+COVERAGE_MIN_TOTAL ?= 64
 
 coverage:
 	@echo "Generating coverage profile..."

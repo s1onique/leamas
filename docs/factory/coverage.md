@@ -6,7 +6,7 @@ infrastructure, including module-level breakdown.
 ## Overview
 
 The coverage gate provides a way to measure and enforce minimum Go test coverage
-thresholds. The current conservative ratchet threshold is **60%**.
+thresholds. The current conservative ratchet threshold is **64%**.
 
 ## How to Run Coverage
 
@@ -23,18 +23,18 @@ This will:
 3. Generate a coverage profile at `.factory/coverage.out`
 4. Generate a JSON report at `.factory/coverage-summary.json`
 5. Print total coverage and module breakdown
-6. Check against the configured threshold (default: 60%)
+6. Check against the configured threshold (default: 64%)
 
 ### Output Format
 
 **Terminal Output:**
 ```
 Generating coverage profile...
-coverage: total=62.2% min=60.0% OK
+coverage: total=66.6% min=64.0% OK
 Coverage by module:
 module                  coverage
-cmd/leamas             36.2%
-internal/factory       71.1%
+cmd/leamas             52.0%
+internal/factory       69.7%
 internal/hulk          95.6%
 internal/web           74.6%
 internal/witness       85.4%
@@ -44,23 +44,23 @@ internal/witness       85.4%
 ```json
 {
   "schema_version": 2,
-  "total_percent": 62.2,
-  "total_covered": 2253,
-  "total_statements": 3621,
+  "total_percent": 66.6,
+  "total_covered": 2790,
+  "total_statements": 4189,
   "modules": [
     {
       "module": "cmd/leamas",
-      "percent": 36.2,
-      "packages": 9,
-      "covered_statements": 413,
-      "total_statements": 1141
+      "percent": 52.0,
+      "packages": 14,
+      "covered_statements": 691,
+      "total_statements": 1328
     },
     {
       "module": "internal/factory",
-      "percent": 71.1,
-      "packages": 25,
-      "covered_statements": 1330,
-      "total_statements": 1871
+      "percent": 69.7,
+      "packages": 30,
+      "covered_statements": 1577,
+      "total_statements": 2261
     }
   ]
 }
@@ -70,14 +70,14 @@ internal/witness       85.4%
 
 ```bash
 # Check an existing coverage profile with module breakdown
-leamas factory coverage --profile .factory/coverage.out --min-total 60.0
+leamas factory coverage --profile .factory/coverage.out --min-total 64.0
 
 # Generate JSON output only (no terminal breakdown)
-leamas factory coverage --profile .factory/coverage.out --min-total 60.0 \
+leamas factory coverage --profile .factory/coverage.out --min-total 64.0 \
   --json-output .factory/coverage-summary.json
 
 # Hide module breakdown on terminal
-leamas factory coverage --profile .factory/coverage.out --min-total 60.0 \
+leamas factory coverage --profile .factory/coverage.out --min-total 64.0 \
   --no-breakdown
 
 # Check with a different threshold
@@ -137,19 +137,27 @@ This is the exact statement-weighted coverage, not an approximation.
 
 **Pass:**
 ```
-coverage: total=62.2% min=60.0% OK
+coverage: total=66.6% min=64.0% OK
 ```
 
 **Fail:**
 ```
-coverage: threshold_fail: total coverage 59.9% is below minimum 60.0%
+coverage: threshold_fail: total coverage 63.9% is below minimum 64.0%
 ```
 
 ### Current Threshold
 
-The current conservative ratchet threshold is **60%**. This means:
-- The coverage gate actively enforces a minimum 60% coverage
-- Headroom exists from the current ~62.2% measured coverage
+The current conservative ratchet threshold is **64%** (raised from 60%).
+
+**Threshold selection rule:**
+- If total >= 67.0: threshold = 65
+- If total >= 66.0: threshold = 64
+- If total >= 65.0: threshold = 63
+- Otherwise: threshold = 62
+
+This means:
+- The coverage gate actively enforces a minimum 64% coverage
+- Headroom exists from the current ~66.6% measured coverage (2.6 percentage points)
 - Module thresholds remain deferred for future ACTs
 
 ### Raising the Threshold
@@ -230,12 +238,14 @@ Measured weighted statement coverage:
 
 | Module | Coverage |
 |--------|----------|
-| cmd/leamas | 36.2% |
-| internal/factory | 71.1% |
+| cmd/leamas | 52.0% |
+| internal/factory | 69.7% |
 | internal/hulk | 95.6% |
 | internal/web | 74.6% |
 | internal/witness | 85.4% |
-| **Total** | **62.2%** |
+| **Total** | **66.6%** |
+
+Total statements: 4189 (2790 covered, 1399 uncovered)
 
 ## Non-Goals
 

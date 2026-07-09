@@ -277,12 +277,19 @@ func TestCheckThreshold(t *testing.T) {
 		minTotal float64
 		wantErr  bool
 	}{
+		// Legacy tests (60% threshold)
 		{"pass at exactly 60.0", 60.0, 60.0, false},
 		{"fail at 59.9", 59.9, 60.0, true},
 		{"pass at 62.2", 62.2, 60.0, false},
 		{"fail below threshold", 50.0, 60.0, true},
 		{"pass above threshold", 100.0, 60.0, false},
 		{"pass at zero threshold", 50.0, 0.0, false},
+		// Ratchet02 tests (64% threshold)
+		{"pass at exactly 64.0", 64.0, 64.0, false},
+		{"fail at 63.9", 63.9, 64.0, true},
+		{"pass at 64.1", 64.1, 64.0, false},
+		{"pass at 66.6", 66.6, 64.0, false},
+		{"fail below 64 threshold", 63.0, 64.0, true},
 	}
 
 	for _, tt := range tests {
@@ -300,6 +307,7 @@ func TestCheckThreshold(t *testing.T) {
 	}
 }
 
+// TestCheckThreshold_ErrorMessage is kept for backward compatibility with existing test coverage.
 func TestCheckThreshold_ErrorMessage(t *testing.T) {
 	report := &Report{TotalPercent: 59.9}
 	threshold := &Threshold{MinTotalPercent: 60.0}
