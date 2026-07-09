@@ -12,6 +12,7 @@ M internal/witness/proxy/proxy_integration_test.go
 A internal/witness/proxy/proxy_deep_copy_test.go
 A internal/witness/proxy/proxy_capture_test.go
 M docs/close-reports/ACT-LEAMAS-WITNESS-PROXY-SEED01.md
+A docs/close-reports/ACT-LEAMAS-WITNESS-PROXY-SEED01-R1.md
 ```
 
 ## Behavior Changed
@@ -72,8 +73,8 @@ All 26 tests pass (21 original + 5 new).
 ## Suggested Commit
 
 ```bash
-git add internal/witness/proxy docs/close-reports/ACT-LEAMAS-WITNESS-PROXY-SEED01.md
-git commit -m "ACT-LEAMAS-WITNESS-PROXY-SEED01-R1 fix capture truth"
+git add docs/close-reports/ACT-LEAMAS-WITNESS-PROXY-SEED01-R1.md
+git commit -m "ACT-LEAMAS-WITNESS-PROXY-SEED01-R2 fix close report truth"
 ```
 
 ## Next Candidate
