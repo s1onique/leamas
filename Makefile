@@ -4,7 +4,7 @@
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
 .PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
-.PHONY: coverage release release-build release-checksum release-verify release-clean
+.PHONY: coverage dupcode-baseline release release-build release-checksum release-verify release-clean
 
 # Install variables (GNU conventions)
 PREFIX ?= /usr/local
@@ -92,6 +92,13 @@ coverage:
 		--profile $(COVERAGE_PROFILE) \
 		--min-total $(COVERAGE_MIN_TOTAL) \
 		--json-output .factory/coverage-summary.json
+
+# Dupcode baseline: generate or update the duplicate code baseline
+# Use this to create or refresh .factory/dupcode-baseline.json
+dupcode-baseline:
+	@echo "Updating duplicate code baseline..."
+	@mkdir -p .factory
+	@go run ./cmd/leamas factory verify dupcode --update-baseline
 
 bootstrap:
 	@echo "Configuring git hooks path..."

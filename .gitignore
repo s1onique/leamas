@@ -8,4 +8,7 @@ coverage.out
 
 # Release artifacts
 dist/
-.factory/
+
+# Factory artifacts (except committed baseline)
+.factory/*
+!.factory/dupcode-baseline.json

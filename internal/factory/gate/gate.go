@@ -15,7 +15,6 @@ import (
 	"github.com/s1onique/leamas/internal/factory/coverage"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
-	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/githooks"
 	"github.com/s1onique/leamas/internal/factory/github"
@@ -49,40 +48,6 @@ func AllVerifiers() []Verifier {
 		{"git-hooks", gitHooksVerifier},
 		{"domain-boundaries", boundary.CheckRepo},
 	}
-}
-
-func dupCodeVerifier(root string) []checks.Finding {
-	cfg := dupcode.DefaultConfig()
-	cfg.Root = root
-	findings, err := dupcode.CheckRepo(root, cfg)
-	if err != nil {
-		return []checks.Finding{
-			{
-				Path:     "dupcode",
-				Kind:     "dupcode_error",
-				Message:  fmt.Sprintf("duplicate code scan failed: %v", err),
-				Severity: checks.SeverityError,
-			},
-		}
-	}
-	return convertDupcodeFindings(findings)
-}
-
-func convertDupcodeFindings(src []dupcode.Finding) []checks.Finding {
-	var result []checks.Finding
-	for _, f := range src {
-		paths := make([]string, len(f.Occurrences))
-		for i, occ := range f.Occurrences {
-			paths[i] = fmt.Sprintf("%s:%d-%d", occ.Path, occ.StartLine, occ.EndLine)
-		}
-		result = append(result, checks.Finding{
-			Path:     f.Occurrences[0].Path,
-			Kind:     "duplicate_code",
-			Message:  fmt.Sprintf("%d tokens across %d occurrences: %v", f.TokenCount, len(f.Occurrences), paths),
-			Severity: checks.SeverityError,
-		})
-	}
-	return result
 }
 
 func llmFriendlyVerifier(root string) []checks.Finding {

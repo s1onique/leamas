@@ -11,11 +11,11 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.MinLines != 100 {
-		t.Errorf("expected MinLines=100, got %d", cfg.MinLines)
+	if cfg.MinLines != 40 {
+		t.Errorf("expected MinLines=40, got %d", cfg.MinLines)
 	}
-	if cfg.MinTokens != 1000 {
-		t.Errorf("expected MinTokens=1000, got %d", cfg.MinTokens)
+	if cfg.MinTokens != 400 {
+		t.Errorf("expected MinTokens=400, got %d", cfg.MinTokens)
 	}
 	if len(cfg.ExcludeDirs) == 0 {
 		t.Error("expected ExcludeDirs to be non-empty")

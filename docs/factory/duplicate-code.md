@@ -1,12 +1,35 @@
 # Duplicate Code Detection
 
-**ACT**: ACT-LEAMAS-FACTORY-DUPLICATE-CODE-GATE01
+**ACT**: ACT-LEAMAS-FACTORY-DUPLICATE-CODE-GATE01  
+**Ratchet ACT**: ACT-LEAMAS-FACTORY-DUPCODE-BASELINE-THRESHOLD-GATE01
 
 ## Purpose
 
 The duplicate code verifier detects substantial copy-paste duplication in Go source
 files. It uses scanner-based tokenization and normalization to catch blocks of code that
 have been copied between files, even when identifiers have been renamed.
+
+## Baseline + Ratchet Model
+
+The verifier uses a **baseline + ratchet** model to prevent regression while tolerating
+existing duplication:
+
+1. **Baseline**: A committed snapshot of current duplicate findings (`.factory/dupcode-baseline.json`)
+2. **Ratchet**: The gate only fails on **new** or **worsened** duplication
+
+This means:
+- Existing duplication is grandfathered (tolerated temporarily)
+- Any new duplicate code is blocked
+- Any expansion of existing duplicates (new occurrence locations) is blocked
+- The codebase cannot get worse, only better
+
+### Policy Summary
+
+| Setting | Value |
+|---------|-------|
+| Detection `MinLines` | 40 |
+| Detection `MinTokens` | 400 |
+| Gate threshold | 0 new, 0 worsened |
 
 ## Why Native Go Instead of jscpd/dupl?
 
@@ -18,15 +41,77 @@ have been copied between files, even when identifiers have been renamed.
 The native verifier handles Go code. Future ACTs may add optional polyglot support
 via jscpd-compatible reporting.
 
-## Default Thresholds
+## Detection Thresholds
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `MinLines` | 100 | Minimum lines for a duplicate block |
-| `MinTokens` | 1000 | Minimum tokens for a duplicate block |
+| `MinLines` | 40 | Minimum lines for a duplicate block |
+| `MinTokens` | 400 | Minimum tokens for a duplicate block |
 
-These thresholds are intentionally conservative (high) to avoid noisy failures from
-existing duplicate patterns in the codebase. The detector can be tuned tighter as needed.
+These thresholds determine what size of clone is worth tracking. The gate threshold
+is always **0** - any new or worsened duplication fails the gate.
+
+## Baseline Commands
+
+```bash
+# Generate/update the baseline
+make dupcode-baseline
+
+# Or directly:
+leamas factory verify dupcode --update-baseline
+
+# Run verification (normal gate mode)
+leamas factory verify dupcode
+
+# Custom baseline path
+leamas factory verify dupcode --baseline .factory/dupcode-baseline.json
+
+# Custom thresholds
+leamas factory verify dupcode --min-lines 40 --min-tokens 400
+```
+
+## When to Update the Baseline
+
+Baseline updates are **allowed** for:
+- Known historical duplication that pre-exists new code changes
+- Accepting existing duplication that cannot be refactored immediately
+- Periodic cleanup of the baseline when duplication is actually removed
+
+Baseline updates are **NOT for**:
+- Hiding new duplication introduced by recent changes
+- Bypassing the gate without addressing the underlying issue
+
+**Rule**: If a PR introduces new duplication, either:
+1. Remove the duplication before merging, or
+2. Document why it must be accepted temporarily, then address it in a follow-up
+
+## Baseline Schema
+
+```json
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-09T00:00:00Z",
+  "tool": "leamas dupcode",
+  "thresholds": {
+    "min_lines": 40,
+    "min_tokens": 400
+  },
+  "findings": [
+    {
+      "fingerprint": "sha256-hash-of-normalized-fingerprint",
+      "token_count": 400,
+      "line_count": 42,
+      "occurrences": [
+        {
+          "path": "internal/example/foo.go",
+          "start_line": 10,
+          "end_line": 55
+        }
+      ]
+    }
+  ]
+}
+```
 
 ## Ignored Paths
 
@@ -51,35 +136,11 @@ The verifier ignores these directories by default:
 
 Note: `//go:generate` comments are NOT used to detect generated files.
 
-## How to Run Manually
-
-```bash
-# Via factory verify
-leamas factory verify dupcode
-```
-
-## Interpreting Findings
-
-Each finding represents a duplicate block:
-
-```
-Found 2 duplicate code blocks:
-
-1. Duplicate block (200 tokens, ~25 lines):
-   - internal/foo/bar.go:10-35
-   - internal/baz/qux.go:10-35
-```
-
-A finding shows:
-- **Token count**: Number of normalized tokens in the block
-- **Line count**: Approximate source lines
-- **Occurrences**: All locations where this block appears
-
 ## Exit Codes
 
-- `0` - No substantial duplicates detected
-- `1` - Duplicates found (verification failed)
-- `2` - Internal error (config issue, file access, etc.)
+- `0` - No new or worsened duplicate code detected (gate passes)
+- `1` - New or worsened duplicates found (verification failed)
+- `2` - Internal error (config issue, file access, baseline error)
 
 ## Algorithm
 
@@ -89,9 +150,10 @@ A finding shows:
 3. **Normalization**: Replace identifiers with `IDENT`, strings with `STRING`,
    numbers with `NUMBER`
 4. **Fingerprinting**: Rolling window (step=1) over tokens creates fingerprints
-5. **Grouping**: Identical fingerprints across 2+ files become findings
-6. **Deduplication**: Overlapping windows in the same file are merged
-7. **Sorting**: Results sorted by token count (desc), then path, then line
+5. **Hashing**: SHA256 hash of normalized fingerprint for stable baseline matching
+6. **Grouping**: Identical fingerprints across 2+ files become findings
+7. **Deduplication**: Overlapping windows in the same file are merged
+8. **Comparison**: Current findings compared against baseline for new/worsened
 
 ## Design Decisions
 
@@ -100,12 +162,19 @@ A finding shows:
 Text-based detection (diff) catches identical code but misses renamed copy-paste.
 Token-based detection normalizes identifiers, making renamed duplicates detectable.
 
-### Why Minimum Thresholds?
+### Why Baseline + Ratchet?
 
-Small repeated idioms (error handling patterns, logging helpers) are common and
-acceptable. Thresholds prevent noise.
+High thresholds pass the gate but don't prevent duplication from getting worse.
+Low thresholds detect real issues but fail on existing debt.
+Baseline + ratchet gets both: low thresholds that catch new issues while
+tolerating known historical debt.
 
-### Why No Cross-Language Support Now?
+### Why SHA256 Fingerprint Hash?
+
+Fingerprints can be long and may vary slightly between runs. SHA256 provides a
+stable, fixed-length identifier for baseline comparison.
+
+### Why No Polyglot Support Now?
 
 Supporting multiple languages requires either:
 1. Multiple tokenizers (Go, TypeScript, Python, etc.)
@@ -120,3 +189,5 @@ Go-only is the right scope for v1. Polyglot support is a future follow-up.
 - [Tooling Boundaries](./tooling-boundaries.md)
 - [ACT-LEAMAS-FACTORY-DUPLICATE-CODE-GATE01](../close-reports/
   ACT-LEAMAS-FACTORY-DUPLICATE-CODE-GATE01.md)
+- [ACT-LEAMAS-FACTORY-DUPCODE-BASELINE-THRESHOLD-GATE01](../close-reports/
+  ACT-LEAMAS-FACTORY-DUPCODE-BASELINE-THRESHOLD-GATE01.md)

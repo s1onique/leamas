@@ -28,10 +28,13 @@ type Config struct {
 }
 
 // DefaultConfig returns the default configuration.
+// These thresholds are aligned with the gate policy of MinLines=40, MinTokens=400.
+// The baseline + ratchet model allows these lower thresholds while tolerating
+// existing historical duplication through the committed baseline.
 func DefaultConfig() Config {
 	return Config{
-		MinLines:            100,
-		MinTokens:           1000,
+		MinLines:            40,
+		MinTokens:           400,
 		ExcludeDirs:         []string{".git", "vendor", "node_modules", "dist", "build", ".factory", "bin", "testdata"},
 		ExcludeFileSuffixes: []string{"_test.go", ".pb.go", ".gen.go"},
 		IgnoreGenerated:     true,
@@ -47,10 +50,15 @@ type Occurrence struct {
 
 // Finding represents a detected duplicate code block.
 type Finding struct {
+	// Fingerprint is the stable identifier for this duplicate block.
+	// For display, it's truncated to 40 chars. For baseline comparison, use StableFingerprint.
 	Fingerprint string
-	TokenCount  int
-	LineCount   int
-	Occurrences []Occurrence
+	// StableFingerprint is the full normalized fingerprint (not truncated).
+	// Use this for baseline comparisons to ensure deterministic matching.
+	StableFingerprint string
+	TokenCount        int
+	LineCount         int
+	Occurrences       []Occurrence
 }
 
 // CheckRepo scans the repository for duplicate code and returns findings.
@@ -117,10 +125,11 @@ func CheckRepo(root string, cfg Config) ([]Finding, error) {
 			continue
 		}
 		findings = append(findings, Finding{
-			Fingerprint: truncateFingerprint(fp),
-			TokenCount:  fingerprintTokens[fp],
-			LineCount:   fingerprintLines[fp],
-			Occurrences: dedupedOccs,
+			Fingerprint:       truncateFingerprint(fp),
+			StableFingerprint: StableFingerprintHash(fp), // Full normalized fingerprint hash for baseline comparison
+			TokenCount:        fingerprintTokens[fp],
+			LineCount:         fingerprintLines[fp],
+			Occurrences:       dedupedOccs,
 		})
 	}
 

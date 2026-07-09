@@ -9,7 +9,6 @@ import (
 	"github.com/s1onique/leamas/internal/factory/boundary"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
-	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/factory/githooks"
@@ -186,28 +185,7 @@ func handleFactoryVerify() {
 			}{f.Path, f.Kind, f.Message})
 		}
 	case "dupcode":
-		cfg := dupcode.DefaultConfig()
-		f, err := dupcode.CheckRepo(".", cfg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Duplicate code detection ERROR: %v\n", err)
-			os.Exit(2)
-		}
-		if len(f) > 0 {
-			fmt.Printf("Found %d duplicate code blocks:\n\n", len(f))
-			for _, finding := range f {
-				fmt.Printf("Duplicate block (%d tokens, ~%d lines):\n", finding.TokenCount, finding.LineCount)
-				for _, occ := range finding.Occurrences {
-					fmt.Printf("  - %s:%d-%d\n", occ.Path, occ.StartLine, occ.EndLine)
-				}
-				fmt.Println()
-			}
-		} else {
-			fmt.Println("No duplicate code detected.")
-		}
-		if len(f) > 0 {
-			os.Exit(1)
-		}
-		os.Exit(0)
+		handleFactoryVerifyDupcode()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", check)
 		printFactoryVerifyUsage()
