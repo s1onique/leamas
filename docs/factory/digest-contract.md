@@ -196,42 +196,7 @@ config_files=0
 
 ### REVIEW_MAP
 
-Files grouped by reviewer role for routing purposes.
-
-**Fixed group order:**
-1. `production`
-2. `tests`
-3. `docs`
-4. `config`
-5. `generated`
-6. `binary`
-
-**Requirements:**
-- Lexical path order inside each group
-- Empty groups render as: `  - none`
-
-**Example:**
-```
-## REVIEW_MAP
-production:
-  - internal/factory/digest/digest.go
-  - internal/factory/digest/range.go
-
-tests:
-  - internal/factory/digest/review_evidence_test.go
-
-docs:
-  - none
-
-config:
-  - none
-
-generated:
-  - none
-
-binary:
-  - none
-```
+Files grouped by reviewer role for routing purposes. Fixed group order: production, tests, docs, config, generated, binary. Empty groups render as `  - none`. See [digest.md](./digest.md) for examples.
 
 ### RISK_SIGNALS
 
@@ -284,6 +249,12 @@ Deterministic patch hygiene checks using `git diff --check`.
 
 See [digest-patch-hygiene.md](./digest-patch-hygiene.md) for full specification.
 
+### EVIDENCE_HASHES
+
+Deterministic SHA-256 fingerprints over normalized digest sections. Answers "What exact evidence did we review?" with stable content hashes.
+
+See [digest-evidence-hashes.md](./digest-evidence-hashes.md) for full specification.
+
 ## Complete Digest Structure
 
 ```
@@ -310,6 +281,9 @@ Mode: <mode>
 ## PATCH_HYGIENE
 ...
 
+## EVIDENCE_HASHES
+...
+
 ## Changed files
 ...
 
@@ -325,7 +299,6 @@ Mode: <mode>
 This ACT explicitly does not implement:
 
 - `GATE_SUMMARY` - Test execution results
-- `EVIDENCE_HASHES` - Content integrity verification
 - `PUBLIC_SURFACE_DELTA` - Public API analysis
 - `DEPENDENCY_DELTA` - Dependency change tracking
 - SARIF/static-analysis ingestion

@@ -3,7 +3,6 @@ package digest
 
 import (
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -123,54 +122,42 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	}
 	sb.WriteString("\n")
 
-	// Review evidence sections (v2 contract)
-	sb.WriteString(RenderManifest(manifest))
+	// Render review evidence sections (v2 contract) - store for hashing
+	manifestSection := RenderManifest(manifest)
+	statsSection := RenderStats(stats)
+	reviewMapSection := RenderReviewMap(reviewMap)
+	riskSignalsSection := RenderRiskSignals(riskSignals)
+
+	sb.WriteString(manifestSection)
 	sb.WriteString("\n")
-	sb.WriteString(RenderStats(stats))
+	sb.WriteString(statsSection)
 	sb.WriteString("\n")
-	sb.WriteString(RenderReviewMap(reviewMap))
+	sb.WriteString(reviewMapSection)
 	sb.WriteString("\n")
-	sb.WriteString(RenderRiskSignals(riskSignals))
+	sb.WriteString(riskSignalsSection)
 	sb.WriteString("\n")
 
 	// PATCH_HYGIENE section
 	patchHygiene := RunPatchHygiene(repoRoot, resolved.Range)
-	sb.WriteString(RenderPatchHygiene(patchHygiene))
+	patchHygieneSection := RenderPatchHygiene(patchHygiene)
+	sb.WriteString(patchHygieneSection)
 
-	// Changed files section
-	sb.WriteString("## Changed files\n")
-	if len(files) == 0 {
-		sb.WriteString("No changed files found in range.\n")
-	} else {
-		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("%s  [%s]\n", f.Path, f.Status))
-		}
-	}
-	sb.WriteString("\n")
+	// Build file evidence section for hashing (using shared function)
+	fileEvidenceSection := RenderRangeFileEvidence(repoRoot, files, resolved.Range)
 
-	// Diffs section
-	sb.WriteString("## Diffs\n")
-	if len(files) == 0 {
-		sb.WriteString("No diffs to show.\n")
-	} else {
-		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", f.Path))
-			sb.WriteString(fmt.Sprintf("Status: %s\n\n", f.Status))
+	// Compute evidence hashes
+	evidenceHashes := ComputeEvidenceHashes(
+		manifestSection,
+		statsSection,
+		reviewMapSection,
+		riskSignalsSection,
+		patchHygieneSection,
+		fileEvidenceSection,
+	)
+	sb.WriteString(RenderEvidenceHashes(evidenceHashes))
 
-			diff, err := RunGit(repoRoot, []string{"diff", "--unified=3", resolved.Range, "--", f.Path})
-			if err == nil && diff != "" {
-				sb.WriteString(diff)
-			} else {
-				// Try with empty tree for new files
-				diff, err = RunGit(repoRoot, []string{"diff", "--unified=3", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD", "--", f.Path})
-				if err == nil && diff != "" {
-					sb.WriteString(diff)
-				} else {
-					sb.WriteString("(no diff available)\n")
-				}
-			}
-		}
-	}
+	// Write Changed files and Diffs sections
+	sb.WriteString(fileEvidenceSection)
 
 	sb.WriteString("\n## Workflow anchors\n")
 
@@ -275,14 +262,19 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 
 	sb.WriteString("\n")
 
-	// Review evidence sections (v2 contract)
-	sb.WriteString(RenderManifest(manifest))
+	// Render review evidence sections (v2 contract) - store for hashing
+	manifestSection := RenderManifest(manifest)
+	statsSection := RenderStats(stats)
+	reviewMapSection := RenderReviewMap(reviewMap)
+	riskSignalsSection := RenderRiskSignals(riskSignals)
+
+	sb.WriteString(manifestSection)
 	sb.WriteString("\n")
-	sb.WriteString(RenderStats(stats))
+	sb.WriteString(statsSection)
 	sb.WriteString("\n")
-	sb.WriteString(RenderReviewMap(reviewMap))
+	sb.WriteString(reviewMapSection)
 	sb.WriteString("\n")
-	sb.WriteString(RenderRiskSignals(riskSignals))
+	sb.WriteString(riskSignalsSection)
 	sb.WriteString("\n")
 
 	// PATCH_HYGIENE section (only for dirty mode)
@@ -290,90 +282,25 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	if mode == ModeDirty {
 		patchHygiene = RunPatchHygieneDirty(repoRoot)
 	}
-	sb.WriteString(RenderPatchHygiene(patchHygiene))
+	patchHygieneSection := RenderPatchHygiene(patchHygiene)
+	sb.WriteString(patchHygieneSection)
 
-	// Changed files section
-	sb.WriteString("## Changed files\n")
-	if len(files) == 0 {
-		sb.WriteString("No changed files found.\n")
-	} else {
-		for _, f := range files {
-			if f.Tracked {
-				stagedStr := "no"
-				if f.StagedPresent {
-					stagedStr = "yes"
-				}
-				unstagedStr := "no"
-				if f.UnstagedPresent {
-					unstagedStr = "yes"
-				}
-				sb.WriteString(fmt.Sprintf("%s  [tracked, staged present: %s, unstaged present: %s]\n",
-					f.Path, stagedStr, unstagedStr))
-			} else {
-				sb.WriteString(fmt.Sprintf("%s  [untracked, staged present: no, unstaged present: yes]\n",
-					f.Path))
-			}
-		}
-	}
-	sb.WriteString("\n")
+	// Build file evidence section for hashing (using shared function)
+	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
-	// Diffs section
-	sb.WriteString("## Diffs\n")
-	if len(files) == 0 {
-		sb.WriteString("No diffs to show.\n")
-	} else {
-		for _, f := range files {
-			fullPath := filepath.Join(repoRoot, f.Path)
-			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", f.Path))
+	// Compute evidence hashes
+	evidenceHashes := ComputeEvidenceHashes(
+		manifestSection,
+		statsSection,
+		reviewMapSection,
+		riskSignalsSection,
+		patchHygieneSection,
+		fileEvidenceSection,
+	)
+	sb.WriteString(RenderEvidenceHashes(evidenceHashes))
 
-			// Metadata
-			if f.Tracked {
-				stagedStr := "yes"
-				if !f.StagedPresent {
-					stagedStr = "no"
-				}
-				unstagedStr := "yes"
-				if !f.UnstagedPresent {
-					unstagedStr = "no"
-				}
-				sb.WriteString(fmt.Sprintf("Metadata: tracked, staged present: %s, unstaged present: %s\n",
-					stagedStr, unstagedStr))
-			} else {
-				sb.WriteString("Metadata: untracked, staged present: no, unstaged present: yes\n")
-			}
-			sb.WriteString("\n")
-
-			// Content based on file type
-			if f.Untracked {
-				sb.WriteString("--- untracked file content ---\n")
-				content, isBinary := ReadFileFull(fullPath)
-				if isBinary {
-					sb.WriteString("(binary file)\n")
-				} else {
-					sb.WriteString(content)
-				}
-			} else {
-				// Tracked file with staged changes
-				if f.StagedPresent {
-					sb.WriteString("--- staged diff ---\n")
-					diff, err := RunGit(repoRoot, []string{"diff", "--cached", "--", f.Path})
-					if err == nil && diff != "" {
-						sb.WriteString(diff)
-					}
-					sb.WriteString("\n")
-				}
-
-				// Tracked file with unstaged changes
-				if f.UnstagedPresent {
-					sb.WriteString("--- unstaged diff ---\n")
-					diff, err := RunGit(repoRoot, []string{"diff", "--", f.Path})
-					if err == nil && diff != "" {
-						sb.WriteString(diff)
-					}
-				}
-			}
-		}
-	}
+	// Write Changed files and Diffs sections
+	sb.WriteString(fileEvidenceSection)
 
 	sb.WriteString("\n## Workflow anchors\n")
 

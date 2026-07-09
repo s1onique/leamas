@@ -1,0 +1,131 @@
+// Package digest provides targeted digest generation for Git repositories.
+package digest
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+)
+
+// RenderChangedFilesAndDiffs renders the Changed files list and diff content for dirty/staged modes.
+func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
+	var sb strings.Builder
+
+	sb.WriteString("## Changed files\n")
+	if len(files) == 0 {
+		sb.WriteString("No changed files found.\n")
+	} else {
+		for _, f := range files {
+			if f.Tracked {
+				stagedStr := "no"
+				if f.StagedPresent {
+					stagedStr = "yes"
+				}
+				unstagedStr := "no"
+				if f.UnstagedPresent {
+					unstagedStr = "yes"
+				}
+				sb.WriteString(fmt.Sprintf("%s  [tracked, staged present: %s, unstaged present: %s]\n",
+					f.Path, stagedStr, unstagedStr))
+			} else {
+				sb.WriteString(fmt.Sprintf("%s  [untracked, staged present: no, unstaged present: yes]\n",
+					f.Path))
+			}
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Diffs\n")
+	if len(files) == 0 {
+		sb.WriteString("No diffs to show.\n")
+	} else {
+		for _, f := range files {
+			fullPath := filepath.Join(repoRoot, f.Path)
+			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", f.Path))
+
+			if f.Tracked {
+				stagedStr := "yes"
+				if !f.StagedPresent {
+					stagedStr = "no"
+				}
+				unstagedStr := "yes"
+				if !f.UnstagedPresent {
+					unstagedStr = "no"
+				}
+				sb.WriteString(fmt.Sprintf("Metadata: tracked, staged present: %s, unstaged present: %s\n",
+					stagedStr, unstagedStr))
+			} else {
+				sb.WriteString("Metadata: untracked, staged present: no, unstaged present: yes\n")
+			}
+			sb.WriteString("\n")
+
+			if f.Untracked {
+				sb.WriteString("--- untracked file content ---\n")
+				content, isBinary := ReadFileFull(fullPath)
+				if isBinary {
+					sb.WriteString("(binary file)\n")
+				} else {
+					sb.WriteString(content)
+				}
+			} else {
+				if f.StagedPresent {
+					sb.WriteString("--- staged diff ---\n")
+					diff, err := RunGit(repoRoot, []string{"diff", "--cached", "--", f.Path})
+					if err == nil && diff != "" {
+						sb.WriteString(diff)
+					}
+					sb.WriteString("\n")
+				}
+
+				if f.UnstagedPresent {
+					sb.WriteString("--- unstaged diff ---\n")
+					diff, err := RunGit(repoRoot, []string{"diff", "--", f.Path})
+					if err == nil && diff != "" {
+						sb.WriteString(diff)
+					}
+				}
+			}
+		}
+	}
+
+	return sb.String()
+}
+
+// RenderRangeFileEvidence renders the Changed files list and diffs for range mode.
+func RenderRangeFileEvidence(repoRoot string, files []RangeFile, rangeSpec string) string {
+	var sb strings.Builder
+
+	sb.WriteString("## Changed files\n")
+	if len(files) == 0 {
+		sb.WriteString("No changed files found in range.\n")
+	} else {
+		for _, f := range files {
+			sb.WriteString(fmt.Sprintf("%s  [%s]\n", f.Path, f.Status))
+		}
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("## Diffs\n")
+	if len(files) == 0 {
+		sb.WriteString("No diffs to show.\n")
+	} else {
+		for _, f := range files {
+			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", f.Path))
+			sb.WriteString(fmt.Sprintf("Status: %s\n\n", f.Status))
+
+			diff, err := RunGit(repoRoot, []string{"diff", "--unified=3", rangeSpec, "--", f.Path})
+			if err == nil && diff != "" {
+				sb.WriteString(diff)
+			} else {
+				diff, err = RunGit(repoRoot, []string{"diff", "--unified=3", "4b825dc642cb6eb9a060e54bf8d69288fbee4904", "HEAD", "--", f.Path})
+				if err == nil && diff != "" {
+					sb.WriteString(diff)
+				} else {
+					sb.WriteString("(no diff available)\n")
+				}
+			}
+		}
+	}
+
+	return sb.String()
+}

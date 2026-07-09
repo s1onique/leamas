@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-09T20:24:15Z",
+  "generated_at": "2026-07-09T20:41:02Z",
   "tool": "leamas dupcode",
   "thresholds": {
     "min_lines": 40,
@@ -21,23 +21,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 270,
           "end_line": 344
-        }
-      ]
-    },
-    {
-      "fingerprint": "008fc60e18ad074dd2ca6f58986ee9359611ac99beb672df6b96e64df50f2c1d",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 306,
-          "end_line": 383
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 298,
-          "end_line": 375
         }
       ]
     },
@@ -106,23 +89,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 146,
           "end_line": 211
-        }
-      ]
-    },
-    {
-      "fingerprint": "01fdc769fb4dec3438bebf509609cca2bad8c5a5604d6821f17630743a8471fd",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 379
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 371
         }
       ]
     },
@@ -467,23 +433,6 @@
       ]
     },
     {
-      "fingerprint": "0c88a6df9289ac5406a6e2592cccf07744f5f652f2100f7b793d77420fd477da",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 304,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 296,
-          "end_line": 370
-        }
-      ]
-    },
-    {
       "fingerprint": "0d3fba2c3d2b1b04379b5ea520c9a6f77d9ba665bf45c21fe3008547e26acee5",
       "token_count": 400,
       "line_count": 70,
@@ -671,23 +620,6 @@
       ]
     },
     {
-      "fingerprint": "1110aa28aaad13b29253809581672bcc9cf692433edd267d69972203d95e6878",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 309,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 301,
-          "end_line": 381
-        }
-      ]
-    },
-    {
       "fingerprint": "118c946ce1bd0611ac6fc0d1d3fee155dab6a8b63d038feee711351115532b0b",
       "token_count": 400,
       "line_count": 78,
@@ -803,23 +735,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 240,
           "end_line": 315
-        }
-      ]
-    },
-    {
-      "fingerprint": "1533a9747dbd15f4249ce54a04e1644e25126e46414f2f32d657d03dcaeaefe5",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 306,
-          "end_line": 382
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 298,
-          "end_line": 374
         }
       ]
     },
@@ -1028,23 +943,6 @@
       ]
     },
     {
-      "fingerprint": "18afba3f6f08cedb3949210cd9dfcfbc36ad78975461634620fff052ae503316",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
-        }
-      ]
-    },
-    {
       "fingerprint": "18f62fc9335cdcc94b0216e44e6f2854ec9bfb7fa11e6898db721582061d29de",
       "token_count": 400,
       "line_count": 73,
@@ -1092,23 +990,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 138,
           "end_line": 204
-        }
-      ]
-    },
-    {
-      "fingerprint": "1a29476be0a428348bf6873bbf760dbc6c5c2810667c8959e343bd48ebe08939",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
         }
       ]
     },
@@ -1215,23 +1096,6 @@
       ]
     },
     {
-      "fingerprint": "1c3f41445b2a765433f8d5db135fb88a6d270a221522ff3a5da734d9c3ba7fac",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 304,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 296,
-          "end_line": 370
-        }
-      ]
-    },
-    {
       "fingerprint": "1c71d813a5e78be284a3bb4cd8bbd5202732623e696ebbf7e38d2a6abbe24d3f",
       "token_count": 400,
       "line_count": 62,
@@ -1296,23 +1160,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 316,
           "end_line": 378
-        }
-      ]
-    },
-    {
-      "fingerprint": "1eab3e551486d070e08c9a89a407628cbfb0638dcea7d30b134334397f4f910a",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 314,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 306,
-          "end_line": 383
         }
       ]
     },
@@ -1385,23 +1232,6 @@
       ]
     },
     {
-      "fingerprint": "1f5f7219db31928370a51e72731afe0e84bdbef80b97b0e70a3776ffc01a15bf",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
-        }
-      ]
-    },
-    {
       "fingerprint": "1fc3894a8abd9e8693ab0e8823b2bfe5f318037d88241e537d73cfa38ca61f7a",
       "token_count": 400,
       "line_count": 63,
@@ -1415,23 +1245,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 312,
           "end_line": 374
-        }
-      ]
-    },
-    {
-      "fingerprint": "1fcf8ee5f0d23247b159580c37e15a48f15d57d5f2a817028a9e5e77ad4d78f9",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
         }
       ]
     },
@@ -1521,23 +1334,6 @@
       ]
     },
     {
-      "fingerprint": "21c78c6faa4f26f02f0187f12d24e9c186776d5881b7ae2294b141b2257767b4",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 316,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 308,
-          "end_line": 385
-        }
-      ]
-    },
-    {
       "fingerprint": "2220350862aaf929a69fdfd71d5d65ccf6fbaef7d36ce877fbaa3e1d04e027f1",
       "token_count": 400,
       "line_count": 65,
@@ -1623,23 +1419,6 @@
       ]
     },
     {
-      "fingerprint": "233d2149a0ad14864495d7103a210b75b1cc0c231c711b7ae753792aa2b3b3ef",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 309,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 301,
-          "end_line": 381
-        }
-      ]
-    },
-    {
       "fingerprint": "23afa89a21db2bd256ba2b346a15a3d3e67bacc201ccd80481f5a32b053ac420",
       "token_count": 400,
       "line_count": 79,
@@ -1687,40 +1466,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 293,
           "end_line": 360
-        }
-      ]
-    },
-    {
-      "fingerprint": "24b645887a808312f5a84ee202e30be345130220610e71f314cf418e7e6cfd5d",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 315,
-          "end_line": 392
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 307,
-          "end_line": 384
-        }
-      ]
-    },
-    {
-      "fingerprint": "2532307fd3472084fa3d837845080d3d63963064dd62aca11a1be6c344d7e33e",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 310,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 302,
-          "end_line": 381
         }
       ]
     },
@@ -1891,23 +1636,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 256,
           "end_line": 332
-        }
-      ]
-    },
-    {
-      "fingerprint": "2926cc476db0c8c0ef819b0a068df822708145925529613c5b0788347108f207",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 314,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 306,
-          "end_line": 383
         }
       ]
     },
@@ -2201,57 +1929,6 @@
       ]
     },
     {
-      "fingerprint": "323d0d474a51d64d62af57d8c27f4b95445c2c099fb120f0c20406ecccee159b",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 307,
-          "end_line": 384
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 299,
-          "end_line": 376
-        }
-      ]
-    },
-    {
-      "fingerprint": "328f1a6d602ab53ad9e998e7f6cec08c3e1e25bc71c9cde0bf358c36712026a5",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 304,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 296,
-          "end_line": 370
-        }
-      ]
-    },
-    {
-      "fingerprint": "32d059f59b3e557a19cf50c0cf31b2ce9db96ddd1052a6e7e96bbf6841faf507",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 315,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 307,
-          "end_line": 385
-        }
-      ]
-    },
-    {
       "fingerprint": "337092d78ded6bf7a4280115c859dcfe9b71f3355c982451540bbe62464f3a17",
       "token_count": 400,
       "line_count": 70,
@@ -2299,23 +1976,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 314,
           "end_line": 375
-        }
-      ]
-    },
-    {
-      "fingerprint": "33e0818b2db49027dc4611aa46a81bdc505b50f262d878ae1d4d4b06d60c8c52",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
         }
       ]
     },
@@ -2371,40 +2031,6 @@
       ]
     },
     {
-      "fingerprint": "3565681f50565a475f547c5974dd94af321119f31348f66b3826d026213ac456",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 304,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 296,
-          "end_line": 370
-        }
-      ]
-    },
-    {
-      "fingerprint": "36198e4bf2f28f1b347aeb20c12a24927247d3b0a1c1f87076b2d395014b4cbe",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 317,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 309,
-          "end_line": 385
-        }
-      ]
-    },
-    {
       "fingerprint": "36763ac92f80b9ecfc77fc48a409cfb6925f87ab7cbe8a2d4173d28f7150e72d",
       "token_count": 400,
       "line_count": 64,
@@ -2418,23 +2044,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 316,
           "end_line": 379
-        }
-      ]
-    },
-    {
-      "fingerprint": "3699be72418e2232b6bfe5a71b757ed175cc4620696ac01901121bed9976b2d8",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 379
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 371
         }
       ]
     },
@@ -2558,23 +2167,6 @@
       ]
     },
     {
-      "fingerprint": "38f00de06f13f56d466b9b8086d0b0b8bfeb9e22c48f1b9ae5896dcf5069fdae",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 312,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 304,
-          "end_line": 383
-        }
-      ]
-    },
-    {
       "fingerprint": "395b5be89fddef5985098970fe781de51408e0cc8ccd353b1ed4d9d9ed98af7c",
       "token_count": 400,
       "line_count": 77,
@@ -2656,23 +2248,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 244,
           "end_line": 316
-        }
-      ]
-    },
-    {
-      "fingerprint": "3a26c9fe7357c36335ca401b3dda3bd1310a735da427c84c7aa451389b8d8c3d",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 312,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 304,
-          "end_line": 383
         }
       ]
     },
@@ -3289,23 +2864,6 @@
       ]
     },
     {
-      "fingerprint": "4585528c522293ba10907b23226b9a59e6c2a47ddcf9f554fd7def2c20a4c3d8",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 319,
-          "end_line": 396
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 311,
-          "end_line": 388
-        }
-      ]
-    },
-    {
       "fingerprint": "45d97c43872d026988d5e9dd8807e1bdab6de69d0b784612ed419f2d0c8c4dc0",
       "token_count": 400,
       "line_count": 70,
@@ -3404,23 +2962,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 250,
           "end_line": 324
-        }
-      ]
-    },
-    {
-      "fingerprint": "49d8d22c493486d3f15f57024bf20381558014ea283d08a3a43105d89d22782c",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 306,
-          "end_line": 383
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 298,
-          "end_line": 375
         }
       ]
     },
@@ -3918,23 +3459,6 @@
       ]
     },
     {
-      "fingerprint": "53b4512b48ec41f0372666657400fac2b9897beec681c2baba65a8ed1b11753d",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 300,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 292,
-          "end_line": 369
-        }
-      ]
-    },
-    {
       "fingerprint": "53ccb03125d25f3dcccd15562b2de8746113cc31e472422e7792f1768275510a",
       "token_count": 400,
       "line_count": 70,
@@ -4020,40 +3544,6 @@
       ]
     },
     {
-      "fingerprint": "5502db7ce9ca8d60bee8c76b27a41b4bd48cb6759b865bb37aa5e2bc48dac55f",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 379
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 371
-        }
-      ]
-    },
-    {
-      "fingerprint": "55ca344664ce79a67fb2e87d88741d8ccd688dce6240a3913ebaa70032ee67c1",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 312,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 304,
-          "end_line": 383
-        }
-      ]
-    },
-    {
       "fingerprint": "55cab3af601e6a91391fb3331ffcbc5778df52ece5f7c5cecf5c987202402285",
       "token_count": 400,
       "line_count": 70,
@@ -4084,23 +3574,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 140,
           "end_line": 208
-        }
-      ]
-    },
-    {
-      "fingerprint": "564ae0945fd26162cd6ea24d2025338bf96aba376da1770de77edc605eaec8fa",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 386
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 378
         }
       ]
     },
@@ -4254,23 +3727,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 230,
           "end_line": 312
-        }
-      ]
-    },
-    {
-      "fingerprint": "5933c84353ffa717d20afdf72d369603421b7c95ab085938e03b5ef132ed95b8",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
         }
       ]
     },
@@ -4547,23 +4003,6 @@
       ]
     },
     {
-      "fingerprint": "5f33f1658cc9973142505b7043484fd88358795aa1309182efd982f868341521",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
-        }
-      ]
-    },
-    {
       "fingerprint": "5f5245fbf1df29ea69e4dbdaea905434060307bed022ea41b74c33bf898fcaa5",
       "token_count": 400,
       "line_count": 67,
@@ -4683,40 +4122,6 @@
       ]
     },
     {
-      "fingerprint": "61e2382c8f2dbe5f3599189f178e7ac7111fdd3631c85402a2ad75890186dfaf",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 314,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 306,
-          "end_line": 383
-        }
-      ]
-    },
-    {
-      "fingerprint": "631c3f94853af9d0b39655fec8827fe928c86d4137311d8dddd0b2f0adbbf35a",
-      "token_count": 400,
-      "line_count": 76,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 306,
-          "end_line": 381
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 298,
-          "end_line": 373
-        }
-      ]
-    },
-    {
       "fingerprint": "634264665c7548b6a74db7993856e8005753f954f95fed3d8cc2976da612b6bf",
       "token_count": 400,
       "line_count": 68,
@@ -4747,40 +4152,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 315,
           "end_line": 377
-        }
-      ]
-    },
-    {
-      "fingerprint": "64d0d98e547cc4e58c1bfebd04429df3cc20be56195b00969d3db2dca2b4e8d4",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 379
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 371
-        }
-      ]
-    },
-    {
-      "fingerprint": "64d3e941363d8d3c7cbb9ca0d4c1ccab03ace0d3e26665fd1dfb5f3acda5fbbf",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
         }
       ]
     },
@@ -4849,23 +4220,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 259,
           "end_line": 333
-        }
-      ]
-    },
-    {
-      "fingerprint": "67a1258a617398ca9bc79401d0b34646c91094a6ec63bb3707e38fea171a823c",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 316,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 308,
-          "end_line": 385
         }
       ]
     },
@@ -5108,23 +4462,6 @@
       ]
     },
     {
-      "fingerprint": "6c5a9f8a2d7fa25a8ef008d6103d1510ade789780c2a9708a89904dfaf68abab",
-      "token_count": 400,
-      "line_count": 76,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 306,
-          "end_line": 381
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 298,
-          "end_line": 373
-        }
-      ]
-    },
-    {
       "fingerprint": "6c95daf061bebf7b3112fac8bed6bcc97a58492e384a7781aac4fccd47482914",
       "token_count": 400,
       "line_count": 76,
@@ -5193,23 +4530,6 @@
       ]
     },
     {
-      "fingerprint": "6e83db97c0ee4dd8044c40270748000f307a955324e710c9c645e333a36b2a59",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 309,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 301,
-          "end_line": 381
-        }
-      ]
-    },
-    {
       "fingerprint": "6e9eee938f004176aff1a4fb9fa7dabaa0ddb2f7ecc93836911b4dbf1c96e6b4",
       "token_count": 400,
       "line_count": 78,
@@ -5261,23 +4581,6 @@
       ]
     },
     {
-      "fingerprint": "6ed32fc9ed6621e05e9b0646cd913e90049477d45eb8559f66e71edeff3c24ce",
-      "token_count": 400,
-      "line_count": 82,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 381
-        }
-      ]
-    },
-    {
       "fingerprint": "6ed3e88b6062961b13ad6b1b7ec5035012ef7d5b86251887847d29c4b4358b07",
       "token_count": 400,
       "line_count": 63,
@@ -5291,23 +4594,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 151,
           "end_line": 213
-        }
-      ]
-    },
-    {
-      "fingerprint": "6f2f6d607a5aaaf3166ce8e4ae4f2bc8b058c8a9be05956b30c349623185b927",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
         }
       ]
     },
@@ -5414,40 +4700,6 @@
       ]
     },
     {
-      "fingerprint": "71567a2a25b183197563062ba802d076194ccfc7edc8f79e4f6bd76bc78895ba",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 316,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 308,
-          "end_line": 385
-        }
-      ]
-    },
-    {
-      "fingerprint": "71648b4bd40c0bf847f7bf699935d7868fc1ab68842604df23fdc964f196430b",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 315,
-          "end_line": 392
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 307,
-          "end_line": 384
-        }
-      ]
-    },
-    {
       "fingerprint": "71e2fea6c922e412a22504f7be6823f744427f1c43dbc3f95044a34b4a1628ab",
       "token_count": 400,
       "line_count": 75,
@@ -5529,23 +4781,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 312,
           "end_line": 374
-        }
-      ]
-    },
-    {
-      "fingerprint": "73e08d121ba46e520417fa293a1bc414d6acc5e7993e180f369480eed54b4763",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 307,
-          "end_line": 384
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 299,
-          "end_line": 376
         }
       ]
     },
@@ -5750,23 +4985,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 267,
           "end_line": 343
-        }
-      ]
-    },
-    {
-      "fingerprint": "7ad3c4924284b9623bb961c04330a46e5a8c4ab5c7ee8ffea96e50a5f87ab739",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 311,
-          "end_line": 390
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 303,
-          "end_line": 382
         }
       ]
     },
@@ -6060,23 +5278,6 @@
       ]
     },
     {
-      "fingerprint": "80611434087486fd4e03fa1e890030e6ee4e91486296c35aacbf50dd2e6882a8",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 307,
-          "end_line": 386
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 299,
-          "end_line": 378
-        }
-      ]
-    },
-    {
       "fingerprint": "81718a3df8134003e9b32dbca1d2c37bc13d37dea0881c31f9a7622a5e4067de",
       "token_count": 400,
       "line_count": 76,
@@ -6141,23 +5342,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 248,
           "end_line": 323
-        }
-      ]
-    },
-    {
-      "fingerprint": "82e4c4bb134f9d2aa8fbc9e7ad9a5889bd5b8e1686b0a4934a7bb142ef056f9a",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 314,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 306,
-          "end_line": 383
         }
       ]
     },
@@ -6723,40 +5907,6 @@
       ]
     },
     {
-      "fingerprint": "91fe90c9d8101a75b34919c2f3b181642f7f2dca91c23bc933664140562ec509",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
-        }
-      ]
-    },
-    {
-      "fingerprint": "921d6837d0be51e67029d7b62458ab833a17cd20d6929f91a7d887e0daeaa531",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 311,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 303,
-          "end_line": 383
-        }
-      ]
-    },
-    {
       "fingerprint": "9239d051bb226b2f349e12d78e40a8bc17c416ba3bc1a49ffaaaa4e4522a5079",
       "token_count": 400,
       "line_count": 70,
@@ -6838,23 +5988,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 318,
           "end_line": 381
-        }
-      ]
-    },
-    {
-      "fingerprint": "9528fda368238c133afec7f95a21ceb97799d47c44f52a80652201bc9d2c7c96",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 317,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 309,
-          "end_line": 385
         }
       ]
     },
@@ -6961,23 +6094,6 @@
       ]
     },
     {
-      "fingerprint": "9789e8ed0d090906a9f1d91aec393d350deef88b3096240d8010865653b99219",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 370
-        }
-      ]
-    },
-    {
       "fingerprint": "97d867bcd5d047ccc4702ef80019919e30e55856247b4850d6458687ee9d0625",
       "token_count": 400,
       "line_count": 77,
@@ -6991,23 +6107,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 252,
           "end_line": 328
-        }
-      ]
-    },
-    {
-      "fingerprint": "986cbed90028bdb26fd752d5a3841c016a0d3373e409a9f003a836db59d0ffbf",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 300,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 292,
-          "end_line": 369
         }
       ]
     },
@@ -7199,23 +6298,6 @@
       ]
     },
     {
-      "fingerprint": "9e99cc7f8b3b81b1f41531f0c529d2de4a50b9fa8caac8ed8945461871e68816",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 386
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 378
-        }
-      ]
-    },
-    {
       "fingerprint": "9ea10d4d7bdd25af140487268dce9fd182eb0b7cc9d356e657aecd586f6bc905",
       "token_count": 400,
       "line_count": 77,
@@ -7369,23 +6451,6 @@
       ]
     },
     {
-      "fingerprint": "a36f4d8b2f7788944a7a19df54644b81a791b3c23ba48a43b545f21ac03ed919",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
-        }
-      ]
-    },
-    {
       "fingerprint": "a463a32fe93c2977a98c0c1ed43dcc83c7a2c4f63235fcdfb50e34ead8d15977",
       "token_count": 400,
       "line_count": 78,
@@ -7488,23 +6553,6 @@
       ]
     },
     {
-      "fingerprint": "a6cf09efac52b40281ea358e66439e04a89750fbabc89b937c50487abd990f3a",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 315,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 307,
-          "end_line": 385
-        }
-      ]
-    },
-    {
       "fingerprint": "a73c8266a1eba3f128f850468f769ae177ba3c76ae886cc10717665f107b8536",
       "token_count": 400,
       "line_count": 68,
@@ -7569,40 +6617,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 152,
           "end_line": 217
-        }
-      ]
-    },
-    {
-      "fingerprint": "a95bb50eb92024555634a7d3e329ac8f3aa5e510de3b4b208d8e688d3623ad0d",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
-        }
-      ]
-    },
-    {
-      "fingerprint": "a9756488f499e7f9502633722ed5892f1acd6576dffe451610f18f697302394b",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 306,
-          "end_line": 380
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 298,
-          "end_line": 372
         }
       ]
     },
@@ -7947,23 +6961,6 @@
       ]
     },
     {
-      "fingerprint": "b23a745d6be791f56d13e76bbe75d85acadb53f542b9d18b6a6c737139719045",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
-        }
-      ]
-    },
-    {
       "fingerprint": "b26c9204311bf00c4820a8fdbb6b4037310bfc7de1dbd22eae738954d8798260",
       "token_count": 400,
       "line_count": 76,
@@ -8304,23 +7301,6 @@
       ]
     },
     {
-      "fingerprint": "b964efff248b4c67e83b78bf3970b50889cd709bdf9b1508c290f3d426f8bab6",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 386
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 378
-        }
-      ]
-    },
-    {
       "fingerprint": "b9cfe1d1bdfd8fd26de7fb21f747749b92d555ebcfd03017cf2ffcd117f297cb",
       "token_count": 400,
       "line_count": 70,
@@ -8504,23 +7484,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 262,
           "end_line": 338
-        }
-      ]
-    },
-    {
-      "fingerprint": "be6ce50efe4c4c2717b15e2c786eb6efd9d65d30283c81677d46a5a88e1bbd1c",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 310,
-          "end_line": 390
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 302,
-          "end_line": 382
         }
       ]
     },
@@ -8916,23 +7879,6 @@
       ]
     },
     {
-      "fingerprint": "c37302d8a99adfa4a881ee82ecfec0acc7d72fa4467587b797659a6e7838774b",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 309,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 301,
-          "end_line": 381
-        }
-      ]
-    },
-    {
       "fingerprint": "c3ae01857c8541f4c23111a247d8187f205d462f24f748161206013639f12b8b",
       "token_count": 400,
       "line_count": 82,
@@ -9014,23 +7960,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 244,
           "end_line": 316
-        }
-      ]
-    },
-    {
-      "fingerprint": "c56e8b71cd7663426d37306b3cd0a7ac7b8b0d1eac74245fbd3fa875f6066a63",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
         }
       ]
     },
@@ -9205,23 +8134,6 @@
       ]
     },
     {
-      "fingerprint": "c8d8aaf648db4adf51f192661594813f5159af83857b4bbe05e8b9044a7c8fa4",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 370
-        }
-      ]
-    },
-    {
       "fingerprint": "c8e2e8de31c4f339d2137412190add8a9f4be0586bafeecdbe7bde792ebabe79",
       "token_count": 400,
       "line_count": 76,
@@ -9273,23 +8185,6 @@
       ]
     },
     {
-      "fingerprint": "c9ccff509e8c2a0b70be157bde386cd07154972b7c41e399dea27c76a9defa95",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 304,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 296,
-          "end_line": 370
-        }
-      ]
-    },
-    {
       "fingerprint": "ca34883b1f3d2923d69fd8bf3fb5f631d05bbb58dd43112b735c30b507a4fadd",
       "token_count": 400,
       "line_count": 76,
@@ -9337,23 +8232,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 244,
           "end_line": 318
-        }
-      ]
-    },
-    {
-      "fingerprint": "ca5ae056591561f9eaca1f4ff895a5137af3c7e229f8b3f10a53bd8d72cc7eeb",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
         }
       ]
     },
@@ -9490,23 +8368,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 153,
           "end_line": 222
-        }
-      ]
-    },
-    {
-      "fingerprint": "ce6bae5e0fef0fb7060dc53e324ca134150a8daeb014f39d558e3475fb0fc248",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 386
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 378
         }
       ]
     },
@@ -9664,23 +8525,6 @@
       ]
     },
     {
-      "fingerprint": "d09a7518966e22fc927d5709cbccd485378bbfb377fe9136a44bef36f5c7f8eb",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 309,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 301,
-          "end_line": 381
-        }
-      ]
-    },
-    {
       "fingerprint": "d1e11ed6110d4385f5fc5e26420e35be940e4021f861a8b073097ba864b22c1c",
       "token_count": 400,
       "line_count": 78,
@@ -9728,23 +8572,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 245,
           "end_line": 319
-        }
-      ]
-    },
-    {
-      "fingerprint": "d327e81f028a1baeb053368c68bc2748d669fa9a02461874d3675e6fc0e9ac66",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 395
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 387
         }
       ]
     },
@@ -9919,23 +8746,6 @@
       ]
     },
     {
-      "fingerprint": "d7af26173faa9dc40f2e6b84bbaf4c6298680cb2a9b8607d05646c06ae3d2b82",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 311,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 303,
-          "end_line": 383
-        }
-      ]
-    },
-    {
       "fingerprint": "d801e2e49e259645bd64e5879500a50ee1e286845a4930781e6f833e0a1018cb",
       "token_count": 400,
       "line_count": 69,
@@ -9966,23 +8776,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 232,
           "end_line": 313
-        }
-      ]
-    },
-    {
-      "fingerprint": "d8f4f2000fdb5602dd3492d08215a77730cc03b1ab85f26582f89ae9b5d143f4",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 313,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 305,
-          "end_line": 383
         }
       ]
     },
@@ -10140,23 +8933,6 @@
       ]
     },
     {
-      "fingerprint": "db5e65de5cddc3dc2767d86a78d98188f53f686abc214fbf0023466665400b1c",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 304,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 296,
-          "end_line": 370
-        }
-      ]
-    },
-    {
       "fingerprint": "db81c7a96f33f33c34c6ddfc4126fbee982b89ecee6cc5898aa6ac9fb889c0b2",
       "token_count": 400,
       "line_count": 78,
@@ -10191,40 +8967,6 @@
       ]
     },
     {
-      "fingerprint": "dc929b6f23e78e14d321dc9432883690fa3e344f7daebdbc495839ad339e0604",
-      "token_count": 400,
-      "line_count": 81,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 310,
-          "end_line": 390
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 302,
-          "end_line": 382
-        }
-      ]
-    },
-    {
-      "fingerprint": "dcf4ed469e114fc8cf99f703e1cf467eea7dfc45610b85998f8bc04226a62a8d",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 312,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 304,
-          "end_line": 383
-        }
-      ]
-    },
-    {
       "fingerprint": "dd7c73e6e7f403213c6c305e0ca2d9ed8392c01a1876237bb8863034014c8ef3",
       "token_count": 400,
       "line_count": 65,
@@ -10255,23 +8997,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 153,
           "end_line": 220
-        }
-      ]
-    },
-    {
-      "fingerprint": "de3ecd1225af70ba183bf85326d48be48ab4368e9ed828ee027eae098e5ec4fa",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 386
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 378
         }
       ]
     },
@@ -10480,23 +9205,6 @@
       ]
     },
     {
-      "fingerprint": "e44c21601b0a13485e15454ed783e6eb75c113e9293dedd760a1cea945cba4fb",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 316,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 308,
-          "end_line": 385
-        }
-      ]
-    },
-    {
       "fingerprint": "e47424d0743d7690b45bc5e91b633a67b7cacc492f753b3cb75364caf293cdd5",
       "token_count": 400,
       "line_count": 76,
@@ -10565,23 +9273,6 @@
       ]
     },
     {
-      "fingerprint": "e6829f8f45335539ad96833110f768b7c7be8756f1831784cec237f2aebfb5f8",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 311,
-          "end_line": 390
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 303,
-          "end_line": 382
-        }
-      ]
-    },
-    {
       "fingerprint": "e68e2569ef802ab70ea324026567af5b4250d5a4e8e3c0fee1241337f8ba9dd4",
       "token_count": 400,
       "line_count": 75,
@@ -10595,23 +9286,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 250,
           "end_line": 324
-        }
-      ]
-    },
-    {
-      "fingerprint": "e6ec3b7937558535c35c7e12f34cc3c28a6ee2262474a9eec3181f48020f9449",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 306,
-          "end_line": 382
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 298,
-          "end_line": 374
         }
       ]
     },
@@ -10650,23 +9324,6 @@
       ]
     },
     {
-      "fingerprint": "e7e88edec513b5dbb42f25d3802397a7593192ae4a6362b558d2737f58614197",
-      "token_count": 400,
-      "line_count": 76,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 318,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 310,
-          "end_line": 385
-        }
-      ]
-    },
-    {
       "fingerprint": "e80fed1b4dd61a0f6ad93aa34137041ab03ca060cab4d8dd5931bf2a03c7ca46",
       "token_count": 400,
       "line_count": 76,
@@ -10680,74 +9337,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 268,
           "end_line": 343
-        }
-      ]
-    },
-    {
-      "fingerprint": "e83d7dec49efdbfb0f98275e6bd1806616190eafc706195e09466021913116ff",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 304,
-          "end_line": 378
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 296,
-          "end_line": 370
-        }
-      ]
-    },
-    {
-      "fingerprint": "e8ba7a64d63044469d850f282e6d4af249abd824c0750d33157871d139e36d71",
-      "token_count": 400,
-      "line_count": 82,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 381
-        }
-      ]
-    },
-    {
-      "fingerprint": "e9d7ffc099733bd576e4ee05eacfc14a19b367d75e670d0ec62c0aa191a5ef0a",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 299,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 291,
-          "end_line": 369
-        }
-      ]
-    },
-    {
-      "fingerprint": "ea226482fd3e1149c6577e999d23d8ebca8140fc150613723aec6e1f7de623dc",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 311,
-          "end_line": 390
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 303,
-          "end_line": 382
         }
       ]
     },
@@ -10803,23 +9392,6 @@
       ]
     },
     {
-      "fingerprint": "eb90d6b0c2c570377bd0c269b3fbe944e97fb5b3683918bfe52aa57bb978742a",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 379
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 371
-        }
-      ]
-    },
-    {
       "fingerprint": "eba9f3aa7373fc6cebff502622cf754410a0a0ee91f8bd18664b7c454c447e5c",
       "token_count": 400,
       "line_count": 60,
@@ -10833,23 +9405,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 310,
           "end_line": 369
-        }
-      ]
-    },
-    {
-      "fingerprint": "ebaed8b34a07f96e9af9a8e7462d898807dbbb9fb5421fb7c19b14bbfce63cd9",
-      "token_count": 400,
-      "line_count": 76,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 380
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 372
         }
       ]
     },
@@ -10901,23 +9456,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 294,
           "end_line": 361
-        }
-      ]
-    },
-    {
-      "fingerprint": "ed08b169feba2a2e10d2f17ba2c3e145c14350c919d32110f5abb1fc457ddb3f",
-      "token_count": 400,
-      "line_count": 78,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 319,
-          "end_line": 396
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 311,
-          "end_line": 388
         }
       ]
     },
@@ -10990,23 +9528,6 @@
       ]
     },
     {
-      "fingerprint": "ee92aa5a9a077650bc8094555859dc1a6dd8eaf545553d15fa0ede5d4697044e",
-      "token_count": 400,
-      "line_count": 77,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 301,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 293,
-          "end_line": 369
-        }
-      ]
-    },
-    {
       "fingerprint": "ee96e72790e8ab4b17844be56677428d2125b1e3f1b535146e7c405743f54ef5",
       "token_count": 400,
       "line_count": 66,
@@ -11041,23 +9562,6 @@
       ]
     },
     {
-      "fingerprint": "ef8d33d0a31c9ea2d040e37a834675898bf960b5b948e3cbcc91a1701b5368e6",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 313,
-          "end_line": 391
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 305,
-          "end_line": 383
-        }
-      ]
-    },
-    {
       "fingerprint": "f00b6f14f7512a80e0fe8fbf160c1ec762abac8ff465d3df84dbed4a6437e2b0",
       "token_count": 400,
       "line_count": 69,
@@ -11071,23 +9575,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 290,
           "end_line": 358
-        }
-      ]
-    },
-    {
-      "fingerprint": "f01949f1838f876300e16ace9a85952be0fc799e819439d0b33536cf8d43eaa4",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 379
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 371
         }
       ]
     },
@@ -11126,40 +9613,6 @@
       ]
     },
     {
-      "fingerprint": "f28972835b24df49d67a2e759a6406aa8354413fab1ed043c1dfbc1d9edef8d4",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 315,
-          "end_line": 393
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 307,
-          "end_line": 385
-        }
-      ]
-    },
-    {
-      "fingerprint": "f31016ff6fe4c0597ad59da0cb71f60962d54ee2b8868c6925f98c61c22cbfe1",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 299,
-          "end_line": 377
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 291,
-          "end_line": 369
-        }
-      ]
-    },
-    {
       "fingerprint": "f3bef32f5052a6c855d6626b26c88accef02a11d75530e61b0652fdeb421c024",
       "token_count": 400,
       "line_count": 69,
@@ -11190,23 +9643,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 271,
           "end_line": 344
-        }
-      ]
-    },
-    {
-      "fingerprint": "f425b11d23a9fb768e16acfb4c0ee2c97388e24cf8c18fb8585592846f620213",
-      "token_count": 400,
-      "line_count": 79,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 308,
-          "end_line": 386
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 300,
-          "end_line": 378
         }
       ]
     },
@@ -11330,23 +9766,6 @@
       ]
     },
     {
-      "fingerprint": "f890756259484bbd588c4ad4ce1fc3b5bf41bebdee476587856824ef4bec86fb",
-      "token_count": 400,
-      "line_count": 75,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 305,
-          "end_line": 379
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 297,
-          "end_line": 371
-        }
-      ]
-    },
-    {
       "fingerprint": "f97b7e560fff5f032e1cb7bbb4bfeee646abd9553ed83bf1d184ed06db583ac8",
       "token_count": 400,
       "line_count": 77,
@@ -11360,23 +9779,6 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 259,
           "end_line": 335
-        }
-      ]
-    },
-    {
-      "fingerprint": "f99f1d4c6a0596c4d1c9f0ebea7641efb57d40fdd2d1ab175ed83e00fbb3a77c",
-      "token_count": 400,
-      "line_count": 80,
-      "occurrences": [
-        {
-          "path": "internal/factory/digest/digest.go",
-          "start_line": 310,
-          "end_line": 389
-        },
-        {
-          "path": "internal/factory/digest/range.go",
-          "start_line": 302,
-          "end_line": 381
         }
       ]
     },
