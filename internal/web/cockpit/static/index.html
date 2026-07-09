@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leamas Cockpit</title>
+    <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+    <header>
+        <h1>Leamas Cockpit</h1>
+        <p>Local status dashboard for Leamas verification witness</p>
+    </header>
+
+    <main>
+        <section>
+            <h2>System Status</h2>
+            <dl class="status-grid">
+                <div class="status-item">
+                    <dt>Mode</dt>
+                    <dd>Local-only</dd>
+                </div>
+                <div class="status-item">
+                    <dt>Access</dt>
+                    <dd>Read-only</dd>
+                </div>
+                <div class="status-item">
+                    <dt>Storage</dt>
+                    <dd>None</dd>
+                </div>
+                <div class="status-item">
+                    <dt>Auth</dt>
+                    <dd>None</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section>
+            <h2>Components</h2>
+            <ul class="component-list">
+                <li>
+                    <span class="name">Factory</span>
+                    <span class="status">available</span>
+                    <p class="summary">Factory gates and digest workflow</p>
+                </li>
+                <li>
+                    <span class="name">Hulk</span>
+                    <span class="status">seeded</span>
+                    <p class="summary">Typed run-bundle and claim/evidence cores</p>
+                </li>
+                <li>
+                    <span class="name">Witness</span>
+                    <span class="status">seeded</span>
+                    <p class="summary">Local witness proxy package; runtime not started by cockpit</p>
+                </li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>API Endpoints</h2>
+            <ul class="component-list">
+                <li>
+                    <span class="name">GET /api/status</span>
+                    <p class="summary">Returns system status as JSON</p>
+                </li>
+                <li>
+                    <span class="name">GET /api/components</span>
+                    <p class="summary">Returns component status as JSON</p>
+                </li>
+            </ul>
+        </section>
+
+        <div class="notice">
+            <strong>Security Notice:</strong> This cockpit is local-only and has no authentication.
+            Do not expose it beyond loopback (127.0.0.1).
+        </div>
+    </main>
+</body>
+</html>
