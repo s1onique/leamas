@@ -154,9 +154,49 @@ func TestProxyExample(t *testing.T) {
 }
 ```
 
+## CLI Usage
+
+The witness proxy can be started via the `leamas witness proxy` command:
+
+```bash
+# Basic usage
+leamas witness proxy --upstream http://127.0.0.1:8080
+
+# Custom listen address
+leamas witness proxy --listen 127.0.0.1:8766 --upstream http://127.0.0.1:8080
+
+# With header capture enabled
+leamas witness proxy --upstream http://localhost:8080 --capture-headers --max-records 250
+```
+
+### CLI Flags
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--upstream` | Yes | - | Single target upstream URL (must start with http:// or https://) |
+| `--listen` | No | `127.0.0.1:0` | Listen address (loopback only) |
+| `--max-records` | No | `100` | Maximum records to retain (0 = package default) |
+| `--capture-headers` | No | `false` | Enable header capture with sanitization |
+| `--help`, `-h` | No | - | Show help |
+
+### Security Constraints
+
+- **Listen addresses**: Only loopback addresses are allowed (`127.0.0.1:*`, `localhost:*`)
+- **Rejected addresses**: `0.0.0.0:*`, `[::]:*`, `:*`, private networks (`192.168.*`, `10.*`, `172.16.*`)
+- **Upstream**: Must be http:// or https:// URL (no routing tables, single upstream only)
+
+### Example Output
+
+```
+Leamas witness proxy listening on http://127.0.0.1:54322
+Upstream: http://127.0.0.1:8080
+Capture headers: false
+Press Ctrl-C to stop.
+```
+
 ## Limitations
 
-- No CLI is provided in this seed. See `ACT-LEAMAS-WITNESS-PROXY-CLI01` for potential future CLI wiring.
 - No integration with Hulk cores (`runbundle`, `claimevidence`) in this seed.
 - No external service discovery or health checks.
 - No TLS support (use a reverse proxy in front if needed).
+- IPv6 loopback `[::1]` not yet supported in CLI.

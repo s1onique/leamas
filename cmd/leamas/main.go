@@ -39,6 +39,8 @@ func main() {
 		fmt.Println("Leamas doctor: all systems operational")
 	case "cockpit":
 		handleCockpit()
+	case "witness":
+		handleWitness()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -341,6 +343,7 @@ func printUsage() {
 	fmt.Println("  leamas factory digest        Generate targeted digest")
 	fmt.Println("  leamas doctor                Run diagnostics")
 	fmt.Println("  leamas cockpit               Local web cockpit")
+	fmt.Println("  leamas witness               Witness proxy commands")
 }
 
 func printFactoryUsage() {
