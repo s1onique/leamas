@@ -147,19 +147,20 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	// Build file evidence section for hashing (using shared function)
 	fileEvidenceSection := RenderRangeFileEvidence(repoRoot, files, resolved.Range)
 
-	// GATE_SUMMARY section
+	// GATE_SUMMARY section - compute before writing to include in evidence hashes
 	gateSummaryPath := filepath.Join(repoRoot, ".factory", "gate-summary.json")
 	var gateSummarySection string
+	var gateSummaryErr error
 	if gate.GateSummaryExists(gateSummaryPath) {
 		if gs, err := gate.ReadGateSummary(gateSummaryPath); err == nil {
-			gateSummarySection = gate.RenderGateSummary(gs)
+			gateSummarySection = gate.RenderGateSummary(gs, nil)
 		} else {
-			gateSummarySection = gate.RenderGateSummary(nil)
+			gateSummaryErr = err
+			gateSummarySection = gate.RenderGateSummary(nil, err)
 		}
 	} else {
-		gateSummarySection = gate.RenderGateSummary(nil)
+		gateSummarySection = gate.RenderGateSummary(nil, nil)
 	}
-	sb.WriteString(gateSummarySection)
 
 	// Compute evidence hashes (includes GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
@@ -171,10 +172,17 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 		gateSummarySection,
 		fileEvidenceSection,
 	)
+
+	// Write EVIDENCE_HASHES before GATE_SUMMARY (contract order)
 	sb.WriteString(RenderEvidenceHashes(evidenceHashes))
+
+	// Write GATE_SUMMARY section
+	sb.WriteString(gateSummarySection)
 
 	// Write Changed files and Diffs sections
 	sb.WriteString(fileEvidenceSection)
+
+	_ = gateSummaryErr // suppress unused warning
 
 	sb.WriteString("\n## Workflow anchors\n")
 
@@ -305,19 +313,20 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	// Build file evidence section for hashing (using shared function)
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
-	// GATE_SUMMARY section
+	// GATE_SUMMARY section - compute before writing to include in evidence hashes
 	gateSummaryPath := filepath.Join(repoRoot, ".factory", "gate-summary.json")
 	var gateSummarySection string
+	var gateSummaryErr error
 	if gate.GateSummaryExists(gateSummaryPath) {
 		if gs, err := gate.ReadGateSummary(gateSummaryPath); err == nil {
-			gateSummarySection = gate.RenderGateSummary(gs)
+			gateSummarySection = gate.RenderGateSummary(gs, nil)
 		} else {
-			gateSummarySection = gate.RenderGateSummary(nil)
+			gateSummaryErr = err
+			gateSummarySection = gate.RenderGateSummary(nil, err)
 		}
 	} else {
-		gateSummarySection = gate.RenderGateSummary(nil)
+		gateSummarySection = gate.RenderGateSummary(nil, nil)
 	}
-	sb.WriteString(gateSummarySection)
 
 	// Compute evidence hashes (includes GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
@@ -329,10 +338,17 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 		gateSummarySection,
 		fileEvidenceSection,
 	)
+
+	// Write EVIDENCE_HASHES before GATE_SUMMARY (contract order)
 	sb.WriteString(RenderEvidenceHashes(evidenceHashes))
+
+	// Write GATE_SUMMARY section
+	sb.WriteString(gateSummarySection)
 
 	// Write Changed files and Diffs sections
 	sb.WriteString(fileEvidenceSection)
+
+	_ = gateSummaryErr // suppress unused warning
 
 	sb.WriteString("\n## Workflow anchors\n")
 
