@@ -278,3 +278,120 @@ func TestRunFactoryCoverage_OneOverThreshold(t *testing.T) {
 		t.Errorf("expected exit code 0 for one over threshold, got %d", code)
 	}
 }
+
+// TestCoverageCLIRejectsOtherModule verifies that the CLI rejects "other" module.
+func TestCoverageCLIRejectsOtherModule(t *testing.T) {
+	_, err := parseCoverageArgs([]string{
+		"--profile", "/path",
+		"--min-total", "64",
+		"--min-module", "other=1",
+	})
+	if err == nil {
+		t.Error("expected error when trying to enforce 'other' module")
+	}
+	if !strings.Contains(err.Error(), "unknown module") {
+		t.Errorf("expected 'unknown module' in error, got: %v", err)
+	}
+}
+
+// TestCoverageCLIRejectsUnknownModuleUsingCanonicalList verifies that the CLI
+// uses the canonical module list from coverage package.
+func TestCoverageCLIRejectsUnknownModuleUsingCanonicalList(t *testing.T) {
+	_, err := parseCoverageArgs([]string{
+		"--profile", "/path",
+		"--min-total", "64",
+		"--min-module", "some-random-module=50",
+	})
+	if err == nil {
+		t.Error("expected error when trying to enforce unknown module")
+	}
+	if !strings.Contains(err.Error(), "unknown module") {
+		t.Errorf("expected 'unknown module' in error, got: %v", err)
+	}
+	// Verify the error message contains known modules from the canonical list
+	if !strings.Contains(err.Error(), "cmd/leamas") {
+		t.Errorf("expected error to list canonical modules, got: %v", err)
+	}
+}
+
+// TestCoverageCLIPrintThresholdsJSON verifies that --thresholds --json works.
+func TestCoverageCLIPrintThresholdsJSON(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runFactoryCoverage([]string{"--thresholds", "--json"}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d. stderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Verify JSON structure
+	if !strings.Contains(output, `"schema_version"`) {
+		t.Error("expected JSON output to contain schema_version")
+	}
+	if !strings.Contains(output, `"total"`) {
+		t.Error("expected JSON output to contain total")
+	}
+	if !strings.Contains(output, `"modules"`) {
+		t.Error("expected JSON output to contain modules")
+	}
+	if !strings.Contains(output, `"report_only_modules"`) {
+		t.Error("expected JSON output to contain report_only_modules")
+	}
+	// Verify known modules appear
+	if !strings.Contains(output, "cmd/leamas") {
+		t.Error("expected JSON output to contain cmd/leamas")
+	}
+	if !strings.Contains(output, "internal/factory") {
+		t.Error("expected JSON output to contain internal/factory")
+	}
+	if !strings.Contains(output, "internal/hulk") {
+		t.Error("expected JSON output to contain internal/hulk")
+	}
+	if !strings.Contains(output, "internal/web") {
+		t.Error("expected JSON output to contain internal/web")
+	}
+	if !strings.Contains(output, "internal/witness") {
+		t.Error("expected JSON output to contain internal/witness")
+	}
+	// Verify other is report-only
+	if !strings.Contains(output, `"other"`) {
+		t.Error("expected JSON output to list 'other' as report-only")
+	}
+}
+
+// TestCoverageCLIPrintThresholdsText verifies that --thresholds (text output) works.
+func TestCoverageCLIPrintThresholdsText(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := runFactoryCoverage([]string{"--thresholds"}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Errorf("expected exit code 0, got %d. stderr: %s", code, stderr.String())
+	}
+
+	output := stdout.String()
+	// Verify text structure
+	if !strings.Contains(output, "coverage thresholds:") {
+		t.Error("expected text output to contain 'coverage thresholds:'")
+	}
+	if !strings.Contains(output, "total >= 64.0") {
+		t.Error("expected text output to contain 'total >= 64.0'")
+	}
+	if !strings.Contains(output, "cmd/leamas >= 50.0") {
+		t.Error("expected text output to contain 'cmd/leamas >= 50.0'")
+	}
+	if !strings.Contains(output, "internal/factory >= 67.0") {
+		t.Error("expected text output to contain 'internal/factory >= 67.0'")
+	}
+	if !strings.Contains(output, "internal/hulk >= 90.0") {
+		t.Error("expected text output to contain 'internal/hulk >= 90.0'")
+	}
+	if !strings.Contains(output, "internal/web >= 70.0") {
+		t.Error("expected text output to contain 'internal/web >= 70.0'")
+	}
+	if !strings.Contains(output, "internal/witness >= 80.0") {
+		t.Error("expected text output to contain 'internal/witness >= 80.0'")
+	}
+	if !strings.Contains(output, "other: report-only") {
+		t.Error("expected text output to contain 'other: report-only'")
+	}
+}

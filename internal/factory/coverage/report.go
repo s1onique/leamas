@@ -156,25 +156,6 @@ func Analyze(profilePath string, threshold *Threshold) (*Report, error) {
 	return report, nil
 }
 
-// DefaultModuleThresholds returns the conservative default module floors.
-func DefaultModuleThresholds() map[string]float64 {
-	return map[string]float64{
-		"cmd/leamas":       50.0,
-		"internal/factory": 67.0,
-		"internal/hulk":    90.0,
-		"internal/web":     70.0,
-		"internal/witness": 80.0,
-	}
-}
-
-// DefaultThreshold returns a Threshold with conservative default values.
-func DefaultThreshold() *Threshold {
-	return &Threshold{
-		MinTotalPercent:   64.0,
-		MinModulePercents: DefaultModuleThresholds(),
-	}
-}
-
 // CheckThreshold checks if coverage meets the threshold.
 // It checks both total and module thresholds.
 // Module thresholds are checked in deterministic order.

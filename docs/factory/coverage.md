@@ -9,6 +9,60 @@ The coverage gate provides a way to measure and enforce minimum Go test coverage
 thresholds. The current conservative ratchet threshold is **64%** total, with
 conservative per-module floors to prevent individual modules from regressing.
 
+## Canonical Threshold Contract
+
+Coverage thresholds are **single-sourced** in `internal/factory/coverage/defaults.go`.
+This is the authoritative source for all threshold values.
+
+The Makefile defines override-friendly variables for CI convenience, but these
+**must match** the canonical Go values. A test verifies this contract:
+
+```bash
+go test ./internal/factory/coverage/... -v -run TestMakefileCoverageDefaultsMatchCanonicalThresholds
+```
+
+### Current Thresholds (Canonical)
+
+**Global Threshold:** 64%
+
+**Module Floors:**
+
+| Module | Floor |
+|--------|-------|
+| cmd/leamas | 50.0% |
+| internal/factory | 67.0% |
+| internal/hulk | 90.0% |
+| internal/web | 70.0% |
+| internal/witness | 80.0% |
+| other | (report-only, not enforced) |
+
+### Viewing Canonical Thresholds
+
+```bash
+# Text output
+leamas factory coverage --thresholds
+
+# JSON output
+leamas factory coverage --thresholds --json
+```
+
+The JSON output schema:
+
+```json
+{
+  "schema_version": 1,
+  "total": 64.0,
+  "modules": [
+    {"module": "cmd/leamas", "min_percent": 50.0},
+    {"module": "internal/factory", "min_percent": 67.0},
+    {"module": "internal/hulk", "min_percent": 90.0},
+    {"module": "internal/web", "min_percent": 70.0},
+    {"module": "internal/witness", "min_percent": 80.0}
+  ],
+  "report_only_modules": ["other"]
+}
+```
+
 ## How to Run Coverage
 
 ### Quick Start
@@ -88,7 +142,7 @@ leamas factory coverage \
   --min-module internal/web=70 \
   --min-module internal/witness=80
 
-# Using default module floors (convenience flag)
+# Using default module floors (applies canonical defaults)
 leamas factory coverage \
   --profile .factory/coverage.out \
   --min-total 64 \
@@ -186,24 +240,6 @@ coverage: threshold_fail: total coverage 63.9% is below minimum 64.0%
 coverage: module_threshold_fail: module cmd/leamas coverage 49.9% is below minimum 50.0%
 ```
 
-### Current Thresholds
-
-**Global Threshold:** 64%
-
-**Module Floors:**
-
-| Module | Floor | Current | Headroom |
-|--------|-------|---------|----------|
-| cmd/leamas | 50.0% | 52.0% | 2.0% |
-| internal/factory | 67.0% | 69.7% | 2.7% |
-| internal/hulk | 90.0% | 95.6% | 5.6% |
-| internal/web | 70.0% | 74.6% | 4.6% |
-| internal/witness | 80.0% | 85.4% | 5.4% |
-| other | (report only) | 85.7% | N/A |
-
-**Note:** The `other` module is report-only and not enforced. This allows flexibility
-for new modules while still protecting known stable components.
-
 ### Why Module Floors?
 
 The global threshold protects the overall repository, but it does not prevent a
@@ -224,35 +260,25 @@ coverage. These floors can be ratcheted later as coverage improves.
 - Floors are not raised without corresponding coverage improvements
 - "other" is intentionally report-only to avoid blocking on new modules
 
-### Raising Thresholds
+### Changing Thresholds
 
-To raise the global threshold, edit the Makefile:
+To change thresholds, edit `internal/factory/coverage/defaults.go`:
 
-```makefile
-COVERAGE_MIN_TOTAL ?= 65
+```go
+const DefaultMinTotalPercent = 65.0
+
+var defaultModuleFloors = map[string]float64{
+    "cmd/leamas":       55.0,
+    "internal/factory": 68.0,
+    // ...
+}
 ```
 
-To raise a module floor, edit the Makefile:
+The Makefile variables are override points for CI and must match the Go defaults.
 
-```makefile
-COVERAGE_MIN_INTERNAL_FACTORY ?= 68
-```
+## Module Thresholds (Enforced)
 
-Or override on the command line:
-
-```bash
-COVERAGE_MIN_CMD_LEAMAS=55 make coverage
-```
-
-Or pass directly to the CLI:
-
-```bash
---min-module cmd/leamas=55
-```
-
-## Module Thresholds (Now Enforced)
-
-Module-level thresholds are **now enforced** by default.
+Module-level thresholds are **enforced** by default.
 
 **Behavior:**
 - `make coverage` enforces all module floors
@@ -264,34 +290,41 @@ Module-level thresholds are **now enforced** by default.
 
 ### Components
 
-1. **`internal/factory/coverage/`** - Core coverage parsing and threshold logic
+1. **`internal/factory/coverage/defaults.go`** - Canonical threshold contract
+   - `DefaultMinTotalPercent` - Default total threshold constant
+   - `DefaultModuleFloorOrder` - Deterministic module order
+   - `DefaultModuleThresholds()` - Default module floors (defensive copy)
+   - `DefaultThreshold()` - Full default threshold with total and modules
+   - `KnownEnforcedModules()` - List of enforceable modules
+   - `IsKnownEnforcedModule()` - Check if module is enforceable
+
+2. **`internal/factory/coverage/report.go`** - Core coverage parsing and threshold logic
    - `Report` - Module breakdown report with JSON serialization
    - `Threshold` - Threshold configuration (with module floors)
    - `ModuleSummary` - Per-module coverage data
    - `ProfileReport` - Statement-weighted report with statement counts
    - `ParseProfile()` - Parse raw coverage profile for weighted aggregation
    - `CheckThreshold()` - Compare report against threshold (total + modules)
-   - `DefaultModuleThresholds()` - Default conservative module floors
-   - `DefaultThreshold()` - Full default threshold with total and modules
-   - `Analyze()` - Full analysis pipeline: ParseProfile() -> statement-weighted report -> CheckThreshold()
    - `ClassifyModule()` - Map import path to module name
    - `ToJSON()` - Serialize report to JSON
    - `PrintModuleTable()` - Print human-readable module table
+   - `Analyze()` - Full analysis pipeline: ParseProfile() -> statement-weighted report -> CheckThreshold()
 
-2. **`make coverage`** - Orchestrates test run and report generation
+3. **`make coverage`** - Orchestrates test run and report generation
    - Runs `go test -coverprofile`
    - Invokes the CLI for analysis and JSON output
    - Passes module floors to CLI
 
-3. **`leamas factory coverage`** - CLI command for coverage analysis
+4. **`leamas factory coverage`** - CLI command for coverage analysis
    - Accepts `--profile` and `--min-total` flags (required)
    - Accepts `--min-module` flags (repeatable, format: `module=threshold`)
-   - Accepts `--default-module-floors` flag (convenience)
+   - Accepts `--default-module-floors` flag (applies canonical defaults)
+   - Accepts `--thresholds [--json]` flag (prints canonical defaults)
    - Accepts `--json-output` flag (optional)
    - `--breakdown` / `--no-breakdown` flags control terminal output
    - Returns exit code 1 on threshold failure
 
-4. **`leamas factory verify coverage`** - Verifier for gate integration
+5. **`leamas factory verify coverage`** - Verifier for gate integration
    - Checks if profile exists
    - Validates against threshold (total + module floors)
    - Requires `make coverage` to be run first
