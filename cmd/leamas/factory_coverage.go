@@ -97,7 +97,7 @@ func runFactoryCoverage(args []string, stdout, stderr io.Writer) int {
 
 	// Print module breakdown by default
 	if parsed.showBreakdown {
-		profileReport.PrintModuleTable()
+		profileReport.PrintModuleTableTo(stdout)
 	}
 
 	// Write JSON output if requested

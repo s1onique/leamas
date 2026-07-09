@@ -119,15 +119,6 @@ func formatValue(sb *strings.Builder, v interface{}, indent int) {
 	}
 }
 
-// PrintModuleTable prints the module breakdown in a formatted table.
-func (r *Report) PrintModuleTable() {
-	fmt.Println("Coverage by module:")
-	fmt.Println("module                  coverage")
-	for _, m := range r.Modules {
-		fmt.Printf("%-22s %.1f%%\n", m.Module, roundToOneDecimal(m.Percent))
-	}
-}
-
 // Threshold represents coverage threshold configuration.
 type Threshold struct {
 	MinTotalPercent float64

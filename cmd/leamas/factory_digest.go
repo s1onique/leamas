@@ -2,104 +2,127 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/digest"
 )
 
-func handleFactoryDigest() {
-	var mode digest.Mode
-	var hasDirty, hasStaged, hasRange bool
-	var output string
-	var rangeSpec string
+// digestArgs holds parsed arguments for the digest command.
+type digestArgs struct {
+	mode      digest.Mode
+	hasDirty  bool
+	hasStaged bool
+	hasRange  bool
+	output    string
+	rangeSpec string
+}
 
-	args := os.Args[3:]
-	i := 0
-	for i < len(args) {
+// parseDigestArgs parses command-line arguments for the digest command.
+func parseDigestArgs(args []string) (digestArgs, error) {
+	result := digestArgs{}
+
+	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--dirty":
-			hasDirty = true
-			mode = digest.ModeDirty
-			i++
+			result.hasDirty = true
+			result.mode = digest.ModeDirty
 		case "--staged":
-			hasStaged = true
-			mode = digest.ModeStaged
-			i++
+			result.hasStaged = true
+			result.mode = digest.ModeStaged
 		case "--range":
 			if i+1 >= len(args) {
-				fmt.Fprintf(os.Stderr, "ERROR: --range requires a revision range argument\n")
-				printDigestUsage()
-				os.Exit(1)
+				return digestArgs{}, errors.New("--range requires a revision range argument")
 			}
-			hasRange = true
-			rangeSpec = args[i+1]
-			mode = digest.ModeRange
-			i += 2
+			if strings.HasPrefix(args[i+1], "-") {
+				return digestArgs{}, errors.New("--range requires a revision range argument")
+			}
+			result.hasRange = true
+			result.rangeSpec = args[i+1]
+			result.mode = digest.ModeRange
+			i++
 		case "--output":
 			if i+1 >= len(args) {
-				fmt.Fprintf(os.Stderr, "ERROR: --output requires a path argument\n")
-				printDigestUsage()
-				os.Exit(1)
+				return digestArgs{}, errors.New("--output requires a path argument")
 			}
-			output = args[i+1]
-			i += 2
+			result.output = args[i+1]
+			i++
 		default:
-			fmt.Fprintf(os.Stderr, "ERROR: unknown flag: %s\n", args[i])
-			printDigestUsage()
-			os.Exit(1)
+			return digestArgs{}, fmt.Errorf("unknown flag: %s", args[i])
 		}
 	}
 
-	if hasDirty && hasStaged {
-		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --dirty and --staged\n")
-		printDigestUsage()
-		os.Exit(1)
+	// Validate mutual exclusivity
+	if result.hasDirty && result.hasStaged {
+		return digestArgs{}, errors.New("cannot specify both --dirty and --staged")
 	}
-	if hasDirty && hasRange {
-		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --dirty and --range\n")
-		printDigestUsage()
-		os.Exit(1)
+	if result.hasDirty && result.hasRange {
+		return digestArgs{}, errors.New("cannot specify both --dirty and --range")
 	}
-	if hasStaged && hasRange {
-		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --staged and --range\n")
-		printDigestUsage()
-		os.Exit(1)
+	if result.hasStaged && result.hasRange {
+		return digestArgs{}, errors.New("cannot specify both --staged and --range")
 	}
 
-	if mode == "" {
-		mode = digest.ModeAuto
+	// Default to auto mode if no mode specified
+	if result.mode == "" {
+		result.mode = digest.ModeAuto
 	}
 
-	if output == "" {
-		fmt.Fprintf(os.Stderr, "ERROR: --output is required\n")
-		printDigestUsage()
-		os.Exit(1)
+	// Validate required --output
+	if result.output == "" {
+		return digestArgs{}, errors.New("--output is required")
+	}
+
+	return result, nil
+}
+
+// runFactoryDigest runs the digest command with the given arguments.
+// It returns 0 on success, non-zero on failure.
+func runFactoryDigest(args []string, stdout, stderr io.Writer, writeDigest func(digest.Options) error) int {
+	parsed, err := parseDigestArgs(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "ERROR: %s\n", err)
+		printDigestUsageTo(stderr)
+		return 1
 	}
 
 	opts := digest.Options{
-		Mode:   mode,
-		Output: output,
+		Mode:   parsed.mode,
+		Output: parsed.output,
 	}
-	if hasRange {
-		opts.Range = rangeSpec
-	}
-
-	err := digest.Write(opts)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-		os.Exit(1)
+	if parsed.hasRange {
+		opts.Range = parsed.rangeSpec
 	}
 
-	fmt.Println(output)
+	if err := writeDigest(opts); err != nil {
+		fmt.Fprintf(stderr, "ERROR: %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintln(stdout, opts.Output)
+	return 0
 }
 
+// handleFactoryDigest handles the `leamas factory digest` command.
+func handleFactoryDigest() {
+	os.Exit(runFactoryDigest(os.Args[3:], os.Stdout, os.Stderr, digest.Write))
+}
+
+// printDigestUsage prints usage information to stdout.
 func printDigestUsage() {
-	fmt.Println("Usage: leamas factory digest [flags]")
-	fmt.Println()
-	fmt.Println("Flags:")
-	fmt.Println("  --dirty             Include unstaged, staged, and untracked changes")
-	fmt.Println("  --staged            Include only staged changes")
-	fmt.Println("  --range <rev-range> Include changes in revision range")
-	fmt.Println("  --output <path>     Output path (required)")
+	printDigestUsageTo(os.Stdout)
+}
+
+// printDigestUsageTo prints usage information to the given writer.
+func printDigestUsageTo(w io.Writer) {
+	fmt.Fprintln(w, "Usage: leamas factory digest [flags]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  --dirty             Include unstaged, staged, and untracked changes")
+	fmt.Fprintln(w, "  --staged            Include only staged changes")
+	fmt.Fprintln(w, "  --range <rev-range> Include changes in revision range")
+	fmt.Fprintln(w, "  --output <path>     Output path (required)")
 }

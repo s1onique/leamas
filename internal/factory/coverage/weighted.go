@@ -344,11 +344,20 @@ func CountProfileBlocks(profilePath string) (covered, total int, err error) {
 	return covered, total, scanner.Err()
 }
 
-// PrintModuleTable prints the module breakdown in a formatted table.
+// PrintModuleTable prints the module breakdown in a formatted table to stdout.
 func (r *ProfileReport) PrintModuleTable() {
 	fmt.Println("Coverage by module:")
 	fmt.Println("module                  coverage")
 	for _, m := range r.Modules {
 		fmt.Printf("%-22s %.1f%%\n", m.Module, roundToOneDecimal(m.Percent))
+	}
+}
+
+// PrintModuleTableTo prints the module breakdown in a formatted table to the given writer.
+func (r *ProfileReport) PrintModuleTableTo(w io.Writer) {
+	fmt.Fprintln(w, "Coverage by module:")
+	fmt.Fprintln(w, "module                  coverage")
+	for _, m := range r.Modules {
+		fmt.Fprintf(w, "%-22s %.1f%%\n", m.Module, roundToOneDecimal(m.Percent))
 	}
 }

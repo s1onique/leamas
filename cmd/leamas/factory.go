@@ -2,11 +2,28 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/s1onique/leamas/internal/factory/gate"
 )
+
+// parseFactoryCommand extracts and validates the factory subcommand from args.
+// Returns the command name or an error if missing/unknown.
+func parseFactoryCommand(args []string) (string, error) {
+	if len(args) < 1 {
+		return "", errors.New("missing factory command")
+	}
+
+	cmd := args[0]
+	switch cmd {
+	case "verify", "gate", "factorize", "digest", "coverage":
+		return cmd, nil
+	default:
+		return "", fmt.Errorf("unknown factory command: %s", cmd)
+	}
+}
 
 // handleFactory handles the `leamas factory` subcommand.
 func handleFactory() {
