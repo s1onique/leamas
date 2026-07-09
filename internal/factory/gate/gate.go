@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
+	"github.com/s1onique/leamas/internal/factory/boundary"
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
@@ -43,6 +44,7 @@ func AllVerifiers() []Verifier {
 		{"llm-friendly", llmFriendlyVerifier},
 		{"agent-context", agentContextVerifier},
 		{"git-hooks", gitHooksVerifier},
+		{"domain-boundaries", boundary.CheckRepo},
 	}
 }
 

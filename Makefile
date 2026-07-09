@@ -3,7 +3,7 @@
 .PHONY: help gate test clean digest factorize verify-doctrine verify-factory
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
-.PHONY: verify-git-hooks install-git-hooks build digest install
+.PHONY: verify-git-hooks verify-domain-boundaries install-git-hooks build digest install
 .PHONY: release release-build release-checksum release-verify release-clean
 
 # Install variables (GNU conventions)
@@ -136,6 +136,10 @@ verify-agent-context:
 verify-git-hooks:
 	@echo "Running Git hooks verifier..."
 	@go run ./cmd/leamas factory verify git-hooks
+
+verify-domain-boundaries:
+	@echo "Running domain boundaries verifier..."
+	@go run ./cmd/leamas factory verify domain-boundaries
 
 install-git-hooks:
 	@chmod +x scripts/install_git_hooks.sh

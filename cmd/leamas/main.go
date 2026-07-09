@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
+	"github.com/s1onique/leamas/internal/factory/boundary"
 	"github.com/s1onique/leamas/internal/factory/digest"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
@@ -186,6 +187,15 @@ func handleFactoryVerify() {
 				message string
 			}{f.Path, f.Kind, f.Message})
 		}
+	case "domain-boundaries":
+		f := boundary.CheckRepo(".")
+		for _, f := range f {
+			findings = append(findings, struct {
+				path    string
+				kind    string
+				message string
+			}{f.Path, f.Kind, f.Message})
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", check)
 		printFactoryVerifyUsage()
@@ -358,4 +368,5 @@ func printFactoryVerifyUsage() {
 	fmt.Println("  agent-context      Check agent context files")
 	fmt.Println("  git-hooks          Check Git hooks installation")
 	fmt.Println("  github             Check GitHub policy compliance")
+	fmt.Println("  domain-boundaries  Check domain boundary import policies")
 }
