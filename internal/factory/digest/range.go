@@ -133,6 +133,10 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	sb.WriteString(RenderRiskSignals(riskSignals))
 	sb.WriteString("\n")
 
+	// PATCH_HYGIENE section
+	patchHygiene := RunPatchHygiene(repoRoot, resolved.Range)
+	sb.WriteString(RenderPatchHygiene(patchHygiene))
+
 	// Changed files section
 	sb.WriteString("## Changed files\n")
 	if len(files) == 0 {
@@ -280,6 +284,13 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	sb.WriteString("\n")
 	sb.WriteString(RenderRiskSignals(riskSignals))
 	sb.WriteString("\n")
+
+	// PATCH_HYGIENE section (only for dirty mode)
+	var patchHygiene PatchHygiene
+	if mode == ModeDirty {
+		patchHygiene = RunPatchHygieneDirty(repoRoot)
+	}
+	sb.WriteString(RenderPatchHygiene(patchHygiene))
 
 	// Changed files section
 	sb.WriteString("## Changed files\n")

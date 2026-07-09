@@ -21,6 +21,22 @@ func RunGit(repoRoot string, args []string) (string, error) {
 	return string(output), nil
 }
 
+// RunGitWithExitCode executes a git command and returns output and exit code.
+// Returns exitCode=-1 if command execution failed (not just non-zero exit).
+func RunGitWithExitCode(repoRoot string, args []string) (string, int) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoRoot
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return string(output), exitErr.ExitCode()
+		}
+		// Command execution failed entirely
+		return string(output), -1
+	}
+	return string(output), 0
+}
+
 // DetectRepoRoot finds the root of the current Git repository.
 func DetectRepoRoot() (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")

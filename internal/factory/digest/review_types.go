@@ -67,3 +67,25 @@ const LargeFileThreshold int64 = 1024 * 1024
 
 // generatedMarker matches the canonical Go generated-file marker format.
 var generatedMarker = regexp.MustCompile(`^// Code generated .* DO NOT EDIT\.$`)
+
+// PatchHygieneStatus values for git diff --check results.
+const (
+	PatchHygienePass        = "pass"
+	PatchHygieneFail        = "fail"
+	PatchHygieneUnavailable = "unavailable"
+)
+
+// MaxPatchHygieneDiagnostics is the maximum number of diagnostic lines to include.
+const MaxPatchHygieneDiagnostics = 20
+
+// MaxDiagnosticLineLength is the maximum length for each diagnostic line.
+const MaxDiagnosticLineLength = 240
+
+// PatchHygiene contains patch hygiene check results.
+type PatchHygiene struct {
+	GitDiffCheck     string
+	WhitespaceErrors int
+	ConflictMarkers  int
+	DiagnosticLines  int
+	Diagnostics      []string
+}

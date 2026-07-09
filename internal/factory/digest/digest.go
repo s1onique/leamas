@@ -291,6 +291,15 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 	sb.WriteString(RenderRiskSignals(riskSignals))
 	sb.WriteString("\n")
 
+	// PATCH_HYGIENE section
+	var patchHygiene PatchHygiene
+	if mode == ModeDirty {
+		patchHygiene = RunPatchHygieneDirty(repoRoot)
+	} else if mode == ModeStaged {
+		patchHygiene = RunPatchHygiene(repoRoot, "--cached")
+	}
+	sb.WriteString(RenderPatchHygiene(patchHygiene))
+
 	// Changed files section
 	sb.WriteString("## Changed files\n")
 	if len(files) == 0 {

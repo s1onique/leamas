@@ -113,6 +113,7 @@ The review evidence sections appear in this order:
 2. `## CHANGESET_STATS` - Aggregated counts by file type and status
 3. `## REVIEW_MAP` - Files grouped by reviewer role
 4. `## RISK_SIGNALS` - Deterministic facts for reviewer focus
+5. `## PATCH_HYGIENE` - Conflict marker and whitespace checks
 
 ### CHANGESET_MANIFEST
 
@@ -277,6 +278,12 @@ large_file_changed=false
 large_file_threshold_bytes=1048576
 ```
 
+### PATCH_HYGIENE
+
+Deterministic patch hygiene checks using `git diff --check`.
+
+See [digest-patch-hygiene.md](./digest-patch-hygiene.md) for full specification.
+
 ## Complete Digest Structure
 
 ```
@@ -300,6 +307,9 @@ Mode: <mode>
 ## RISK_SIGNALS
 ...
 
+## PATCH_HYGIENE
+...
+
 ## Changed files
 ...
 
@@ -315,7 +325,6 @@ Mode: <mode>
 This ACT explicitly does not implement:
 
 - `GATE_SUMMARY` - Test execution results
-- `PATCH_HYGIENE` - Conflict marker/whitespace checks (deferred to next ACT)
 - `EVIDENCE_HASHES` - Content integrity verification
 - `PUBLIC_SURFACE_DELTA` - Public API analysis
 - `DEPENDENCY_DELTA` - Dependency change tracking
@@ -354,8 +363,8 @@ A digest with incomplete files is worse than no digest, because it creates false
 ## Implementation
 
 - **Source**: `internal/factory/digest/contract.go` (contract constants)
-- **Source**: `internal/factory/digest/review_evidence.go` (v2 evidence sections)
-- **Tests**: `internal/factory/digest/review_evidence_test.go`
+- **Source**: `internal/factory/digest/review_*.go` (v2 evidence sections)
+- **Tests**: `internal/factory/digest/*_test.go`
 - **Constants**: Field names and contract version defined in `contract.go`
 
 ## Verification
@@ -377,6 +386,7 @@ grep -n "CHANGESET_MANIFEST" /tmp/digest.txt
 grep -n "CHANGESET_STATS" /tmp/digest.txt
 grep -n "REVIEW_MAP" /tmp/digest.txt
 grep -n "RISK_SIGNALS" /tmp/digest.txt
+grep -n "PATCH_HYGIENE" /tmp/digest.txt
 ```
 
 ## Related
@@ -384,4 +394,4 @@ grep -n "RISK_SIGNALS" /tmp/digest.txt
 - [Digest Documentation](./digest.md)
 - [LLM-Friendliness](./llm-friendliness.md)
 - [Version Metadata](./version.md)
-- Next ACT: ACT-LEAMAS-FACTORY-DIGEST-PATCH-HYGIENE01
+- [PATCH_HYGIENE Specification](./digest-patch-hygiene.md)
