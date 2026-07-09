@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-09T12:33:59Z",
+  "generated_at": "2026-07-09T20:11:02Z",
   "tool": "leamas dupcode",
   "thresholds": {
     "min_lines": 40,
@@ -31,13 +31,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 281,
-          "end_line": 358
+          "start_line": 297,
+          "end_line": 374
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 255,
-          "end_line": 332
+          "start_line": 287,
+          "end_line": 364
         }
       ]
     },
@@ -116,13 +116,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 354
+          "start_line": 296,
+          "end_line": 370
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 328
+          "start_line": 286,
+          "end_line": 360
         }
       ]
     },
@@ -473,13 +473,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 279,
-          "end_line": 353
+          "start_line": 295,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 253,
-          "end_line": 327
+          "start_line": 285,
+          "end_line": 359
         }
       ]
     },
@@ -565,6 +565,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 312,
           "end_line": 374
+        }
+      ]
+    },
+    {
+      "fingerprint": "0f6ada7081c5d884914acebbc5d82fa8f306940e70f81d9fc1f172000105c07a",
+      "token_count": 400,
+      "line_count": 76,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 362
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 352
         }
       ]
     },
@@ -677,13 +694,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 284,
-          "end_line": 364
+          "start_line": 300,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 258,
-          "end_line": 338
+          "start_line": 290,
+          "end_line": 370
         }
       ]
     },
@@ -762,13 +779,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 276,
-          "end_line": 352
+          "start_line": 292,
+          "end_line": 368
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 250,
-          "end_line": 326
+          "start_line": 282,
+          "end_line": 358
         }
       ]
     },
@@ -830,13 +847,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 281,
-          "end_line": 357
+          "start_line": 297,
+          "end_line": 373
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 255,
-          "end_line": 331
+          "start_line": 287,
+          "end_line": 363
         }
       ]
     },
@@ -926,6 +943,23 @@
       ]
     },
     {
+      "fingerprint": "164922ca9fa974a49bbc7734939b42c6835cb46503940d5da0a960bd24cf73fc",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 290,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 280,
+          "end_line": 358
+        }
+      ]
+    },
+    {
       "fingerprint": "16978452e40e7eb0798c81ab9bb41c68f033d52b983bc1ea0bc42a3a26d70819",
       "token_count": 400,
       "line_count": 64,
@@ -972,6 +1006,23 @@
         {
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 279,
+          "end_line": 349
+        }
+      ]
+    },
+    {
+      "fingerprint": "17f20ff20e13f7c66d03f5c347cf1d1bff84a0480ee3bf329c6414a41f4dbcc7",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 286,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 276,
           "end_line": 349
         }
       ]
@@ -1051,13 +1102,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -1221,13 +1272,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 279,
-          "end_line": 353
+          "start_line": 295,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 253,
-          "end_line": 327
+          "start_line": 285,
+          "end_line": 359
         }
       ]
     },
@@ -1245,6 +1296,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 314,
           "end_line": 375
+        }
+      ]
+    },
+    {
+      "fingerprint": "1cb0cdfdb26461082d41e448dc7113b534ba05ce3460ed150d9a6ce7e4a5d58b",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 290,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 280,
+          "end_line": 358
         }
       ]
     },
@@ -1306,13 +1374,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 289,
-          "end_line": 366
+          "start_line": 305,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 263,
-          "end_line": 340
+          "start_line": 295,
+          "end_line": 372
         }
       ]
     },
@@ -1391,13 +1459,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 276,
-          "end_line": 352
+          "start_line": 292,
+          "end_line": 368
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 250,
-          "end_line": 326
+          "start_line": 282,
+          "end_line": 358
         }
       ]
     },
@@ -1425,13 +1493,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -1487,6 +1555,23 @@
       ]
     },
     {
+      "fingerprint": "21202901769ec30186e8de62ee3fb8307a0e440c3ffe50c02307d3613c1cdfe7",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 286,
+          "end_line": 360
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 276,
+          "end_line": 350
+        }
+      ]
+    },
+    {
       "fingerprint": "21659a2fd2fbd3411f06d20d3b65a1c33567e516afe527dde284d8c89b498d0d",
       "token_count": 400,
       "line_count": 81,
@@ -1527,13 +1612,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 291,
-          "end_line": 368
+          "start_line": 307,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 265,
-          "end_line": 342
+          "start_line": 297,
+          "end_line": 374
         }
       ]
     },
@@ -1606,6 +1691,23 @@
       ]
     },
     {
+      "fingerprint": "2282b5352b335e03807e14296b8e4ecfd913095837c1f633f85a9c7b9aef511d",
+      "token_count": 400,
+      "line_count": 77,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 282,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 272,
+          "end_line": 348
+        }
+      ]
+    },
+    {
       "fingerprint": "231e5a363a25b7619cf9402dcb98f59d3ab5a801a8deae5eea07cfe8903d4ce9",
       "token_count": 400,
       "line_count": 71,
@@ -1629,13 +1731,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 284,
-          "end_line": 364
+          "start_line": 300,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 258,
-          "end_line": 338
+          "start_line": 290,
+          "end_line": 370
         }
       ]
     },
@@ -1697,13 +1799,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 290,
-          "end_line": 367
+          "start_line": 306,
+          "end_line": 383
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 264,
-          "end_line": 341
+          "start_line": 296,
+          "end_line": 373
         }
       ]
     },
@@ -1714,13 +1816,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 285,
-          "end_line": 364
+          "start_line": 301,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 259,
-          "end_line": 338
+          "start_line": 291,
+          "end_line": 370
         }
       ]
     },
@@ -1895,19 +1997,36 @@
       ]
     },
     {
+      "fingerprint": "29165ca22bff2dd66d701d7d01a6341d70dd81fcb66eebf30fd27d7509303ed9",
+      "token_count": 400,
+      "line_count": 77,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 282,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 272,
+          "end_line": 348
+        }
+      ]
+    },
+    {
       "fingerprint": "2926cc476db0c8c0ef819b0a068df822708145925529613c5b0788347108f207",
       "token_count": 400,
       "line_count": 78,
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 289,
-          "end_line": 366
+          "start_line": 305,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 263,
-          "end_line": 340
+          "start_line": 295,
+          "end_line": 372
         }
       ]
     },
@@ -1929,6 +2048,23 @@
       ]
     },
     {
+      "fingerprint": "2aaa3329b1f06b68e1f267d9411c5b3deaf467f1b49ee9a0efc4ea7a0261af79",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 360
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 350
+        }
+      ]
+    },
+    {
       "fingerprint": "2abee94f249c257ddb3949869f44f40290bd04b38bdb0ac1ddefe80322e37790",
       "token_count": 400,
       "line_count": 75,
@@ -1942,6 +2078,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 269,
           "end_line": 343
+        }
+      ]
+    },
+    {
+      "fingerprint": "2b08f19cbb0f311a2f18dc3bf24cdcf2e8af2bd819574d4269eb023b37d6d06b",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 367
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 357
         }
       ]
     },
@@ -2207,13 +2360,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 282,
-          "end_line": 359
+          "start_line": 298,
+          "end_line": 375
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 256,
-          "end_line": 333
+          "start_line": 288,
+          "end_line": 365
         }
       ]
     },
@@ -2224,13 +2377,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 279,
-          "end_line": 353
+          "start_line": 295,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 253,
-          "end_line": 327
+          "start_line": 285,
+          "end_line": 359
         }
       ]
     },
@@ -2241,13 +2394,30 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 290,
+          "start_line": 306,
+          "end_line": 384
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 296,
+          "end_line": 374
+        }
+      ]
+    },
+    {
+      "fingerprint": "32e23baa61282c667b73525d0d471639c85ec421d6b6ed8fa800544f70b1b890",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
           "end_line": 368
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 264,
-          "end_line": 342
+          "start_line": 281,
+          "end_line": 358
         }
       ]
     },
@@ -2309,13 +2479,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -2377,13 +2547,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 279,
-          "end_line": 353
+          "start_line": 295,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 253,
-          "end_line": 327
+          "start_line": 285,
+          "end_line": 359
         }
       ]
     },
@@ -2394,13 +2564,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 292,
-          "end_line": 368
+          "start_line": 308,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 266,
-          "end_line": 342
+          "start_line": 298,
+          "end_line": 374
         }
       ]
     },
@@ -2428,13 +2598,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 354
+          "start_line": 296,
+          "end_line": 370
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 328
+          "start_line": 286,
+          "end_line": 360
         }
       ]
     },
@@ -2564,13 +2734,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 287,
-          "end_line": 366
+          "start_line": 303,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 261,
-          "end_line": 340
+          "start_line": 293,
+          "end_line": 372
         }
       ]
     },
@@ -2666,13 +2836,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 287,
-          "end_line": 366
+          "start_line": 303,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 261,
-          "end_line": 340
+          "start_line": 293,
+          "end_line": 372
         }
       ]
     },
@@ -2898,6 +3068,23 @@
       ]
     },
     {
+      "fingerprint": "3e84ec146f88c8ee128675000e3ee12ef9130be1ab0fe5757d30a32229173681",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 288,
+          "end_line": 362
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 278,
+          "end_line": 352
+        }
+      ]
+    },
+    {
       "fingerprint": "3ebaccd1aa686ee726a6772e1f91716ab86d9b2d1c0726fa33be2201535056e6",
       "token_count": 400,
       "line_count": 63,
@@ -3119,6 +3306,23 @@
       ]
     },
     {
+      "fingerprint": "42355f196a72b87ddad2cb9b820ab7c4cd70a345d47f8a401831a623546ca67b",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
+        }
+      ]
+    },
+    {
       "fingerprint": "4242ffdd96ad4491c813818bae8487e92627beaa183782fd8da870e81cb80bb4",
       "token_count": 400,
       "line_count": 63,
@@ -3295,13 +3499,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 294,
-          "end_line": 371
+          "start_line": 310,
+          "end_line": 387
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 268,
-          "end_line": 345
+          "start_line": 300,
+          "end_line": 377
         }
       ]
     },
@@ -3336,6 +3540,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 259,
           "end_line": 334
+        }
+      ]
+    },
+    {
+      "fingerprint": "47984388e07583a7ac77f92d1467721369c0cc8ba7ac4a7f956e5ef36694a4f2",
+      "token_count": 400,
+      "line_count": 77,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 282,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 272,
+          "end_line": 348
         }
       ]
     },
@@ -3414,13 +3635,30 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 281,
-          "end_line": 358
+          "start_line": 297,
+          "end_line": 374
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 255,
-          "end_line": 332
+          "start_line": 287,
+          "end_line": 364
+        }
+      ]
+    },
+    {
+      "fingerprint": "4a0e44817cacebdd7a90ca7d4b23f2bcb1db37ab56933dd45eb73a02c5286281",
+      "token_count": 400,
+      "line_count": 76,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 362
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 352
         }
       ]
     },
@@ -3438,6 +3676,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 267,
           "end_line": 343
+        }
+      ]
+    },
+    {
+      "fingerprint": "4aacc0289dc0adc3a5d72b608e6f50255ae2e00693af4681a396bd7efe7298c3",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 367
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 357
         }
       ]
     },
@@ -3595,6 +3850,23 @@
       ]
     },
     {
+      "fingerprint": "4e810f304d94747bc2efb1c05d6058bffa2a6e6ebec8faedd75f71b0b74e8056",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 286,
+          "end_line": 360
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 276,
+          "end_line": 350
+        }
+      ]
+    },
+    {
       "fingerprint": "4e9c64e4804384a156f7eed087b059f98e3608002bc158ddf6ba5f61f04e22ab",
       "token_count": 400,
       "line_count": 75,
@@ -3618,13 +3890,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 275,
-          "end_line": 352
+          "start_line": 291,
+          "end_line": 368
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 248,
-          "end_line": 326
+          "start_line": 281,
+          "end_line": 358
         }
       ]
     },
@@ -4026,13 +4298,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 354
+          "start_line": 296,
+          "end_line": 370
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 328
+          "start_line": 286,
+          "end_line": 360
         }
       ]
     },
@@ -4043,13 +4315,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 287,
-          "end_line": 366
+          "start_line": 303,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 261,
-          "end_line": 340
+          "start_line": 293,
+          "end_line": 372
         }
       ]
     },
@@ -4067,6 +4339,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 290,
           "end_line": 359
+        }
+      ]
+    },
+    {
+      "fingerprint": "55dc2d9b30ddb4071924f1ca90135b015a829a16defae067fb06c77132b46dcc",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 349
         }
       ]
     },
@@ -4094,13 +4383,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 361
+          "start_line": 299,
+          "end_line": 377
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 335
+          "start_line": 289,
+          "end_line": 367
         }
       ]
     },
@@ -4275,6 +4564,23 @@
       ]
     },
     {
+      "fingerprint": "59b1381925b0f48b0efc416f29b4a631eb3c898f2453c33cb6766b30efe0cb26",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 349
+        }
+      ]
+    },
+    {
       "fingerprint": "59e98985cd7089478ad025b8621f5667715a6191b06fd147a8bec20d904b2417",
       "token_count": 400,
       "line_count": 77,
@@ -4309,6 +4615,23 @@
       ]
     },
     {
+      "fingerprint": "5a922f89697af685e820297cb3bf8311ab4c482b56bb000139976ce5c752bfef",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
+        }
+      ]
+    },
+    {
       "fingerprint": "5ab02ae72502e3f470654f76f61d4c820469cdc4db6fbcae757ac98d416492b1",
       "token_count": 400,
       "line_count": 70,
@@ -4339,6 +4662,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 288,
           "end_line": 358
+        }
+      ]
+    },
+    {
+      "fingerprint": "5ad9dc566152340fabf9c7c41c91468036ee560845b95e946449c3b6589a2506",
+      "token_count": 400,
+      "line_count": 77,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 282,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 272,
+          "end_line": 348
         }
       ]
     },
@@ -4400,13 +4740,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 276,
-          "end_line": 352
+          "start_line": 292,
+          "end_line": 368
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 250,
-          "end_line": 326
+          "start_line": 282,
+          "end_line": 358
         }
       ]
     },
@@ -4547,19 +4887,36 @@
       ]
     },
     {
+      "fingerprint": "5ed9d1049ba333e232237f6f5ecfa832abb78179185ccf57e5e9eefc1ea6e66e",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 348
+        }
+      ]
+    },
+    {
       "fingerprint": "5f33f1658cc9973142505b7043484fd88358795aa1309182efd982f868341521",
       "token_count": 400,
       "line_count": 78,
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -4666,6 +5023,23 @@
       ]
     },
     {
+      "fingerprint": "61417c34da4335e2374ba7c9f9d31cc1b70fe94a9e8dae58b703ecd48a744a44",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 286,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 276,
+          "end_line": 349
+        }
+      ]
+    },
+    {
       "fingerprint": "61abf97ef3c88a6d86b4eb46c9d01d1d3a77b0b8a96c782979f7bbf0dc1153ef",
       "token_count": 400,
       "line_count": 71,
@@ -4689,13 +5063,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 289,
-          "end_line": 366
+          "start_line": 305,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 263,
-          "end_line": 340
+          "start_line": 295,
+          "end_line": 372
         }
       ]
     },
@@ -4706,13 +5080,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 281,
-          "end_line": 356
+          "start_line": 297,
+          "end_line": 372
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 255,
-          "end_line": 330
+          "start_line": 287,
+          "end_line": 362
         }
       ]
     },
@@ -4757,13 +5131,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 354
+          "start_line": 296,
+          "end_line": 370
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 328
+          "start_line": 286,
+          "end_line": 360
         }
       ]
     },
@@ -4774,13 +5148,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -4859,13 +5233,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 291,
-          "end_line": 368
+          "start_line": 307,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 265,
-          "end_line": 342
+          "start_line": 297,
+          "end_line": 374
         }
       ]
     },
@@ -4883,6 +5257,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 260,
           "end_line": 337
+        }
+      ]
+    },
+    {
+      "fingerprint": "680d801da62ed8729ac61f7c959c1b5fc040322b82eca571ba7451a14d0283ee",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 360
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 350
         }
       ]
     },
@@ -4916,6 +5307,23 @@
         {
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 287,
+          "end_line": 356
+        }
+      ]
+    },
+    {
+      "fingerprint": "686e32bc2dc0ad8eb4408478f0201fa4b7d81935d114562976b8a39835fd7a85",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 366
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
           "end_line": 356
         }
       ]
@@ -4989,6 +5397,23 @@
       ]
     },
     {
+      "fingerprint": "698fa3c52a4df5d662affa37e75273251e859f9b67950d7b7c060d4b72d4e135",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 366
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 356
+        }
+      ]
+    },
+    {
       "fingerprint": "69c6c1b1b73af35d7968e1d88faa7f788006193ac96b8943e0cd21db9507718f",
       "token_count": 400,
       "line_count": 62,
@@ -5057,6 +5482,23 @@
       ]
     },
     {
+      "fingerprint": "6aecd8284b5fb94b04e0637a7ecd64e60e0af98121b6c4912bc65efe935eeb38",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 288,
+          "end_line": 366
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 278,
+          "end_line": 356
+        }
+      ]
+    },
+    {
       "fingerprint": "6af48a6191bd761216675a4a885103eba1a62c713417a33f906402ea7a7fe137",
       "token_count": 400,
       "line_count": 72,
@@ -5108,19 +5550,36 @@
       ]
     },
     {
+      "fingerprint": "6c3f8f126c4e29a1429b1e6d39924ccb6a42d52543d5f28cff3d0dcb4430d519",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 361
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 351
+        }
+      ]
+    },
+    {
       "fingerprint": "6c5a9f8a2d7fa25a8ef008d6103d1510ade789780c2a9708a89904dfaf68abab",
       "token_count": 400,
       "line_count": 76,
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 281,
-          "end_line": 356
+          "start_line": 297,
+          "end_line": 372
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 255,
-          "end_line": 330
+          "start_line": 287,
+          "end_line": 362
         }
       ]
     },
@@ -5199,13 +5658,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 284,
-          "end_line": 364
+          "start_line": 300,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 258,
-          "end_line": 338
+          "start_line": 290,
+          "end_line": 370
         }
       ]
     },
@@ -5267,13 +5726,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 364
+          "start_line": 299,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 338
+          "start_line": 289,
+          "end_line": 370
         }
       ]
     },
@@ -5403,13 +5862,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 291,
-          "end_line": 368
+          "start_line": 307,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 265,
-          "end_line": 342
+          "start_line": 297,
+          "end_line": 374
         }
       ]
     },
@@ -5420,13 +5879,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 290,
-          "end_line": 367
+          "start_line": 306,
+          "end_line": 383
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 264,
-          "end_line": 341
+          "start_line": 296,
+          "end_line": 373
         }
       ]
     },
@@ -5444,6 +5903,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 259,
           "end_line": 333
+        }
+      ]
+    },
+    {
+      "fingerprint": "72079abbcaa48afc6997256f16a70696b29087978bb7cb71d38f8b1330317a7a",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 290,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 280,
+          "end_line": 358
         }
       ]
     },
@@ -5478,6 +5954,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 254,
           "end_line": 331
+        }
+      ]
+    },
+    {
+      "fingerprint": "7325b456efabcae9dbc1d66e0e05a0714211a4e563601189b6cf9b9ba4ece6ec",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 348
         }
       ]
     },
@@ -5522,13 +6015,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 282,
-          "end_line": 359
+          "start_line": 298,
+          "end_line": 375
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 256,
-          "end_line": 333
+          "start_line": 288,
+          "end_line": 365
         }
       ]
     },
@@ -5652,6 +6145,23 @@
       ]
     },
     {
+      "fingerprint": "75fcb45399642d1c4c4d10fda962370925e147b3ee471fa7769c8f65633b5af9",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 281,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 270,
+          "end_line": 348
+        }
+      ]
+    },
+    {
       "fingerprint": "76d05db4b3d390c8a27cc806c563649ca0536c090a88fd7034233ceaa12eed64",
       "token_count": 400,
       "line_count": 68,
@@ -5743,13 +6253,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 286,
-          "end_line": 365
+          "start_line": 302,
+          "end_line": 381
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 260,
-          "end_line": 339
+          "start_line": 292,
+          "end_line": 371
         }
       ]
     },
@@ -6049,13 +6559,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 282,
-          "end_line": 361
+          "start_line": 298,
+          "end_line": 377
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 256,
-          "end_line": 335
+          "start_line": 288,
+          "end_line": 367
         }
       ]
     },
@@ -6134,13 +6644,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 289,
-          "end_line": 366
+          "start_line": 305,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 263,
-          "end_line": 340
+          "start_line": 295,
+          "end_line": 372
         }
       ]
     },
@@ -6158,6 +6668,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 318,
           "end_line": 380
+        }
+      ]
+    },
+    {
+      "fingerprint": "84b55c0c9f8b9e1d8810f572a068a42ef5cab3f7585fe8996779f58d70468d79",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 288,
+          "end_line": 366
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 278,
+          "end_line": 356
         }
       ]
     },
@@ -6349,6 +6876,23 @@
       ]
     },
     {
+      "fingerprint": "87a8bd8d0c19bc25ea725189a6a3ad371b012935bd75b2f34393ee28e6f1aeca",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 367
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 357
+        }
+      ]
+    },
+    {
       "fingerprint": "87cd576c0f6767ea778376b4c8090e16859eb9c8135177b3b655b7582645879a",
       "token_count": 400,
       "line_count": 77,
@@ -6430,6 +6974,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 311,
           "end_line": 371
+        }
+      ]
+    },
+    {
+      "fingerprint": "89891574921f6925c8b22ff500f2ef0195f96e936ef6f0ab2c26058384fac074",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 290,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 280,
+          "end_line": 358
         }
       ]
     },
@@ -6566,6 +7127,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 273,
           "end_line": 345
+        }
+      ]
+    },
+    {
+      "fingerprint": "8c83a1e59b8bb4bf356789287ff38adf9a9331565830befd659ed17035cb61fa",
+      "token_count": 400,
+      "line_count": 76,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 362
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 352
         }
       ]
     },
@@ -6712,13 +7290,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 286,
-          "end_line": 366
+          "start_line": 302,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 260,
-          "end_line": 340
+          "start_line": 292,
+          "end_line": 372
         }
       ]
     },
@@ -6736,6 +7314,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 283,
           "end_line": 352
+        }
+      ]
+    },
+    {
+      "fingerprint": "9320dd5435e25002360b4a5223104ddf05f80fe04403f8280c0a1a9fb7d9c74e",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 361
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 351
         }
       ]
     },
@@ -6814,13 +7409,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 292,
-          "end_line": 368
+          "start_line": 308,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 266,
-          "end_line": 342
+          "start_line": 298,
+          "end_line": 374
         }
       ]
     },
@@ -6933,13 +7528,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 276,
-          "end_line": 353
+          "start_line": 292,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 250,
-          "end_line": 327
+          "start_line": 282,
+          "end_line": 359
         }
       ]
     },
@@ -7052,13 +7647,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 276,
-          "end_line": 352
+          "start_line": 292,
+          "end_line": 368
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 250,
-          "end_line": 326
+          "start_line": 282,
+          "end_line": 358
         }
       ]
     },
@@ -7148,6 +7743,23 @@
       ]
     },
     {
+      "fingerprint": "9dcd41a89a8bc9e01627f7ea1a07c649eee679ddd4841cfa4443ff947e1974d2",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
+        }
+      ]
+    },
+    {
       "fingerprint": "9e31f6c6a0c8fd302a60220d5495e555edb180dea90580ce28fa99e3c8c2c2b6",
       "token_count": 400,
       "line_count": 68,
@@ -7171,13 +7783,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 361
+          "start_line": 299,
+          "end_line": 377
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 335
+          "start_line": 289,
+          "end_line": 367
         }
       ]
     },
@@ -7301,6 +7913,23 @@
       ]
     },
     {
+      "fingerprint": "a15b47a7c4586656607076ad58ad613ef8feef70bc98ccad7fea1b3e6a1b408a",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 366
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 356
+        }
+      ]
+    },
+    {
       "fingerprint": "a29c009888e959b3d17b3b77388b6545e391d5742ac85ba0cc71a9d9c240735e",
       "token_count": 400,
       "line_count": 77,
@@ -7341,13 +7970,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -7460,13 +8089,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 290,
-          "end_line": 368
+          "start_line": 306,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 264,
-          "end_line": 342
+          "start_line": 296,
+          "end_line": 374
         }
       ]
     },
@@ -7545,13 +8174,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 281,
-          "end_line": 355
+          "start_line": 297,
+          "end_line": 371
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 255,
-          "end_line": 329
+          "start_line": 287,
+          "end_line": 361
         }
       ]
     },
@@ -7586,6 +8215,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 247,
           "end_line": 322
+        }
+      ]
+    },
+    {
+      "fingerprint": "aa43d0d44e24ef7d8bb1045907cf378ac0114977b2ba4f417455b1dbc822701e",
+      "token_count": 400,
+      "line_count": 77,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 282,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 272,
+          "end_line": 348
         }
       ]
     },
@@ -7811,6 +8457,91 @@
       ]
     },
     {
+      "fingerprint": "aee733baad7c2f149c31f87a679ab1768a7889cd9611342da49c80c6e10996d6",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
+        }
+      ]
+    },
+    {
+      "fingerprint": "af2bec13f8cf3b35eb90e26ba469e8e5b4fcbb0b8f6033eb1d6b38fdf5d90928",
+      "token_count": 400,
+      "line_count": 76,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 288,
+          "end_line": 363
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 278,
+          "end_line": 353
+        }
+      ]
+    },
+    {
+      "fingerprint": "af82a851a9a317fe3847e3a92e8bbfa0406339231b1c18b08af6da0434973792",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
+        }
+      ]
+    },
+    {
+      "fingerprint": "afc5b2d7d122f4e10f4584a1d6163886bea3115b0b716708f41e3544cbd36ab2",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
+        }
+      ]
+    },
+    {
+      "fingerprint": "aff87091e2ba78c2c86a9a1f8dbb385ea09dd1f768f646f03bea6682e070a35a",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 288,
+          "end_line": 362
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 278,
+          "end_line": 352
+        }
+      ]
+    },
+    {
       "fingerprint": "b110ab901594d9d00f3eb52ed58bcb5eb3e00731962ca5ec116e56b80a644a4b",
       "token_count": 400,
       "line_count": 78,
@@ -7902,13 +8633,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -7943,6 +8674,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 275,
           "end_line": 346
+        }
+      ]
+    },
+    {
+      "fingerprint": "b2ca8fb0c92e5c815aaebc82236bde3c5ccf54b965097f50b796d2a430325eb6",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 348
         }
       ]
     },
@@ -8253,19 +9001,53 @@
       ]
     },
     {
+      "fingerprint": "b84fb8349e0dc6c39ca09d0849f4f166de82621cd316bdc88697a5e4d200fe06",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 349
+        }
+      ]
+    },
+    {
       "fingerprint": "b964efff248b4c67e83b78bf3970b50889cd709bdf9b1508c290f3d426f8bab6",
       "token_count": 400,
       "line_count": 79,
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 361
+          "start_line": 299,
+          "end_line": 377
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 335
+          "start_line": 289,
+          "end_line": 367
+        }
+      ]
+    },
+    {
+      "fingerprint": "b992de94d981006f3361b7c2aa5773d962c6637a9a0bee5b8c5b285753423232",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 290,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 280,
+          "end_line": 358
         }
       ]
     },
@@ -8321,6 +9103,23 @@
       ]
     },
     {
+      "fingerprint": "ba5dc1dbe17c004a741306e18a5f0c2269e079f8cf7315fc40436265e466d9a6",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
+        }
+      ]
+    },
+    {
       "fingerprint": "ba74f4443de5dca0c86e6cb38faede2cfa47bff0587a0f4af731156120fcb384",
       "token_count": 400,
       "line_count": 72,
@@ -8351,6 +9150,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 266,
           "end_line": 343
+        }
+      ]
+    },
+    {
+      "fingerprint": "bbb2781b21c37b56c9de30b7ccdc89d453a4a570a65456ac29d33bcfeeee27e0",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 348
         }
       ]
     },
@@ -8440,6 +9256,23 @@
       ]
     },
     {
+      "fingerprint": "bd89b0e9539468b6ea2f7c609bb695738dedda1a7bbcc02d74d1ee4e4b049ad5",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 290,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 280,
+          "end_line": 358
+        }
+      ]
+    },
+    {
       "fingerprint": "be1b47b6d7b18f50b334912fcf1b1b6f5eefe5e2a215ec2564acbf8cc90ff152",
       "token_count": 400,
       "line_count": 77,
@@ -8463,13 +9296,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 285,
-          "end_line": 365
+          "start_line": 301,
+          "end_line": 381
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 259,
-          "end_line": 339
+          "start_line": 291,
+          "end_line": 371
         }
       ]
     },
@@ -8871,13 +9704,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 284,
-          "end_line": 364
+          "start_line": 300,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 258,
-          "end_line": 338
+          "start_line": 290,
+          "end_line": 370
         }
       ]
     },
@@ -9143,13 +9976,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 276,
-          "end_line": 353
+          "start_line": 292,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 250,
-          "end_line": 327
+          "start_line": 282,
+          "end_line": 359
         }
       ]
     },
@@ -9194,13 +10027,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 276,
-          "end_line": 352
+          "start_line": 292,
+          "end_line": 368
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 250,
-          "end_line": 326
+          "start_line": 282,
+          "end_line": 358
         }
       ]
     },
@@ -9228,13 +10061,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 279,
-          "end_line": 353
+          "start_line": 295,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 253,
-          "end_line": 327
+          "start_line": 285,
+          "end_line": 359
         }
       ]
     },
@@ -9296,13 +10129,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -9371,6 +10204,40 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 315,
           "end_line": 378
+        }
+      ]
+    },
+    {
+      "fingerprint": "cbb978fc5cdb9dff788de6b9e2839e51fe6e7979d96981fbaceee260d97b119b",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 349
+        }
+      ]
+    },
+    {
+      "fingerprint": "cd0fd382cac894f86f3d1cbcd7ea6faa63fce26d4a0ace041d9c588397d20f25",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 290,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 280,
+          "end_line": 358
         }
       ]
     },
@@ -9449,13 +10316,30 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 361
+          "start_line": 299,
+          "end_line": 377
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 335
+          "start_line": 289,
+          "end_line": 367
+        }
+      ]
+    },
+    {
+      "fingerprint": "ce747a804e7defb51b66f93a84c54f00368198d4da2605a4a4f0c3f46466d6d0",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 349
         }
       ]
     },
@@ -9619,13 +10503,30 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 284,
-          "end_line": 364
+          "start_line": 300,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 258,
-          "end_line": 338
+          "start_line": 290,
+          "end_line": 370
+        }
+      ]
+    },
+    {
+      "fingerprint": "d1a6d9facea0e0dfe37dcd14c9ff2ffe421b8a35c7f80c91b46eb4a80f0fcb9e",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 367
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 357
         }
       ]
     },
@@ -9687,13 +10588,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 370
+          "start_line": 309,
+          "end_line": 386
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 344
+          "start_line": 299,
+          "end_line": 376
         }
       ]
     },
@@ -9874,13 +10775,30 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 286,
-          "end_line": 366
+          "start_line": 302,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 260,
-          "end_line": 340
+          "start_line": 292,
+          "end_line": 372
+        }
+      ]
+    },
+    {
+      "fingerprint": "d7fea4f2b644caa9ea37c3783438e00537c5bb1f5151118cbd075a7f6e98d05d",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 288,
+          "end_line": 362
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 278,
+          "end_line": 352
         }
       ]
     },
@@ -9925,13 +10843,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 288,
-          "end_line": 366
+          "start_line": 304,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 262,
-          "end_line": 340
+          "start_line": 294,
+          "end_line": 372
         }
       ]
     },
@@ -10038,6 +10956,23 @@
       ]
     },
     {
+      "fingerprint": "da3e4c481002dbe768a80149c2b3c9669eb4f3626a922053818fd8d525a03654",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 367
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 357
+        }
+      ]
+    },
+    {
       "fingerprint": "dae453ed125bd516f4ae6d9515890a48b25af9acffe2134ea677fbe9a7d99f6b",
       "token_count": 400,
       "line_count": 77,
@@ -10095,13 +11030,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 279,
-          "end_line": 353
+          "start_line": 295,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 253,
-          "end_line": 327
+          "start_line": 285,
+          "end_line": 359
         }
       ]
     },
@@ -10119,6 +11054,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 260,
           "end_line": 337
+        }
+      ]
+    },
+    {
+      "fingerprint": "dba7cd9e936ccbea6db3fba12ae56e41d14db4157a55f7b90745c00ea897e822",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 286,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 276,
+          "end_line": 349
         }
       ]
     },
@@ -10146,13 +11098,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 285,
-          "end_line": 365
+          "start_line": 301,
+          "end_line": 381
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 259,
-          "end_line": 339
+          "start_line": 291,
+          "end_line": 371
         }
       ]
     },
@@ -10163,13 +11115,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 287,
-          "end_line": 366
+          "start_line": 303,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 261,
-          "end_line": 340
+          "start_line": 293,
+          "end_line": 372
         }
       ]
     },
@@ -10187,6 +11139,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 316,
           "end_line": 380
+        }
+      ]
+    },
+    {
+      "fingerprint": "dde2c97e0fea0fb71ebece17c78d98ebdad8383a349ee870b5febc812cf67260",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 367
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 357
         }
       ]
     },
@@ -10214,13 +11183,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 361
+          "start_line": 299,
+          "end_line": 377
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 335
+          "start_line": 289,
+          "end_line": 367
         }
       ]
     },
@@ -10255,6 +11224,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 269,
           "end_line": 343
+        }
+      ]
+    },
+    {
+      "fingerprint": "dff3962dc843409baa5521637c49144fc3363e2d000ab0cc2146e552c6e49f53",
+      "token_count": 400,
+      "line_count": 77,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 282,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 272,
+          "end_line": 348
         }
       ]
     },
@@ -10435,13 +11421,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 291,
-          "end_line": 368
+          "start_line": 307,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 265,
-          "end_line": 342
+          "start_line": 297,
+          "end_line": 374
         }
       ]
     },
@@ -10520,13 +11506,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 286,
-          "end_line": 365
+          "start_line": 302,
+          "end_line": 381
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 260,
-          "end_line": 339
+          "start_line": 292,
+          "end_line": 371
         }
       ]
     },
@@ -10554,13 +11540,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 281,
-          "end_line": 357
+          "start_line": 297,
+          "end_line": 373
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 255,
-          "end_line": 331
+          "start_line": 287,
+          "end_line": 363
         }
       ]
     },
@@ -10578,6 +11564,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 288,
           "end_line": 358
+        }
+      ]
+    },
+    {
+      "fingerprint": "e774d9bf7ac691d9cf1fe6b684eedafee56763ef87eda68c78d3e14010000498",
+      "token_count": 400,
+      "line_count": 76,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 288,
+          "end_line": 363
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 278,
+          "end_line": 353
         }
       ]
     },
@@ -10605,13 +11608,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 293,
-          "end_line": 368
+          "start_line": 309,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 267,
-          "end_line": 342
+          "start_line": 299,
+          "end_line": 374
         }
       ]
     },
@@ -10639,13 +11642,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 279,
-          "end_line": 353
+          "start_line": 295,
+          "end_line": 369
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 253,
-          "end_line": 327
+          "start_line": 285,
+          "end_line": 359
         }
       ]
     },
@@ -10656,13 +11659,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 364
+          "start_line": 299,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 338
+          "start_line": 289,
+          "end_line": 370
         }
       ]
     },
@@ -10673,13 +11676,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 286,
-          "end_line": 365
+          "start_line": 302,
+          "end_line": 381
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 260,
-          "end_line": 339
+          "start_line": 292,
+          "end_line": 371
         }
       ]
     },
@@ -10718,6 +11721,23 @@
       ]
     },
     {
+      "fingerprint": "eaa63dc3b95f7be6352774d822e06369191d7bcd735896a3db0d9965ff0f5503",
+      "token_count": 400,
+      "line_count": 75,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 286,
+          "end_line": 360
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 276,
+          "end_line": 350
+        }
+      ]
+    },
+    {
       "fingerprint": "eb85f972cc53350ec4979823acd07127a16dee387a360678207dd82ad0ff39fe",
       "token_count": 400,
       "line_count": 75,
@@ -10741,13 +11761,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 354
+          "start_line": 296,
+          "end_line": 370
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 328
+          "start_line": 286,
+          "end_line": 360
         }
       ]
     },
@@ -10775,13 +11795,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 355
+          "start_line": 296,
+          "end_line": 371
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 329
+          "start_line": 286,
+          "end_line": 361
         }
       ]
     },
@@ -10843,13 +11863,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 294,
-          "end_line": 371
+          "start_line": 310,
+          "end_line": 387
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 268,
-          "end_line": 345
+          "start_line": 300,
+          "end_line": 377
         }
       ]
     },
@@ -10939,6 +11959,23 @@
       ]
     },
     {
+      "fingerprint": "eebf6d69a9aff45ee42ac9b541238583308f9e99d745b643df319a1e88ab51d5",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 360
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 350
+        }
+      ]
+    },
+    {
       "fingerprint": "eee03455338d258dbac4a24467da117bbe9fa0ab956aebd243cfc1af849e5e6b",
       "token_count": 400,
       "line_count": 64,
@@ -10962,13 +11999,30 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 288,
-          "end_line": 366
+          "start_line": 304,
+          "end_line": 382
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 262,
-          "end_line": 340
+          "start_line": 294,
+          "end_line": 372
+        }
+      ]
+    },
+    {
+      "fingerprint": "efb5b1f22664f4a3a3a734a44dac9a57128174b0543c9f39359d2f8571f3211c",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 360
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 350
         }
       ]
     },
@@ -10996,13 +12050,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 354
+          "start_line": 296,
+          "end_line": 370
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 328
+          "start_line": 286,
+          "end_line": 360
         }
       ]
     },
@@ -11047,13 +12101,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 290,
-          "end_line": 368
+          "start_line": 306,
+          "end_line": 384
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 264,
-          "end_line": 342
+          "start_line": 296,
+          "end_line": 374
         }
       ]
     },
@@ -11098,13 +12152,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 283,
-          "end_line": 361
+          "start_line": 299,
+          "end_line": 377
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 257,
-          "end_line": 335
+          "start_line": 289,
+          "end_line": 367
         }
       ]
     },
@@ -11139,6 +12193,40 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 252,
           "end_line": 328
+        }
+      ]
+    },
+    {
+      "fingerprint": "f55d0565c23dc4386715f4f3898a6a9d93fdbc4ff0f0081b8090efafcd9eae49",
+      "token_count": 400,
+      "line_count": 77,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 282,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 272,
+          "end_line": 348
+        }
+      ]
+    },
+    {
+      "fingerprint": "f5a21200537750b477f249e871c43430091ed13678aa85855bfe6b1ca0feb5a4",
+      "token_count": 400,
+      "line_count": 78,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 291,
+          "end_line": 368
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 281,
+          "end_line": 358
         }
       ]
     },
@@ -11234,13 +12322,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 280,
-          "end_line": 354
+          "start_line": 296,
+          "end_line": 370
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 254,
-          "end_line": 328
+          "start_line": 286,
+          "end_line": 360
         }
       ]
     },
@@ -11268,13 +12356,13 @@
       "occurrences": [
         {
           "path": "internal/factory/digest/digest.go",
-          "start_line": 285,
-          "end_line": 364
+          "start_line": 301,
+          "end_line": 380
         },
         {
           "path": "internal/factory/digest/range.go",
-          "start_line": 259,
-          "end_line": 338
+          "start_line": 291,
+          "end_line": 370
         }
       ]
     },
@@ -11343,6 +12431,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 288,
           "end_line": 358
+        }
+      ]
+    },
+    {
+      "fingerprint": "fb13ce2283545bec0ae64642b661ca1dc687ac467efada6e9c61cbd41b1549c3",
+      "token_count": 400,
+      "line_count": 79,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 289,
+          "end_line": 367
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 279,
+          "end_line": 357
         }
       ]
     },
@@ -11500,6 +12605,23 @@
       ]
     },
     {
+      "fingerprint": "fd3af76d00ca9fa28c2b7bfb25e267e0851d5d9dab6ea155c82c927962b8a4ec",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 285,
+          "end_line": 358
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 275,
+          "end_line": 348
+        }
+      ]
+    },
+    {
       "fingerprint": "fd5b5442810b7b0fb73dd90200d6ec5f264163b5527e6f48106e2868a39fafb3",
       "token_count": 400,
       "line_count": 79,
@@ -11534,6 +12656,23 @@
       ]
     },
     {
+      "fingerprint": "feecb61141b1742cd035604a9c60b711456bce4c4afcfcfe3aaaed3b8388f93c",
+      "token_count": 400,
+      "line_count": 74,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 286,
+          "end_line": 359
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 276,
+          "end_line": 349
+        }
+      ]
+    },
+    {
       "fingerprint": "fefe953cecb46bbe4098c6910fa331ffa24527a3762d34f268292ff7eda2b383",
       "token_count": 400,
       "line_count": 75,
@@ -11547,6 +12686,23 @@
           "path": "cmd/leamas/evidence_commands.go",
           "start_line": 259,
           "end_line": 333
+        }
+      ]
+    },
+    {
+      "fingerprint": "ff101ea987d02960736e1c5f49d119a238c9d2cdf860f8c7d78e5d63b4b31443",
+      "token_count": 400,
+      "line_count": 76,
+      "occurrences": [
+        {
+          "path": "internal/factory/digest/digest.go",
+          "start_line": 287,
+          "end_line": 362
+        },
+        {
+          "path": "internal/factory/digest/range.go",
+          "start_line": 277,
+          "end_line": 352
         }
       ]
     },

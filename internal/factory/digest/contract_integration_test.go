@@ -37,7 +37,7 @@ func TestDigestOutput_HasContractHeader(t *testing.T) {
 	}
 
 	// Verify contract header is at the top
-	if !strings.HasPrefix(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1") {
+	if !strings.HasPrefix(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
 		t.Error("digest should start with contract header")
 	}
 
@@ -72,7 +72,7 @@ func TestDigestOutput_HasContractHeader_Staged(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	if !strings.HasPrefix(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1") {
+	if !strings.HasPrefix(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
 		t.Error("staged digest should start with contract header")
 	}
 	if !strings.Contains(content, "DIGEST_MODE: staged") {
@@ -107,7 +107,7 @@ func TestDigestOutput_HasContractHeader_Range(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	if !strings.HasPrefix(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1") {
+	if !strings.HasPrefix(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
 		t.Error("range digest should start with contract header")
 	}
 	if !strings.Contains(content, "DIGEST_MODE: range") {

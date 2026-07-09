@@ -268,11 +268,27 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 	}
 	sb.WriteString(RenderContractHeader(headerInfo))
 
+	// Build review evidence sections from manifest
+	manifest := BuildManifest(files)
+	stats := ComputeStats(manifest, repoRoot)
+	reviewMap := BuildReviewMap(manifest, repoRoot)
+	riskSignals := ComputeRiskSignals(stats, manifest, repoRoot)
+
 	// Legacy header (preserved for backwards compatibility)
 	sb.WriteString("# Targeted digest\n\n")
 	sb.WriteString(fmt.Sprintf("Generated at: %s\n", createdAt))
 	sb.WriteString(fmt.Sprintf("Repo: %s\n", repoRoot))
 	sb.WriteString(fmt.Sprintf("Mode: %s\n", mode))
+	sb.WriteString("\n")
+
+	// Review evidence sections (v2 contract)
+	sb.WriteString(RenderManifest(manifest))
+	sb.WriteString("\n")
+	sb.WriteString(RenderStats(stats))
+	sb.WriteString("\n")
+	sb.WriteString(RenderReviewMap(reviewMap))
+	sb.WriteString("\n")
+	sb.WriteString(RenderRiskSignals(riskSignals))
 	sb.WriteString("\n")
 
 	// Changed files section

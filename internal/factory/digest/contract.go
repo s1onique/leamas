@@ -10,7 +10,7 @@ import (
 // ContractVersion is the current digest contract version.
 // This version governs the header format and field names.
 // Breaking changes to the digest output shape require a version bump.
-const ContractVersion = 1
+const ContractVersion = 2
 
 // Contract header field names - these must remain stable.
 const (

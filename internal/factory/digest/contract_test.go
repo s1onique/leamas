@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-func TestContractVersion_IsOne(t *testing.T) {
-	if ContractVersion != 1 {
-		t.Errorf("ContractVersion = %d, want 1", ContractVersion)
+func TestContractVersion_IsTwo(t *testing.T) {
+	if ContractVersion != 2 {
+		t.Errorf("ContractVersion = %d, want 2", ContractVersion)
 	}
 }
 
@@ -59,8 +59,8 @@ func TestRenderContractHeader_ContractVersionIsInteger(t *testing.T) {
 	}
 	header := RenderContractHeader(info)
 
-	if !strings.Contains(header, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1") {
-		t.Error("header should contain contract version as integer 1")
+	if !strings.Contains(header, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
+		t.Error("header should contain contract version as integer 2")
 	}
 }
 
@@ -145,7 +145,7 @@ func TestParseContractHeader_ExtractsHeaderAndBody(t *testing.T) {
 
 	parsedHeader, parsedBody := ParseContractHeader(content)
 
-	if !strings.Contains(parsedHeader, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1") {
+	if !strings.Contains(parsedHeader, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
 		t.Error("parsed header should contain contract version")
 	}
 	if !strings.Contains(parsedBody, "# Targeted digest") {

@@ -104,6 +104,12 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	}
 	sb.WriteString(RenderContractHeader(headerInfo))
 
+	// Build review evidence sections from manifest
+	manifest := BuildRangeManifest(files)
+	stats := ComputeStats(manifest, repoRoot)
+	reviewMap := BuildReviewMap(manifest, repoRoot)
+	riskSignals := ComputeRiskSignals(stats, manifest, repoRoot)
+
 	// Legacy header (preserved for backwards compatibility)
 	sb.WriteString("# Targeted digest\n\n")
 	sb.WriteString(fmt.Sprintf("Generated at: %s\n", createdAt))
@@ -115,6 +121,16 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 		sb.WriteString(fmt.Sprintf("Resolved from: auto\n"))
 		sb.WriteString(fmt.Sprintf("Reason: %s\n", resolved.Reason))
 	}
+	sb.WriteString("\n")
+
+	// Review evidence sections (v2 contract)
+	sb.WriteString(RenderManifest(manifest))
+	sb.WriteString("\n")
+	sb.WriteString(RenderStats(stats))
+	sb.WriteString("\n")
+	sb.WriteString(RenderReviewMap(reviewMap))
+	sb.WriteString("\n")
+	sb.WriteString(RenderRiskSignals(riskSignals))
 	sb.WriteString("\n")
 
 	// Changed files section
@@ -235,6 +251,12 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	}
 	sb.WriteString(RenderContractHeader(headerInfo))
 
+	// Build review evidence sections from manifest
+	manifest := BuildManifest(files)
+	stats := ComputeStats(manifest, repoRoot)
+	reviewMap := BuildReviewMap(manifest, repoRoot)
+	riskSignals := ComputeRiskSignals(stats, manifest, repoRoot)
+
 	// Legacy header (preserved for backwards compatibility)
 	sb.WriteString("# Targeted digest\n\n")
 	sb.WriteString(fmt.Sprintf("Generated at: %s\n", createdAt))
@@ -247,6 +269,16 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 		sb.WriteString(fmt.Sprintf("Reason: %s\n", resolved.Reason))
 	}
 
+	sb.WriteString("\n")
+
+	// Review evidence sections (v2 contract)
+	sb.WriteString(RenderManifest(manifest))
+	sb.WriteString("\n")
+	sb.WriteString(RenderStats(stats))
+	sb.WriteString("\n")
+	sb.WriteString(RenderReviewMap(reviewMap))
+	sb.WriteString("\n")
+	sb.WriteString(RenderRiskSignals(riskSignals))
 	sb.WriteString("\n")
 
 	// Changed files section
