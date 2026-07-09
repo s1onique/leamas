@@ -187,17 +187,17 @@ func TestParseGoSum(t *testing.T) {
 		{
 			name:     "single line",
 			content:  "foo v1.0.0 h1",
-			expected: map[string]string{"foo v1.0.0": "v1.0.0"},
+			expected: map[string]string{"foo v1.0.0": "foo v1.0.0 h1"},
 		},
 		{
 			name:     "multiple lines",
 			content:  "foo v1.0.0 h1\nbar v2.0.0 h2\n",
-			expected: map[string]string{"foo v1.0.0": "v1.0.0", "bar v2.0.0": "v2.0.0"},
+			expected: map[string]string{"foo v1.0.0": "foo v1.0.0 h1", "bar v2.0.0": "bar v2.0.0 h2"},
 		},
 		{
 			name:     "with empty lines",
 			content:  "foo v1.0.0 h1\n\nbar v2.0.0 h2\n",
-			expected: map[string]string{"foo v1.0.0": "v1.0.0", "bar v2.0.0": "v2.0.0"},
+			expected: map[string]string{"foo v1.0.0": "foo v1.0.0 h1", "bar v2.0.0": "bar v2.0.0 h2"},
 		},
 	}
 

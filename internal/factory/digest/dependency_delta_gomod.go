@@ -103,7 +103,8 @@ func getIndexGoSum(repoRoot string) (map[string]string, error) {
 	return parseGoSum(content), nil
 }
 
-// parseGoSum parses go.sum content into a map of module@version -> hash.
+// parseGoSum parses go.sum content into a map of module@version -> full_line.
+// Full line preservation ensures we can detect checksum changes for same module+version.
 func parseGoSum(content []byte) map[string]string {
 	result := make(map[string]string)
 	lines := strings.Split(string(content), "\n")
@@ -114,8 +115,9 @@ func parseGoSum(content []byte) map[string]string {
 		}
 		parts := strings.Fields(line)
 		if len(parts) >= 2 {
+			// Key: module path + version, Value: full line (for hash preservation)
 			key := parts[0] + " " + parts[1]
-			result[key] = parts[1]
+			result[key] = line
 		}
 	}
 	return result
