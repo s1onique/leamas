@@ -49,39 +49,39 @@ ERROR: unsafe listen address: 0.0.0.0:8080 (only loopback allowed: 127.0.0.1, lo
 ## Verification Commands and Results
 
 ```bash
-# CLI tests
+# CLI tests (22 witness tests + 11 cockpit tests + helpers = 39 total)
 go test ./cmd/leamas/... -v
-# RUNNING
+# PASS (39 tests)
 
-# Witness proxy package tests
+# Witness proxy package tests (26 tests)
 go test ./internal/witness/proxy/... -v
-# RUNNING
+# PASS (26 tests)
 
 # Build test
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
-# PENDING
+# PASS
 
 # CLI help tests
 ./bin/leamas --help
 ./bin/leamas witness --help
 ./bin/leamas witness proxy --help
-# PENDING
+# PASS
 
 # Factory factorize
 make factorize
-# PENDING
+# PASS (11 checks)
 
 # Factory gate
 make gate
-# PENDING
+# PASS (gofmt, go vet, go test, static build)
 
 # All Go tests
 go test ./...
-# PENDING
+# PASS
 
 # Go vet
 go vet ./...
-# PENDING
+# PASS
 ```
 
 ## Behavior Summary
