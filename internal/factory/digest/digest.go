@@ -313,6 +313,12 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 		publicSurfaceDeltaSection = RenderPublicSurfaceDelta(delta)
 	}
 
+	// DEPENDENCY_DELTA section - compute before writing to include in evidence hashes
+	dependencyDeltaSection := RenderEmptyDependencyDelta()
+	if delta, err := CollectDependencyDelta(mode, repoRoot, files); err == nil {
+		dependencyDeltaSection = RenderDependencyDelta(delta)
+	}
+
 	// File evidence section for hashing
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
@@ -331,7 +337,7 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 		gateSummarySection = gate.RenderGateSummary(nil, nil)
 	}
 
-	// Compute evidence hashes (includes PUBLIC_SURFACE_DELTA and GATE_SUMMARY)
+	// Compute evidence hashes (includes PUBLIC_SURFACE_DELTA, DEPENDENCY_DELTA, and GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection,
 		statsSection,
@@ -339,6 +345,7 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 		riskSignalsSection,
 		patchHygieneSection,
 		publicSurfaceDeltaSection,
+		dependencyDeltaSection,
 		gateSummarySection,
 		fileEvidenceSection,
 	)
@@ -348,6 +355,13 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 
 	// Write GATE_SUMMARY section
 	sb.WriteString(gateSummarySection)
+
+	// Write PUBLIC_SURFACE_DELTA section
+	sb.WriteString(publicSurfaceDeltaSection)
+	sb.WriteString("\n")
+
+	// Write DEPENDENCY_DELTA section
+	sb.WriteString(dependencyDeltaSection)
 
 	// Write Changed files and Diffs sections
 	sb.WriteString(fileEvidenceSection)

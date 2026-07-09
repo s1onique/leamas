@@ -117,6 +117,7 @@ The review evidence sections appear in this order:
 6. `## EVIDENCE_HASHES` - Deterministic SHA-256 fingerprints over digest sections
 7. `## GATE_SUMMARY` - Digest gate pass/fail status
 8. `## PUBLIC_SURFACE_DELTA` - Public Go API/CLI surface changes
+9. `## DEPENDENCY_DELTA` - Go module dependency changes
 
 ### CHANGESET_MANIFEST
 
@@ -293,6 +294,9 @@ Mode: <mode>
 ## PUBLIC_SURFACE_DELTA
 ...
 
+## DEPENDENCY_DELTA
+...
+
 ## Changed files
 ...
 
@@ -307,7 +311,6 @@ Mode: <mode>
 
 Potential future sections not yet implemented:
 
-- `DEPENDENCY_DELTA` - Dependency change tracking
 - SARIF/static-analysis ingestion
 - SBOM/provenance/attestation output
 

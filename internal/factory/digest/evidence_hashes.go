@@ -25,6 +25,7 @@ type EvidenceHashes struct {
 	RiskSignalsSHA256        string
 	PatchHygieneSHA256       string
 	PublicSurfaceDeltaSHA256 string
+	DependencyDeltaSHA256    string
 	GateSummarySHA256        string
 	FileEvidenceSHA256       string
 	DigestEvidenceSHA256     string
@@ -63,7 +64,7 @@ func ComputeFileEvidence(diffsContent string) string {
 
 // ComputeEvidenceHashes computes all evidence hashes from rendered sections.
 func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
-	riskSignalsSection, patchHygieneSection, publicSurfaceDeltaSection, gateSummarySection, fileEvidenceSection string) EvidenceHashes {
+	riskSignalsSection, patchHygieneSection, publicSurfaceDeltaSection, dependencyDeltaSection, gateSummarySection, fileEvidenceSection string) EvidenceHashes {
 
 	var eh EvidenceHashes
 	eh.HashAlgorithm = EvidenceHashAlgorithm
@@ -75,6 +76,7 @@ func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
 	eh.RiskSignalsSHA256 = ComputeSectionHash(riskSignalsSection)
 	eh.PatchHygieneSHA256 = ComputeSectionHash(patchHygieneSection)
 	eh.PublicSurfaceDeltaSHA256 = ComputeSectionHash(publicSurfaceDeltaSection)
+	eh.DependencyDeltaSHA256 = ComputeSectionHash(dependencyDeltaSection)
 	eh.GateSummarySHA256 = ComputeSectionHash(gateSummarySection)
 	eh.FileEvidenceSHA256 = ComputeSectionHash(fileEvidenceSection)
 
@@ -85,6 +87,7 @@ func ComputeEvidenceHashes(manifestSection, statsSection, reviewMapSection,
 		riskSignalsSection + "\n" +
 		patchHygieneSection + "\n" +
 		publicSurfaceDeltaSection + "\n" +
+		dependencyDeltaSection + "\n" +
 		gateSummarySection + "\n" +
 		fileEvidenceSection
 
@@ -113,6 +116,8 @@ func RenderEvidenceHashes(eh EvidenceHashes) string {
 	sb.WriteString(eh.PatchHygieneSHA256)
 	sb.WriteString("\npublic_surface_delta_sha256=")
 	sb.WriteString(eh.PublicSurfaceDeltaSHA256)
+	sb.WriteString("\ndependency_delta_sha256=")
+	sb.WriteString(eh.DependencyDeltaSHA256)
 	sb.WriteString("\ngate_summary_sha256=")
 	sb.WriteString(eh.GateSummarySHA256)
 	sb.WriteString("\nfile_evidence_sha256=")
