@@ -11,10 +11,19 @@ PREFIX ?= /usr/local
 BINDIR ?= $(PREFIX)/bin
 INSTALL ?= install
 
-# Release variables
+# Build variables
+MODULE_PATH := github.com/s1onique/leamas
+
+# Version injection via linker flags
 VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
-BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
+BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
+
+LDFLAGS := -X '$(MODULE_PATH)/internal/version.Version=$(VERSION)' \
+           -X '$(MODULE_PATH)/internal/version.Commit=$(COMMIT)' \
+           -X '$(MODULE_PATH)/internal/version.BuildTime=$(BUILD_TIME)'
+
+# Release variables
 DIST_DIR ?= dist
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
@@ -101,7 +110,7 @@ test:
 build:
 	@echo "Building Leamas (static binary)..."
 	@mkdir -p bin
-	@CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
+	@CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/leamas ./cmd/leamas
 	@echo "Done. Binary: bin/leamas"
 
 clean:
@@ -180,11 +189,11 @@ release-build:
 	@echo "Building release for version $(VERSION)..."
 	@mkdir -p "$(ARTIFACT_DIR)"
 	@CGO_ENABLED=0 go build -trimpath \
-		-ldflags "-s -w" \
+		-ldflags "$(LDFLAGS) -s -w" \
 		-o "$(ARTIFACT_DIR)/leamas" ./cmd/leamas
 	@echo "version=$(VERSION)" > "$(ARTIFACT_DIR)/release.txt"
 	@echo "commit=$(COMMIT)" >> "$(ARTIFACT_DIR)/release.txt"
-	@echo "build_date=$(BUILD_DATE)" >> "$(ARTIFACT_DIR)/release.txt"
+	@echo "build_time=$(BUILD_TIME)" >> "$(ARTIFACT_DIR)/release.txt"
 	@echo "goos=$(GOOS)" >> "$(ARTIFACT_DIR)/release.txt"
 	@echo "goarch=$(GOARCH)" >> "$(ARTIFACT_DIR)/release.txt"
 	@echo "Done. Artifact: $(ARTIFACT_DIR)/leamas"

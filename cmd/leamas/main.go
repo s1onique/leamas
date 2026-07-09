@@ -20,8 +20,6 @@ import (
 	"github.com/s1onique/leamas/internal/factory/tooling"
 )
 
-const version = "0.1.0"
-
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -32,7 +30,7 @@ func main() {
 	case "--help", "-h":
 		printUsage()
 	case "version", "--version", "-v":
-		fmt.Println("leamas version", version)
+		handleVersion()
 	case "factory":
 		handleFactory()
 	case "doctor":
