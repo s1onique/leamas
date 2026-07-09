@@ -27,6 +27,8 @@ func handleWitness() {
 	switch os.Args[2] {
 	case "proxy":
 		handleWitnessProxy()
+	case "run-bundle":
+		handleWitnessRunBundle()
 	case "--help", "-h":
 		printWitnessUsage()
 	default:
@@ -39,6 +41,7 @@ func handleWitness() {
 func printWitnessUsage() {
 	fmt.Println("Witness commands:")
 	fmt.Println("  leamas witness proxy [flags]   Start local witness proxy")
+	fmt.Println("  leamas witness run-bundle       Manage local run bundles")
 	fmt.Println()
 	printWitnessProxyUsage()
 }

@@ -159,6 +159,86 @@ func BundlePath(root string, id RunID) (string, error)
 | `ACT-LEAMAS-WEB-RUN-BUNDLE-LIST01` | Web cockpit run bundle list UI | P2 |
 | `ACT-LEAMAS-HULK-RUN-BUNDLE-CORE01` | Hulk run bundle core integration | P2 |
 
+## CLI
+
+The run bundle CLI is available via `leamas witness run-bundle` and supports local-only, filesystem-backed run bundle management.
+
+### Create
+
+```bash
+# Create a new run bundle with a specific ID
+leamas witness run-bundle create --id run-20260709T071704Z-smoke01
+
+# Create with custom root and tool version
+leamas witness run-bundle create \
+  --root .leamas/runs \
+  --id run-20260709T071704Z-smoke01 \
+  --tool-version v0.1.0
+
+# Create with JSON output
+leamas witness run-bundle create --id run-20260709T071704Z-smoke01 --json
+```
+
+### List
+
+```bash
+# List all run bundles under the default root (.leamas/runs)
+leamas witness run-bundle list
+
+# List with custom root
+leamas witness run-bundle list --root /path/to/runs
+
+# List with JSON output
+leamas witness run-bundle list --json
+
+# Include invalid bundles (those missing metadata.json)
+leamas witness run-bundle list --include-invalid
+```
+
+### Show
+
+```bash
+# Show details for a specific run bundle
+leamas witness run-bundle show run-20260709T071704Z-smoke01
+
+# Show with custom root
+leamas witness run-bundle show --root /path/to/runs run-20260709T071704Z-smoke01
+
+# Show with JSON output
+leamas witness run-bundle show --json run-20260709T071704Z-smoke01
+```
+
+### Root
+
+All commands accept `--root` to specify an alternate run bundle root. Default root is `.leamas/runs`.
+
+```bash
+leamas witness run-bundle create --root /var/lib/leamas/runs --id run-xyz
+leamas witness run-bundle list --root /var/lib/leamas/runs
+leamas witness run-bundle show --root /var/lib/leamas/runs run-xyz
+```
+
+### CLI Contract
+
+The run bundle CLI is:
+- **Local-only**: No network calls or external services
+- **Filesystem-only**: Uses only local filesystem storage
+- **Read-only except create**: No delete or edit commands
+- **Bounded**: Explicit root and run ID validation
+- **JSON-readable**: All commands support `--json` output
+- **Safe by construction**: Run ID validation prevents path traversal
+- **Scriptable**: Non-interactive, deterministic output
+
+### What CLI Wiring Does NOT Add
+
+The CLI wiring for run bundles intentionally does NOT add:
+- Witness proxy persistence
+- Cockpit UI
+- Database persistence
+- Network behavior
+- Background daemon
+- Delete/edit commands
+
 ## References
 
 - [Doctrines](../doctrine/)
