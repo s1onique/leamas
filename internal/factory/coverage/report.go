@@ -121,7 +121,8 @@ func formatValue(sb *strings.Builder, v interface{}, indent int) {
 
 // Threshold represents coverage threshold configuration.
 type Threshold struct {
-	MinTotalPercent float64
+	MinTotalPercent   float64
+	MinModulePercents map[string]float64
 }
 
 // Summary represents a simple coverage summary.
@@ -155,8 +156,30 @@ func Analyze(profilePath string, threshold *Threshold) (*Report, error) {
 	return report, nil
 }
 
+// DefaultModuleThresholds returns the conservative default module floors.
+func DefaultModuleThresholds() map[string]float64 {
+	return map[string]float64{
+		"cmd/leamas":       50.0,
+		"internal/factory": 67.0,
+		"internal/hulk":    90.0,
+		"internal/web":     70.0,
+		"internal/witness": 80.0,
+	}
+}
+
+// DefaultThreshold returns a Threshold with conservative default values.
+func DefaultThreshold() *Threshold {
+	return &Threshold{
+		MinTotalPercent:   64.0,
+		MinModulePercents: DefaultModuleThresholds(),
+	}
+}
+
 // CheckThreshold checks if coverage meets the threshold.
+// It checks both total and module thresholds.
+// Module thresholds are checked in deterministic order.
 func CheckThreshold(report *Report, threshold *Threshold) error {
+	// Check total threshold first
 	if report.TotalPercent < threshold.MinTotalPercent {
 		return &Error{
 			Kind: "threshold_fail",
@@ -164,5 +187,48 @@ func CheckThreshold(report *Report, threshold *Threshold) error {
 				report.TotalPercent, threshold.MinTotalPercent),
 		}
 	}
+
+	// Build module lookup from report
+	moduleMap := make(map[string]float64)
+	for _, m := range report.Modules {
+		moduleMap[m.Module] = m.Percent
+	}
+
+	// Deterministic order for module threshold checking
+	moduleOrder := []string{
+		"cmd/leamas",
+		"internal/factory",
+		"internal/hulk",
+		"internal/web",
+		"internal/witness",
+		"other",
+	}
+
+	// Check each module threshold (only for modules in MinModulePercents)
+	for _, moduleName := range moduleOrder {
+		minPercent, hasThreshold := threshold.MinModulePercents[moduleName]
+		if !hasThreshold {
+			continue
+		}
+
+		actualPercent, exists := moduleMap[moduleName]
+		if !exists {
+			// Fail closed for missing enforced modules (except "other" which is report-only)
+			return &Error{
+				Kind: "module_threshold_fail",
+				Message: fmt.Sprintf("module %s coverage is missing but minimum %.1f%% is required",
+					moduleName, minPercent),
+			}
+		}
+
+		if actualPercent < minPercent {
+			return &Error{
+				Kind: "module_threshold_fail",
+				Message: fmt.Sprintf("module %s coverage %.1f%% is below minimum %.1f%%",
+					moduleName, actualPercent, minPercent),
+			}
+		}
+	}
+
 	return nil
 }

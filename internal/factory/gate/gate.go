@@ -179,8 +179,8 @@ func coverageVerifier(root string) []checks.Finding {
 	}
 
 	// Check coverage threshold against existing profile
-	// Conservative ratchet threshold: raised from 60 to 64 per ACT-LEAMAS-FACTORY-GO-COVERAGE-RATCHET02
-	threshold := &coverage.Threshold{MinTotalPercent: 64}
+	// Use default threshold with module floors (same as make coverage)
+	threshold := coverage.DefaultThreshold()
 	_, err := coverage.Analyze(fullPath, threshold)
 	if err != nil {
 		findings = append(findings, checks.Finding{

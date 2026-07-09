@@ -82,6 +82,11 @@ factorize:
 # Conservative ratchet threshold: raised from 60 to 64 per ACT-LEAMAS-FACTORY-GO-COVERAGE-RATCHET02
 COVERAGE_PROFILE ?= .factory/coverage.out
 COVERAGE_MIN_TOTAL ?= 64
+COVERAGE_MIN_CMD_LEAMAS ?= 50
+COVERAGE_MIN_INTERNAL_FACTORY ?= 67
+COVERAGE_MIN_INTERNAL_HULK ?= 90
+COVERAGE_MIN_INTERNAL_WEB ?= 70
+COVERAGE_MIN_INTERNAL_WITNESS ?= 80
 
 coverage:
 	@echo "Generating coverage profile..."
@@ -91,6 +96,11 @@ coverage:
 	@go run ./cmd/leamas factory coverage \
 		--profile $(COVERAGE_PROFILE) \
 		--min-total $(COVERAGE_MIN_TOTAL) \
+		--min-module cmd/leamas=$(COVERAGE_MIN_CMD_LEAMAS) \
+		--min-module internal/factory=$(COVERAGE_MIN_INTERNAL_FACTORY) \
+		--min-module internal/hulk=$(COVERAGE_MIN_INTERNAL_HULK) \
+		--min-module internal/web=$(COVERAGE_MIN_INTERNAL_WEB) \
+		--min-module internal/witness=$(COVERAGE_MIN_INTERNAL_WITNESS) \
 		--json-output .factory/coverage-summary.json
 
 # Dupcode baseline: generate or update the duplicate code baseline

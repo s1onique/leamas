@@ -151,7 +151,7 @@ All required commands remain behaviorally unchanged:
 
 ## witness Seams Production-Backed
 
-**Yes.** `handleWitness()` now calls `parseWitnessCommand(os.Args[2:])` directly. The tested helper is the single source of truth for witness command validation. The switch statement in `handleWitness` preserves the existing dispatch logic for proxy, run-bundle, claim, and evidence commands.
+**Yes.** `handleWitness()` calls `parseWitnessCommand(os.Args[2:])` directly. The switch statement preserves dispatch logic for proxy, run-bundle, claim, and evidence subcommands.
 
 ## Key Design Decisions
 
