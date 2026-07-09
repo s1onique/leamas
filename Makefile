@@ -4,7 +4,7 @@
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
 .PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
-.PHONY: release release-build release-checksum release-verify release-clean
+.PHONY: coverage release release-build release-checksum release-verify release-clean
 
 # Install variables (GNU conventions)
 PREFIX ?= /usr/local
@@ -38,6 +38,7 @@ help:
 	@echo ""
 	@echo "  make gate           - Run quality gate (verifiers + Go toolchain)"
 	@echo "  make factorize     - Run factory verifiers only (no toolchain)"
+	@echo "  make coverage      - Generate coverage profile and check threshold"
 	@echo "  make bootstrap     - Configure repo-local git hooks path"
 	@echo "  make test          - Run Go tests (if module exists)"
 	@echo "  make build         - Build static binary to bin/leamas"
@@ -67,6 +68,21 @@ factorize:
 	@echo "Running factory factorize..."
 	@chmod +x scripts/verify_*.sh
 	@go run ./cmd/leamas factory factorize
+
+# Coverage: generate coverage profile and check threshold
+# First conservative ratchet threshold
+COVERAGE_PROFILE ?= .factory/coverage.out
+COVERAGE_MIN_TOTAL ?= 60
+
+coverage:
+	@echo "Generating coverage profile..."
+	@mkdir -p .factory
+	@go test ./... -covermode=atomic -coverprofile $(COVERAGE_PROFILE)
+	@echo ""
+	@go run ./cmd/leamas factory coverage \
+		--profile $(COVERAGE_PROFILE) \
+		--min-total $(COVERAGE_MIN_TOTAL) \
+		--json-output .factory/coverage-summary.json
 
 bootstrap:
 	@echo "Configuring git hooks path..."

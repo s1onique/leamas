@@ -12,6 +12,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
 	"github.com/s1onique/leamas/internal/factory/boundary"
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/coverage"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
@@ -123,6 +124,54 @@ func convertGithubFindings(src []github.Finding) []checks.Finding {
 		}
 	}
 	return result
+}
+
+// CheckCoverage is the exported wrapper for coverage verification.
+// Use this for `leamas factory verify coverage`.
+func CheckCoverage(root string) []checks.Finding {
+	return coverageVerifier(root)
+}
+
+// coverageVerifier checks a pre-existing coverage profile against a threshold.
+// Note: This verifier does NOT run `go test -coverprofile` - that expensive step
+// is handled by `make coverage`. This verifier only checks an existing profile.
+// The coverage verifier is not included in AllVerifiers() by default to avoid
+// disrupting workflows where `make coverage` hasn't been run yet.
+// To enable coverage gate checking, run `make coverage` before `make gate`.
+func coverageVerifier(root string) []checks.Finding {
+	var findings []checks.Finding
+
+	profilePath := ".factory/coverage.out"
+	fullPath := profilePath
+	if root != "." && root != "" {
+		fullPath = filepath.Join(root, profilePath)
+	}
+
+	// Check if coverage profile exists
+	if !checks.FileExists(fullPath) {
+		findings = append(findings, checks.Finding{
+			Path:     profilePath,
+			Kind:     "missing_coverage_profile",
+			Message:  "coverage profile not found. Run 'make coverage' first.",
+			Severity: checks.SeverityError,
+		})
+		return findings
+	}
+
+	// Check coverage threshold against existing profile
+	// Conservative ratchet threshold
+	threshold := &coverage.Threshold{MinTotalPercent: 60}
+	_, err := coverage.Analyze(fullPath, threshold)
+	if err != nil {
+		findings = append(findings, checks.Finding{
+			Path:     profilePath,
+			Kind:     "coverage_threshold_fail",
+			Message:  err.Error(),
+			Severity: checks.SeverityError,
+		})
+	}
+
+	return findings
 }
 
 // RunGate runs all verifiers and Go toolchain checks.

@@ -63,6 +63,8 @@ func handleFactory() {
 		handleFactoryFactorize()
 	case "digest":
 		handleFactoryDigest()
+	case "coverage":
+		handleFactoryCoverage()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown factory command: %s\n", os.Args[2])
 		printFactoryUsage()
@@ -200,6 +202,15 @@ func handleFactoryVerify() {
 				message string
 			}{f.Path, f.Kind, f.Message})
 		}
+	case "coverage":
+		f := gate.CheckCoverage(".")
+		for _, f := range f {
+			findings = append(findings, struct {
+				path    string
+				kind    string
+				message string
+			}{f.Path, f.Kind, f.Message})
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", check)
 		printFactoryVerifyUsage()
@@ -320,12 +331,8 @@ func printDigestUsage() {
 	fmt.Println("Flags:")
 	fmt.Println("  --dirty             Include unstaged, staged, and untracked changes")
 	fmt.Println("  --staged            Include only staged changes")
-	fmt.Println("  --range <rev-range> Include changes in revision range (e.g., HEAD~1..HEAD)")
+	fmt.Println("  --range <rev-range> Include changes in revision range")
 	fmt.Println("  --output <path>     Output path (required)")
-	fmt.Println()
-	fmt.Println("Default behavior (no mode flag):")
-	fmt.Println("  - If working tree has changes: generate dirty digest")
-	fmt.Println("  - If working tree is clean: generate previous commit digest (HEAD~1..HEAD)")
 }
 
 func printUsage() {
@@ -335,39 +342,42 @@ func printUsage() {
 	fmt.Println("  leamas [command]")
 	fmt.Println()
 	fmt.Println("Commands:")
-	fmt.Println("  leamas --help                Show this help")
-	fmt.Println("  leamas version               Show version")
-	fmt.Println("  leamas factory verify        Run factory verifiers")
-	fmt.Println("  leamas factory gate          Run quality gate")
-	fmt.Println("  leamas factory factorize     Run factory verifiers only")
-	fmt.Println("  leamas factory digest        Generate targeted digest")
-	fmt.Println("  leamas doctor                Run diagnostics")
-	fmt.Println("  leamas cockpit               Local web cockpit")
-	fmt.Println("  leamas witness               Witness proxy commands")
+	fmt.Println("  leamas --help               Show this help")
+	fmt.Println("  leamas version              Show version")
+	fmt.Println("  leamas factory verify       Run factory verifiers")
+	fmt.Println("  leamas factory gate        Run quality gate")
+	fmt.Println("  leamas factory factorize   Run factory verifiers only")
+	fmt.Println("  leamas factory digest      Generate targeted digest")
+	fmt.Println("  leamas factory coverage    Check coverage threshold")
+	fmt.Println("  leamas doctor              Run diagnostics")
+	fmt.Println("  leamas cockpit             Local web cockpit")
+	fmt.Println("  leamas witness             Witness proxy commands")
 }
 
 func printFactoryUsage() {
 	fmt.Println("Factory commands:")
-	fmt.Println("  leamas factory verify <check>     Run a specific verifier")
-	fmt.Println("  leamas factory gate               Run full quality gate")
-	fmt.Println("  leamas factory factorize          Run verifiers only (no toolchain)")
-	fmt.Println("  leamas factory digest [flags]     Generate targeted digest")
+	fmt.Println("  leamas factory verify <check>   Run a specific verifier")
+	fmt.Println("  leamas factory gate           Run full quality gate")
+	fmt.Println("  leamas factory factorize      Run verifiers only (no toolchain)")
+	fmt.Println("  leamas factory digest [flags] Generate targeted digest")
+	fmt.Println("  leamas factory coverage        Check coverage threshold")
 	fmt.Println()
 	printFactoryVerifyUsage()
 }
 
 func printFactoryVerifyUsage() {
 	fmt.Println("Available verifiers:")
-	fmt.Println("  doctrine             Check doctrine documents exist")
+	fmt.Println("  doctrine              Check doctrine documents exist")
 	fmt.Println("  doctrine-agent-contracts  Check Agent Contract sections")
-	fmt.Println("  docs                Check factory documentation")
-	fmt.Println("  forbidden-patterns  Check for forbidden patterns")
-	fmt.Println("  language            Check Go-only enforcement")
-	fmt.Println("  static-binary       Check static binary build")
-	fmt.Println("  tooling-boundaries  Check tooling boundaries")
-	fmt.Println("  llm-friendly       Check LLM-friendliness")
-	fmt.Println("  agent-context      Check agent context files")
-	fmt.Println("  git-hooks          Check Git hooks installation")
-	fmt.Println("  github             Check GitHub policy compliance")
-	fmt.Println("  domain-boundaries  Check domain boundary import policies")
+	fmt.Println("  docs                 Check factory documentation")
+	fmt.Println("  forbidden-patterns   Check for forbidden patterns")
+	fmt.Println("  language             Check Go-only enforcement")
+	fmt.Println("  static-binary        Check static binary build")
+	fmt.Println("  tooling-boundaries   Check tooling boundaries")
+	fmt.Println("  llm-friendly         Check LLM-friendliness")
+	fmt.Println("  agent-context        Check agent context files")
+	fmt.Println("  git-hooks            Check Git hooks installation")
+	fmt.Println("  github               Check GitHub policy compliance")
+	fmt.Println("  domain-boundaries    Check domain boundary import policies")
+	fmt.Println("  coverage             Check coverage threshold")
 }
