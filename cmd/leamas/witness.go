@@ -29,6 +29,10 @@ func handleWitness() {
 		handleWitnessProxy()
 	case "run-bundle":
 		handleWitnessRunBundle()
+	case "claim":
+		handleWitnessClaim()
+	case "evidence":
+		handleWitnessEvidence()
 	case "--help", "-h":
 		printWitnessUsage()
 	default:
@@ -42,6 +46,8 @@ func printWitnessUsage() {
 	fmt.Println("Witness commands:")
 	fmt.Println("  leamas witness proxy [flags]   Start local witness proxy")
 	fmt.Println("  leamas witness run-bundle       Manage local run bundles")
+	fmt.Println("  leamas witness claim            Manage claims")
+	fmt.Println("  leamas witness evidence         Manage evidence")
 	fmt.Println()
 	printWitnessProxyUsage()
 }
@@ -65,6 +71,24 @@ func printWitnessProxyUsage() {
 	fmt.Println("Headers are not captured by default. Bodies are never captured.")
 	fmt.Println()
 	fmt.Println("Press Ctrl-C to stop.")
+}
+
+// handleWitnessClaim dispatches claim subcommands from os.Args.
+func handleWitnessClaim() {
+	if len(os.Args) < 4 {
+		printClaimUsage()
+		os.Exit(1)
+	}
+	os.Exit(runWitnessClaim(os.Args[3:]))
+}
+
+// handleWitnessEvidence dispatches evidence subcommands from os.Args.
+func handleWitnessEvidence() {
+	if len(os.Args) < 4 {
+		printEvidenceUsage()
+		os.Exit(1)
+	}
+	os.Exit(runWitnessEvidence(os.Args[3:]))
 }
 
 // handleWitnessProxy starts the witness proxy server.

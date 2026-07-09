@@ -1,6 +1,7 @@
 package claim
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -27,19 +28,20 @@ func TestValidateClaimIDAcceptsSafeIDs(t *testing.T) {
 }
 
 // TestValidateClaimIDRejectsUnsafeIDs tests that invalid claim IDs are rejected.
+// Note: prefix is checked first, so inputs without "claim-" prefix return ErrClaimIDNoPrefix.
 func TestValidateClaimIDRejectsUnsafeIDs(t *testing.T) {
 	unsafeIDs := []struct {
 		id       string
 		expected error
 	}{
 		{"", ErrEmptyID},
-		{".", ErrIDReserved},
-		{"..", ErrIDReserved},
-		{"../escape", ErrIDTraversal},
-		{"/absolute", ErrIDNotLocal},
-		{"claim/bad", ErrIDNotLocal},
-		{"claim with spaces", ErrIDInvalidChar},
-		{"claim:bad", ErrIDInvalidChar},
+		{".", ErrClaimIDNoPrefix},                 // checked before reserved names
+		{"..", ErrClaimIDNoPrefix},                // checked before reserved names
+		{"../escape", ErrClaimIDNoPrefix},         // checked before traversal
+		{"/absolute", ErrClaimIDNoPrefix},         // checked before not-local
+		{"claim/bad", ErrClaimIDNoPrefix},         // checked before not-local
+		{"claim with spaces", ErrClaimIDNoPrefix}, // checked before invalid char
+		{"claim:bad", ErrClaimIDNoPrefix},         // checked before invalid char
 		{"bad-prefix", ErrClaimIDNoPrefix},
 		{"CLAIM-UPPERCASE", ErrClaimIDNoPrefix},
 		{"claim-", ErrIDMissingSuffix}, // missing suffix after prefix
@@ -61,8 +63,9 @@ func TestValidateClaimIDRejectsUnsafeIDs(t *testing.T) {
 			t.Errorf("ValidateClaimID(%q) should have returned error, got nil", tc.id)
 			continue
 		}
-		// Just check that some error is returned for now
-		t.Logf("ValidateClaimID(%q) correctly returned error: %v", tc.id, err)
+		if !errors.Is(err, tc.expected) {
+			t.Errorf("ValidateClaimID(%q) error = %v, want %v", tc.id, err, tc.expected)
+		}
 	}
 }
 
@@ -89,24 +92,43 @@ func TestValidateEvidenceIDAcceptsSafeIDs(t *testing.T) {
 }
 
 // TestValidateEvidenceIDRejectsUnsafeIDs tests that invalid evidence IDs are rejected.
+// Note: prefix is checked first, so inputs without "evidence-" prefix return ErrEvidenceIDNoPrefix.
 func TestValidateEvidenceIDRejectsUnsafeIDs(t *testing.T) {
-	unsafeIDs := []string{
-		"",
-		".",
-		"..",
-		"../escape",
-		"/absolute",
-		"evidence/bad",
-		"evidence with spaces",
-		"evidence:bad",
-		"bad-prefix",
-		"EVIDENCE-UPPERCASE",
+	unsafeIDs := []struct {
+		id       string
+		expected error
+	}{
+		{"", ErrEmptyID},
+		{".", ErrEvidenceIDNoPrefix},                    // checked before reserved names
+		{"..", ErrEvidenceIDNoPrefix},                   // checked before reserved names
+		{"../escape", ErrEvidenceIDNoPrefix},            // checked before traversal
+		{"/absolute", ErrEvidenceIDNoPrefix},            // checked before not-local
+		{"evidence/bad", ErrEvidenceIDNoPrefix},         // checked before not-local
+		{"evidence with spaces", ErrEvidenceIDNoPrefix}, // checked before invalid char
+		{"evidence:bad", ErrEvidenceIDNoPrefix},         // checked before invalid char
+		{"bad-prefix", ErrEvidenceIDNoPrefix},
+		{"EVIDENCE-UPPERCASE", ErrEvidenceIDNoPrefix},
+		{"evidence-", ErrIDMissingSuffix}, // missing suffix after prefix
 	}
 
-	for _, id := range unsafeIDs {
-		err := ValidateEvidenceID(EvidenceID(id))
+	// Generate a too-long ID (more than 128 chars)
+	longID := "evidence-"
+	for i := 0; i < 130; i++ {
+		longID += "x"
+	}
+	unsafeIDs = append(unsafeIDs, struct {
+		id       string
+		expected error
+	}{longID, ErrIDTooLong})
+
+	for _, tc := range unsafeIDs {
+		err := ValidateEvidenceID(EvidenceID(tc.id))
 		if err == nil {
-			t.Errorf("ValidateEvidenceID(%q) should have returned error, got nil", id)
+			t.Errorf("ValidateEvidenceID(%q) should have returned error, got nil", tc.id)
+			continue
+		}
+		if !errors.Is(err, tc.expected) {
+			t.Errorf("ValidateEvidenceID(%q) error = %v, want %v", tc.id, err, tc.expected)
 		}
 	}
 }
@@ -147,6 +169,10 @@ func TestValidateRelativePathRejectsUnsafePaths(t *testing.T) {
 		err := ValidateRelativePath(tc.path)
 		if err == nil {
 			t.Errorf("ValidateRelativePath(%q) should have returned error, got nil", tc.path)
+			continue
+		}
+		if !errors.Is(err, tc.expected) {
+			t.Errorf("ValidateRelativePath(%q) error = %v, want %v", tc.path, err, tc.expected)
 		}
 	}
 }

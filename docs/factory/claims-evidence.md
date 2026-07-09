@@ -113,6 +113,44 @@ Claims and evidence provide a local-first, filesystem-backed, portable, and JSON
 - Witness proxy persistence wiring
 - Database/sql, network calls
 
+## CLI
+
+### Create Claim
+
+```bash
+leamas witness claim create --run-id <run-id> --id <claim-id> --statement <statement>
+```
+
+### Create Evidence
+
+```bash
+leamas witness evidence create --run-id <run-id> --id <evidence-id> --kind command_output --role primary --title <title>
+```
+
+### Attach Evidence
+
+```bash
+leamas witness claim attach-evidence --run-id <run-id> --claim-id <claim-id> --evidence-id <evidence-id>
+```
+
+### List / Show
+
+```bash
+leamas witness claim list --run-id <run-id>
+leamas witness claim show --run-id <run-id> <claim-id>
+leamas witness evidence list --run-id <run-id>
+leamas witness evidence show --run-id <run-id> <evidence-id>
+```
+
+### CLI Notes
+
+CLI does not evaluate claims.
+CLI does not call LLMs.
+CLI does not persist witness proxy traffic.
+CLI does not add cockpit UI.
+CLI does not add network behavior.
+CLI does not add database behavior.
+
 ## References
 
 - [Run Bundles](./run-bundles.md)
