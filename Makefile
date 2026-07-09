@@ -3,7 +3,7 @@
 .PHONY: help gate test clean digest factorize verify-doctrine verify-factory
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
-.PHONY: verify-git-hooks verify-domain-boundaries install-git-hooks build digest install
+.PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
 .PHONY: release release-build release-checksum release-verify release-clean
 
 # Install variables (GNU conventions)
@@ -38,6 +38,7 @@ help:
 	@echo ""
 	@echo "  make gate           - Run quality gate (verifiers + Go toolchain)"
 	@echo "  make factorize     - Run factory verifiers only (no toolchain)"
+	@echo "  make bootstrap     - Configure repo-local git hooks path"
 	@echo "  make test          - Run Go tests (if module exists)"
 	@echo "  make build         - Build static binary to bin/leamas"
 	@echo "  make clean         - Clean build artifacts"
@@ -66,6 +67,12 @@ factorize:
 	@echo "Running factory factorize..."
 	@chmod +x scripts/verify_*.sh
 	@go run ./cmd/leamas factory factorize
+
+bootstrap:
+	@echo "Configuring git hooks path..."
+	@git config --local core.hooksPath githooks
+	@test "$$(git config --local --get core.hooksPath)" = "githooks"
+	@echo "Bootstrap complete: core.hooksPath=$$(git config --local --get core.hooksPath)"
 
 test:
 	@if [ -f go.mod ]; then \

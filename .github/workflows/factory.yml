@@ -26,6 +26,9 @@ jobs:
           go-version: '1.22'
           cache-dependency-path: go.sum
 
+      - name: Bootstrap git hooks
+        run: make bootstrap
+
       - name: Build binary
         run: |
           mkdir -p bin

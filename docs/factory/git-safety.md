@@ -35,13 +35,24 @@ on:
 
 ### Status Checks Run:
 
-1. `make factorize` - Factory verifiers
-2. `make gate` - Full quality gate
-3. `./bin/leamas factory verify llm-friendly` - LLM-friendliness
-4. `./bin/leamas factory verify agent-context` - Agent context
-5. `./bin/leamas factory verify forbidden-patterns` - Forbidden patterns
-6. `go test ./...` - Unit tests
-7. `go vet ./...` - Go vet
+1. `make bootstrap` - Configure repo-local git hooks path (required for fresh VM environments)
+2. `make factorize` - Factory verifiers
+3. `make gate` - Full quality gate
+4. `./bin/leamas factory verify llm-friendly` - LLM-friendliness
+5. `./bin/leamas factory verify agent-context` - Agent context
+6. `./bin/leamas factory verify forbidden-patterns` - Forbidden patterns
+7. `go test ./...` - Unit tests
+8. `go vet ./...` - Go vet
+
+## CI Bootstrap
+
+GitHub Actions runners are fresh VM environments. Local `.git/config` state from your laptop is not preserved during checkout. The `make bootstrap` target configures the git hooks path:
+
+```bash
+git config --local core.hooksPath githooks
+```
+
+This is required before running `make factorize`, as the `git-hooks` verifier checks that `core.hooksPath` is configured.
 
 ## Configuration
 
