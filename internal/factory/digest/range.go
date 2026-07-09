@@ -302,12 +302,12 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 
 			// Content based on file type
 			if f.Untracked {
-				sb.WriteString("--- untracked file preview ---\n")
-				preview, isBinary := PreviewFile(fullPath, MaxPreviewBytes, MaxPreviewLines)
+				sb.WriteString("--- untracked file content ---\n")
+				content, isBinary := ReadFileFull(fullPath)
 				if isBinary {
 					sb.WriteString("(binary file)\n")
 				} else {
-					sb.WriteString(preview)
+					sb.WriteString(content)
 				}
 			} else {
 				// Tracked file with staged changes

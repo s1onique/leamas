@@ -121,6 +121,33 @@ Mode: <mode>
 ...
 ```
 
+## File Content Contract
+
+**Digest file bodies are never truncated by default.**
+
+| Case | Expected behavior |
+|------|-------------------|
+| Untracked text file | Include full worktree content |
+| Tracked unstaged text file | Include Git unstaged diff, without Leamas-side truncation |
+| Tracked staged text file | Include Git staged diff, without Leamas-side truncation |
+| Binary file | Do not dump bytes; show binary marker + size/hash |
+
+The digest stays concise by **selecting fewer files**, not by **clipping included files**.
+
+### Labeling
+
+Untracked file content sections use the label `--- untracked file content ---` (not `preview`).
+
+### Rationale
+
+LLM-friendly does not mean "truncate selected files." It means:
+
+```
+small enough file set, full enough context
+```
+
+A digest with incomplete files is worse than no digest, because it creates false confidence during review.
+
 ## Implementation
 
 - **Source**: `internal/factory/digest/contract.go`

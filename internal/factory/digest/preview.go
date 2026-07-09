@@ -136,3 +136,38 @@ func BytesPreview(path string, maxBytes int) (string, bool) {
 
 	return buf.String(), false
 }
+
+// ReadFileFull reads and returns the full content of a file without truncation.
+// This is the preferred method for digest output where complete file context is required.
+// Returns the content and whether the file is binary.
+func ReadFileFull(path string) (string, bool) {
+	// Check if file exists
+	info, err := os.Stat(path)
+	if err != nil {
+		return "(file not present)\n", false
+	}
+
+	// Check if it's a directory
+	if info.IsDir() {
+		return "(directory)\n", false
+	}
+
+	// Check if binary
+	if IsBinary(path) {
+		return "", true
+	}
+
+	// Read full file content
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "(error reading file)\n", false
+	}
+
+	// Ensure trailing newline
+	result := string(content)
+	if !strings.HasSuffix(result, "\n") {
+		result += "\n"
+	}
+
+	return result, false
+}
