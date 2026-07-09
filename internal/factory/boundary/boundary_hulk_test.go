@@ -34,7 +34,7 @@ import (
 		ForbiddenContains: hulkForbiddenContains,
 	}
 
-	findings := checkPackage(policy, pkgDir)
+	findings := checkPackage(policy, pkgDir, tmpDir)
 
 	found := false
 	for _, f := range findings {
@@ -76,7 +76,7 @@ import (
 		ForbiddenContains: hulkForbiddenContains,
 	}
 
-	findings := checkPackage(policy, pkgDir)
+	findings := checkPackage(policy, pkgDir, tmpDir)
 
 	found := false
 	for _, f := range findings {
@@ -118,7 +118,7 @@ import (
 		ForbiddenContains: hulkForbiddenContains,
 	}
 
-	findings := checkPackage(policy, pkgDir)
+	findings := checkPackage(policy, pkgDir, tmpDir)
 
 	found := false
 	for _, f := range findings {
@@ -176,7 +176,7 @@ func TestSomething(t *testing.T) {
 		ForbiddenContains: hulkForbiddenContains,
 	}
 
-	findings := checkPackage(policy, pkgDir)
+	findings := checkPackage(policy, pkgDir, tmpDir)
 
 	httpImportCount := 0
 	for _, f := range findings {

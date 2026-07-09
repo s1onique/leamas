@@ -132,20 +132,19 @@ func TestMissingDirectoryDetection(t *testing.T) {
 
 	result := Check(tmpDir)
 
-	// All 4 protected packages should be reported as missing
-	if len(result.Findings) != 4 {
-		t.Fatalf("expected 4 missing directory findings, got %d", len(result.Findings))
+	// All 4 protected packages + 2 CLI runtime files should be reported as missing = 6
+	if len(result.Findings) != 6 {
+		t.Fatalf("expected 6 missing findings, got %d: %v", len(result.Findings), result.Findings)
 	}
 
 	foundDirs := make(map[string]bool)
+	foundFiles := make(map[string]bool)
 	for _, f := range result.Findings {
-		if f.Import != "(missing directory)" {
-			t.Errorf("expected missing directory import, got: %s", f.Import)
+		if f.Import == "(missing directory)" {
+			foundDirs[f.File] = true
+		} else if f.Import == "(missing file)" {
+			foundFiles[f.File] = true
 		}
-		if f.Reason != "protected package directory does not exist" {
-			t.Errorf("unexpected reason: %s", f.Reason)
-		}
-		foundDirs[f.File] = true
 	}
 
 	expectedDirs := []string{
@@ -159,4 +158,106 @@ func TestMissingDirectoryDetection(t *testing.T) {
 			t.Errorf("expected missing directory finding for %s", dir)
 		}
 	}
+
+	expectedFiles := []string{
+		"cmd/leamas/cockpit.go",
+		"cmd/leamas/witness.go",
+	}
+	for _, file := range expectedFiles {
+		if !foundFiles[file] {
+			t.Errorf("expected missing file finding for %s", file)
+		}
+	}
+}
+
+// TestMissingCLIRuntimeFileDetection verifies that missing CLI runtime files are detected.
+func TestMissingCLIRuntimeFileDetection(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create protected directories to avoid missing directory findings
+	createDir(t, tmpDir, "internal/hulk/runbundle")
+	createDir(t, tmpDir, "internal/hulk/claimevidence")
+	createDir(t, tmpDir, "internal/witness/proxy")
+	createDir(t, tmpDir, "internal/web/cockpit")
+
+	result := Check(tmpDir)
+
+	// All 2 CLI runtime files should be reported as missing
+	if len(result.Findings) != 2 {
+		t.Fatalf("expected 2 missing CLI file findings, got %d: %v", len(result.Findings), result.Findings)
+	}
+
+	foundFiles := make(map[string]bool)
+	for _, f := range result.Findings {
+		if f.Import != "(missing file)" {
+			t.Errorf("expected missing file import, got: %s", f.Import)
+		}
+		if f.Reason != "expected CLI runtime file does not exist" {
+			t.Errorf("unexpected reason: %s", f.Reason)
+		}
+		foundFiles[f.File] = true
+	}
+
+	expectedFiles := []string{
+		"cmd/leamas/cockpit.go",
+		"cmd/leamas/witness.go",
+	}
+	for _, file := range expectedFiles {
+		if !foundFiles[file] {
+			t.Errorf("expected missing CLI file finding for %s", file)
+		}
+	}
+}
+
+// Helper functions for creating test files
+
+func createDir(t *testing.T, baseDir, relPath string) {
+	t.Helper()
+	path := filepath.Join(baseDir, relPath)
+	if err := os.MkdirAll(path, 0755); err != nil {
+		t.Fatalf("failed to create directory %s: %v", path, err)
+	}
+}
+
+func createProtectedDirs(t *testing.T, baseDir string) {
+	t.Helper()
+	createDir(t, baseDir, "internal/hulk/runbundle")
+	createDir(t, baseDir, "internal/hulk/claimevidence")
+	createDir(t, baseDir, "internal/witness/proxy")
+	createDir(t, baseDir, "internal/web/cockpit")
+}
+
+func createProtectedDirsWithCLI(t *testing.T, baseDir string) {
+	t.Helper()
+	createDir(t, baseDir, "internal/hulk/runbundle")
+	createDir(t, baseDir, "internal/hulk/claimevidence")
+	createDir(t, baseDir, "internal/witness/proxy")
+	createDir(t, baseDir, "internal/web/cockpit")
+	createDir(t, baseDir, "cmd/leamas")
+}
+
+func createCLIRuntimeFile(t *testing.T, baseDir, relPath, content string) {
+	t.Helper()
+	path := filepath.Join(baseDir, relPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("failed to create directory for %s: %v", path, err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write file %s: %v", path, err)
+	}
+}
+
+func createHulkFile(t *testing.T, baseDir, relPath, content string) {
+	t.Helper()
+	createCLIRuntimeFile(t, baseDir, relPath, content)
+}
+
+func createWitnessFile(t *testing.T, baseDir, relPath, content string) {
+	t.Helper()
+	createCLIRuntimeFile(t, baseDir, relPath, content)
+}
+
+func createCockpitFile(t *testing.T, baseDir, relPath, content string) {
+	t.Helper()
+	createCLIRuntimeFile(t, baseDir, relPath, content)
 }

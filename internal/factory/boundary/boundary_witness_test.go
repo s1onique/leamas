@@ -33,7 +33,7 @@ import (
 		ForbiddenContains: witnessForbiddenContains,
 	}
 
-	findings := checkPackage(policy, pkgDir)
+	findings := checkPackage(policy, pkgDir, tmpDir)
 
 	found := false
 	for _, f := range findings {
@@ -75,7 +75,7 @@ import (
 		ForbiddenContains: witnessForbiddenContains,
 	}
 
-	findings := checkPackage(policy, pkgDir)
+	findings := checkPackage(policy, pkgDir, tmpDir)
 
 	found := false
 	for _, f := range findings {

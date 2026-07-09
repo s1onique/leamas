@@ -8,15 +8,16 @@
 //   - internal/hulk/claimevidence: Pure domain logic
 //   - internal/witness/proxy: Local HTTP witness proxy seed
 //   - internal/web/cockpit: Local read-only web cockpit seed
+//
+// CLI runtime files:
+//   - cmd/leamas/cockpit.go: CLI cockpit serve command
+//   - cmd/leamas/witness.go: CLI witness proxy command
 package boundary
 
 import (
-	"go/parser"
-	"go/token"
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 )
@@ -25,6 +26,15 @@ import (
 type PackagePolicy struct {
 	Name              string
 	Dir               string
+	AllowedImports    map[string]bool
+	ForbiddenImports  map[string]string
+	ForbiddenContains []string // Ordered list for deterministic checking
+}
+
+// FilePolicy defines import constraints for a specific CLI runtime file.
+type FilePolicy struct {
+	Name              string
+	File              string
 	AllowedImports    map[string]bool
 	ForbiddenImports  map[string]string
 	ForbiddenContains []string // Ordered list for deterministic checking
@@ -176,6 +186,79 @@ var cockpitForbiddenContains = []string{
 	"mysql",
 }
 
+// CLI runtime allowed imports for cockpit and witness command files.
+var cliRuntimeAllowedImports = map[string]bool{
+	"context":   true,
+	"errors":    true,
+	"fmt":       true,
+	"net":       true,
+	"net/http":  true,
+	"os":        true,
+	"os/signal": true,
+	"strconv":   true,
+	"strings":   true,
+	"syscall":   true,
+	"time":      true,
+}
+
+// CLI runtime forbidden imports.
+var cliRuntimeForbiddenImports = map[string]string{
+	"database/sql":  "CLI runtime must not import database packages",
+	"os/exec":       "CLI runtime must not import process execution",
+	"embed":         "CLI runtime must not import embed",
+	"html/template": "CLI runtime must not import HTML templates",
+	"text/template": "CLI runtime must not import text templates",
+}
+
+// CLI runtime allowed internal imports.
+var cliRuntimeAllowedInternal = map[string]bool{
+	"github.com/s1onique/leamas/internal/web/cockpit":   true,
+	"github.com/s1onique/leamas/internal/witness/proxy": true,
+}
+
+// CLI runtime forbidden internal imports.
+var cliRuntimeForbiddenInternal = map[string]string{
+	"github.com/s1onique/leamas/internal/hulk/runbundle":     "CLI runtime must not import Hulk runbundle package",
+	"github.com/s1onique/leamas/internal/hulk/claimevidence": "CLI runtime must not import Hulk claimevidence package",
+}
+
+// Provider/control-plane substrings forbidden for CLI runtime (ordered for determinism).
+var cliRuntimeForbiddenContains = []string{
+	"openai",
+	"anthropic",
+	"litellm",
+	"ollama",
+	"gemini",
+	"bedrock",
+	"azure",
+	"oauth",
+	"oidc",
+	"jwt",
+	"session",
+	"cookie",
+	"sqlite",
+	"postgres",
+	"mysql",
+}
+
+// filePolicies defines CLI runtime files with their import constraints.
+var filePolicies = []FilePolicy{
+	{
+		Name:              "cockpit-cli-runtime",
+		File:              "cmd/leamas/cockpit.go",
+		AllowedImports:    cliRuntimeAllowedImports,
+		ForbiddenImports:  cliRuntimeForbiddenImports,
+		ForbiddenContains: cliRuntimeForbiddenContains,
+	},
+	{
+		Name:              "witness-cli-runtime",
+		File:              "cmd/leamas/witness.go",
+		AllowedImports:    cliRuntimeAllowedImports,
+		ForbiddenImports:  cliRuntimeForbiddenImports,
+		ForbiddenContains: cliRuntimeForbiddenContains,
+	},
+}
+
 // policies defines the protected packages and their import constraints.
 var policies = []PackagePolicy{
 	{
@@ -213,19 +296,11 @@ func forbiddenContainsReason(substring string) string {
 	return "imports provider/control-plane package containing: " + substring
 }
 
-// forbiddenContainsToMap converts ordered slice to map for test compatibility.
-func forbiddenContainsToMap(slice []string) map[string]string {
-	m := make(map[string]string)
-	for _, s := range slice {
-		m[s] = forbiddenContainsReason(s)
-	}
-	return m
-}
-
 // Check verifies import boundaries for all protected packages.
 func Check(repoRoot string) Result {
 	var allFindings []Finding
 
+	// Check protected packages
 	for _, policy := range policies {
 		dirPath := filepath.Join(repoRoot, policy.Dir)
 
@@ -240,7 +315,25 @@ func Check(repoRoot string) Result {
 			continue
 		}
 
-		findings := checkPackage(policy, dirPath)
+		findings := checkPackage(policy, dirPath, repoRoot)
+		allFindings = append(allFindings, findings...)
+	}
+
+	// Check CLI runtime files
+	for _, policy := range filePolicies {
+		filePath := filepath.Join(repoRoot, policy.File)
+
+		// Check if CLI runtime file exists
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			allFindings = append(allFindings, Finding{
+				File:   policy.File,
+				Import: "(missing file)",
+				Reason: "expected CLI runtime file does not exist",
+			})
+			continue
+		}
+
+		findings := checkCLIFile(policy, filePath, repoRoot)
 		allFindings = append(allFindings, findings...)
 	}
 
@@ -256,87 +349,6 @@ func Check(repoRoot string) Result {
 	})
 
 	return Result{Findings: allFindings}
-}
-
-// checkPackage scans a single package directory for boundary violations.
-func checkPackage(policy PackagePolicy, dirPath string) []Finding {
-	var findings []Finding
-
-	fset := token.NewFileSet()
-
-	err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-
-		if d.IsDir() {
-			// Skip testdata and vendor directories
-			name := d.Name()
-			if name == "testdata" || name == "vendor" || name == ".git" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		// Only scan .go files, skip test files
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-
-		fileFindings := checkFile(policy, path, fset)
-		findings = append(findings, fileFindings...)
-		return nil
-	})
-
-	if err != nil {
-		return findings
-	}
-
-	return findings
-}
-
-// checkFile parses a single Go file and checks its imports.
-func checkFile(policy PackagePolicy, filePath string, fset *token.FileSet) []Finding {
-	var findings []Finding
-
-	f, err := parser.ParseFile(fset, filePath, nil, parser.ImportsOnly)
-	if err != nil {
-		return findings
-	}
-
-	relPath, _ := filepath.Rel(".", filePath)
-
-	for _, imp := range f.Imports {
-		if imp.Path == nil {
-			continue
-		}
-
-		importPath := strings.Trim(imp.Path.Value, `"`)
-
-		// Check if import is explicitly forbidden
-		if reason, forbidden := policy.ForbiddenImports[importPath]; forbidden {
-			findings = append(findings, Finding{
-				File:   relPath,
-				Import: importPath,
-				Reason: reason,
-			})
-			continue
-		}
-
-		// Check if import path contains forbidden substrings (deterministic order)
-		for _, substring := range policy.ForbiddenContains {
-			if strings.Contains(importPath, substring) {
-				findings = append(findings, Finding{
-					File:   relPath,
-					Import: importPath,
-					Reason: forbiddenContainsReason(substring),
-				})
-				break // Only report first match for this import
-			}
-		}
-	}
-
-	return findings
 }
 
 // CheckRepo returns findings as checks.Finding for integration with Factory gate.
