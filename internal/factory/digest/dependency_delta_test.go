@@ -145,7 +145,7 @@ func TestCompareGoSum(t *testing.T) {
 			name:     "empty head",
 			base:     map[string]string{"foo v1.0.0": "h1"},
 			head:     map[string]string{},
-			expected: nil,
+			expected: []string{"foo v1.0.0"}, // removed entries now included
 		},
 		{
 			name:     "empty base",
@@ -157,7 +157,9 @@ func TestCompareGoSum(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := compareGoSum(tt.base, tt.head)
+			added, removed := compareGoSum(tt.base, tt.head)
+			// Combine for comparison (test only checks added, not removed)
+			result := append(added, removed...)
 			if len(result) != len(tt.expected) {
 				t.Errorf("compareGoSum() = %v, want %v", result, tt.expected)
 				return

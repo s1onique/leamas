@@ -58,7 +58,16 @@ func collectDependencyDeltaInternal(mode Mode, repoRoot string, rangeFiles []Ran
 		if headMod != nil {
 			headSum, _ = getGoSumAtCommit(repoRoot, head)
 		}
-	case ModeDirty, ModeStaged:
+	case ModeStaged:
+		baseMod, _ = getGoModAtCommit(repoRoot, "HEAD")
+		headMod, _ = getIndexGoMod(repoRoot)
+		if baseMod != nil {
+			baseSum, _ = getGoSumAtCommit(repoRoot, "HEAD")
+		}
+		if headMod != nil {
+			headSum, _ = getIndexGoSum(repoRoot)
+		}
+	case ModeDirty:
 		baseMod, _ = getGoModAtCommit(repoRoot, "HEAD")
 		headMod, _ = getWorktreeGoMod(repoRoot)
 		if baseMod != nil {
@@ -110,6 +119,7 @@ func collectDependencyDeltaInternal(mode Mode, repoRoot string, rangeFiles []Ran
 
 	requiresAdded, requiresRemoved, requiresModified := compareRequires(baseMod, headMod)
 	replacesAdded, replacesRemoved, replacesModified := compareReplaces(baseMod, headMod)
+	goSumAdded, goSumRemoved := compareGoSum(baseSum, headSum)
 
 	sort.Strings(requiresAdded)
 	sort.Strings(requiresRemoved)
@@ -117,8 +127,8 @@ func collectDependencyDeltaInternal(mode Mode, repoRoot string, rangeFiles []Ran
 	sort.Strings(replacesAdded)
 	sort.Strings(replacesRemoved)
 	sort.Strings(replacesModified)
-
-	_ = compareGoSum(baseSum, headSum)
+	sort.Strings(goSumAdded)
+	sort.Strings(goSumRemoved)
 
 	moduleInfo := ModuleInfo{}
 	goVersionInfo := VersionInfo{}
@@ -158,6 +168,8 @@ func collectDependencyDeltaInternal(mode Mode, repoRoot string, rangeFiles []Ran
 		ReplacesAdded:        len(replacesAdded),
 		ReplacesRemoved:      len(replacesRemoved),
 		ReplacesModified:     len(replacesModified),
+		GoSumAdded:           len(goSumAdded),
+		GoSumRemoved:         len(goSumRemoved),
 		Module:               moduleInfo,
 		GoVersion:            goVersionInfo,
 		Toolchain:            toolchainInfo,
@@ -167,5 +179,7 @@ func collectDependencyDeltaInternal(mode Mode, repoRoot string, rangeFiles []Ran
 		ReplacesAddedList:    replacesAdded,
 		ReplacesRemovedList:  replacesRemoved,
 		ReplacesModifiedList: replacesModified,
+		GoSumAddedList:       goSumAdded,
+		GoSumRemovedList:     goSumRemoved,
 	}, nil
 }

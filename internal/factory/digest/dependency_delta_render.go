@@ -91,6 +91,24 @@ func RenderDependencyDelta(delta *DependencyDelta) string {
 		}
 	}
 
+	sb.WriteString("\ngo_sum_added:\n")
+	if len(delta.GoSumAddedList) == 0 {
+		sb.WriteString("  - none\n")
+	} else {
+		for _, r := range delta.GoSumAddedList {
+			sb.WriteString(fmt.Sprintf("  - %s\n", r))
+		}
+	}
+
+	sb.WriteString("\ngo_sum_removed:\n")
+	if len(delta.GoSumRemovedList) == 0 {
+		sb.WriteString("  - none\n")
+	} else {
+		for _, r := range delta.GoSumRemovedList {
+			sb.WriteString(fmt.Sprintf("  - %s\n", r))
+		}
+	}
+
 	return sb.String()
 }
 

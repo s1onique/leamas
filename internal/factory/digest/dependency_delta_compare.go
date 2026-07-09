@@ -40,45 +40,57 @@ func compareRequires(baseMod, headMod *goModWithToolchain) (added, removed, modi
 }
 
 // compareReplaces compares replace directives between two go.mod versions.
+// Keys on old module path+version, values are new module path+version.
 func compareReplaces(baseMod, headMod *goModWithToolchain) (added, removed, modified []string) {
+	// Map old module path+version -> new module path+version
 	baseRepls := make(map[string]string)
 	headRepls := make(map[string]string)
 
 	if baseMod != nil {
 		for _, r := range baseMod.Replace {
-			baseRepls[r.New.Path] = r.New.Version
+			oldKey := r.Old.Path + " " + r.Old.Version
+			newVal := r.New.Path + " " + r.New.Version
+			baseRepls[oldKey] = newVal
 		}
 	}
 	if headMod != nil {
 		for _, r := range headMod.Replace {
-			headRepls[r.New.Path] = r.New.Version
+			oldKey := r.Old.Path + " " + r.Old.Version
+			newVal := r.New.Path + " " + r.New.Version
+			headRepls[oldKey] = newVal
 		}
 	}
 
-	for path, headVer := range headRepls {
-		if baseVer, exists := baseRepls[path]; !exists {
-			added = append(added, path+" "+headVer)
-		} else if baseVer != headVer {
-			modified = append(modified, fmt.Sprintf("%s %s -> %s", path, baseVer, headVer))
+	// Find added (in head but not in base)
+	for oldKey, newVal := range headRepls {
+		if _, exists := baseRepls[oldKey]; !exists {
+			added = append(added, oldKey+" => "+newVal)
+		} else if baseRepls[oldKey] != newVal {
+			modified = append(modified, oldKey+" => "+baseRepls[oldKey]+" -> "+newVal)
 		}
 	}
 
-	for path := range baseRepls {
-		if _, exists := headRepls[path]; !exists {
-			removed = append(removed, path+" "+baseRepls[path])
+	// Find removed (in base but not in head)
+	for oldKey := range baseRepls {
+		if _, exists := headRepls[oldKey]; !exists {
+			removed = append(removed, oldKey+" => "+baseRepls[oldKey])
 		}
 	}
 
 	return
 }
 
-// compareGoSum returns entries added to go.sum.
-func compareGoSum(base, head map[string]string) []string {
-	var added []string
+// compareGoSum returns go.sum entries added and removed.
+func compareGoSum(base, head map[string]string) (added, removed []string) {
 	for key := range head {
 		if _, exists := base[key]; !exists {
 			added = append(added, key)
 		}
 	}
-	return added
+	for key := range base {
+		if _, exists := head[key]; !exists {
+			removed = append(removed, key)
+		}
+	}
+	return
 }

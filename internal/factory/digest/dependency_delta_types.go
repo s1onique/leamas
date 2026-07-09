@@ -16,6 +16,8 @@ type DependencyDelta struct {
 	ReplacesAdded        int
 	ReplacesRemoved      int
 	ReplacesModified     int
+	GoSumAdded           int
+	GoSumRemoved         int
 	Module               ModuleInfo
 	GoVersion            VersionInfo
 	Toolchain            VersionInfo
@@ -25,6 +27,8 @@ type DependencyDelta struct {
 	ReplacesAddedList    []string
 	ReplacesRemovedList  []string
 	ReplacesModifiedList []string
+	GoSumAddedList       []string
+	GoSumRemovedList     []string
 }
 
 // ModuleInfo contains module directive changes.
