@@ -35,6 +35,8 @@ requires_modified=<count>
 replaces_added=<count>
 replaces_removed=<count>
 replaces_modified=<count>
+go_sum_added=<count>
+go_sum_removed=<count>
 
 module:
   before=<module path>
@@ -61,15 +63,23 @@ requires_modified:
   - ...
 
 replaces_added:
-  - <module> <version>
+  - <old_module> <old_version> => <new_module> <new_version>
   - ...
 
 replaces_removed:
-  - <module> <version>
+  - <old_module> <old_version> => <new_module> <new_version>
   - ...
 
 replaces_modified:
-  - <module> <old_version> -> <new_version>
+  - <old_module> <old_version> => <old_new_version> -> <new_module> <new_version>
+  - ...
+
+go_sum_added:
+  - <module> <version> <hash>
+  - ...
+
+go_sum_removed:
+  - <module> <version> <hash>
   - ...
 ```
 
@@ -86,6 +96,8 @@ replaces_modified:
 | `toolchain_changed` | True if toolchain directive changed |
 | `requires_added/removed/modified` | Count of require directive changes |
 | `replaces_added/removed/modified` | Count of replace directive changes |
+| `go_sum_added` | Count of new go.sum entries |
+| `go_sum_removed` | Count of removed go.sum entries |
 
 ## Tracked Changes
 
