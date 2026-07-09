@@ -30,9 +30,11 @@ ERROR: unsafe listen address: 0.0.0.0:8080 (only loopback allowed: 127.0.0.1, lo
 
 ## Files Changed
 
-- `cmd/leamas/main.go` - Added cockpit command handling and serve function
+- `cmd/leamas/main.go` - Added cockpit command dispatch
+- `cmd/leamas/cockpit.go` - Cockpit serve implementation with graceful shutdown
 - `cmd/leamas/cockpit_test.go` - Added tests for CLI parsing and validation
 - `docs/factory/web-cockpit.md` - Updated with CLI usage documentation
+- `docs/close-reports/ACT-LEAMAS-WEB-COCKPIT-CLI01.md` - Close report
 
 ## Verification Commands and Results
 
@@ -47,7 +49,7 @@ go test ./cmd/leamas/... -v
 
 # Cockpit package tests
 go test ./internal/web/cockpit/... -v
-# PASSED (11 tests)
+# PASSED (12 tests)
 
 # All Go tests
 go test ./...
