@@ -84,7 +84,42 @@ internal/web/cockpit
 }
 ```
 
-## Usage
+## CLI Usage
+
+The cockpit is wired into the `leamas` binary as a local-only CLI command:
+
+```bash
+# Start cockpit with random port on loopback (default)
+leamas cockpit serve
+
+# Start cockpit with specific port
+leamas cockpit serve --listen 127.0.0.1:8080
+
+# Show help
+leamas cockpit serve --help
+```
+
+### CLI Constraints
+
+The CLI enforces loopback-only binding for security:
+
+- **Default listen address**: `127.0.0.1:0` (dynamic port allocation)
+- **Allowed addresses**: `127.0.0.1:*`, `localhost:*`
+- **Rejected addresses**: `0.0.0.0:*`, `[::]:*`, `:*` (any non-loopback)
+
+### CLI Behavior
+
+1. Prints the actual URL with the chosen port when using `:0`
+2. Shuts down gracefully on SIGINT/SIGTERM
+3. Returns non-zero on listener/server startup errors
+
+Example output:
+```
+Leamas cockpit listening on http://127.0.0.1:54321
+Press Ctrl-C to stop.
+```
+
+### Programmatic Usage
 
 ```go
 package main
@@ -142,5 +177,6 @@ go test ./internal/web/cockpit/... -v
 
 ## Deferred Work
 
-- CLI wiring (`ACT-LEAMAS-WEB-COCKPIT-CLI01`)
 - Boundary verifier to ensure no forbidden imports
+- Browser auto-open (`ACT-LEAMAS-WEB-COCKPIT-BROWSER-OPEN01`)
+- Witness proxy CLI wiring (`ACT-LEAMAS-WITNESS-PROXY-CLI01`)

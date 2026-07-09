@@ -37,6 +37,8 @@ func main() {
 		handleFactory()
 	case "doctor":
 		fmt.Println("Leamas doctor: all systems operational")
+	case "cockpit":
+		handleCockpit()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -225,7 +227,6 @@ func handleFactoryFactorize() {
 }
 
 func handleFactoryDigest() {
-	// Parse flags manually for simplicity
 	var mode digest.Mode
 	var hasDirty, hasStaged, hasRange bool
 	var output string
@@ -268,7 +269,6 @@ func handleFactoryDigest() {
 		}
 	}
 
-	// Validate: mutually exclusive modes
 	if hasDirty && hasStaged {
 		fmt.Fprintf(os.Stderr, "ERROR: cannot specify both --dirty and --staged\n")
 		printDigestUsage()
@@ -285,19 +285,16 @@ func handleFactoryDigest() {
 		os.Exit(1)
 	}
 
-	// If no mode specified, default to auto
 	if mode == "" {
 		mode = digest.ModeAuto
 	}
 
-	// Validate output
 	if output == "" {
 		fmt.Fprintf(os.Stderr, "ERROR: --output is required\n")
 		printDigestUsage()
 		os.Exit(1)
 	}
 
-	// Generate digest
 	opts := digest.Options{
 		Mode:   mode,
 		Output: output,
@@ -343,6 +340,7 @@ func printUsage() {
 	fmt.Println("  leamas factory factorize     Run factory verifiers only")
 	fmt.Println("  leamas factory digest        Generate targeted digest")
 	fmt.Println("  leamas doctor                Run diagnostics")
+	fmt.Println("  leamas cockpit               Local web cockpit")
 }
 
 func printFactoryUsage() {
