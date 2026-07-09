@@ -190,7 +190,9 @@ var cockpitForbiddenContains = []string{
 var cliRuntimeAllowedImports = map[string]bool{
 	"context":   true,
 	"errors":    true,
+	"flag":      true,
 	"fmt":       true,
+	"io":        true,
 	"net":       true,
 	"net/http":  true,
 	"os":        true,

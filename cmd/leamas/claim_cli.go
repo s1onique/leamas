@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/s1onique/leamas/internal/witness/runbundle"
@@ -37,19 +38,23 @@ func runWitnessClaim(args []string) int {
 }
 
 func printClaimUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: leamas witness claim <subcommand> [flags]")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Subcommands:")
-	fmt.Fprintln(os.Stderr, "  create                   Create a new claim")
-	fmt.Fprintln(os.Stderr, "  list                     List claims in a run bundle")
-	fmt.Fprintln(os.Stderr, "  show <claim-id>          Show a claim")
-	fmt.Fprintln(os.Stderr, "  attach-evidence          Attach evidence to a claim")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Flags:")
-	fmt.Fprintln(os.Stderr, "  --root <path>    Root directory for run bundles (default: .leamas/runs)")
-	fmt.Fprintln(os.Stderr, "  --run-id <id>    Run bundle ID (required)")
-	fmt.Fprintln(os.Stderr, "  --json           Output JSON format")
-	fmt.Fprintln(os.Stderr, "  --help, -h       Show this help")
+	printClaimUsageTo(os.Stderr)
+}
+
+func printClaimUsageTo(w io.Writer) {
+	fmt.Fprintln(w, "Usage: leamas witness claim <subcommand> [flags]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Subcommands:")
+	fmt.Fprintln(w, "  create                   Create a new claim")
+	fmt.Fprintln(w, "  list                     List claims in a run bundle")
+	fmt.Fprintln(w, "  show <claim-id>          Show a claim")
+	fmt.Fprintln(w, "  attach-evidence          Attach evidence to a claim")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  --root <path>    Root directory for run bundles (default: .leamas/runs)")
+	fmt.Fprintln(w, "  --run-id <id>    Run bundle ID (required)")
+	fmt.Fprintln(w, "  --json           Output JSON format")
+	fmt.Fprintln(w, "  --help, -h       Show this help")
 }
 
 // ============================================================================
@@ -80,18 +85,22 @@ func runWitnessEvidence(args []string) int {
 }
 
 func printEvidenceUsage() {
-	fmt.Fprintln(os.Stderr, "Usage: leamas witness evidence <subcommand> [flags]")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Subcommands:")
-	fmt.Fprintln(os.Stderr, "  create              Create new evidence")
-	fmt.Fprintln(os.Stderr, "  list                List evidence in a run bundle")
-	fmt.Fprintln(os.Stderr, "  show <evidence-id>  Show evidence")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Flags:")
-	fmt.Fprintln(os.Stderr, "  --root <path>    Root directory for run bundles (default: .leamas/runs)")
-	fmt.Fprintln(os.Stderr, "  --run-id <id>    Run bundle ID (required)")
-	fmt.Fprintln(os.Stderr, "  --json            Output JSON format")
-	fmt.Fprintln(os.Stderr, "  --help, -h        Show this help")
+	printEvidenceUsageTo(os.Stderr)
+}
+
+func printEvidenceUsageTo(w io.Writer) {
+	fmt.Fprintln(w, "Usage: leamas witness evidence <subcommand> [flags]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Subcommands:")
+	fmt.Fprintln(w, "  create              Create new evidence")
+	fmt.Fprintln(w, "  list                List evidence in a run bundle")
+	fmt.Fprintln(w, "  show <evidence-id>  Show evidence")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Flags:")
+	fmt.Fprintln(w, "  --root <path>    Root directory for run bundles (default: .leamas/runs)")
+	fmt.Fprintln(w, "  --run-id <id>    Run bundle ID (required)")
+	fmt.Fprintln(w, "  --json            Output JSON format")
+	fmt.Fprintln(w, "  --help, -h        Show this help")
 }
 
 // ============================================================================

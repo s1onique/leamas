@@ -27,12 +27,14 @@ func parseFactoryCommand(args []string) (string, error) {
 
 // handleFactory handles the `leamas factory` subcommand.
 func handleFactory() {
-	if len(os.Args) < 3 {
+	cmd, err := parseFactoryCommand(os.Args[2:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		printFactoryUsage()
 		os.Exit(1)
 	}
 
-	switch os.Args[2] {
+	switch cmd {
 	case "verify":
 		handleFactoryVerify()
 	case "gate":
@@ -43,10 +45,6 @@ func handleFactory() {
 		handleFactoryDigest()
 	case "coverage":
 		handleFactoryCoverage()
-	default:
-		fmt.Fprintf(os.Stderr, "unknown factory command: %s\n", os.Args[2])
-		printFactoryUsage()
-		os.Exit(1)
 	}
 }
 

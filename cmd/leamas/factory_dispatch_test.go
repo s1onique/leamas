@@ -115,3 +115,37 @@ func TestParseFactoryCommand_ErrorMessages(t *testing.T) {
 		})
 	}
 }
+
+// TestHandleFactory_UsesParseFactoryCommandContract verifies that parseFactoryCommand
+// returns the same command names that handleFactory dispatches on.
+func TestHandleFactory_UsesParseFactoryCommandContract(t *testing.T) {
+	// Known factory commands from handleFactory switch statement
+	knownCommands := []string{"verify", "gate", "factorize", "digest", "coverage"}
+
+	for _, cmd := range knownCommands {
+		t.Run(cmd, func(t *testing.T) {
+			result, err := parseFactoryCommand([]string{cmd})
+			if err != nil {
+				t.Errorf("parseFactoryCommand should recognize %q (used in handleFactory)", cmd)
+			}
+			if result != cmd {
+				t.Errorf("parseFactoryCommand(%q) = %q, want %q", cmd, result, cmd)
+			}
+		})
+	}
+}
+
+// TestParseFactoryCommand_ContractWithHandleFactory verifies that unknown commands
+// from parseFactoryCommand match the default case in handleFactory
+func TestParseFactoryCommand_ContractWithHandleFactory(t *testing.T) {
+	unknownCommands := []string{"", "invalid", "random", "verifyx"}
+
+	for _, cmd := range unknownCommands {
+		t.Run("unknown-"+cmd, func(t *testing.T) {
+			_, err := parseFactoryCommand([]string{cmd})
+			if err == nil {
+				t.Errorf("parseFactoryCommand should reject unknown command %q", cmd)
+			}
+		})
+	}
+}
