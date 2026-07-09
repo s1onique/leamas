@@ -187,10 +187,24 @@ func TestKnownFactoryVerifyChecks_IncludesDoctrinesAgentContracts(t *testing.T) 
 	}
 }
 
+func TestKnownFactoryVerifyChecks_IncludesDupcode(t *testing.T) {
+	checks := knownFactoryVerifyChecks()
+	found := false
+	for _, c := range checks {
+		if c == "dupcode" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("known checks should include 'dupcode'")
+	}
+}
+
 func TestKnownFactoryVerifyChecks_HasExpectedCount(t *testing.T) {
 	checks := knownFactoryVerifyChecks()
-	// We expect 13 checks based on the current implementation
-	expected := 13
+	// We expect 14 checks based on the current implementation (added dupcode)
+	expected := 14
 	if len(checks) != expected {
 		t.Errorf("expected %d known checks, got %d", expected, len(checks))
 	}

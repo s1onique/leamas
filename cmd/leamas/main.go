@@ -9,6 +9,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/boundary"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
+	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/factory/githooks"
@@ -184,6 +185,29 @@ func handleFactoryVerify() {
 				message string
 			}{f.Path, f.Kind, f.Message})
 		}
+	case "dupcode":
+		cfg := dupcode.DefaultConfig()
+		f, err := dupcode.CheckRepo(".", cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Duplicate code detection ERROR: %v\n", err)
+			os.Exit(2)
+		}
+		if len(f) > 0 {
+			fmt.Printf("Found %d duplicate code blocks:\n\n", len(f))
+			for _, finding := range f {
+				fmt.Printf("Duplicate block (%d tokens, ~%d lines):\n", finding.TokenCount, finding.LineCount)
+				for _, occ := range finding.Occurrences {
+					fmt.Printf("  - %s:%d-%d\n", occ.Path, occ.StartLine, occ.EndLine)
+				}
+				fmt.Println()
+			}
+		} else {
+			fmt.Println("No duplicate code detected.")
+		}
+		if len(f) > 0 {
+			os.Exit(1)
+		}
+		os.Exit(0)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", check)
 		printFactoryVerifyUsage()
@@ -249,6 +273,7 @@ func knownFactoryVerifyChecks() []string {
 		"doctrine",
 		"doctrine-agent-contracts",
 		"docs",
+		"dupcode",
 		"forbidden-patterns",
 		"language",
 		"static-binary",
@@ -277,6 +302,7 @@ func printFactoryVerifyUsage() {
 	fmt.Println("  doctrine              Check doctrine documents exist")
 	fmt.Println("  doctrine-agent-contracts  Check Agent Contract sections")
 	fmt.Println("  docs                 Check factory documentation")
+	fmt.Println("  dupcode               Check for duplicate code")
 	fmt.Println("  forbidden-patterns   Check for forbidden patterns")
 	fmt.Println("  language             Check Go-only enforcement")
 	fmt.Println("  static-binary        Check static binary build")
