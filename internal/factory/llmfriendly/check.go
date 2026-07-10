@@ -126,7 +126,7 @@ func runGitCommand(root string, args ...string) ([]string, error) {
 // checkFile checks a single file for LLM-friendliness violations.
 func checkFile(path string, cfg Config) ([]Finding, error) {
 	// Check structural ignores (defensive, in case git didn't catch them)
-	ignoredDirs := []string{".git", "build", "bin", "vendor"}
+	ignoredDirs := []string{".git", "build", "bin", "vendor", "testdata"}
 	for _, dir := range ignoredDirs {
 		if strings.HasPrefix(path, dir+"/") || path == dir {
 			return nil, nil

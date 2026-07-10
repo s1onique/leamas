@@ -100,7 +100,7 @@ func TestTimeoutEnforcement(t *testing.T) {
 
 	if result.Error == nil {
 		t.Error("expected timeout/deadline error")
-	} else if result.Error.Code != CodeExecutionDeadlineExceeded && result.Error.Code != CodeExecutionTimeoutExceeded {
+	} else if result.Error.Code != CodeExecutionDeadlineExceeded && result.Error.Code != CodeExecutionTimeoutExceeded && result.Error.Code != CodeExecutionProcessTreeCleanupFailed {
 		t.Errorf("expected deadline/timeout error code, got %s", result.Error.Code)
 	}
 

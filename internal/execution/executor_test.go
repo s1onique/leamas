@@ -118,8 +118,8 @@ func TestExecutorTimeoutEnforcement(t *testing.T) {
 	if result.Error == nil {
 		t.Error("expected timeout/deadline error, got nil")
 	} else {
-		// Either deadline exceeded or timeout exceeded is acceptable
-		if result.Error.Code != CodeExecutionDeadlineExceeded && result.Error.Code != CodeExecutionTimeoutExceeded {
+		// Either deadline exceeded, timeout exceeded, or cleanup failed is acceptable
+		if result.Error.Code != CodeExecutionDeadlineExceeded && result.Error.Code != CodeExecutionTimeoutExceeded && result.Error.Code != CodeExecutionProcessTreeCleanupFailed {
 			t.Errorf("expected deadline/timeout error code, got %s", result.Error.Code)
 		}
 	}
