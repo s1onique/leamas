@@ -259,6 +259,12 @@ Deterministic SHA-256 fingerprints over normalized digest sections. Answers "Wha
 
 See [digest-evidence-hashes.md](./digest-evidence-hashes.md) for full specification.
 
+## Redaction Policy (v2)
+
+The digest implements a source-aware redaction policy. Source files are preserved for review fidelity while non-source artifacts are redacted.
+
+See [digest-redaction-policy.md](./digest-redaction-policy.md) for full specification.
+
 ## Complete Digest Structure
 
 ```

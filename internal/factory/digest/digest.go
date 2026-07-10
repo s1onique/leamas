@@ -7,12 +7,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/gate"
-	"github.com/s1onique/leamas/internal/factory/redact"
 	"github.com/s1onique/leamas/internal/version"
 )
 
@@ -26,15 +24,6 @@ type Options struct {
 	Output string
 	// Range is the commit range for ModeRange (e.g., "HEAD~1..HEAD").
 	Range string
-}
-
-// ChangedFile represents a file with changes.
-type ChangedFile struct {
-	Path            string
-	Tracked         bool
-	StagedPresent   bool
-	UnstagedPresent bool
-	Untracked       bool
 }
 
 // Generate creates a targeted digest and returns it as a string.
@@ -106,149 +95,53 @@ func Generate(opts Options) (string, error) {
 
 // Write generates a digest and writes it to the output file.
 // The digest content is redacted before writing to prevent secret exposure.
+// For source files: content is preserved for review fidelity, warnings are emitted.
+// For non-source files: standard redaction is applied.
 func Write(opts Options) error {
 	content, err := Generate(opts)
 	if err != nil {
 		return err
 	}
 
-	// Redact secrets from digest output before writing
-	content = redact.RedactDigest(content)
-
-	// Create parent directory if needed
-	dir := filepath.Dir(opts.Output)
-	if dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
-		}
+	// Apply source-aware redaction policy
+	// - Source files (.py, .go, etc.) are preserved with warning metadata
+	// - Non-source files (logs, config, env, etc.) are redacted
+	warnings, err := WriteWithWarnings(opts, content)
+	if err != nil {
+		return err
 	}
 
-	// Write the digest
-	if err := os.WriteFile(opts.Output, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write digest: %w", err)
+	// Log warnings if any source secrets were detected (optional, for visibility)
+	if len(warnings) > 0 {
+		// Warnings are already included in the digest content
+		// This is just for any additional logging if needed
+		_ = warnings
 	}
 
 	return nil
 }
 
-// GetDirtyFiles returns all changed files for dirty mode.
-func GetDirtyFiles(repoRoot string) ([]ChangedFile, error) {
-	// Get staged files using NUL delimiter
-	stagedOutput, err := RunGit(repoRoot, []string{"diff", "--cached", "--name-only", "-z"})
-	if err != nil {
-		return nil, err
-	}
-	stagedFiles := splitNULList(stagedOutput)
+// WriteWithWarnings generates a digest with policy-aware redaction and returns warnings.
+// This allows callers to handle warnings separately if needed.
+func WriteWithWarnings(opts Options, content string) ([]SourceSecretWarning, error) {
+	// Apply source-aware redaction policy
+	// Source files are preserved, non-source files are redacted
+	redactedContent, warnings := RedactDigestWithPolicy(content)
 
-	// Get unstaged files using NUL delimiter
-	unstagedOutput, err := RunGit(repoRoot, []string{"diff", "--name-only", "-z"})
-	if err != nil {
-		return nil, err
-	}
-	unstagedFiles := splitNULList(unstagedOutput)
-
-	// Get untracked files using NUL delimiter
-	untrackedOutput, err := RunGit(repoRoot, []string{"ls-files", "--others", "--exclude-standard", "-z"})
-	if err != nil {
-		return nil, err
-	}
-	untrackedFiles := splitNULList(untrackedOutput)
-
-	// Build a map of all files with their status
-	fileMap := make(map[string]*ChangedFile)
-
-	// Process staged files
-	for _, path := range stagedFiles {
-		if path == "" {
-			continue
-		}
-		if f, exists := fileMap[path]; exists {
-			f.StagedPresent = true
-		} else {
-			fileMap[path] = &ChangedFile{
-				Path:          path,
-				Tracked:       true,
-				StagedPresent: true,
-			}
+	// Create parent directory if needed
+	dir := filepath.Dir(opts.Output)
+	if dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return warnings, fmt.Errorf("failed to create output directory: %w", err)
 		}
 	}
 
-	// Process unstaged files
-	for _, path := range unstagedFiles {
-		if path == "" {
-			continue
-		}
-		if f, exists := fileMap[path]; exists {
-			f.UnstagedPresent = true
-		} else {
-			fileMap[path] = &ChangedFile{
-				Path:            path,
-				Tracked:         true,
-				UnstagedPresent: true,
-			}
-		}
+	// Write the digest with redaction applied
+	if err := os.WriteFile(opts.Output, []byte(redactedContent), 0644); err != nil {
+		return warnings, fmt.Errorf("failed to write digest: %w", err)
 	}
 
-	// Process untracked files
-	for _, path := range untrackedFiles {
-		if path == "" {
-			continue
-		}
-		if _, exists := fileMap[path]; !exists {
-			fileMap[path] = &ChangedFile{
-				Path:            path,
-				Untracked:       true,
-				StagedPresent:   false,
-				UnstagedPresent: true,
-			}
-		}
-	}
-
-	// Convert to slice and sort
-	result := make([]ChangedFile, 0, len(fileMap))
-	for _, f := range fileMap {
-		result = append(result, *f)
-	}
-
-	// Sort: tracked first, then untracked, both alphabetically
-	sort.Slice(result, func(i, j int) bool {
-		if result[i].Tracked != result[j].Tracked {
-			return result[i].Tracked
-		}
-		return result[i].Path < result[j].Path
-	})
-
-	return result, nil
-}
-
-// GetStagedFiles returns only staged changed files.
-func GetStagedFiles(repoRoot string) ([]ChangedFile, error) {
-	// Get staged files using NUL delimiter
-	stagedOutput, err := RunGit(repoRoot, []string{"diff", "--cached", "--name-only", "-z"})
-	if err != nil {
-		return nil, err
-	}
-
-	stagedFiles := splitNULList(stagedOutput)
-	result := make([]ChangedFile, 0, len(stagedFiles))
-
-	for _, path := range stagedFiles {
-		if path == "" {
-			continue
-		}
-		result = append(result, ChangedFile{
-			Path:          path,
-			Tracked:       true,
-			StagedPresent: true,
-		})
-	}
-
-	// Sort alphabetically
-	sort.Slice(result, func(i, j int) bool {
-		return result[i].Path < result[j].Path
-	})
-
-	return result, nil
+	return warnings, nil
 }
 
 // RenderDigest creates the markdown digest content.
