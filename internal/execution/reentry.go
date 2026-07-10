@@ -2,10 +2,11 @@
 package execution
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 )
 
 // Re-entry protection environment variable names.
@@ -47,7 +48,7 @@ func checkReentry(policy ReentryPolicy) error {
 // ExecutionRoot holds state for the root execution.
 type ExecutionRoot struct {
 	ID         string // Unique root execution ID
-	ParentPID  int    // Parent process PID
+	ParentPID  int    // Parent process PID of the root Leamas
 	Generation uint32 // Execution generation (0 = root)
 	SelfPath   string // Resolved path to current executable
 }
@@ -68,14 +69,15 @@ func NewExecutionRoot() (*ExecutionRoot, error) {
 
 	root := &ExecutionRoot{
 		ID:         generateRootID(),
-		ParentPID:  os.Getppid(),
+		ParentPID:  os.Getpid(), // Root's parent is the original parent
 		Generation: 0,
 		SelfPath:   selfPath,
 	}
 
 	// Set environment variables for child processes
+	// These will be inherited by all child processes
 	os.Setenv(EnvRootID, root.ID)
-	os.Setenv(EnvParentPID, fmt.Sprintf("%d", root.ParentPID))
+	os.Setenv(EnvParentPID, fmt.Sprintf("%d", os.Getpid())) // Leamas PID, not its parent
 	os.Setenv(EnvGeneration, fmt.Sprintf("%d", root.Generation))
 
 	return root, nil
@@ -86,18 +88,24 @@ func NewExecutionRoot() (*ExecutionRoot, error) {
 func NewTestExecutionRoot() *ExecutionRoot {
 	return &ExecutionRoot{
 		ID:         generateRootID(),
-		ParentPID:  os.Getppid(),
+		ParentPID:  os.Getpid(),
 		Generation: 0,
 		SelfPath:   os.Args[0],
 	}
 }
 
 // ForChild returns a copy configured for a child invocation.
+// The generation is incremented for the child.
 func (r *ExecutionRoot) ForChild() *ExecutionRoot {
+	// Check for overflow
+	gen := r.Generation + 1
+	if gen < r.Generation {
+		gen = ^uint32(0) // Max uint32 on overflow
+	}
 	return &ExecutionRoot{
 		ID:         r.ID,
 		ParentPID:  r.ParentPID,
-		Generation: r.Generation + 1,
+		Generation: gen,
 		SelfPath:   r.SelfPath,
 	}
 }
@@ -147,7 +155,18 @@ func resolveExecutable(path string) (string, error) {
 }
 
 // generateRootID generates a unique root execution ID.
+// Uses PID + timestamp + cryptographic randomness for uniqueness.
 func generateRootID() string {
-	// Use a simple approach: timestamp + random suffix
-	return fmt.Sprintf("leamas-%d-%d", os.Getpid(), syscall.Getpid())
+	// Get PID and timestamp
+	pid := int64(os.Getpid())
+
+	// Generate random bytes for uniqueness
+	randomBytes := make([]byte, 8)
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback to less unique ID
+		return fmt.Sprintf("leamas-%d-%d", pid, os.Getpid())
+	}
+	randomHex := hex.EncodeToString(randomBytes)
+
+	return fmt.Sprintf("leamas-%d-%s", pid, randomHex)
 }

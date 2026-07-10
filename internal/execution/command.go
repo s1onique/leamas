@@ -11,19 +11,25 @@ type Request struct {
 	Args        []string      // Command arguments (first element is the executable)
 	Dir         string        // Working directory
 	Env         []string      // Environment variables (appended to inherited env)
-	Timeout     time.Duration // Command timeout (must be <= MaxPermittedTimeout)
+	Timeout     time.Duration // Command timeout (0 = use DefaultTimeout)
 	OutputCap   int64         // Output capture limit (0 = use budget default)
 	Fingerprint string        // Logical fingerprint for cycle detection
+	TaskDepth   uint16        // Logical task depth (0 = inherited from context, then 1)
 }
 
 // Result represents the outcome of an execution.
 type Result struct {
-	ExitCode        int             // Process exit code
-	Duration        time.Duration   // Execution duration
-	Stdout          []byte          // Captured stdout (may be truncated)
-	Stderr          []byte          // Captured stderr (may be truncated)
-	OutputTruncated bool            // True if output was truncated
-	Error           *ExecutionError // Execution error, if any
+	ExitCode            int             // Process exit code
+	Duration            time.Duration   // Execution duration
+	QueueDuration       time.Duration   // Time spent waiting for semaphore
+	RunDuration         time.Duration   // Time spent executing (including termination)
+	Stdout              []byte          // Captured stdout (may be truncated)
+	Stderr              []byte          // Captured stderr (may be truncated)
+	OutputTruncated     bool            // True if output was truncated
+	OutputBytesObserved int64           // Total bytes observed (including discarded)
+	OutputBytesRetained int64           // Total bytes retained
+	OutputLimit         int64           // Configured output limit
+	Error               *ExecutionError // Execution error, if any
 }
 
 // Success returns true if the command completed successfully.
@@ -39,11 +45,13 @@ func (r *Result) Failed() bool {
 // NewResult creates a successful result.
 func NewResult(exitCode int, duration time.Duration, stdout, stderr []byte, truncated bool) *Result {
 	return &Result{
-		ExitCode:        exitCode,
-		Duration:        duration,
-		Stdout:          stdout,
-		Stderr:          stderr,
-		OutputTruncated: truncated,
+		ExitCode:            exitCode,
+		Duration:            duration,
+		Stdout:              stdout,
+		Stderr:              stderr,
+		OutputTruncated:     truncated,
+		OutputBytesObserved: int64(len(stdout) + len(stderr)),
+		OutputBytesRetained: int64(len(stdout) + len(stderr)),
 	}
 }
 

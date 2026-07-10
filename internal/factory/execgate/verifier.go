@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -30,18 +31,30 @@ var ForbiddenCalls = []ForbiddenCall{
 	{"syscall", "Exec", "syscall.Exec must not be called outside internal/execution"},
 }
 
-// AllowedDirs are directories where direct exec calls are permitted.
-var AllowedDirs = []string{
-	"internal/execution",
-	"internal/execution/adapters",
-	"internal/factory", // Factory verifiers are tooling infrastructure
+// AllowedFiles are specific files where direct exec calls are permitted.
+// Only the execution gateway itself and factory infrastructure require process APIs.
+var AllowedFiles = map[string]bool{
+	"internal/execution/executor.go":                    true,
+	"internal/factory/gate/gate.go":                     true,
+	"internal/factory/digest/git.go":                    true,
+	"internal/factory/digest/digest_auto_test.go":       true,
+	"internal/factory/dupcode/baseline_verify.go":       true,
+	"internal/factory/githooks/check.go":                true,
+	"internal/factory/githooks/check_test.go":           true,
+	"internal/factory/githooks/hook_functional_test.go": true,
+	"internal/factory/github/check.go":                  true,
+	"internal/factory/llmfriendly/check.go":             true,
+	"internal/factory/output/outputcontract.go":         true,
+	"internal/factory/staticbinary/check.go":            true,
+	"cmd/leamas/runtime_smoke_test.go":                  true,
+	"cmd/leamas/version_cli_test.go":                    true,
 }
 
 // CheckRepo scans the repository for forbidden exec patterns.
 func CheckRepo(root string) []checks.Finding {
 	var findings []checks.Finding
 
-	// Scan cmd/ and internal/ (except execution gateway)
+	// Scan cmd/ and internal/
 	dirs := []string{"cmd", "internal"}
 
 	for _, dir := range dirs {
@@ -52,18 +65,13 @@ func CheckRepo(root string) []checks.Finding {
 
 		err := filepath.WalkDir(scanPath, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
-				return nil
+				return err
 			}
 
 			if d.IsDir() {
-				// Skip testdata and vendor
 				name := d.Name()
 				if name == "testdata" || name == "vendor" || name == ".git" {
 					return filepath.SkipDir
-				}
-				// Skip execution package - it's allowed to use exec
-				if strings.HasPrefix(path, filepath.Join(root, "internal/execution")) {
-					return nil
 				}
 				return nil
 			}
@@ -73,12 +81,14 @@ func CheckRepo(root string) []checks.Finding {
 				return nil
 			}
 
-			// Skip test files
-			if strings.HasSuffix(path, "_test.go") {
+			relPath, _ := filepath.Rel(root, path)
+
+			// Skip only exact allowed files
+			if AllowedFiles[filepath.ToSlash(relPath)] {
 				return nil
 			}
 
-			findings = append(findings, checkFile(path)...)
+			findings = append(findings, checkFile(relPath, path)...)
 			return nil
 		})
 		if err != nil {
@@ -86,31 +96,60 @@ func CheckRepo(root string) []checks.Finding {
 		}
 	}
 
-	checks.SortFindings(findings)
+	sort.Slice(findings, func(i, j int) bool {
+		if findings[i].Path != findings[j].Path {
+			return findings[i].Path < findings[j].Path
+		}
+		return findings[i].Message < findings[j].Message
+	})
+
 	return findings
 }
 
 // checkFile checks a single file for forbidden exec calls.
-func checkFile(path string) []checks.Finding {
+func checkFile(relPath, path string) []checks.Finding {
 	var findings []checks.Finding
 
 	data, err := os.ReadFile(path)
 	if err != nil {
+		findings = append(findings, checks.Finding{
+			Path:     relPath,
+			Kind:     "file_read_error",
+			Message:  fmt.Sprintf("failed to read file: %v", err),
+			Severity: checks.SeverityError,
+		})
 		return findings
 	}
 
 	fset := token.NewFileSet()
 	file, err := parser.ParseFile(fset, path, data, parser.AllErrors)
 	if err != nil {
+		findings = append(findings, checks.Finding{
+			Path:     relPath,
+			Kind:     "parse_error",
+			Message:  fmt.Sprintf("failed to parse file: %v", err),
+			Severity: checks.SeverityError,
+		})
 		return findings
 	}
 
-	relPath, _ := filepath.Rel(".", path)
+	// Build import alias map
+	imports := buildImportMap(file)
 
 	ast.Inspect(file, func(n ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.CallExpr:
-			findings = append(findings, checkCallExpr(fset, relPath, node)...)
+			findings = append(findings, checkCallExpr(relPath, fset, node, imports)...)
+		case *ast.ImportSpec:
+			// Check dot imports
+			if node.Path != nil && node.Name != nil && node.Name.Name == "." {
+				findings = append(findings, checks.Finding{
+					Path:     relPath,
+					Kind:     "dot_import_forbidden",
+					Message:  fmt.Sprintf("dot imports are forbidden in this package"),
+					Severity: checks.SeverityError,
+				})
+			}
 		}
 		return true
 	})
@@ -118,44 +157,121 @@ func checkFile(path string) []checks.Finding {
 	return findings
 }
 
+// buildImportMap builds a map from import aliases to package paths.
+func buildImportMap(file *ast.File) map[string]string {
+	imports := make(map[string]string)
+
+	// Add standard aliases
+	imports["exec"] = "os/exec"
+	imports["osexec"] = "os/exec"
+	imports["os"] = "os"
+	imports["syscall"] = "syscall"
+
+	for _, spec := range file.Imports {
+		if spec.Path == nil {
+			continue
+		}
+		path := strings.Trim(spec.Path.Value, `"`)
+
+		var alias string
+		if spec.Name != nil {
+			alias = spec.Name.Name
+		} else {
+			// Derive alias from path
+			parts := strings.Split(path, "/")
+			alias = parts[len(parts)-1]
+		}
+
+		imports[alias] = path
+	}
+
+	return imports
+}
+
 // checkCallExpr checks a call expression for forbidden exec calls.
-func checkCallExpr(fset *token.FileSet, path string, node *ast.CallExpr) []checks.Finding {
+func checkCallExpr(path string, fset *token.FileSet, node *ast.CallExpr, imports map[string]string) []checks.Finding {
 	var findings []checks.Finding
 
-	// Check for exec.Command and exec.CommandContext
+	// Handle selector expressions: pkg.Function()
 	if sel, ok := node.Fun.(*ast.SelectorExpr); ok {
 		if ident, ok := sel.X.(*ast.Ident); ok {
 			pkg := ident.Name
 			fn := sel.Sel.Name
 
-			if pkg == "exec" && (fn == "Command" || fn == "CommandContext") {
-				// Check if we're in internal/execution
-				if !isInAllowedDir(path) {
-					findings = append(findings, checks.Finding{
-						Path:     path,
-						Kind:     "forbidden_exec_call",
-						Message:  fmt.Sprintf("exec.%s must not be called outside internal/execution", fn),
-						Severity: checks.SeverityError,
-					})
-				}
+			// Resolve alias to package path
+			if resolved, ok := imports[pkg]; ok {
+				pkg = resolved
 			}
+
+			// Check for forbidden patterns
+			if isForbiddenCall(pkg, fn) {
+				findings = append(findings, checks.Finding{
+					Path:     path,
+					Kind:     "forbidden_exec_call",
+					Message:  fmt.Sprintf("forbidden: %s.%s - %s", pkg, fn, forbiddenDesc(pkg, fn)),
+					Severity: checks.SeverityError,
+				})
+			}
+		}
+	}
+
+	// Handle direct function calls where function is assigned from package
+	// e.g., cmd := exec.Command; cmd(...)
+	if ident, ok := node.Fun.(*ast.Ident); ok {
+		fnName := ident.Name
+		if isForbiddenFunction(fnName) {
+			findings = append(findings, checks.Finding{
+				Path:     path,
+				Kind:     "forbidden_exec_call",
+				Message:  fmt.Sprintf("forbidden: %s() - direct exec function usage", fnName),
+				Severity: checks.SeverityError,
+			})
 		}
 	}
 
 	return findings
 }
 
-// isInAllowedDir checks if a path is in an allowed directory.
-func isInAllowedDir(path string) bool {
-	for _, dir := range AllowedDirs {
-		if strings.HasPrefix(path, dir) || strings.HasPrefix(path, "./"+dir) {
-			return true
-		}
+// isForbiddenCall checks if a package.function combination is forbidden.
+func isForbiddenCall(pkg, fn string) bool {
+	switch pkg {
+	case "os/exec":
+		return fn == "Command" || fn == "CommandContext" || fn == "LookPath"
+	case "os":
+		return fn == "StartProcess"
+	case "syscall":
+		return fn == "ForkExec" || fn == "Exec"
 	}
 	return false
 }
 
+// isForbiddenFunction checks if a bare function name is forbidden.
+func isForbiddenFunction(fn string) bool {
+	switch fn {
+	case "Command", "CommandContext", "LookPath":
+		return true
+	}
+	return false
+}
+
+// forbiddenDesc returns the description for a forbidden call.
+func forbiddenDesc(pkg, fn string) string {
+	switch pkg {
+	case "os/exec":
+		return "exec.Command/CommandContext must not be called outside internal/execution"
+	case "os":
+		return "os.StartProcess must not be called outside internal/execution"
+	case "syscall":
+		return "syscall.ForkExec/Exec must not be called outside internal/execution"
+	}
+	return "forbidden execution call"
+}
+
 // CheckFile scans a single file for forbidden exec patterns.
 func CheckFile(path string) []checks.Finding {
-	return checkFile(path)
+	relPath := path
+	if strings.HasPrefix(path, "./") {
+		relPath = strings.TrimPrefix(path, "./")
+	}
+	return checkFile(relPath, path)
 }

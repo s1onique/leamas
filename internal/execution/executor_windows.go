@@ -5,23 +5,26 @@ package execution
 
 import (
 	"context"
-	"sync"
+	"fmt"
+	"time"
 )
 
-// Executor represents a bounded command executor (Windows stub).
-// All operations return an error indicating Windows is unsupported.
+// Executor represents a bounded command executor on Windows.
+// Windows execution is not supported - this stub returns errors.
 type Executor struct {
 	budget *Budget
 	root   *ExecutionRoot
-	mu     sync.Mutex
 }
 
 // NewExecutor creates a new bounded executor.
-func NewExecutor(budget *Budget, root *ExecutionRoot) *Executor {
+func NewExecutor(budget *Budget, root *ExecutionRoot) (*Executor, error) {
+	if err := budget.Validate(time.Now()); err != nil {
+		return nil, fmt.Errorf("invalid budget: %w", err)
+	}
 	return &Executor{
 		budget: budget,
 		root:   root,
-	}
+	}, nil
 }
 
 // Budget returns the execution budget.
@@ -29,11 +32,12 @@ func (e *Executor) Budget() *Budget {
 	return e.budget
 }
 
-// Execute runs a bounded command and returns the result.
+// Execute runs a bounded command and returns an error.
+// Windows execution is not supported.
 func (e *Executor) Execute(_ context.Context, req *Request) *Result {
 	err := NewExecutionError(
 		CodeExecutionUnknown,
-		"execution is unsupported on Windows",
+		"execution is not supported on Windows",
 		nil,
 	)
 	if req != nil && len(req.Args) > 0 {
@@ -52,7 +56,7 @@ func (e *Executor) ExecuteSimple(req *Request) *Result {
 
 // WaitForCompletion waits for all pending executions to complete.
 func (e *Executor) WaitForCompletion(_ context.Context) error {
-	return NewExecutionError(CodeExecutionUnknown, "execution is unsupported on Windows", nil)
+	return NewExecutionError(CodeExecutionUnknown, "execution is not supported on Windows", nil)
 }
 
 // Close releases all resources.

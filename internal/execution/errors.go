@@ -9,14 +9,16 @@ import (
 const (
 	CodeNestedLeamasExecution             = "nested_leamas_execution"
 	CodeExecutionCycleDetected            = "execution_cycle_detected"
+	CodeExecutionCancelled                = "execution_cancelled"
+	CodeExecutionTimeoutExceeded          = "execution_timeout_exceeded"
 	CodeExecutionDeadlineExceeded         = "execution_deadline_exceeded"
 	CodeExecutionConcurrencyExhausted     = "execution_concurrency_exhausted"
 	CodeExecutionStartBudgetExhausted     = "execution_start_budget_exhausted"
+	CodeExecutionTaskDepthExceeded        = "execution_task_depth_exceeded"
 	CodeExecutionOutputLimitExceeded      = "execution_output_limit_exceeded"
 	CodeExecutionProcessTreeCleanupFailed = "execution_process_tree_cleanup_failed"
 	CodeExecutionInvalidUnboundedTimeout  = "execution_invalid_unbounded_timeout"
-	CodeExecutionTimeoutExceeded          = "execution_timeout_exceeded"
-	CodeExecutionCancelled                = "execution_cancelled"
+	CodeExecutionInvalidRequest           = "execution_invalid_request"
 	CodeExecutionCommandNotFound          = "execution_command_not_found"
 	CodeExecutionPermissionDenied         = "execution_permission_denied"
 	CodeExecutionUnknown                  = "execution_unknown"
@@ -84,7 +86,7 @@ var ErrExecutionCycleDetected = &ExecutionError{
 }
 
 // ErrStartBudgetExhausted is returned when the total starts budget is exhausted.
-func ErrStartBudgetExhausted(limit uint64, observed uint64) *ExecutionError {
+func ErrStartBudgetExhausted(limit, observed uint64) *ExecutionError {
 	err := &ExecutionError{
 		Code:    CodeExecutionStartBudgetExhausted,
 		Message: fmt.Sprintf("start budget exhausted: limit=%d, observed=%d", limit, observed),
@@ -107,15 +109,29 @@ func ErrConcurrencyExhausted(limit int64) *ExecutionError {
 	return err
 }
 
+// ErrTaskDepthExceeded is returned when the task depth exceeds the configured limit.
+func ErrTaskDepthExceeded(limit uint16, observed uint16) *ExecutionError {
+	err := &ExecutionError{
+		Code:    CodeExecutionTaskDepthExceeded,
+		Message: fmt.Sprintf("task depth exceeded: limit=%d, observed=%d", limit, observed),
+	}
+	err.Dimension = "task_depth"
+	err.Limit = limit
+	err.Observed = observed
+	return err
+}
+
 // ErrOutputLimitExceeded is returned when command output exceeds the limit.
-func ErrOutputLimitExceeded(limit int64, source string) *ExecutionError {
+func ErrOutputLimitExceeded(limit int64, observed int64, rootID, command string) *ExecutionError {
 	err := &ExecutionError{
 		Code:    CodeExecutionOutputLimitExceeded,
-		Message: fmt.Sprintf("output limit exceeded (%d bytes) on %s", limit, source),
+		Message: fmt.Sprintf("output limit exceeded: limit=%d bytes, observed=%d bytes", limit, observed),
 	}
 	err.Dimension = "output_bytes"
 	err.Limit = limit
-	err.Observed = limit
+	err.Observed = observed
+	err.RootExecutionID = rootID
+	err.Command = command
 	return err
 }
 
@@ -142,7 +158,23 @@ func ErrUnboundedTimeout(timeout string) *ExecutionError {
 }
 
 // ErrProcessTreeCleanupFailed is returned when process tree cleanup fails.
-var ErrProcessTreeCleanupFailed = &ExecutionError{
-	Code:    CodeExecutionProcessTreeCleanupFailed,
-	Message: "failed to cleanup process tree",
+func ErrProcessTreeCleanupFailed(pid int, detail string) *ExecutionError {
+	return &ExecutionError{
+		Code:    CodeExecutionProcessTreeCleanupFailed,
+		Message: fmt.Sprintf("failed to cleanup process tree (pid=%d): %s", pid, detail),
+	}
+}
+
+// ErrCancelled is returned when the context is cancelled.
+var ErrCancelled = &ExecutionError{
+	Code:    CodeExecutionCancelled,
+	Message: "execution was cancelled",
+}
+
+// ErrInvalidRequest is returned when a request is invalid.
+func ErrInvalidRequest(msg string) *ExecutionError {
+	return &ExecutionError{
+		Code:    CodeExecutionInvalidRequest,
+		Message: msg,
+	}
 }

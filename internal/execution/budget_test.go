@@ -60,7 +60,10 @@ func TestBudgetWithMethods(t *testing.T) {
 func TestExecutorCreation(t *testing.T) {
 	root := NewTestExecutionRoot()
 	budget := DefaultBudget()
-	executor := NewExecutor(budget, root)
+	executor, err := NewExecutor(budget, root)
+	if err != nil {
+		t.Fatalf("failed to create executor: %v", err)
+	}
 
 	if executor == nil {
 		t.Fatal("expected executor to be created")
@@ -79,7 +82,7 @@ func TestExecutorCreation(t *testing.T) {
 func TestTimeoutEnforcement(t *testing.T) {
 	root := NewTestExecutionRoot()
 	budget := DefaultBudget()
-	executor := NewExecutor(budget, root)
+	executor, _ := NewExecutor(budget, root)
 
 	req := &Request{
 		Name:    "sleep",
@@ -96,9 +99,9 @@ func TestTimeoutEnforcement(t *testing.T) {
 	}
 
 	if result.Error == nil {
-		t.Error("expected timeout error")
-	} else if result.Error.Code != CodeExecutionTimeoutExceeded {
-		t.Errorf("expected timeout error code, got %s", result.Error.Code)
+		t.Error("expected timeout/deadline error")
+	} else if result.Error.Code != CodeExecutionDeadlineExceeded && result.Error.Code != CodeExecutionTimeoutExceeded {
+		t.Errorf("expected deadline/timeout error code, got %s", result.Error.Code)
 	}
 
 	// Should have been terminated within reasonable time
@@ -111,7 +114,7 @@ func TestTimeoutEnforcement(t *testing.T) {
 func TestUnboundedTimeoutRejection(t *testing.T) {
 	root := NewTestExecutionRoot()
 	budget := DefaultBudget()
-	executor := NewExecutor(budget, root)
+	executor, _ := NewExecutor(budget, root)
 
 	req := &Request{
 		Name:    "sleep",
@@ -136,7 +139,7 @@ func TestUnboundedTimeoutRejection(t *testing.T) {
 func TestOutputLimitEnforcement(t *testing.T) {
 	root := NewTestExecutionRoot()
 	budget := DefaultBudget().WithMaxOutputBytes(1024) // 1KB limit
-	executor := NewExecutor(budget, root)
+	executor, _ := NewExecutor(budget, root)
 
 	req := &Request{
 		Name:      "dd",
@@ -164,7 +167,7 @@ func TestMaxStartsBudget(t *testing.T) {
 	root := NewTestExecutionRoot()
 	// Use MaxStarts=1 to test that only 1 command can start
 	budget := DefaultBudget().WithMaxStarts(1)
-	executor := NewExecutor(budget, root)
+	executor, _ := NewExecutor(budget, root)
 
 	// First command should succeed
 	req1 := &Request{

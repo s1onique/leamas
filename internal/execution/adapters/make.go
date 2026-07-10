@@ -3,7 +3,6 @@ package adapters
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/s1onique/leamas/internal/execution"
 )
@@ -30,6 +29,7 @@ func (a *MakeAdapter) Request(dir string, target string, args ...string) *execut
 		Name: "make " + target,
 		Args: []string{"make"},
 		Dir:  dir,
+		Env:  a.sanitizeMakeFlags(nil),
 	}
 
 	if len(args) > 0 {
@@ -45,76 +45,22 @@ func (a *MakeAdapter) Request(dir string, target string, args ...string) *execut
 
 // GateRequest creates a bounded make gate request.
 func (a *MakeAdapter) GateRequest(dir string, env []string) *execution.Request {
-	args := a.clampJobs([]string{"-j" + strconv.FormatInt(a.limit, 10), "gate"})
+	args := []string{"-j" + strconv.FormatInt(a.limit, 10), "gate"}
 	return &execution.Request{
 		Name: "make gate",
 		Args: append([]string{"make"}, args...),
 		Dir:  dir,
-		Env:  env,
+		Env:  a.sanitizeMakeFlags(env),
 	}
 }
 
 // FactorizeRequest creates a bounded make factorize request.
 func (a *MakeAdapter) FactorizeRequest(dir string, env []string) *execution.Request {
-	args := a.clampJobs([]string{"-j" + strconv.FormatInt(a.limit, 10), "factorize"})
+	args := []string{"-j" + strconv.FormatInt(a.limit, 10), "factorize"}
 	return &execution.Request{
 		Name: "make factorize",
 		Args: append([]string{"make"}, args...),
 		Dir:  dir,
-		Env:  env,
+		Env:  a.sanitizeMakeFlags(env),
 	}
-}
-
-func (a *MakeAdapter) clampJobs(args []string) []string {
-	result := make([]string, len(args))
-	copy(result, args)
-
-	for i, arg := range result {
-		if strings.HasPrefix(arg, "-j") {
-			val := strings.TrimPrefix(arg, "-j")
-			if val == "" {
-				result[i] = "-j" + strconv.FormatInt(a.limit, 10)
-			} else if val != "" {
-				if n, err := strconv.ParseInt(val, 10, 64); err == nil {
-					if n > a.limit || n == 0 {
-						result[i] = "-j" + strconv.FormatInt(a.limit, 10)
-					}
-				}
-			}
-		}
-	}
-
-	for i := 0; i < len(result)-1; i++ {
-		if result[i] == "-j" {
-			val := result[i+1]
-			if n, err := strconv.ParseInt(val, 10, 64); err == nil {
-				if n > a.limit || n == 0 {
-					result[i+1] = strconv.FormatInt(a.limit, 10)
-				}
-			}
-		}
-	}
-
-	return result
-}
-
-// HasUnboundedJobs checks if args contain unbounded -j flag.
-func (a *MakeAdapter) HasUnboundedJobs(args []string) bool {
-	for _, arg := range args {
-		if arg == "-j" {
-			return true
-		}
-		if strings.HasPrefix(arg, "-j") {
-			val := strings.TrimPrefix(arg, "-j")
-			if val == "" {
-				return true
-			}
-			if n, err := strconv.ParseInt(val, 10, 64); err == nil {
-				if n == 0 {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
