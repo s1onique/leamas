@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -80,117 +79,29 @@ func WriteGateSummary(root, outputPath string) error {
 	return nil
 }
 
-// buildGateSummary runs configured checks and builds the summary.
+// buildGateSummaryFromArtifact reads an existing gate-summary.json artifact.
+// This is the safe, non-recursive way to build a summary.
 func buildGateSummary(root string) GateSummary {
-	checks := []Check{
-		runGoTest(root),
-		runGoVet(root),
-		runMakeFactorize(root),
-		runMakeGate(root),
+	artifactPath := filepath.Join(root, ".factory", "gate-summary.json")
+
+	// Try to read existing artifact
+	summary, err := ReadGateSummary(artifactPath)
+	if err == nil && summary != nil {
+		return *summary
 	}
 
-	// Sort checks by name for deterministic output
-	sort.Slice(checks, func(i, j int) bool {
-		return checks[i].Name < checks[j].Name
-	})
-
-	// Compute overall status
-	overallStatus := CheckStatusPass
-	for _, c := range checks {
-		if c.Status == CheckStatusFail {
-			overallStatus = CheckStatusFail
-			break
-		}
-		if c.Status == CheckStatusUnavailable {
-			overallStatus = CheckStatusUnavailable
-		}
-	}
-
+	// Fall back to a summary indicating no gate has been run yet
 	return GateSummary{
 		SchemaVersion: GateSummarySchemaVersion,
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
-		OverallStatus: string(overallStatus),
-		Checks:        checks,
-	}
-}
-
-func runGoTest(root string) Check {
-	start := time.Now()
-	cmd := exec.Command("go", "test", "./...")
-	cmd.Dir = root
-	err := cmd.Run()
-	duration := time.Since(start).Milliseconds()
-
-	status := CheckStatusPass
-	if err != nil {
-		status = CheckStatusFail
-	}
-
-	return Check{
-		Name:       "go_test",
-		Status:     status,
-		DurationMs: duration,
-		Evidence:   "go test ./...",
-	}
-}
-
-func runGoVet(root string) Check {
-	start := time.Now()
-	cmd := exec.Command("go", "vet", "./...")
-	cmd.Dir = root
-	err := cmd.Run()
-	duration := time.Since(start).Milliseconds()
-
-	status := CheckStatusPass
-	if err != nil {
-		status = CheckStatusFail
-	}
-
-	return Check{
-		Name:       "go_vet",
-		Status:     status,
-		DurationMs: duration,
-		Evidence:   "go vet ./...",
-	}
-}
-
-func runMakeFactorize(root string) Check {
-	start := time.Now()
-	cmd := exec.Command("make", "factorize")
-	cmd.Dir = root
-	err := cmd.Run()
-	duration := time.Since(start).Milliseconds()
-
-	status := CheckStatusPass
-	if err != nil {
-		status = CheckStatusFail
-	}
-
-	return Check{
-		Name:       "factorize",
-		Status:     status,
-		DurationMs: duration,
-		Evidence:   "make factorize",
-	}
-}
-
-func runMakeGate(root string) Check {
-	start := time.Now()
-	cmd := exec.Command("make", "gate")
-	cmd.Dir = root
-	err := cmd.Run()
-	duration := time.Since(start).Milliseconds()
-
-	status := CheckStatusPass
-	if err != nil {
-		status = CheckStatusFail
-	}
-
-	return Check{
-		Name:       "gate",
-		Status:     status,
-		DurationMs: duration,
-		Evidence:   "make gate",
+		OverallStatus: string(CheckStatusUnavailable),
+		Checks: []Check{
+			{
+				Name:     "gate_summary",
+				Status:   CheckStatusUnavailable,
+				Evidence: "gate-summary artifact not found - run 'make gate' first",
+			},
+		},
 	}
 }
 

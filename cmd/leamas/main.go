@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/s1onique/leamas/internal/execution"
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
 	"github.com/s1onique/leamas/internal/factory/boundary"
 	"github.com/s1onique/leamas/internal/factory/docs"
@@ -20,6 +21,15 @@ import (
 )
 
 func main() {
+	// Emergency re-entry fuse: prevent Leamas from running inside Leamas
+	// This must be checked before any other operation
+	_, err := execution.NewExecutionRoot()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		fmt.Fprintln(os.Stderr, "Leamas cannot be started from within a Leamas execution.")
+		os.Exit(1)
+	}
+
 	if len(os.Args) < 2 {
 		printUsage()
 		os.Exit(1)

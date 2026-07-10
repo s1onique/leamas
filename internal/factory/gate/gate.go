@@ -16,6 +16,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
+	"github.com/s1onique/leamas/internal/factory/execgate"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/githooks"
 	"github.com/s1onique/leamas/internal/factory/github"
@@ -41,6 +42,7 @@ func AllVerifiers() []Verifier {
 		{"docs", docs.CheckRepo},
 		{"dupcode-baseline", dupcodeBaselineVerifier},
 		{"dupcode", dupCodeVerifier},
+		{"exec-gate", execgate.CheckRepo},
 		{"forbidden-patterns", forbidden.CheckRepo},
 		{"language", language.CheckRepo},
 		{"static-binary", staticbinary.CheckRepo},

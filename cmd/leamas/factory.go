@@ -66,21 +66,51 @@ func handleFactoryFactorize() {
 func handleFactoryGateSummary() {
 	args := os.Args[3:] // Skip: leamas factory gate-summary
 	outputPath := ".factory/gate-summary.json"
+	jsonFormat := false
 
-	// Parse --output flag if provided
+	// Parse --output and --json flags
 	for i, arg := range args {
-		if arg == "--output" && i+1 < len(args) {
-			outputPath = args[i+1]
-			break
+		switch arg {
+		case "--output":
+			if i+1 < len(args) {
+				outputPath = args[i+1]
+			}
+		case "--json":
+			jsonFormat = true
 		}
 	}
 
+	result := output.NewResult("gate-summary")
+	result.AddField("output", outputPath)
+
 	if err := gate.WriteGateSummary(".", outputPath); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to write gate summary: %v\n", err)
+		result.AddFailure("write_error", err.Error())
+		if jsonFormat {
+			data, jsonErr := result.JSON()
+			if jsonErr != nil {
+				fmt.Fprintf(os.Stderr, "gate-summary: error generating JSON: %v\n", jsonErr)
+				os.Exit(2)
+			}
+			fmt.Fprintln(os.Stdout, string(data))
+			os.Exit(1)
+		}
+		output.WriteLine(os.Stderr, *result)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Gate summary written to: %s\n", outputPath)
+	result.SetOK()
+
+	if jsonFormat {
+		data, err := result.JSON()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "gate-summary: error generating JSON: %v\n", err)
+			os.Exit(2)
+		}
+		fmt.Fprintln(os.Stdout, string(data))
+		os.Exit(0)
+	}
+
+	output.WriteLine(os.Stdout, *result)
 	os.Exit(0)
 }
 
