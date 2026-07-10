@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -16,7 +15,7 @@ import (
 func newProcessVerifier(t *testing.T) (*processVerifier, func()) {
 	t.Helper()
 
-	helperPath, err := locateHelperBinary()
+	helperPath, err := getHelperPath()
 	if err != nil {
 		t.Fatalf("test helper not found: %v", err)
 	}
@@ -34,34 +33,6 @@ func newProcessVerifier(t *testing.T) (*processVerifier, func()) {
 		}, func() {
 			_ = os.Remove(f.Name())
 		}
-}
-
-// locateHelperBinary finds the test helper binary.
-func locateHelperBinary() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("cannot determine working directory: %w", err)
-	}
-
-	searchPaths := []string{
-		filepath.Join(cwd, "testdata", "testhelper", "main"),
-		filepath.Join(cwd, "..", "testdata", "testhelper", "main"),
-		filepath.Join(cwd, "..", "..", "testdata", "testhelper", "main"),
-		filepath.Join(cwd, "..", "..", "..", "testdata", "testhelper", "main"),
-		filepath.Join(cwd, "..", "..", "..", "..", "testdata", "testhelper", "main"),
-	}
-
-	for _, p := range searchPaths {
-		absPath, err := filepath.Abs(p)
-		if err != nil {
-			continue
-		}
-		if _, err := os.Stat(absPath); err == nil {
-			return absPath, nil
-		}
-	}
-
-	return "", fmt.Errorf("helper not found in any search path (cwd=%s)", cwd)
 }
 
 // ManifestFile returns the path to the PID manifest file.

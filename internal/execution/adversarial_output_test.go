@@ -45,11 +45,7 @@ func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 	result := executor.Execute(context.Background(), req)
 	elapsed := time.Since(start)
 
-	// Debug output
-	t.Logf("DEBUG: result.Error=%v, OutputTruncated=%v, OutputBytesRetained=%d, OutputBytesObserved=%d, OutputLimit=%d",
-		result.Error, result.OutputTruncated, result.OutputBytesRetained, result.OutputBytesObserved, result.OutputLimit)
-
-	// Strict contract assertions - use t.Fatal to stop on nil error
+	// Strict contract assertions
 	if result.Error == nil {
 		t.Fatal("expected error result, got nil")
 	}
@@ -72,10 +68,9 @@ func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 		t.Fatalf("expected elapsed (%v) < execTimeout (%v)", elapsed, execTimeout)
 	}
 
-	// Must be output limit exceeded - cleanup_failure is acceptable on some platforms
-	// because output overflow races with process termination can cause signal permission issues
-	if result.Error.Code != CodeExecutionOutputLimitExceeded && result.Error.Code != CodeExecutionProcessTreeCleanupFailed {
-		t.Fatalf("expected error code %s or %s, got %s", CodeExecutionOutputLimitExceeded, CodeExecutionProcessTreeCleanupFailed, result.Error.Code)
+	// Require exact output limit exceeded error code
+	if result.Error.Code != CodeExecutionOutputLimitExceeded {
+		t.Fatalf("expected error code %s, got %s", CodeExecutionOutputLimitExceeded, result.Error.Code)
 	}
 
 	records, err := verifier.parseManifest()

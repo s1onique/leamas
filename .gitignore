@@ -12,4 +12,8 @@ dist/
 # Factory artifacts (except committed baseline)
 .factory/*
 !.factory/dupcode-baseline.json
+
+# Exception: keep the adversarial test helper source
+# (must come BEFORE testdata/ rule below)
+!internal/execution/testdata/testhelper/main.go
 testdata/

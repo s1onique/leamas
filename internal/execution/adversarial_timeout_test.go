@@ -38,8 +38,6 @@ func TestAdversarialTimeoutDirectSleep(t *testing.T) {
 	res := executor.Execute(context.Background(), req)
 	elapsed := time.Since(start)
 
-	time.Sleep(100 * time.Millisecond)
-
 	if elapsed > maxExpected {
 		t.Fatalf("Test exceeded max: elapsed=%v, maxExpected=%v", elapsed, maxExpected)
 	}
@@ -95,8 +93,6 @@ func TestAdversarialTimeoutChildTree(t *testing.T) {
 	result := executor.Execute(context.Background(), req)
 	elapsed := time.Since(start)
 
-	time.Sleep(100 * time.Millisecond)
-
 	if elapsed > maxExpected {
 		t.Fatalf("Test exceeded max: elapsed=%v, maxExpected=%v", elapsed, maxExpected)
 	}
@@ -114,8 +110,6 @@ func TestAdversarialTimeoutChildTree(t *testing.T) {
 
 	if result.Error == nil {
 		t.Error("expected error result")
-	} else if result.Error.Code == CodeExecutionProcessTreeCleanupFailed {
-		t.Logf("timeout returned cleanup_failed (macOS platform behavior)")
 	} else if result.Error.Code != CodeExecutionDeadlineExceeded && result.Error.Code != CodeExecutionTimeoutExceeded {
 		t.Errorf("expected deadline/timeout error, got %s", result.Error.Code)
 	}
@@ -124,6 +118,7 @@ func TestAdversarialTimeoutChildTree(t *testing.T) {
 }
 
 // TestAdversarialTimeoutGrandchildTree tests that timeout kills 3-level tree.
+// Uses sleep-grandchild mode which produces no output, isolating timeout from overflow.
 func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 	grace := 500 * time.Millisecond
 	postKill := 500 * time.Millisecond
@@ -131,7 +126,7 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 	execTimeout := 700 * time.Millisecond
 	maxExpected := calculateMaxTestDuration(execTimeout, grace, postKill, slack)
 
-	executor := buildTestExecutor(t, maxExpected+time.Second, 64*1024*1024) // 64MB to avoid overflow
+	executor := buildTestExecutor(t, maxExpected+time.Second, 64*1024*1024) // Large buffer to avoid overflow
 	defer executor.Close()
 
 	verifier, cleanup := newProcessVerifier(t)
@@ -142,12 +137,11 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 		t.Skipf("cannot resolve helper path: %v", err)
 	}
 
-	// Use output-forever-grandchild: parent -> child -> grandchild
-	// Parent keeps alive producing output, so the tree stays intact.
-	// This tests timeout killing a 3-level tree where parent produces output.
+	// Use sleep-grandchild: parent -> child -> grandchild, all sleeping forever
+	// No output is produced, so this isolates timeout from overflow.
 	req := &Request{
 		Name:    "timeout-grandchild-tree",
-		Args:    []string{helperPath, "output-forever-grandchild"},
+		Args:    []string{helperPath, "sleep-grandchild"},
 		Env:     []string{"LEAMAS_EXEC_TEST_PID_FILE=" + verifier.ManifestFile()},
 		Timeout: execTimeout,
 	}
@@ -155,8 +149,6 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 	start := time.Now()
 	result := executor.Execute(context.Background(), req)
 	elapsed := time.Since(start)
-
-	time.Sleep(100 * time.Millisecond)
 
 	if elapsed > maxExpected {
 		t.Fatalf("Test exceeded max: elapsed=%v, maxExpected=%v", elapsed, maxExpected)
@@ -167,12 +159,13 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 		t.Fatalf("manifest parse failed: %v", err)
 	}
 	verifier.requireNonEmptyManifest()
-	verifier.requireExpectedRoles("output-forever-grandchild")
+	verifier.requireExpectedRoles("sleep-grandchild")
 
 	if err := verifier.verifyAllProcessesAbsent(verificationTimeout); err != nil {
 		t.Errorf("process leak detected:\n%v", err)
 	}
 
+	// Require exact timeout error code - cleanup_failed would mean the runtime failed
 	if result.Error == nil {
 		t.Error("expected error result")
 	} else if result.Error.Code == CodeExecutionProcessTreeCleanupFailed {

@@ -13,11 +13,11 @@ func TestAdversarialCallerCancellation(t *testing.T) {
 	grace := 500 * time.Millisecond
 	postKill := 500 * time.Millisecond
 	slack := 500 * time.Millisecond
-	execTimeout := 2 * time.Second
-	cancelDelay := 200 * time.Millisecond
+	execTimeout := 5 * time.Second
+	cancelDelay := 1 * time.Second // Must be less than execTimeout to ensure running when cancelled
 	maxExpected := calculateMaxTestDuration(cancelDelay, grace, postKill, slack)
 
-	executor := buildTestExecutor(t, maxExpected+time.Second, 64*1024*1024) // 64MB to avoid overflow
+	executor := buildTestExecutor(t, maxExpected+time.Second, 64*1024*1024) // Large buffer to avoid overflow
 	defer executor.Close()
 
 	verifier, cleanup := newProcessVerifier(t)
@@ -28,11 +28,11 @@ func TestAdversarialCallerCancellation(t *testing.T) {
 		t.Skipf("cannot resolve helper path: %v", err)
 	}
 
-	// Use output-forever-grandchild: parent stays alive (outputting) while child
-	// spawns grandchild. This keeps the process group intact for termination.
+	// Use sleep-grandchild: parent -> child -> grandchild, all sleeping forever
+	// No output is produced, so this isolates cancellation from overflow.
 	req := &Request{
 		Name:    "cancellation-tree",
-		Args:    []string{helperPath, "output-forever-grandchild"},
+		Args:    []string{helperPath, "sleep-grandchild"},
 		Env:     []string{"LEAMAS_EXEC_TEST_PID_FILE=" + verifier.ManifestFile()},
 		Timeout: execTimeout,
 	}
@@ -47,17 +47,6 @@ func TestAdversarialCallerCancellation(t *testing.T) {
 	result := executor.Execute(ctx, req)
 	elapsed := time.Since(start)
 
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify error result - context was cancelled (cleanup_failure is acceptable on some platforms
-	// because cancellation races with output overflow can cause signal permission issues)
-	if result.Error == nil {
-		t.Error("expected error result")
-	}
-	if result.Error != nil && result.Error.Code != CodeExecutionCancelled && result.Error.Code != CodeExecutionProcessTreeCleanupFailed {
-		t.Errorf("expected CodeExecutionCancelled or CodeExecutionProcessTreeCleanupFailed, got %s", result.Error.Code)
-	}
-
 	if elapsed > maxExpected {
 		t.Fatalf("Test exceeded max: elapsed=%v, maxExpected=%v", elapsed, maxExpected)
 	}
@@ -67,10 +56,17 @@ func TestAdversarialCallerCancellation(t *testing.T) {
 		t.Fatalf("manifest parse failed: %v", err)
 	}
 	verifier.requireNonEmptyManifest()
-	verifier.requireExpectedRoles("output-forever-grandchild")
+	verifier.requireExpectedRoles("sleep-grandchild")
 
 	if err := verifier.verifyAllProcessesAbsent(verificationTimeout); err != nil {
 		t.Errorf("process leak detected:\n%v", err)
+	}
+
+	// Require exact cancellation error code
+	if result.Error == nil {
+		t.Error("expected error result")
+	} else if result.Error.Code != CodeExecutionCancelled {
+		t.Errorf("expected CodeExecutionCancelled, got %s", result.Error.Code)
 	}
 
 	t.Logf("TestAdversarialCallerCancellation: PASSED - elapsed %v, records=%d", elapsed, len(records))
@@ -105,8 +101,6 @@ func TestAdversarialNonZeroExitWithChild(t *testing.T) {
 	start := time.Now()
 	result := executor.Execute(context.Background(), req)
 	elapsed := time.Since(start)
-
-	time.Sleep(100 * time.Millisecond)
 
 	if elapsed > maxExpected {
 		t.Fatalf("Test exceeded max: elapsed=%v, maxExpected=%v", elapsed, maxExpected)

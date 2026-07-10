@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-// testHelperBinary is the path to the test helper binary.
-const testHelperBinary = "internal/execution/testdata/testhelper/main"
-
 // expectedRolesForMode defines which roles are expected for each test mode.
 var expectedRolesForMode = map[string][]string{
 	"sleep":                     {"parent"},
