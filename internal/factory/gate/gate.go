@@ -3,11 +3,8 @@ package gate
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
 	"github.com/s1onique/leamas/internal/factory/boundary"
@@ -219,89 +216,8 @@ func RunGate(root string) int {
 		}
 	}
 
-	// Run Go toolchain checks
-	fmt.Printf("\n--- Go toolchain ---\n")
-
-	// go mod tidy
-	fmt.Printf("  go mod tidy...")
-	cmd := exec.Command("go", "mod", "tidy")
-	cmd.Dir = root
-	if err := cmd.Run(); err != nil {
-		fmt.Printf(" FAILED: %v\n", err)
-		failed = true
-	} else {
-		fmt.Printf(" OK\n")
-	}
-
-	// Check go.mod/go.sum didn't change
-	if checks.FileExists(filepath.Join(root, "go.sum")) {
-		cmd = exec.Command("git", "diff", "--quiet", "go.mod", "go.sum")
-		cmd.Dir = root
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("  go.mod/go.sum changed after tidy\n")
-			failed = true
-		}
-	} else {
-		cmd = exec.Command("git", "diff", "--quiet", "go.mod")
-		cmd.Dir = root
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("  go.mod changed after tidy\n")
-			failed = true
-		}
-	}
-
-	// gofmt check
-	fmt.Printf("  gofmt...")
-	cmd = exec.Command("gofmt", "-l", ".")
-	cmd.Dir = root
-	output, _ := cmd.Output()
-	if len(strings.TrimSpace(string(output))) > 0 {
-		fmt.Printf(" FAILED\n")
-		fmt.Printf("    Unformatted files:\n")
-		lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-		for _, f := range lines {
-			if f != "" {
-				fmt.Printf("    - %s\n", f)
-			}
-		}
-		failed = true
-	} else {
-		fmt.Printf(" OK\n")
-	}
-
-	// go vet
-	fmt.Printf("  go vet ./...")
-	cmd = exec.Command("go", "vet", "./...")
-	cmd.Dir = root
-	if err := cmd.Run(); err != nil {
-		fmt.Printf(" FAILED\n")
-		failed = true
-	} else {
-		fmt.Printf(" OK\n")
-	}
-
-	// go test
-	fmt.Printf("  go test ./...")
-	cmd = exec.Command("go", "test", "./...")
-	cmd.Dir = root
-	if err := cmd.Run(); err != nil {
-		fmt.Printf(" FAILED\n")
-		failed = true
-	} else {
-		fmt.Printf(" OK\n")
-	}
-
-	// CGO_ENABLED=0 build
-	fmt.Printf("  static build...")
-	cmd = exec.Command("go", "build", "-trimpath", "-o", "bin/leamas", "./cmd/leamas")
-	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if err := cmd.Run(); err != nil {
-		fmt.Printf(" FAILED\n")
-		failed = true
-	} else {
-		fmt.Printf(" OK\n")
-	}
+	// Run Go toolchain checks (extracted to toolchain.go)
+	runToolchainChecks(root, &failed)
 
 	if failed {
 		fmt.Printf("\n*** GATE FAILED ***\n")
