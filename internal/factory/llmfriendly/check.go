@@ -136,6 +136,7 @@ func checkFile(path string, cfg Config) ([]Finding, error) {
 	// Check path-based ignores for large data files that are inherently large
 	ignoredPaths := []string{
 		".factory/dupcode-baseline.json",
+		".factory/coverage.out",
 	}
 	for _, p := range ignoredPaths {
 		if path == p || strings.HasSuffix(path, p) {

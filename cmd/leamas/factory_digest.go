@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/digest"
+	"github.com/s1onique/leamas/internal/factory/output"
 )
 
 // digestArgs holds parsed arguments for the digest command.
@@ -102,7 +103,12 @@ func runFactoryDigest(args []string, stdout, stderr io.Writer, writeDigest func(
 		return 1
 	}
 
-	fmt.Fprintln(stdout, opts.Output)
+	// Use output package for consistent formatting
+	result := output.NewResult("digest")
+	result.SetOK()
+	result.AddField("output", opts.Output)
+	result.AddField("mode", string(parsed.mode))
+	output.WriteLine(stdout, *result)
 	return 0
 }
 

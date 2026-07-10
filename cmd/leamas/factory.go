@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/s1onique/leamas/internal/factory/gate"
+	"github.com/s1onique/leamas/internal/factory/output"
 )
 
 // parseFactoryCommand extracts and validates the factory subcommand from args.
@@ -18,7 +19,7 @@ func parseFactoryCommand(args []string) (string, error) {
 
 	cmd := args[0]
 	switch cmd {
-	case "verify", "gate", "factorize", "digest", "coverage", "gate-summary":
+	case "verify", "gate", "factorize", "digest", "coverage", "gate-summary", "output-contract":
 		return cmd, nil
 	default:
 		return "", fmt.Errorf("unknown factory command: %s", cmd)
@@ -47,6 +48,8 @@ func handleFactory() {
 		handleFactoryCoverage()
 	case "gate-summary":
 		handleFactoryGateSummary()
+	case "output-contract":
+		handleFactoryOutputContract()
 	}
 }
 
@@ -79,4 +82,30 @@ func handleFactoryGateSummary() {
 
 	fmt.Printf("Gate summary written to: %s\n", outputPath)
 	os.Exit(0)
+}
+
+func handleFactoryOutputContract() {
+	findings := output.ContractCheck(".")
+	verifier := output.DefaultVerifier()
+	cmdCount := len(verifier.Commands)
+
+	if len(findings) == 0 {
+		// Use output package for consistent formatting
+		result := output.NewResult("output-contract")
+		result.SetOK()
+		result.AddField("commands", cmdCount)
+		result.AddField("checked", cmdCount)
+		output.WriteLine(os.Stdout, *result)
+		os.Exit(0)
+	}
+
+	// Report failures
+	result := output.NewResult("output-contract")
+	result.AddField("commands", cmdCount)
+	result.AddField("checked", cmdCount)
+	for _, f := range findings {
+		result.AddFailure(f.Kind, f.Message)
+	}
+	output.WriteLine(os.Stderr, *result)
+	os.Exit(1)
 }

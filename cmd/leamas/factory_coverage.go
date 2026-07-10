@@ -2,7 +2,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/coverage"
+	"github.com/s1onique/leamas/internal/factory/output"
 )
 
 // coverageArgs holds parsed arguments for the coverage command.
@@ -28,7 +28,7 @@ type coverageArgs struct {
 // Explicit --min-module values always override --default-module-floors regardless of order.
 func parseCoverageArgs(args []string) (coverageArgs, error) {
 	result := coverageArgs{
-		showBreakdown:     true, // default to showing breakdown
+		showBreakdown:     false, // default to one-line output
 		minModulePercents: make(map[string]float64),
 	}
 
@@ -129,32 +129,24 @@ func printThresholdsOutput(stdout io.Writer, jsonFormat bool) {
 	threshold := coverage.DefaultThreshold()
 	modules := coverage.KnownEnforcedModules()
 
+	// Use output contract format
+	result := output.NewResult("coverage")
+	result.SetOK()
+	result.AddField("total", threshold.MinTotalPercent)
+	for _, name := range modules {
+		result.AddField(name, threshold.MinModulePercents[name])
+	}
+	result.AddField("report_only", "other")
+
 	if jsonFormat {
-		output := thresholdsOutput{
-			SchemaVersion:     1,
-			Total:             threshold.MinTotalPercent,
-			Modules:           make([]moduleThreshold, 0, len(modules)),
-			ReportOnlyModules: []string{"other"},
-		}
-		for _, name := range modules {
-			output.Modules = append(output.Modules, moduleThreshold{
-				Module:     name,
-				MinPercent: threshold.MinModulePercents[name],
-			})
-		}
-		data, err := json.MarshalIndent(output, "", "  ")
+		data, err := result.JSON()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ERROR: failed to marshal thresholds: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Fprintln(stdout, string(data))
 	} else {
-		fmt.Fprintln(stdout, "coverage thresholds:")
-		fmt.Fprintf(stdout, "total >= %.1f\n", threshold.MinTotalPercent)
-		for _, name := range modules {
-			fmt.Fprintf(stdout, "%s >= %.1f\n", name, threshold.MinModulePercents[name])
-		}
-		fmt.Fprintln(stdout, "other: report-only")
+		output.WriteLine(stdout, *result)
 	}
 }
 
@@ -202,29 +194,27 @@ func runFactoryCoverage(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	// Print main status line
-	fmt.Fprintf(stdout, "coverage: total=%.1f%% min=%.1f%% OK\n", profileReport.TotalPercent, parsed.minTotal)
+	// Build result using output package
+	result := output.NewResult("coverage")
+	result.SetOK()
+	result.AddField("total", profileReport.TotalPercent)
+	result.AddField("min", parsed.minTotal)
 
-	// Print per-module OK lines for enforced modules that have thresholds
-	report := coverage.ProfileReportToReport(profileReport)
-	moduleMap := make(map[string]float64)
-	for _, m := range report.Modules {
-		moduleMap[m.Module] = m.Percent
-	}
-	moduleOrder := coverage.KnownEnforcedModules()
-	for _, moduleName := range moduleOrder {
-		minPercent, hasThreshold := parsed.minModulePercents[moduleName]
-		if !hasThreshold {
-			continue
+	// When --json is used, output only JSON (one-line or structured)
+	if parsed.jsonFormat {
+		data, err := result.JSON()
+		if err != nil {
+			fmt.Fprintf(stderr, "coverage: error generating JSON: %v\n", err)
+			return 1
 		}
-		actualPercent, exists := moduleMap[moduleName]
-		if !exists {
-			continue // skip missing modules in OK output
-		}
-		fmt.Fprintf(stdout, "coverage: module %s=%.1f%% min=%.1f%% OK\n", moduleName, actualPercent, minPercent)
+		fmt.Fprintln(stdout, string(data))
+		return 0
 	}
 
-	// Print module breakdown by default
+	// Write one-line output using output package
+	output.WriteLine(stdout, *result)
+
+	// Print module breakdown only with explicit --breakdown flag
 	if parsed.showBreakdown {
 		profileReport.PrintModuleTableTo(stdout)
 	}
@@ -261,8 +251,8 @@ func printCoverageUsage() {
 	fmt.Println("  --default-module-floors       Apply default module floors (optional)")
 	fmt.Println("  --thresholds [--json]          Print canonical default thresholds")
 	fmt.Println("  --json-output <path>           Write module breakdown JSON to file (optional)")
-	fmt.Println("  --breakdown                    Show module breakdown (default: true)")
-	fmt.Println("  --no-breakdown                 Hide module breakdown")
+	fmt.Println("  --breakdown                    Show module breakdown (optional)")
+	fmt.Println("  --no-breakdown                 Hide module breakdown (default)")
 }
 
 func printCoverageUsageTo(w io.Writer) {
@@ -275,6 +265,6 @@ func printCoverageUsageTo(w io.Writer) {
 	fmt.Fprintln(w, "  --default-module-floors       Apply default module floors (optional)")
 	fmt.Fprintln(w, "  --thresholds [--json]          Print canonical default thresholds")
 	fmt.Fprintln(w, "  --json-output <path>           Write module breakdown JSON to file (optional)")
-	fmt.Fprintln(w, "  --breakdown                    Show module breakdown (default: true)")
-	fmt.Fprintln(w, "  --no-breakdown                 Hide module breakdown")
+	fmt.Fprintln(w, "  --breakdown                    Show module breakdown (optional)")
+	fmt.Fprintln(w, "  --no-breakdown                 Hide module breakdown (default)")
 }

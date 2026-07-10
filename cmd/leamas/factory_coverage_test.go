@@ -127,8 +127,9 @@ func TestParseCoverageArgs_DefaultBreakdown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !args.showBreakdown {
-		t.Error("expected showBreakdown to be true by default")
+	// Default is now no breakdown (one-line output)
+	if args.showBreakdown {
+		t.Error("expected showBreakdown to be false by default")
 	}
 }
 
@@ -207,20 +208,36 @@ func TestRunFactoryCoverage_WritesJSON(t *testing.T) {
 	}
 }
 
-func TestRunFactoryCoverage_NoBreakdown(t *testing.T) {
+func TestRunFactoryCoverage_DefaultNoBreakdown(t *testing.T) {
 	profilePath := writeTempProfile(t, minimalCoverageProfile)
 	defer os.Remove(profilePath)
 
 	var stdout, stderr bytes.Buffer
-	code := runFactoryCoverage([]string{"--profile", profilePath, "--min-total", "50", "--no-breakdown"}, &stdout, &stderr)
+	// Default behavior: no breakdown (one-line output)
+	code := runFactoryCoverage([]string{"--profile", profilePath, "--min-total", "50"}, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("expected exit code 0, got %d", code)
 	}
-	// When --no-breakdown is used, module table should not be printed
-	// The output should only contain the OK line
+	// Default output should be one line
 	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
 	if len(lines) != 1 {
-		t.Errorf("expected 1 line of output with --no-breakdown, got %d: %v", len(lines), lines)
+		t.Errorf("expected 1 line of output by default, got %d: %v", len(lines), lines)
+	}
+}
+
+func TestRunFactoryCoverage_BreakdownFlag(t *testing.T) {
+	profilePath := writeTempProfile(t, minimalCoverageProfile)
+	defer os.Remove(profilePath)
+
+	var stdout, stderr bytes.Buffer
+	code := runFactoryCoverage([]string{"--profile", profilePath, "--min-total", "50", "--breakdown"}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("expected exit code 0, got %d", code)
+	}
+	// With --breakdown, output should have multiple lines
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) < 2 {
+		t.Errorf("expected multiple lines with --breakdown, got %d: %v", len(lines), lines)
 	}
 }
 
@@ -324,38 +341,19 @@ func TestCoverageCLIPrintThresholdsJSON(t *testing.T) {
 	}
 
 	output := stdout.String()
-	// Verify JSON structure
-	if !strings.Contains(output, `"schema_version"`) {
-		t.Error("expected JSON output to contain schema_version")
+	// Verify JSON structure per output contract
+	if !strings.Contains(output, `"ok"`) {
+		t.Error("expected JSON output to contain ok field")
 	}
-	if !strings.Contains(output, `"total"`) {
-		t.Error("expected JSON output to contain total")
+	if !strings.Contains(output, `"check"`) {
+		t.Error("expected JSON output to contain check field")
 	}
-	if !strings.Contains(output, `"modules"`) {
-		t.Error("expected JSON output to contain modules")
+	if !strings.Contains(output, `"fields"`) {
+		t.Error("expected JSON output to contain fields array")
 	}
-	if !strings.Contains(output, `"report_only_modules"`) {
-		t.Error("expected JSON output to contain report_only_modules")
-	}
-	// Verify known modules appear
-	if !strings.Contains(output, "cmd/leamas") {
-		t.Error("expected JSON output to contain cmd/leamas")
-	}
-	if !strings.Contains(output, "internal/factory") {
-		t.Error("expected JSON output to contain internal/factory")
-	}
-	if !strings.Contains(output, "internal/hulk") {
-		t.Error("expected JSON output to contain internal/hulk")
-	}
-	if !strings.Contains(output, "internal/web") {
-		t.Error("expected JSON output to contain internal/web")
-	}
-	if !strings.Contains(output, "internal/witness") {
-		t.Error("expected JSON output to contain internal/witness")
-	}
-	// Verify other is report-only
-	if !strings.Contains(output, `"other"`) {
-		t.Error("expected JSON output to list 'other' as report-only")
+	// Verify OK status
+	if !strings.Contains(output, `"ok": true`) {
+		t.Error("expected JSON output to have ok=true")
 	}
 }
 
@@ -369,29 +367,17 @@ func TestCoverageCLIPrintThresholdsText(t *testing.T) {
 	}
 
 	output := stdout.String()
-	// Verify text structure
-	if !strings.Contains(output, "coverage thresholds:") {
-		t.Error("expected text output to contain 'coverage thresholds:'")
+	// Verify text structure per output contract
+	// Output format: "coverage: key=value key=value OK"
+	if !strings.Contains(output, "coverage:") {
+		t.Error("expected text output to contain 'coverage:'")
 	}
-	if !strings.Contains(output, "total >= 64.0") {
-		t.Error("expected text output to contain 'total >= 64.0'")
+	if !strings.Contains(output, "OK") {
+		t.Error("expected text output to contain 'OK'")
 	}
-	if !strings.Contains(output, "cmd/leamas >= 50.0") {
-		t.Error("expected text output to contain 'cmd/leamas >= 50.0'")
-	}
-	if !strings.Contains(output, "internal/factory >= 67.0") {
-		t.Error("expected text output to contain 'internal/factory >= 67.0'")
-	}
-	if !strings.Contains(output, "internal/hulk >= 90.0") {
-		t.Error("expected text output to contain 'internal/hulk >= 90.0'")
-	}
-	if !strings.Contains(output, "internal/web >= 70.0") {
-		t.Error("expected text output to contain 'internal/web >= 70.0'")
-	}
-	if !strings.Contains(output, "internal/witness >= 80.0") {
-		t.Error("expected text output to contain 'internal/witness >= 80.0'")
-	}
-	if !strings.Contains(output, "other: report-only") {
-		t.Error("expected text output to contain 'other: report-only'")
+	// Should be one line
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line of output, got %d", len(lines))
 	}
 }

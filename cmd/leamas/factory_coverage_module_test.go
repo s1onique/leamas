@@ -326,14 +326,16 @@ func TestRunFactoryCoverage_ModuleOKLines(t *testing.T) {
 	if code != 0 {
 		t.Errorf("expected exit code 0, got %d. stderr: %s", code, stderr.String())
 	}
-	// Check for per-module OK lines
-	if !strings.Contains(stdout.String(), "module cmd/leamas=") {
-		t.Errorf("expected 'module cmd/leamas=' in stdout, got: %s", stdout.String())
-	}
-	if !strings.Contains(stdout.String(), "module internal/factory=") {
-		t.Errorf("expected 'module internal/factory=' in stdout, got: %s", stdout.String())
+	// Check for one-line output format (coverage: total=X min=Y OK)
+	if !strings.Contains(stdout.String(), "coverage:") {
+		t.Errorf("expected 'coverage:' in stdout, got: %s", stdout.String())
 	}
 	if !strings.Contains(stdout.String(), " OK") {
 		t.Errorf("expected 'OK' in stdout, got: %s", stdout.String())
+	}
+	// Should be exactly one line (no per-module breakdown in default output)
+	lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
+	if len(lines) != 1 {
+		t.Errorf("expected 1 line of output, got %d: %s", len(lines), stdout.String())
 	}
 }
