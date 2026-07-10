@@ -74,6 +74,30 @@ func CollectRangePublicSurfaceDelta(repoRoot string, rangeFiles []RangeFile, rev
 	return collectPublicSurfaceDeltaInternal(ModeRange, repoRoot, rangeFiles, base, head, paths)
 }
 
+// mergeExports merges exported symbols into the package's symbol map.
+// This ensures all files in a package contribute to the same package-level symbol set.
+func mergeExports(pkgExports map[symbolKey]symbolInfo, newExports map[symbolKey]symbolInfo) {
+	for key, info := range newExports {
+		// Only add if not already present (first occurrence wins)
+		if _, exists := pkgExports[key]; !exists {
+			pkgExports[key] = info
+		}
+	}
+}
+
+// isDeletedFile checks if a file is marked as deleted in range mode.
+func isDeletedFile(paths []string, rangeFiles []RangeFile, filePath string) bool {
+	if len(rangeFiles) == 0 {
+		return false
+	}
+	for _, rf := range rangeFiles {
+		if rf.Path == filePath && rf.Status == "deleted" {
+			return true
+		}
+	}
+	return false
+}
+
 // collectPublicSurfaceDeltaInternal is the internal collector.
 // For dirty: base=HEAD, current=worktree
 // For staged: base=HEAD, current=index
@@ -82,12 +106,23 @@ func collectPublicSurfaceDeltaInternal(mode Mode, repoRoot string, rangeFiles []
 	goFiles := extractGoFiles(paths)
 	cliFiles := extractCLIFiles(paths)
 
+	// Package-level symbol sets - symbols are merged across all files in a package.
+	// This prevents false removals when a symbol is deleted from file A but
+	// still exists in file B of the same package.
 	baseExports := make(map[string]map[symbolKey]symbolInfo)
 	headExports := make(map[string]map[symbolKey]symbolInfo)
 
 	// Determine comparison targets based on mode
 	for _, file := range goFiles {
 		pkg := packageFromPath(file)
+
+		// Ensure package maps exist
+		if _, exists := baseExports[pkg]; !exists {
+			baseExports[pkg] = make(map[symbolKey]symbolInfo)
+		}
+		if _, exists := headExports[pkg]; !exists {
+			headExports[pkg] = make(map[symbolKey]symbolInfo)
+		}
 
 		// Get base exports
 		var baseContent []byte
@@ -106,16 +141,28 @@ func collectPublicSurfaceDeltaInternal(mode Mode, repoRoot string, rangeFiles []
 		if baseErr == nil && len(baseContent) > 0 {
 			exports, err := parseExportsFromBytes(baseContent, pkg)
 			if err == nil {
-				baseExports[pkg] = exports
+				// Merge exports from this file into the package-level set
+				mergeExports(baseExports[pkg], exports)
 			}
 		}
 
 		// Get head exports (current state)
+		// For deleted files in range mode, we still need to check if the package
+		// has other files that might contain the same symbols
 		var headContent []byte
 		var headErr error
+		fileDeleted := isDeletedFile(paths, rangeFiles, file)
+
 		switch mode {
 		case ModeRange:
-			headContent, headErr = getFileContentAtCommit(repoRoot, file, head)
+			if fileDeleted {
+				// File is deleted - no head content, but we still need to check
+				// if the package exists in head (another file might have the symbols)
+				// For now, headContent stays empty
+				headErr = nil // No error, just no content
+			} else {
+				headContent, headErr = getFileContentAtCommit(repoRoot, file, head)
+			}
 		case ModeDirty:
 			headContent, headErr = getWorktreeFileContent(repoRoot, file)
 		case ModeStaged:
@@ -131,7 +178,8 @@ func collectPublicSurfaceDeltaInternal(mode Mode, repoRoot string, rangeFiles []
 		if headErr == nil && len(headContent) > 0 {
 			exports, err := parseExportsFromBytes(headContent, pkg)
 			if err == nil {
-				headExports[pkg] = exports
+				// Merge exports from this file into the package-level set
+				mergeExports(headExports[pkg], exports)
 			}
 		}
 	}
