@@ -159,41 +159,27 @@ func (e *Executor) terminateProcessTree(pid int, req *Request) *ExecutionError {
 func (e *Executor) escalateTermination(pid int) *ExecutionError {
 	pgm := newProcessGroupManager()
 
-	// Send SIGKILL to process group
+	// Send SIGKILL to process group (not just leader)
 	if err := pgm.killProcessGroup(pid, syscall.SIGKILL); err != nil {
-		// ESRCH: process already gone - benign
+		// Only ESRCH means the process group is confirmed absent
 		if errors.Is(err, syscall.ESRCH) {
 			return nil
 		}
-		// EPERM: process exists but we lack permission to signal it
-		// This is NOT benign - process is still running
-		// Wait and check if it eventually dies
-		if errors.Is(err, syscall.EPERM) {
-			// Process exists; wait to see if it dies
-			terminated, waitErr := pgm.waitForProcessGroup(pid, e.budget.PostKillWait)
-			if waitErr != nil && !errors.Is(waitErr, syscall.ESRCH) {
-				return ErrProcessTreeCleanupFailed(pid, fmt.Sprintf("post-kill wait: %v", waitErr))
-			}
-			if !terminated {
-				return ErrProcessTreeCleanupFailed(pid, "process group survived SIGKILL and post-kill wait")
-			}
-			return nil
-		}
-		// Unexpected error
+		// EPERM means we lack permission to signal the group - it may still exist
+		// EINVAL means invalid signal - unexpected for SIGKILL
+		// Any other error means we can't determine if group is gone
 		return ErrProcessTreeCleanupFailed(pid, fmt.Sprintf("SIGKILL: %v", err))
 	}
 
-	// Wait with post-kill period
+	// Wait with post-kill period and verify process group is gone
 	terminated, err := pgm.waitForProcessGroup(pid, e.budget.PostKillWait)
-	if err != nil && !errors.Is(err, syscall.ESRCH) {
-		// Unexpected error, not just timeout
+	if err != nil {
+		// Any error during wait means we couldn't verify absence
 		return ErrProcessTreeCleanupFailed(pid, fmt.Sprintf("post-kill wait: %v", err))
 	}
-	// If !terminated after PostKillWait, process group survived SIGKILL.
-	// This is a cleanup failure - the strict-bounds contract requires us to
-	// report that the process tree could not be cleaned up.
 	if !terminated {
-		return ErrProcessTreeCleanupFailed(pid, "process group survived SIGKILL and post-kill wait")
+		// Process group survived SIGKILL and post-kill wait - cleanup failed
+		return ErrProcessTreeCleanupFailed(pid, "process group survived SIGKILL")
 	}
 
 	return nil

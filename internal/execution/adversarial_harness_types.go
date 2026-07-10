@@ -15,6 +15,7 @@ var expectedRolesForMode = map[string][]string{
 	"ignore-sigterm":            {"parent", "child"},
 	"spawn-child":               {"parent", "child"},
 	"spawn-grandchild":          {"parent", "child", "grandchild"},
+	"sleep-grandchild":          {"parent", "child", "grandchild"},
 	"hold-stdout-open":          {"parent", "child"},
 	"output-forever":            {"parent"},
 	"output-forever-child":      {"parent", "child"},

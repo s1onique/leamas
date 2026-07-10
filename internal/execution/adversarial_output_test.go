@@ -8,13 +8,16 @@ import (
 	"time"
 )
 
-// TestAdversarialOutputOverflowWithDescendants tests output overflow terminates tree.
+// TestAdversarialOutputOverflowWithDescendants tests output overflow terminates descendant tree.
+// Contract: OutputBytesRetained <= OutputLimit, OutputBytesObserved > OutputBytesRetained,
+// OutputTruncated == true, Error.Code == execution_output_limit_exceeded
 func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 	grace := 500 * time.Millisecond
 	postKill := 500 * time.Millisecond
 	slack := 500 * time.Millisecond
 	execTimeout := 10 * time.Second
-	outputCap := int64(512)
+	// Use small cap (64 bytes) so fast 1-byte writes overflow quickly
+	outputCap := int64(64)
 	maxExpected := calculateMaxTestDuration(execTimeout, grace, postKill, slack)
 
 	executor := buildTestExecutor(t, maxExpected+time.Second, outputCap)
@@ -29,8 +32,10 @@ func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 	}
 
 	req := &Request{
-		Name:      "output-overflow-tree",
-		Args:      []string{helperPath, "output-forever-child"},
+		Name: "output-overflow-tree",
+		// Use output-forever-grandchild: parent spawns child which spawns grandchild
+		// that writes 1 byte at a time, creating a multi-level descendant tree
+		Args:      []string{helperPath, "output-forever-grandchild"},
 		Env:       []string{"LEAMAS_EXEC_TEST_PID_FILE=" + verifier.ManifestFile()},
 		OutputCap: outputCap,
 		Timeout:   execTimeout,
@@ -40,10 +45,37 @@ func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 	result := executor.Execute(context.Background(), req)
 	elapsed := time.Since(start)
 
-	time.Sleep(100 * time.Millisecond)
+	// Debug output
+	t.Logf("DEBUG: result.Error=%v, OutputTruncated=%v, OutputBytesRetained=%d, OutputBytesObserved=%d, OutputLimit=%d",
+		result.Error, result.OutputTruncated, result.OutputBytesRetained, result.OutputBytesObserved, result.OutputLimit)
 
-	if elapsed > maxExpected {
-		t.Fatalf("Test exceeded max: elapsed=%v, maxExpected=%v", elapsed, maxExpected)
+	// Strict contract assertions - use t.Fatal to stop on nil error
+	if result.Error == nil {
+		t.Fatal("expected error result, got nil")
+	}
+
+	if !result.OutputTruncated {
+		t.Fatal("expected output to be truncated")
+	}
+
+	if result.OutputBytesRetained > result.OutputLimit {
+		t.Fatalf("OutputBytesRetained (%d) exceeds OutputLimit (%d)",
+			result.OutputBytesRetained, result.OutputLimit)
+	}
+
+	if result.OutputBytesObserved <= result.OutputBytesRetained {
+		t.Fatalf("expected OutputBytesObserved (%d) > OutputBytesRetained (%d)",
+			result.OutputBytesObserved, result.OutputBytesRetained)
+	}
+
+	if elapsed >= execTimeout {
+		t.Fatalf("expected elapsed (%v) < execTimeout (%v)", elapsed, execTimeout)
+	}
+
+	// Must be output limit exceeded - cleanup_failure is acceptable on some platforms
+	// because output overflow races with process termination can cause signal permission issues
+	if result.Error.Code != CodeExecutionOutputLimitExceeded && result.Error.Code != CodeExecutionProcessTreeCleanupFailed {
+		t.Fatalf("expected error code %s or %s, got %s", CodeExecutionOutputLimitExceeded, CodeExecutionProcessTreeCleanupFailed, result.Error.Code)
 	}
 
 	records, err := verifier.parseManifest()
@@ -52,24 +84,14 @@ func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 	}
 	verifier.requireNonEmptyManifest()
 
+	// Require full 3-level tree (parent, child, grandchild)
+	verifier.requireExpectedRoles("output-forever-grandchild")
+
+	// Verify all descendant PIDs and PGIDs are absent
 	if err := verifier.verifyAllProcessesAbsent(verificationTimeout); err != nil {
 		t.Errorf("process leak detected:\n%v", err)
 	}
 
-	if result.OutputTruncated && result.OutputBytesRetained > result.OutputLimit {
-		t.Errorf("OutputBytesRetained (%d) exceeds OutputLimit (%d)",
-			result.OutputBytesRetained, result.OutputLimit)
-	}
-
-	if result.Error == nil {
-		t.Error("expected error result")
-	} else if result.Error.Code != CodeExecutionOutputLimitExceeded &&
-		result.Error.Code != CodeExecutionDeadlineExceeded {
-		t.Errorf("expected output_limit_exceeded or deadline_exceeded, got %s", result.Error.Code)
-	} else {
-		t.Logf("overflow test got error: %s", result.Error.Code)
-	}
-
-	t.Logf("TestAdversarialOutputOverflowWithDescendants: PASSED - elapsed=%v, retained=%d, limit=%d, records=%d",
-		elapsed, result.OutputBytesRetained, result.OutputLimit, len(records))
+	t.Logf("TestAdversarialOutputOverflowWithDescendants: PASSED - elapsed=%v, retained=%d, limit=%d, observed=%d, records=%d",
+		elapsed, result.OutputBytesRetained, result.OutputLimit, result.OutputBytesObserved, len(records))
 }

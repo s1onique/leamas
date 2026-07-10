@@ -131,7 +131,7 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 	execTimeout := 700 * time.Millisecond
 	maxExpected := calculateMaxTestDuration(execTimeout, grace, postKill, slack)
 
-	executor := buildTestExecutor(t, maxExpected+time.Second, 64*1024)
+	executor := buildTestExecutor(t, maxExpected+time.Second, 64*1024*1024) // 64MB to avoid overflow
 	defer executor.Close()
 
 	verifier, cleanup := newProcessVerifier(t)
@@ -142,9 +142,12 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 		t.Skipf("cannot resolve helper path: %v", err)
 	}
 
+	// Use output-forever-grandchild: parent -> child -> grandchild
+	// Parent keeps alive producing output, so the tree stays intact.
+	// This tests timeout killing a 3-level tree where parent produces output.
 	req := &Request{
 		Name:    "timeout-grandchild-tree",
-		Args:    []string{helperPath, "spawn-grandchild"},
+		Args:    []string{helperPath, "output-forever-grandchild"},
 		Env:     []string{"LEAMAS_EXEC_TEST_PID_FILE=" + verifier.ManifestFile()},
 		Timeout: execTimeout,
 	}
@@ -164,7 +167,7 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 		t.Fatalf("manifest parse failed: %v", err)
 	}
 	verifier.requireNonEmptyManifest()
-	verifier.requireExpectedRoles("spawn-grandchild")
+	verifier.requireExpectedRoles("output-forever-grandchild")
 
 	if err := verifier.verifyAllProcessesAbsent(verificationTimeout); err != nil {
 		t.Errorf("process leak detected:\n%v", err)

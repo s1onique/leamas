@@ -55,10 +55,21 @@ func NewResult(exitCode int, duration time.Duration, stdout, stderr []byte, trun
 	}
 }
 
-// NewErrorResult creates an error result.
+// NewErrorResult creates an error result with zero duration.
+// Deprecated: Use NewErrorResultWithDuration for accurate timing.
 func NewErrorResult(err *ExecutionError) *Result {
 	return &Result{
 		ExitCode: -1,
+		Duration: 0,
+		Error:    err,
+	}
+}
+
+// NewErrorResultWithDuration creates an error result with measured duration.
+func NewErrorResultWithDuration(err *ExecutionError, duration time.Duration) *Result {
+	return &Result{
+		ExitCode: -1,
+		Duration: duration,
 		Error:    err,
 	}
 }

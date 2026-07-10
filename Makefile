@@ -5,6 +5,7 @@
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
 .PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
 .PHONY: coverage dupcode-baseline release release-build release-checksum release-verify release-clean
+.PHONY: test-helper
 
 # Install variables (GNU conventions)
 PREFIX ?= /usr/local
@@ -193,6 +194,14 @@ verify-domain-boundaries:
 install-git-hooks:
 	@chmod +x scripts/install_git_hooks.sh
 	@./scripts/install_git_hooks.sh
+
+# Build test helper binary for adversarial tests
+# This ensures tests can run from a clean checkout without manual setup
+test-helper:
+	@echo "Building test helper..."
+	@mkdir -p internal/execution/testdata/testhelper
+	@cd internal/execution/testdata/testhelper && go build -o main main.go
+	@echo "Done. Test helper: internal/execution/testdata/testhelper/main"
 
 install: build
 	@echo "Installing Leamas to $(DESTDIR)$(BINDIR)/leamas"
