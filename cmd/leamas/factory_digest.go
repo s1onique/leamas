@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/s1onique/leamas/internal/factory/digest"
 	"github.com/s1onique/leamas/internal/factory/output"
@@ -80,9 +81,25 @@ func parseDigestArgs(args []string) (digestArgs, error) {
 	return result, nil
 }
 
+func formatElapsed(d time.Duration) string {
+	return fmt.Sprintf("%.2fs", d.Seconds())
+}
+
 // runFactoryDigest runs the digest command with the given arguments.
 // It returns 0 on success, non-zero on failure.
 func runFactoryDigest(args []string, stdout, stderr io.Writer, writeDigest func(digest.Options) error) int {
+	return runFactoryDigestWithClock(args, stdout, stderr, writeDigest, time.Now, time.Since)
+}
+
+func runFactoryDigestWithClock(
+	args []string,
+	stdout, stderr io.Writer,
+	writeDigest func(digest.Options) error,
+	now func() time.Time,
+	since func(time.Time) time.Duration,
+) int {
+	startedAt := now()
+
 	parsed, err := parseDigestArgs(args)
 	if err != nil {
 		fmt.Fprintf(stderr, "ERROR: %s\n", err)
@@ -102,12 +119,14 @@ func runFactoryDigest(args []string, stdout, stderr io.Writer, writeDigest func(
 		fmt.Fprintf(stderr, "ERROR: %v\n", err)
 		return 1
 	}
+	elapsed := since(startedAt)
 
 	// Use output package for consistent formatting
 	result := output.NewResult("digest")
 	result.SetOK()
 	result.AddField("output", opts.Output)
 	result.AddField("mode", string(parsed.mode))
+	result.AddField("time", formatElapsed(elapsed))
 	output.WriteLine(stdout, *result)
 	return 0
 }
