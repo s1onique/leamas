@@ -48,6 +48,7 @@ func AllVerifiers() []Verifier {
 		{"agent-context", agentContextVerifier},
 		{"git-hooks", gitHooksVerifier},
 		{"domain-boundaries", boundary.CheckRepo},
+		{"executable-contract-first", doctrine.CheckExecutableContractFirst},
 	}
 }
 
