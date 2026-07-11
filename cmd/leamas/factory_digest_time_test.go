@@ -104,7 +104,13 @@ func TestRunFactoryDigest_ElapsedTimeIncludesSuccessfulWrite(t *testing.T) {
 	}
 }
 
-func TestRunFactoryDigest_ProductionDigestFileExcludesElapsedTime(t *testing.T) {
+// TestProductionDigestFile_ExcludesElapsedTime proves the production
+// digest.Write contract: the generated digest file content must not
+// contain the CLI-only timing field. It exercises digest.Write
+// directly with an explicit RepoRoot so it does not mutate global
+// process state (no os.Chdir) and stays hermetic under parallel and
+// CI runs.
+func TestProductionDigestFile_ExcludesElapsedTime(t *testing.T) {
 	repoRoot := t.TempDir()
 	initDigestGitRepo(t, repoRoot)
 
@@ -119,31 +125,13 @@ func TestRunFactoryDigest_ProductionDigestFileExcludesElapsedTime(t *testing.T) 
 		t.Fatalf("failed to modify tracked file: %v", err)
 	}
 
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	if err := os.Chdir(repoRoot); err != nil {
-		t.Fatalf("failed to enter repo: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(oldWd)
-	})
-
 	outputPath := filepath.Join(t.TempDir(), "digest.txt")
-	var stdout, stderr bytes.Buffer
-	code := runFactoryDigest(
-		[]string{"--dirty", "--output", outputPath},
-		&stdout,
-		&stderr,
-		digest.Write,
-	)
-
-	if code != 0 {
-		t.Fatalf("expected code 0, got %d. stderr: %s", code, stderr.String())
-	}
-	if !digestStatusPattern.MatchString(stdout.String()) {
-		t.Fatalf("stdout %q does not match %q", stdout.String(), digestStatusPattern)
+	if err := digest.Write(digest.Options{
+		RepoRoot: repoRoot,
+		Mode:     digest.ModeDirty,
+		Output:   outputPath,
+	}); err != nil {
+		t.Fatalf("digest.Write failed: %v", err)
 	}
 
 	data, err := os.ReadFile(outputPath)
