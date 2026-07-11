@@ -51,24 +51,30 @@ func TestSubprocessMakeFactorizeAndGate(t *testing.T) {
 		t.Fatalf("go build failed: %v\n%s", err, out)
 	}
 
-	// Step 1: compile via the CLI surface.
+	// Step 1: compile via the CLI surface. Strip any inherited
+	// LEAMAS_EXEC_* env vars so the spawned leamas binary does
+	// not refuse to run as a nested invocation.
+	cleanEnv := stripLeamasExecEnv(os.Environ())
 	cmd := exec.Command(leamasBin,
 		"factory", "doctrine", "compile",
 		"--profile", "fsharp-elm-service-v1",
 		"--target", target,
 	)
 	cmd.Dir = repoRoot
+	cmd.Env = cleanEnv
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("doctrine compile failed: %v\n%s", err, out)
 	}
 
 	// Step 2: run `make factorize` with LEAMAS on PATH inside the
-	// compiled target.
+	// compiled target. Strip any inherited LEAMAS_EXEC_* env vars
+	// so the spawned leamas binary does not refuse to run as a
+	// nested invocation.
 	envPath := os.Getenv("PATH")
 	cmd = exec.Command("make", "factorize")
 	cmd.Dir = target
-	cmd.Env = append(os.Environ(), "PATH="+bindir+string(os.PathListSeparator)+envPath)
+	cmd.Env = append(cleanEnv, "PATH="+bindir+string(os.PathListSeparator)+envPath)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("make factorize failed: %v\n%s", err, out)
@@ -80,7 +86,7 @@ func TestSubprocessMakeFactorizeAndGate(t *testing.T) {
 	// Step 3: run `make gate` inside the compiled target.
 	cmd = exec.Command("make", "gate")
 	cmd.Dir = target
-	cmd.Env = append(os.Environ(), "PATH="+bindir+string(os.PathListSeparator)+envPath)
+	cmd.Env = append(cleanEnv, "PATH="+bindir+string(os.PathListSeparator)+envPath)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("make gate failed: %v\n%s", err, out)
@@ -106,4 +112,18 @@ func repoRoot() (string, error) {
 		dir = parent
 	}
 	return "", os.ErrNotExist
+}
+
+// stripLeamasExecEnv returns env with any LEAMAS_EXEC_* variables
+// removed. This lets subprocess tests run a fresh leamas binary
+// without triggering the re-entry fuse.
+func stripLeamasExecEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "LEAMAS_EXEC_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }

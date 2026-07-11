@@ -236,15 +236,15 @@ func TestVerifyDetectsCompilerIncompatibility(t *testing.T) {
 	if pack.CompilerVersion == "" {
 		t.Skip("pack declares no compiler_version constraint")
 	}
-	withCompilerVersion(t, "0.0.5")
 	target := newEmptyTarget(t)
 	prof, err := pack.MustProfile(ProfileId("fsharp-elm-service-v1"))
 	if err != nil {
 		t.Fatalf("MustProfile: %v", err)
 	}
-	if _, err := Compile(pack, prof, target, CompilerOptions{}); err != nil {
+	if _, err := Compile(pack, prof, target, CompilerOptions{CompilerVersion: "0.1.0"}); err != nil {
 		t.Fatalf("Compile: %v", err)
 	}
+	withCompilerVersion(t, "0.0.5")
 	result, err := Verify(pack, prof, target)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)

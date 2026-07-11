@@ -2,7 +2,7 @@
   "schema_version": 1,
   "pack_id": "factory-core-v1",
   "pack_version": "1.0.0",
-  "compiler_version": "",
+  "compiler_version": ">=0.1.0",
   "doctrines": [
     {
       "id": "doctrine-projection-integrity",

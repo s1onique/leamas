@@ -1,6 +1,7 @@
 package doctrinecompiler
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 )
@@ -35,10 +36,24 @@ type ExplainProfile struct {
 // Explain inspects the target repository and produces an ExplainReport.
 // The explain command performs no writes and is intended for human
 // review or scripted consumption.
+//
+// Explain refuses to produce a report when the committed selector
+// names a pack other than the loaded pack. The same constraint
+// applies as for Verify: only the loaded pack is currently
+// available. The returned error identifies both the requested and
+// the available pack.
 func Explain(pack *Pack, profile Profile, target, compilerVersion, compilerCommit, sourceRevision string) (ExplainReport, error) {
 	resolver, err := NewResolver(target)
 	if err != nil {
 		return ExplainReport{}, err
+	}
+	// Selector-pack fidelity: when the selector is present, refuse
+	// to emit a report for a foreign pack. Inference of the profile
+	// from the selector remains the responsibility of ResolveSelection.
+	sel, selErr := readSelector(resolver.Resolve(SelectorPath))
+	if selErr == nil && sel.Pack != string(pack.PackID) {
+		return ExplainReport{}, newError("explain", "selector.pack",
+			fmt.Sprintf("selector requests unsupported pack %q; available pack is %q", sel.Pack, pack.PackID))
 	}
 	rep := ExplainReport{
 		Pack: ExplainPack{

@@ -57,7 +57,18 @@ func resolveProfile(explicit string, target string, fallback bool) (string, doct
 	if !fallback {
 		return "", "", fmt.Errorf("--profile is required for this command")
 	}
-	return doctrinecompiler.ResolveSelection("", "", target, true)
+	selPack, prof, err := doctrinecompiler.ResolveSelection("", "", target, true)
+	if err != nil {
+		return "", "", err
+	}
+	// Selector-pack fidelity: until a pack registry exists, only
+	// factory-core-v1 is supported. The library-level Verify and
+	// Explain also enforce this; the CLI surfaces the failure here
+	// so the caller sees a single, well-formed error.
+	if selPack != "factory-core-v1" {
+		return "", "", fmt.Errorf("selector requests unsupported pack %q; available pack is %q", selPack, "factory-core-v1")
+	}
+	return selPack, prof, nil
 }
 
 // runDoctrinePlan implements `leamas factory doctrine plan`.

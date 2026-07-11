@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // LockFile is the decoded contents of .factory/doctrine.lock.json.
@@ -49,13 +50,26 @@ type ObservedContractEntry struct {
 	Dep    string `json:"dependency,omitempty"`
 }
 
-// ReadLockFile decodes a lock file from disk.
+// ReadLockFile decodes a lock file from disk and validates it for
+// exactness.
 //
 // All path entries are passed through NormalizeTargetPath so that any
 // traversal segment in a corrupted lock file is rejected before it
 // can be used to address a filesystem path. This is a hard
 // security boundary: the planner and verifier never trust a lock
 // entry's path component without normalisation.
+//
+// In addition, the lock is rejected if any of the following hold:
+//
+//   - duplicate normalized paths in managed_files
+//   - duplicate normalized paths in seeded_files
+//   - a normalized path appearing in both managed_files and seeded_files
+//   - duplicate IDs in observed_contracts
+//   - empty managed or seeded paths
+//   - empty observed-contract IDs
+//
+// Duplicate detection runs after NormalizeTargetPath, ensuring
+// alternate accepted spellings cannot bypass duplicate detection.
 func ReadLockFile(path string) (*LockFile, error) {
 	data, err := readAllFile(path)
 	if err != nil {
@@ -69,7 +83,13 @@ func ReadLockFile(path string) (*LockFile, error) {
 		return nil, newError("verify", "lock",
 			fmt.Sprintf("unsupported lock schema_version %d", lf.SchemaVersion))
 	}
+	// Normalize every path entry first; duplicate detection then runs
+	// on the canonical spelling so alternates cannot bypass it.
 	for i, mf := range lf.ManagedFiles {
+		if strings.TrimSpace(string(mf.Path)) == "" {
+			return nil, newError("verify", "lock",
+				fmt.Sprintf("managed_files[%d].path is empty", i))
+		}
 		tp, err := NormalizeTargetPath(string(mf.Path))
 		if err != nil {
 			return nil, newError("verify", "lock",
@@ -78,6 +98,10 @@ func ReadLockFile(path string) (*LockFile, error) {
 		lf.ManagedFiles[i].Path = tp
 	}
 	for i, sf := range lf.SeededFiles {
+		if strings.TrimSpace(string(sf.Path)) == "" {
+			return nil, newError("verify", "lock",
+				fmt.Sprintf("seeded_files[%d].path is empty", i))
+		}
 		tp, err := NormalizeTargetPath(string(sf.Path))
 		if err != nil {
 			return nil, newError("verify", "lock",
@@ -85,7 +109,64 @@ func ReadLockFile(path string) (*LockFile, error) {
 		}
 		lf.SeededFiles[i].Path = tp
 	}
+	if err := validateLockExactness(&lf); err != nil {
+		return nil, newError("verify", "lock", err.Error())
+	}
 	return &lf, nil
+}
+
+// validateLockExactness rejects ambiguous or duplicate entries in a
+// decoded lock. The function is total: it always inspects every
+// section of the lock.
+func validateLockExactness(lf *LockFile) error {
+	seenManaged := make(map[TargetPath]int, len(lf.ManagedFiles))
+	for i, mf := range lf.ManagedFiles {
+		if _, dup := seenManaged[mf.Path]; dup {
+			return fmt.Errorf("duplicate normalized managed path %q at index %d (first seen at index %d)",
+				mf.Path, i, seenManaged[mf.Path])
+		}
+		seenManaged[mf.Path] = i
+	}
+	seenSeeded := make(map[TargetPath]int, len(lf.SeededFiles))
+	for i, sf := range lf.SeededFiles {
+		if _, dup := seenSeeded[sf.Path]; dup {
+			return fmt.Errorf("duplicate normalized seeded path %q at index %d (first seen at index %d)",
+				sf.Path, i, seenSeeded[sf.Path])
+		}
+		seenSeeded[sf.Path] = i
+	}
+	// Cross-ownership collision: a path may appear in both managed
+	// and seeded lists, which is always ambiguous regardless of
+	// intent. Identify the first such conflict deterministically.
+	type conflict struct {
+		path    TargetPath
+		managed int
+		seeded  int
+	}
+	var conflicts []conflict
+	for path, mi := range seenManaged {
+		if si, ok := seenSeeded[path]; ok {
+			conflicts = append(conflicts, conflict{path: path, managed: mi, seeded: si})
+		}
+	}
+	if len(conflicts) > 0 {
+		sort.Slice(conflicts, func(i, j int) bool { return conflicts[i].path < conflicts[j].path })
+		first := conflicts[0]
+		return fmt.Errorf("path %q appears in both managed_files (index %d) and seeded_files (index %d); cross-ownership collision",
+			first.path, first.managed, first.seeded)
+	}
+	seenObs := make(map[string]int, len(lf.Observed))
+	for i, oc := range lf.Observed {
+		if strings.TrimSpace(oc.ID) == "" {
+			return fmt.Errorf("observed_contracts[%d].id is empty", i)
+		}
+		if _, dup := seenObs[oc.ID]; dup {
+			return fmt.Errorf("duplicate observed-contract id %q at index %d (first seen at index %d)",
+				oc.ID, i, seenObs[oc.ID])
+		}
+		seenObs[oc.ID] = i
+	}
+	return nil
 }
 
 // FormatLockFile renders a LockFile to deterministic canonical JSON.

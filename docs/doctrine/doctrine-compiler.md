@@ -85,6 +85,12 @@ and prints the projected action set classified as one of:
 | `remove-obsolete-managed`   | Path is recorded as managed but no longer in the pack.   |
 | `reject`                    | The target shape is unsafe; the compiler refuses to plan. |
 
+`plan` rejects an incompatible or placeholder compiler version
+before producing an actionable plan. The CLI checks compatibility
+via `CheckCompilerCompatibility` before invoking the planner, and
+the library entry points `PlanWithOptions` consult the same check
+when supplied with a non-empty compiler version.
+
 `plan` returns a non-zero exit code when the plan contains reject
 actions.
 
@@ -100,10 +106,35 @@ non-rejecting actions:
 - Writes the lock file **last**, only after every other write
   succeeds.
 
-On apply failure, the compiler performs a best-effort restoration of
-snapshotted file contents and existence. Exact restoration of modes
-and newly created directories remains outstanding. The second
-`compile` against an unchanged target is byte-for-byte idempotent.
+`compile` performs the following transactional discipline:
+
+1. Finish planning and all validation before any write.
+2. Identify every path that may be created, updated, removed, or
+   replaced; snapshot its pre-state (existence, mode, bytes).
+3. Identify every parent directory that does not yet exist on disk;
+   these are tracked so rollback can clean them up.
+4. Apply mutations in deterministic order, journaling each success.
+5. On any failure, walk the journal in reverse and restore the
+   pre-state:
+   - file contents (byte-identical),
+   - permission bits (from `os.FileMode.Perm()`),
+   - the previous lock file if it existed,
+   - recreated files that the apply removed,
+   - newly created files are removed,
+   - transaction-created directories are removed deepest-first, only
+     when empty,
+   - pre-existing directories are never removed or altered,
+   - the target root is never removed,
+   - temporary files produced by interrupted writes are removed.
+
+Rollback errors are surfaced via `errors.Join`; the returned
+`CompileError` always reports whether the target was safely restored.
+Production binaries have no fault injection; tests inject failures
+**after** a successful mutation via `CompilerOptions.FailAfterN`,
+which guarantees rollback has real work to do.
+
+The second `compile` against an unchanged target is byte-for-byte
+idempotent.
 
 ### `verify`
 
@@ -120,12 +151,18 @@ canonical desired digest == lock digest == actual file digest
 It also detects:
 
 - Missing or corrupted selector.
+- Selector naming an unsupported pack (the available pack is named
+  in the finding).
 - Pack / profile identity mismatch.
 - Pack digest mismatch.
 - Managed file missing or modified.
 - Unexpected managed files (recorded as managed but absent from
   the desired projection).
 - Lock entries whose paths escape the target root.
+- Lock exactness: duplicate normalized paths in `managed_files` or
+  `seeded_files`, cross-ownership collisions, and duplicate
+  observed-contract IDs are all rejected by `ReadLockFile` before
+  verification proceeds.
 - Compiler-version incompatibility against the pack's constraint.
 - Observed-contract violations (Makefile include missing, `gate`
   lacks a transitive dependency path to `factorize`, cycles in
@@ -139,6 +176,89 @@ Reports the selected pack, profile, compiler identity, source
 revision when available, the observed managed and seeded files, the
 observed contracts, the enabled doctrines, and the named extension
 points. Output is text-only and deterministic.
+
+`explain` refuses to emit a report when the committed selector names
+a pack other than the loaded pack. The error identifies both the
+requested and the available pack.
+
+## Lock exactness
+
+`ReadLockFile` rejects ambiguous locks before any other verifier
+work. The lock must satisfy all of:
+
+- No duplicate normalized paths in `managed_files`.
+- No duplicate normalized paths in `seeded_files`.
+- No normalized path may appear in both `managed_files` and
+  `seeded_files` (cross-ownership collision).
+- No duplicate IDs in `observed_contracts`.
+- No empty managed/seeded paths.
+- No empty observed-contract IDs.
+
+Path normalisation runs before duplicate detection, so alternate
+spellings (`./a/b`, `a/./b`) cannot bypass it. The first conflict
+encountered is reported deterministically with its section, key,
+and indices.
+
+## Selector-pack fidelity
+
+Until a pack registry exists, every selector consumed by the
+compiler must name the loaded pack. The supported pack is
+`factory-core-v1`. Both `verify` and `explain` reject any selector
+whose `pack` field does not equal the loaded pack; the CLI surfaces
+the same constraint before either command dispatches to the library.
+
+The error message always includes both pack IDs:
+
+```text
+selector requests unsupported pack "<requested>"; available pack is "<available>"
+```
+
+`compile` continues writing selectors containing the canonical pack
+ID. `verify` and `explain` never silently fall through to the
+loaded pack's profile when the selector names a foreign one.
+
+## Compiler compatibility
+
+The canonical pack declares `compiler_version: ">=0.1.0"`. The
+compiler enforces this constraint in three places:
+
+- `plan` checks the supplied compiler version against the constraint
+  before producing an actionable plan.
+- `compile` checks before mutating the target.
+- `verify` checks the runtime compiler version before accepting the
+  lock.
+
+For the canonical constraint:
+
+| Compiler version | Verdict                                  |
+| ---------------- | ---------------------------------------- |
+| empty            | rejected                                 |
+| `dev`            | rejected                                 |
+| `unknown`        | rejected                                 |
+| `0.0.9`          | rejected (below floor)                   |
+| `0.1.0`          | accepted (at floor)                      |
+| `0.2.0`          | accepted (above floor)                   |
+| `1.5.0`          | accepted                                 |
+
+This is the existing bounded compatibility language; full SemVer
+matching remains deferred.
+
+### Building a compatible binary
+
+A development build that uses the default `VERSION=dev` is
+**incompatible** with the constrained doctrine pack by design. To
+build a binary that satisfies the constraint:
+
+```bash
+make build VERSION=0.1.0
+./bin/leamas version
+```
+
+The version is injected via the standard `-ldflags` mechanism in
+`internal/version`. Tests that exercise doctrine commands in a
+subprocess inject the same concrete version. The compiler's
+`init()` wires `version.Get().Version` into the compatibility
+check so production binaries always run with the correct identity.
 
 ## Why `factorize` and `gate` never compile
 
@@ -214,6 +334,8 @@ Packs are versioned by:
 - `pack_version` — semantic version of the doctrine inventory.
 - `pack_digest` — SHA-256 digest of the canonical pack bytes. Used
   for drift detection.
+- `compiler_version` — bounded compatibility constraint; the
+  canonical constraint is `>=0.1.0`.
 
 When a pack version changes, target repositories must run `compile`
 again to update the lock. Until they do so, `verify` reports a
@@ -232,10 +354,10 @@ again to update the lock. Until they do so, `verify` reports a
    and re-run `verify`.
 
 `compile` is transactional with respect to its own actions. A
-mid-apply failure currently rolls back files the apply created in
-this run; the next ACT pass should also restore file modes and
-remove directories the apply created, and surface rollback
-failures as a fatal compound error.
+mid-apply failure rolls back files the apply created or modified in
+this run, restores the prior lock, removes transaction-created
+directories that are empty, and reports the original failure with
+the rollback outcome (successful or with residual errors).
 
 ## Known limitations
 

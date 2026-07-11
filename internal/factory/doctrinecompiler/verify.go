@@ -67,13 +67,22 @@ func Verify(pack *Pack, profile Profile, target string) (VerifyResult, error) {
 			Message: err.Error(),
 		})
 	} else {
+		// Selector-pack fidelity: until a pack registry exists, only
+		// the loaded pack is supported. Reject any selector that
+		// names a different pack, and identify both the requested
+		// and the available pack in the error.
 		if sel.Pack != string(pack.PackID) {
 			result.OK = false
 			result.Findings = append(result.Findings, VerifyFinding{
 				Path:    string(SelectorPath),
 				Kind:    "selector_pack_mismatch",
-				Message: fmt.Sprintf("selector pack=%q does not match pack %q", sel.Pack, pack.PackID),
+				Message: fmt.Sprintf("selector requests unsupported pack %q; available pack is %q", sel.Pack, pack.PackID),
 			})
+			// Do not silently fall through to profile matching
+			// against the loaded pack: a foreign selector is
+			// always rejected first.
+			sortFindings(result.Findings)
+			return result, nil
 		}
 		if sel.Profile != string(profile.ID) {
 			result.OK = false
