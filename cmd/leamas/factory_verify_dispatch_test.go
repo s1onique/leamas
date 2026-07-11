@@ -203,8 +203,8 @@ func TestKnownFactoryVerifyChecks_IncludesDupcode(t *testing.T) {
 
 func TestKnownFactoryVerifyChecks_HasExpectedCount(t *testing.T) {
 	checks := knownFactoryVerifyChecks()
-	// We expect 15 checks based on the current implementation (dupcode + dupcode-baseline)
-	expected := 15
+	// Update count: includes the new act-doctrine-compiler verifier.
+	expected := 16
 	if len(checks) != expected {
 		t.Errorf("expected %d known checks, got %d", expected, len(checks))
 	}
@@ -225,6 +225,7 @@ func TestIsKnownFactoryVerifyCheck_TrueForKnownChecks(t *testing.T) {
 		"github",
 		"domain-boundaries",
 		"coverage",
+		"act-doctrine-compiler",
 	}
 
 	for _, check := range knownChecks {

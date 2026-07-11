@@ -51,6 +51,7 @@ var AllowedFiles = map[string]bool{
 	"internal/factory/llmfriendly/check.go":                true,
 	"internal/factory/output/outputcontract.go":            true,
 	"internal/factory/staticbinary/check.go":               true,
+	"internal/factory/doctrinecompiler/subprocess_test.go": true,
 	"cmd/leamas/runtime_smoke_test.go":                     true,
 	"cmd/leamas/version_cli_test.go":                       true,
 }

@@ -198,6 +198,8 @@ func handleFactoryVerify() {
 		handleFactoryVerifyDupcode()
 	case "dupcode-baseline":
 		handleFactoryVerifyDupcodeBaseline()
+	case "act-doctrine-compiler":
+		runDoctrineCompilerVerifier()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", check)
 		printFactoryVerifyUsage()
@@ -275,6 +277,7 @@ func knownFactoryVerifyChecks() []string {
 		"github",
 		"domain-boundaries",
 		"coverage",
+		"act-doctrine-compiler",
 	}
 }
 

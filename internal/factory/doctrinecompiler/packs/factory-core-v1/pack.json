@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "pack_id": "factory-core-v1",
+  "pack_version": "1.0.0",
+  "compiler_version": "",
+  "doctrines": [
+    {
+      "id": "doctrine-projection-integrity",
+      "summary": "Doctrine projection must be a deterministic, repo-scoped, fail-closed operation."
+    },
+    {
+      "id": "generated-file-ownership",
+      "summary": "Compiler-managed files are owned by the compiler and must not be edited by hand."
+    },
+    {
+      "id": "lock-file-validation",
+      "summary": "The committed lock file must match the canonical projection exactly."
+    },
+    {
+      "id": "factory-makefile-integration",
+      "summary": "The root Makefile must include the generated Factory fragment."
+    },
+    {
+      "id": "read-only-factorization",
+      "summary": "make factorize must never invoke compile, never rewrite the lock, and never modify source files."
+    },
+    {
+      "id": "native-gate-extension",
+      "summary": "The repository owns its native gate target; the projection only establishes the dependency path."
+    },
+    {
+      "id": "repo-hygiene",
+      "summary": "Repository must satisfy the same hygiene checks as Leamas itself."
+    },
+    {
+      "id": "doctrine-inventory",
+      "summary": "A generated doctrine inventory documents the enabled doctrines for human review."
+    },
+    {
+      "id": "no-hand-edits-of-managed-files",
+      "summary": "Compiler-managed files must not be edited manually."
+    }
+  ],
+  "target_profiles": [
+    {
+      "id": "fsharp-elm-service-v1",
+      "summary": "An F# backend with an Elm frontend, Make as its stable local command interface, and Leamas as its Factory verifier. Establishes Factory wiring only; no application scaffolding is produced.",
+      "outputs": [
+        {
+          "id": "factory-mk",
+          "path": ".factory/generated/factory.mk",
+          "ownership": "managed",
+          "content_id": "factory-core:factory-mk"
+        },
+        {
+          "id": "doctrine-inventory",
+          "path": ".factory/generated/doctrine-inventory.md",
+          "ownership": "managed",
+          "content_id": "factory-core:doctrine-inventory-md"
+        },
+        {
+          "id": "factory-readme",
+          "path": "docs/factory/README.md",
+          "ownership": "managed",
+          "content_id": "factory-core:factory-readme-md"
+        }
+      ],
+      "seeds": [
+        {
+          "id": "project-selector",
+          "path": ".factory/project.json",
+          "ownership": "seeded",
+          "content_id": "factory-core:project-selector"
+        },
+        {
+          "id": "root-makefile",
+          "path": "Makefile",
+          "ownership": "seeded",
+          "content_id": "factory-core:root-makefile"
+        }
+      ],
+      "observed_contracts": [
+        {
+          "id": "makefile-includes-factory-fragment",
+          "kind": "makefile-include",
+          "path": "Makefile",
+          "target": "",
+          "dependency": ""
+        },
+        {
+          "id": "gate-depends-on-factorize",
+          "kind": "makefile-target-dep",
+          "path": "Makefile",
+          "target": "gate",
+          "dependency": "factorize"
+        }
+      ],
+      "factorize_checks": [
+        {
+          "id": "doctrine-verify",
+          "command": ["leamas", "factory", "doctrine", "verify"]
+        }
+      ],
+      "extension_points": [
+        {
+          "id": "target-native-gate",
+          "kind": "makefile-target",
+          "name": "gate",
+          "description": "Target-owned native gate target. Must remain reachable from factorize through a documented dependency chain."
+        }
+      ],
+      "enabled_doctrines": [
+        "doctrine-projection-integrity",
+        "generated-file-ownership",
+        "lock-file-validation",
+        "factory-makefile-integration",
+        "read-only-factorization",
+        "native-gate-extension",
+        "repo-hygiene",
+        "doctrine-inventory",
+        "no-hand-edits-of-managed-files"
+      ]
+    }
+  ]
+}

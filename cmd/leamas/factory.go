@@ -19,7 +19,7 @@ func parseFactoryCommand(args []string) (string, error) {
 
 	cmd := args[0]
 	switch cmd {
-	case "verify", "gate", "factorize", "digest", "coverage", "gate-summary", "output-contract":
+	case "verify", "gate", "factorize", "digest", "coverage", "gate-summary", "output-contract", "doctrine":
 		return cmd, nil
 	default:
 		return "", fmt.Errorf("unknown factory command: %s", cmd)
@@ -50,6 +50,8 @@ func handleFactory() {
 		handleFactoryGateSummary()
 	case "output-contract":
 		handleFactoryOutputContract()
+	case "doctrine":
+		handleFactoryDoctrine()
 	}
 }
 
