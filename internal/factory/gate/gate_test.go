@@ -1,6 +1,8 @@
 package gate
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -21,11 +23,34 @@ func TestAllVerifiers(t *testing.T) {
 	}
 }
 
+// findRepoRoot walks up from the current working directory looking for go.mod.
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd failed: %v", err)
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatal("repository root containing go.mod not found")
+		}
+		dir = parent
+	}
+}
+
 func TestRunFactorize(t *testing.T) {
-	// Test that it runs without panicking
-	result := RunFactorize(".")
-	// We don't know the state of the repo, so just check it runs
-	if result < 0 {
-		t.Error("RunFactorize should return 0 or 1")
+	// Find the actual repo root, not the package directory.
+	// A go test binary runs with its package source directory as CWD,
+	// so "." would resolve to internal/factory/gate, not the repo root.
+	repoRoot := findRepoRoot(t)
+	if code := RunFactorize(repoRoot); code != 0 {
+		t.Fatalf("RunFactorize(%q) returned %d", repoRoot, code)
 	}
 }

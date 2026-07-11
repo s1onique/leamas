@@ -12,6 +12,9 @@ import (
 
 // TestPrintFailureOutput_StandardMode verifies the standard output format on failure.
 func TestPrintFailureOutput_StandardMode(t *testing.T) {
+	// Ensure we run in plain mode, not GitHub Actions mode.
+	t.Setenv("GITHUB_ACTIONS", "false")
+
 	tmpDir := t.TempDir()
 	scriptPath := filepath.Join(tmpDir, "fake-failing-command.sh")
 	script := `#!/bin/bash

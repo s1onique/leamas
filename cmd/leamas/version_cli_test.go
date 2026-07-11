@@ -9,6 +9,7 @@ import (
 
 func TestVersionCLI_Output(t *testing.T) {
 	cmd := exec.Command("go", "run", "github.com/s1onique/leamas/cmd/leamas", "version")
+	cmd.Env = withoutLeamasEnv()
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("leamas version failed: %v", err)
@@ -29,6 +30,7 @@ func TestVersionCLI_Output(t *testing.T) {
 
 func TestVersionCLI_ExitCode(t *testing.T) {
 	cmd := exec.Command("go", "run", "github.com/s1onique/leamas/cmd/leamas", "version")
+	cmd.Env = withoutLeamasEnv()
 	err := cmd.Run()
 	if err != nil {
 		t.Errorf("leamas version should exit 0, got error: %v", err)
@@ -37,6 +39,7 @@ func TestVersionCLI_ExitCode(t *testing.T) {
 
 func TestVersionCLI_JSON(t *testing.T) {
 	cmd := exec.Command("go", "run", "github.com/s1onique/leamas/cmd/leamas", "version", "--json")
+	cmd.Env = withoutLeamasEnv()
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("leamas version --json failed: %v", err)
@@ -60,6 +63,7 @@ func TestVersionCLI_JSON(t *testing.T) {
 
 func TestVersionCLI_NoExtraOutput(t *testing.T) {
 	cmd := exec.Command("go", "run", "github.com/s1onique/leamas/cmd/leamas", "version")
+	cmd.Env = withoutLeamasEnv()
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("leamas version failed: %v", err)

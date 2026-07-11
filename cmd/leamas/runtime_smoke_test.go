@@ -22,6 +22,7 @@ func TestRuntimeSmokeCockpitHelp(t *testing.T) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "run", "github.com/s1onique/leamas/cmd/leamas", "cockpit", "serve", "--help")
+	cmd.Env = withoutLeamasEnv()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -47,6 +48,7 @@ func TestRuntimeSmokeWitnessProxyHelp(t *testing.T) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "run", "github.com/s1onique/leamas/cmd/leamas", "witness", "proxy", "--help")
+	cmd.Env = withoutLeamasEnv()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -76,6 +78,7 @@ func TestRuntimeSmokeFactoryDomainBoundariesCommand(t *testing.T) {
 	// cmd/leamas/ -> ../.. = leamas/ (repo root)
 	cmd := exec.CommandContext(ctx, "go", "run", "github.com/s1onique/leamas/cmd/leamas", "factory", "verify", "domain-boundaries")
 	cmd.Dir = "../.."
+	cmd.Env = withoutLeamasEnv()
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -251,6 +254,7 @@ func TestRuntimeSmokeWitnessProxyRejectsFtpScheme(t *testing.T) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "go", "run", "github.com/s1onique/leamas/cmd/leamas", "witness", "proxy", "--upstream", "ftp://127.0.0.1")
+	cmd.Env = withoutLeamasEnv()
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
