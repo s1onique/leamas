@@ -158,8 +158,8 @@ func TestCompileRepairsManagedFiles(t *testing.T) {
 	if _, err := Compile(pack, prof, target, CompilerOptions{}); err != nil {
 		t.Fatalf("repair Compile: %v", err)
 	}
-	got, _ := os.ReadFile(mk)
-	golden, _ := os.ReadFile(filepath.Join(expectedFixtureDir(t), ".factory/generated/factory.mk"))
+	got := mustRead(t, mk)
+	golden := mustRead(t, filepath.Join(expectedFixtureDir(t), ".factory/generated/factory.mk"))
 	if string(got) != string(golden) {
 		t.Errorf("managed file not repaired")
 	}

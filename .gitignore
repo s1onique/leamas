@@ -17,3 +17,8 @@ dist/
 # (must come BEFORE testdata/ rule below)
 !internal/execution/testdata/testhelper/main.go
 testdata/
+
+# Canonical doctrine compiler golden fixtures are source-controlled
+# and must be visible to `git add` despite the broad testdata/ rule above.
+!internal/factory/doctrinecompiler/testdata/
+!internal/factory/doctrinecompiler/testdata/**
