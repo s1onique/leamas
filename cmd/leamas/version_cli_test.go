@@ -172,7 +172,15 @@ func TestVersionCLI_MalformedLinkerVersionRejected(t *testing.T) {
 		t.Fatalf("build failed: %v\n%s", err, out)
 	}
 
-	out, err := exec.Command(binPath, "version").Output()
+	// The temporary binary inherits the parent process env unless
+	// we sanitize it. `make gate` runs `leamas factory gate`, which
+	// exports the LEAMAS_EXEC_* re-entry markers; without stripping
+	// them the spawned binary exits 1 with only "exit status 1"
+	// surfaced (the re-entry message is on stderr). Use
+	// CombinedOutput() so the diagnostic is included on failure.
+	runBad := exec.Command(binPath, "version")
+	runBad.Env = withoutLeamasEnv()
+	out, err := runBad.CombinedOutput()
 	if err != nil {
 		t.Fatalf("release binary exited non-zero: %v\n%s", err, out)
 	}
@@ -230,7 +238,10 @@ func TestVersionCLI_ReleaseBinary(t *testing.T) {
 	// Line-oriented output. Accept either 3 or 4 lines: a clean
 	// build emits version/commit/build_time; a dirty build also
 	// appends `dirty:`. Both must omit `declared_version:`.
-	out, err := exec.Command(binPath, "version").Output()
+	// Sanitize env (see comment in TestVersionCLI_MalformedLinkerVersionRejected).
+	runLine := exec.Command(binPath, "version")
+	runLine.Env = withoutLeamasEnv()
+	out, err := runLine.CombinedOutput()
 	if err != nil {
 		t.Fatalf("release binary exited non-zero: %v\n%s", err, out)
 	}
@@ -248,8 +259,11 @@ func TestVersionCLI_ReleaseBinary(t *testing.T) {
 	}
 
 	// JSON wire form: declared_version must be omitted because
-	// it equals version.
-	jsonOut, err := exec.Command(binPath, "version", "--json").Output()
+	// it equals version. Sanitize env (see comment in
+	// TestVersionCLI_MalformedLinkerVersionRejected).
+	runJSON := exec.Command(binPath, "version", "--json")
+	runJSON.Env = withoutLeamasEnv()
+	jsonOut, err := runJSON.CombinedOutput()
 	if err != nil {
 		t.Fatalf("release binary --json failed: %v\n%s", err, jsonOut)
 	}
