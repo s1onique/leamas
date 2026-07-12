@@ -5,7 +5,7 @@
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
 .PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
 .PHONY: coverage dupcode-baseline release release-build release-checksum release-verify release-clean
-.PHONY: test-helper
+.PHONY: test-helper stamp-check stamp-check-build release-stamp-verify
 
 # Install variables (GNU conventions)
 PREFIX ?= /usr/local
@@ -15,12 +15,29 @@ INSTALL ?= install
 # Build variables
 MODULE_PATH := github.com/s1onique/leamas
 
-# Version injection via linker flags
+# Version injection via linker flags.
+#
+# The Makefile injects FOUR linker variables: Version,
+# DeclaredVersion, Commit, BuildTime. Dirty is NOT injected —
+# the canonical source for the dirty marker is
+# runtime/debug.ReadBuildInfo() (`vcs.modified`) when the binary
+# is built with `-buildvcs=true` (the modern Go default).
+#
+# When the caller leaves VERSION at its `dev` default, the
+# internal/version package derives a SemVer-compatible effective
+# stamp at runtime. A dedicated DeclaredVersion value is also
+# injected so `leamas version` can surface the original
+# placeholder alongside the auto-derived one.
+#
+# Release artefacts MUST be built with an explicit, concrete
+# SemVer; the release-build recipe below enforces that guard
+# (placeholder detection plus strict SemVer pattern matching).
 VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
 
 LDFLAGS := -X '$(MODULE_PATH)/internal/version.Version=$(VERSION)' \
+           -X '$(MODULE_PATH)/internal/version.DeclaredVersion=$(VERSION)' \
            -X '$(MODULE_PATH)/internal/version.Commit=$(COMMIT)' \
            -X '$(MODULE_PATH)/internal/version.BuildTime=$(BUILD_TIME)'
 
@@ -29,6 +46,29 @@ DIST_DIR ?= dist
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 ARTIFACT_DIR = $(DIST_DIR)/leamas_$(VERSION)_$(GOOS)_$(GOARCH)
+
+# Stamp check: assert that the built binary reports a real
+# SemVer effective version. Override STAMP_BINARY to point at a
+# release artefact:
+#   make stamp-check STAMP_BINARY=dist/leamas_0.1.0_darwin_arm64/leamas
+STAMP_BINARY ?= bin/leamas
+
+# Strict SemVer 2.0.0 (POSIX ERE) used by the stamp guard and
+# release-build guard. Mirrors the official suggested regex
+# adapted for POSIX ERE:
+#
+#   ^(?P<major>0|[1-9][0-9]*)
+#    \.(?P<minor>0|[1-9][0-9]*)
+#    \.(?P<patch>0|[1-9][0-9]*)
+#    (?:-(?P<pre>(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)
+#        (?:\.(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?
+#    (?:\+(?P<build>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$
+#
+# Rejects leading zeros (01.2.3), trailing build markers (1.2.3+),
+# extra dot components (1.2.3.4), numeric prerelease
+# identifiers with leading zeros (1.2.3-01), and empty
+# prerelease/build identifiers (1.2.3-alpha..1, 1.2.3+build..42).
+STAMP_REGEX := ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+([0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*))?$$
 
 # Digest target: generate targeted digest for review
 # Uses smart default: dirty digest when working tree has changes, previous commit digest when clean
@@ -53,6 +93,7 @@ help:
 	@echo "  make test          - Run Go tests (if module exists)"
 	@echo "  make build         - Build static binary to bin/leamas"
 	@echo "  make clean         - Clean build artifacts"
+	@echo "  make stamp-check   - Verify a built binary reports a real SemVer stamp"
 	@echo ""
 	@echo "  make verify-*      - Run individual verifiers:"
 	@echo "    make verify-agent-doctrine     Doctrine Agent Contract check"
@@ -191,6 +232,41 @@ verify-domain-boundaries:
 	@echo "Running domain boundaries verifier..."
 	@go run ./cmd/leamas factory verify domain-boundaries
 
+# Stamp check: assert that the binary reports a real SemVer
+# effective version. Used by release and install workflows to
+# catch the case where a literal `dev` placeholder slipped
+# through and would refuse to satisfy any non-empty doctrine
+# constraint.
+stamp-check:
+	@if [ ! -x "$(STAMP_BINARY)" ]; then \
+		echo "ERROR: $(STAMP_BINARY) is not executable"; \
+		exit 1; \
+	fi
+	@version_line=$$($(STAMP_BINARY) version | grep '^version:' | head -1); \
+	if [ -z "$$version_line" ]; then \
+		echo "ERROR: $(STAMP_BINARY) reports no 'version:' line"; \
+		exit 1; \
+	fi; \
+	version_value=$$(printf '%s' "$$version_line" | sed 's/^version: //'); \
+	if ! printf '%s' "$$version_value" | grep -Eq '$(STAMP_REGEX)'; then \
+		echo "ERROR: $(STAMP_BINARY) reports malformed version '$$version_value' (must be strict SemVer)" >&2; \
+		echo "       re-build with VERSION=<strict-SemVer> or remove VERSION= entirely to use auto-stamp" >&2; \
+		exit 2; \
+	fi; \
+	case "$$version_value" in \
+	  dev|unknown) \
+	    echo "ERROR: $(STAMP_BINARY) reports placeholder version '$$version_value'" >&2; \
+	    exit 2 ;; \
+	esac; \
+	echo "stamp-check OK: $(STAMP_BINARY) reports version=$$version_value"
+
+# stamp-check-build: builds and verifies the just-installed
+# binary is SemVer-stamped. It is the gate that satisfies
+# ACT-LEAMAS-COMPILER-VERSION-STAMPING01 acceptance criterion 9
+# (install targets must not emit raw dev).
+stamp-check-build: build
+	@$(MAKE) stamp-check STAMP_BINARY=bin/leamas
+
 install-git-hooks:
 	@chmod +x scripts/install_git_hooks.sh
 	@./scripts/install_git_hooks.sh
@@ -203,7 +279,13 @@ test-helper:
 	@cd internal/execution/testdata/testhelper && go build -o main main.go
 	@echo "Done. Test helper: internal/execution/testdata/testhelper/main"
 
-install: build
+# install: builds and installs. Note: `make install` (without
+# VERSION=) is permitted because the auto-stamp derivation in
+# internal/version turns the `dev` placeholder into a
+# SemVer-compatible effective version. The stamp-check gate
+# below ensures the installed binary indeed carries the stamp
+# before any copy happens.
+install: stamp-check-build
 	@echo "Installing Leamas to $(DESTDIR)$(BINDIR)/leamas"
 	@$(INSTALL) -d "$(DESTDIR)$(BINDIR)"
 	@$(INSTALL) -m 0755 bin/leamas "$(DESTDIR)$(BINDIR)/leamas"
@@ -211,7 +293,22 @@ install: build
 
 # Release targets
 
+# release-build refuses placeholder *and* malformed VERSION.
+# For a release artefact the effective stamp must equal the
+# declared value, so we require a strict SemVer literal.
 release-build:
+	@case '$(VERSION)' in \
+	  ''|dev|unknown) \
+	    echo "ERROR: VERSION must be set to a strict SemVer for \`make release\` (got '$(VERSION)')" >&2; \
+	    echo "       placeholders are rejected; pass VERSION=0.1.0 (or any other strict SemVer)" >&2; \
+	    exit 2 \
+	    ;; \
+	esac
+	@if ! printf '%s' '$(VERSION)' | grep -Eq '$(STAMP_REGEX)'; then \
+	  echo "ERROR: VERSION '$(VERSION)' is not a valid SemVer 2.0.0 version (must match $(STAMP_REGEX))" >&2; \
+	  echo "       examples: 0.1.0, 1.2.3-alpha, 1.2.3+build.42; banned: 'banana', '1.2', '01.2.3', '1.2.3+', '1.2.3-01'" >&2; \
+	  exit 2; \
+	fi
 	@echo "Building release for version $(VERSION)..."
 	@mkdir -p "$(ARTIFACT_DIR)"
 	@CGO_ENABLED=0 go build -trimpath \
@@ -223,6 +320,9 @@ release-build:
 	@echo "goos=$(GOOS)" >> "$(ARTIFACT_DIR)/release.txt"
 	@echo "goarch=$(GOARCH)" >> "$(ARTIFACT_DIR)/release.txt"
 	@echo "Done. Artifact: $(ARTIFACT_DIR)/leamas"
+
+release-stamp-verify:
+	@$(MAKE) stamp-check STAMP_BINARY="$(ARTIFACT_DIR)/leamas"
 
 release-checksum:
 	@echo "Generating checksums for $(ARTIFACT_DIR)..."
@@ -236,7 +336,7 @@ release-checksum:
 	fi
 	@echo "Done. Checksum: $(ARTIFACT_DIR)/SHA256SUMS"
 
-release-verify:
+release-verify: release-stamp-verify
 	@echo "Verifying release artifacts..."
 	@if [ ! -x "$(ARTIFACT_DIR)/leamas" ]; then \
 		echo "ERROR: $(ARTIFACT_DIR)/leamas is not executable"; \

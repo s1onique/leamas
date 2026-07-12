@@ -225,40 +225,37 @@ compiler enforces this constraint in three places:
 - `plan` checks the supplied compiler version against the constraint
   before producing an actionable plan.
 - `compile` checks before mutating the target.
-- `verify` checks the runtime compiler version before accepting the
-  lock.
+- `verify` checks the runtime compiler version before accepting the lock.
 
 For the canonical constraint:
 
-| Compiler version | Verdict                                  |
-| ---------------- | ---------------------------------------- |
-| empty            | rejected                                 |
-| `dev`            | rejected                                 |
-| `unknown`        | rejected                                 |
-| `0.0.9`          | rejected (below floor)                   |
-| `0.1.0`          | accepted (at floor)                      |
-| `0.2.0`          | accepted (above floor)                   |
-| `1.5.0`          | accepted                                 |
+| Compiler version           | Verdict                                          |
+| -------------------------- | ------------------------------------------------ |
+| empty                      | rejected                                         |
+| `dev`                      | rejected                                         |
+| `unknown`                  | rejected                                         |
+| `0.0.9`                    | rejected (below floor)                           |
+| `0.1.0`                    | accepted (at floor)                              |
+| `0.1.0+dev.<commit>`       | accepted (build metadata has no precedence)      |
+| `0.0.9+dev.<commit>`       | rejected (build metadata cannot mask floor)      |
+| `0.1.0-dev.<commit>`       | rejected (pre-release is below the floor)        |
+| `0.2.0`                    | accepted (above floor)                           |
+| `1.5.0`                    | accepted                                         |
 
-This is the existing bounded compatibility language; full SemVer
-matching remains deferred.
+This is the existing bounded compatibility language extended with
+SemVer 2.0.0 §10/§11 precedence rules. Build metadata after `+`
+is ignored for ordering; a pre-release suffix after `-` is
+strictly lower precedence than the same version without
+pre-release. Full boolean range matching (`^`, `~`, `||`)
+remains deferred.
 
 ### Building a compatible binary
 
-A development build that uses the default `VERSION=dev` is
-**incompatible** with the constrained doctrine pack by design. To
-build a binary that satisfies the constraint:
+See [`compiler-version-stamping.md`](./compiler-version-stamping.md)
+for the full stamp-derivation contract, the build-time
+guard in `make release`, and the stamped-version acceptance
+matrix.
 
-```bash
-make build VERSION=0.1.0
-./bin/leamas version
-```
-
-The version is injected via the standard `-ldflags` mechanism in
-`internal/version`. Tests that exercise doctrine commands in a
-subprocess inject the same concrete version. The compiler's
-`init()` wires `version.Get().Version` into the compatibility
-check so production binaries always run with the correct identity.
 
 ## Why `factorize` and `gate` never compile
 

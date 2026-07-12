@@ -145,19 +145,28 @@ func TestDigestOutput_AutoModeReportsEffectiveMode(t *testing.T) {
 	}
 }
 
+// TestDigestOutput_VersionMetadataPopulated exercises the
+// contract that the targeted digest surfaces the *effective* Leamas
+// version. Both Version (effective stamp) and DeclaredVersion
+// (literal declared value) must be injected identically for the
+// release-build shape; the digest then reports Version verbatim.
 func TestDigestOutput_VersionMetadataPopulated(t *testing.T) {
-	// Save and restore version state
 	oldVersion := version.Version
+	oldDeclared := version.DeclaredVersion
 	oldCommit := version.Commit
 	oldBuildTime := version.BuildTime
 	t.Cleanup(func() {
 		version.Version = oldVersion
+		version.DeclaredVersion = oldDeclared
 		version.Commit = oldCommit
 		version.BuildTime = oldBuildTime
 	})
 
-	// Inject test version metadata
+	// Inject strict-SemVer release-style identity into both
+	// Version and DeclaredVersion so EffectiveFrom() leaves the
+	// value unchanged.
 	version.Version = "1.2.3"
+	version.DeclaredVersion = "1.2.3"
 	version.Commit = "test123"
 	version.BuildTime = "2026-01-01T00:00:00Z"
 

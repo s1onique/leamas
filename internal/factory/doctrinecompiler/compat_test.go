@@ -58,6 +58,46 @@ func TestCheckCompilerCompatibility_LaterVersionAccepted(t *testing.T) {
 	}
 }
 
+// TestCheckCompilerCompatibility_BuildMetadataAccepted verifies
+// that a SemVer build-metadata suffix (after "+") has no version
+// precedence and therefore does not affect a >= floor check.
+// 0.1.0+dev.fd71cf2 must satisfy >=0.1.0 because the floor is met
+// at the major.minor.patch level.
+func TestCheckCompilerCompatibility_BuildMetadataAccepted(t *testing.T) {
+	if err := CheckCompilerCompatibility(">=0.1.0", "0.1.0+dev.fd71cf2"); err != nil {
+		t.Errorf("expected 0.1.0+dev.fd71cf2 to satisfy >=0.1.0: %v", err)
+	}
+}
+
+// TestCheckCompilerCompatibility_BuildMetadataBelowFloorRejected
+// verifies that build metadata cannot mask a base version below the
+// floor. 0.0.9+dev.fd71cf2 must NOT satisfy >=0.1.0.
+func TestCheckCompilerCompatibility_BuildMetadataBelowFloorRejected(t *testing.T) {
+	if err := CheckCompilerCompatibility(">=0.1.0", "0.0.9+dev.fd71cf2"); err == nil {
+		t.Errorf("expected 0.0.9+dev.fd71cf2 to be rejected by >=0.1.0")
+	}
+}
+
+// TestCheckCompilerCompatibility_PreReleaseRejected verifies that
+// a pre-release suffix (after "-") is strictly lower precedence than
+// the same version without pre-release. 0.1.0-dev.fd71cf2 must NOT
+// satisfy >=0.1.0 even though it shares the same major.minor.patch.
+func TestCheckCompilerCompatibility_PreReleaseRejected(t *testing.T) {
+	if err := CheckCompilerCompatibility(">=0.1.0", "0.1.0-dev.fd71cf2"); err == nil {
+		t.Errorf("expected 0.1.0-dev.fd71cf2 (pre-release) to be rejected by >=0.1.0")
+	}
+}
+
+// TestCheckCompilerCompatibility_UnknownPrereleaseRejected verifies
+// that an "unknown" pre-release segment is treated as a pre-release
+// and therefore excluded from a non-prerelease constraint.
+// 0.1.0-unknown does not satisfy >=0.1.0.
+func TestCheckCompilerCompatibility_UnknownPrereleaseRejected(t *testing.T) {
+	if err := CheckCompilerCompatibility(">=0.1.0", "0.1.0-unknown"); err == nil {
+		t.Errorf("expected 0.1.0-unknown (pre-release) to be rejected by >=0.1.0")
+	}
+}
+
 // TestCompileRefusesIncompatibleVersion ensures the Compile path
 // rejects an incompatible compiler version BEFORE any target
 // mutation occurs.
