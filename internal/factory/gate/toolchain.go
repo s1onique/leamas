@@ -58,9 +58,14 @@ func newStopCommandsToken() (string, error) {
 }
 
 // printFailureOutput prints captured command output on failure.
-// In GitHub Actions, this wraps output in ::group:: for collapsible logs.
-// Uses ::stop-commands:: to protect raw output from workflow-command interpretation.
-// Writes to w (defaults to os.Stdout if nil).
+//
+// In GitHub Actions mode the diagnostic content is emitted inline at the top
+// level of the step log - NOT inside a ::group:: collapsible block. Hiding the
+// actual failure inside a collapsed section leaves readers with only the bare
+// ::error:: annotation, which is not actionable. The raw subprocess output is
+// still protected from workflow-command interpretation by a ::stop-commands::
+// <token> / :: <token>:: pair, so any embedded ::error:: / ::endgroup:: /
+// similar markers in the captured output are treated as plain text.
 func printFailureOutput(w io.Writer, command string, output string, exitCode int, cmdErr error) {
 	if w == nil {
 		w = os.Stdout
@@ -78,21 +83,24 @@ func printFailureOutput(w io.Writer, command string, output string, exitCode int
 			fmt.Fprintf(w, "GHA output formatting failed: %v\n", err)
 			return
 		}
-		fmt.Fprintf(w, "::group::failure output: %s\n", command)
+		// Protect raw subprocess output from workflow-command interpretation.
+		// The captured output may contain literal ::error::, ::endgroup:: or
+		// other markers as part of its text; the stop/resume pair prevents
+		// GitHub Actions from interpreting those as workflow directives.
 		fmt.Fprintf(w, "::stop-commands::%s\n", token)
 		fmt.Fprint(w, output)
 		if output != "" && !strings.HasSuffix(output, "\n") {
 			fmt.Fprintln(w)
 		}
-		// Resume command processing - correct syntax has two leading colons
+		// Resume command processing - correct syntax has two leading colons.
 		fmt.Fprintf(w, "::%s::\n", token)
+		// Concise summary, emitted ungrouped so it is immediately visible.
 		fmt.Fprintf(w, "command: %s\n", command)
 		fmt.Fprintf(w, "exit_code: %d\n", exitCode)
 		if cmdErr != nil && exitCode == -1 {
 			fmt.Fprintf(w, "execution_error: %v\n", cmdErr)
 		}
-		fmt.Fprintln(w, "::endgroup::")
-		// Optional concise annotation
+		// GHA error annotation - surfaces in the PR/checks UI.
 		if cmdErr != nil && exitCode == -1 {
 			fmt.Fprintf(w, "::error::%s execution failed: %v\n", command, cmdErr)
 		} else {
