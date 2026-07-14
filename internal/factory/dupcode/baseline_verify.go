@@ -306,6 +306,9 @@ func baselinesEqual(a, b Baseline) bool {
 	if a.SchemaVersion != b.SchemaVersion {
 		return false
 	}
+	if a.AlgorithmVersion != b.AlgorithmVersion {
+		return false
+	}
 	if a.Tool != b.Tool {
 		return false
 	}
