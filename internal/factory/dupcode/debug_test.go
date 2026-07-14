@@ -23,9 +23,9 @@ func TestDebugBaselines(t *testing.T) {
 		}
 		wd = parent
 	}
-	
+
 	baselinePath := filepath.Join(repoRoot, ".factory/dupcode-baseline.json")
-	
+
 	// Load committed baseline
 	committed, err := LoadBaseline(baselinePath)
 	if err != nil {
@@ -49,7 +49,7 @@ func TestDebugBaselines(t *testing.T) {
 	fmt.Printf("Repo root: %s\n", repoRoot)
 	fmt.Printf("Committed findings: %d\n", len(committed.Findings))
 	fmt.Printf("Canonical findings: %d\n", len(canonical.Findings))
-	
+
 	for i, cf := range committed.Findings {
 		if i >= len(canonical.Findings) {
 			fmt.Printf("Extra finding in committed at index %d: %s\n", i, cf.Fingerprint)
@@ -62,13 +62,13 @@ func TestDebugBaselines(t *testing.T) {
 			fmt.Printf("  canonical tokens=%d lines=%d\n", ccf.TokenCount, ccf.LineCount)
 		}
 	}
-	
+
 	if baselinesEqual(committed, canonical) {
 		fmt.Println("baselinesEqual: EQUAL")
 	} else {
 		fmt.Println("baselinesEqual: DIFFER")
 	}
-	
+
 	committedJSON, _ := json.MarshalIndent(committed.Findings, "", "  ")
 	canonicalJSON, _ := json.MarshalIndent(canonical.Findings, "", "  ")
 	fmt.Println("\n--- COMMITTED FINDINGS ---")
