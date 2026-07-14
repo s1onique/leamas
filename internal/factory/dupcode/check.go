@@ -170,7 +170,15 @@ func findCommonWindows(ft1, ft2 fileTokens, cfg Config,
 		fp2[fp] = append(fp2[fp], i)
 	}
 
-	for fp, pos1 := range fp1 {
+	// Sort fingerprints for deterministic processing
+	var fps []string
+	for fp := range fp1 {
+		fps = append(fps, fp)
+	}
+	sort.Strings(fps)
+
+	for _, fp := range fps {
+		pos1 := fp1[fp]
 		pos2, ok := fp2[fp]
 		if !ok {
 			continue

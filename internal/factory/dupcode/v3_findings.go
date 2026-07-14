@@ -95,8 +95,16 @@ func mergeFindings(findings []coalescedFinding) []coalescedFinding {
 		bySeedFP[seedFP] = append(bySeedFP[seedFP], f)
 	}
 
+	// Sort keys for deterministic iteration
+	var seedFPs []string
+	for sf := range bySeedFP {
+		seedFPs = append(seedFPs, sf)
+	}
+	sort.Strings(seedFPs)
+
 	var merged []coalescedFinding
-	for _, group := range bySeedFP {
+	for _, sf := range seedFPs {
+		group := bySeedFP[sf]
 		if len(group) == 0 {
 			continue
 		}

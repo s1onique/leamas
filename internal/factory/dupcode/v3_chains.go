@@ -216,8 +216,27 @@ func buildChainsWithPartitioning(matches []seedMatch) []cloneChain {
 	// Group by chain key (left path, right path, offset) for chaining
 	chainGroups := groupMatchesByChainKey(matches)
 
+	// Sort keys to ensure deterministic iteration order
+	var keys []chainKey
+	for k := range chainGroups {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].SeedFingerprint != keys[j].SeedFingerprint {
+			return keys[i].SeedFingerprint < keys[j].SeedFingerprint
+		}
+		if keys[i].LeftPath != keys[j].LeftPath {
+			return keys[i].LeftPath < keys[j].LeftPath
+		}
+		if keys[i].RightPath != keys[j].RightPath {
+			return keys[i].RightPath < keys[j].RightPath
+		}
+		return keys[i].Offset < keys[j].Offset
+	})
+
 	var allChains []cloneChain
-	for _, groupMatches := range chainGroups {
+	for _, k := range keys {
+		groupMatches := chainGroups[k]
 		// Sort matches by (left start, right start) for deterministic processing
 		sort.Slice(groupMatches, func(i, j int) bool {
 			if groupMatches[i].Left.StartPos != groupMatches[j].Left.StartPos {
