@@ -263,9 +263,16 @@ func findingsFromChains(chains []cloneChain) []coalescedFinding {
 // v3CoalesceFindings is the v3 algorithm for finding maximal clones.
 func v3CoalesceFindings(windowMap map[string][]rawWindow, fingerprintTokens map[string]int) []coalescedFinding {
 	// Step 1: Collect all seed matches across all fingerprints
+	// Sort fingerprints to ensure deterministic iteration order
+	var fps []string
+	for fp := range windowMap {
+		fps = append(fps, fp)
+	}
+	sort.Strings(fps)
+
 	var allMatches []seedMatch
-	for fp, windows := range windowMap {
-		matches := buildSeedMatches(fp, windows)
+	for _, fp := range fps {
+		matches := buildSeedMatches(fp, windowMap[fp])
 		allMatches = append(allMatches, matches...)
 	}
 
