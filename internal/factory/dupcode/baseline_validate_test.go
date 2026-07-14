@@ -5,10 +5,11 @@ import "testing"
 
 func TestValidateBaselinePaths_AbsolutePathFails(t *testing.T) {
 	baseline := Baseline{
-		SchemaVersion: 1,
-		GeneratedAt:   "2026-07-09T00:00:00Z",
-		Tool:          "leamas dupcode",
-		Thresholds:    BaselineThresholds{MinLines: 40, MinTokens: 400},
+		SchemaVersion:    1,
+		AlgorithmVersion: 2,
+		GeneratedAt:      "2026-07-09T00:00:00Z",
+		Tool:             "leamas dupcode",
+		Thresholds:       BaselineThresholds{MinLines: 40, MinTokens: 400},
 		Findings: []BaselineFinding{
 			{
 				Fingerprint: "002ec5ff009cad28f7e278c01749ac4268d1ed3a1325a86df39db87d7c909edb",

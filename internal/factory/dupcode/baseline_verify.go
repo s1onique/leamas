@@ -111,6 +111,23 @@ func VerifyBaseline(root string, policy BaselinePolicy) ([]checks.Finding, error
 		})
 	}
 
+	// 4a. Validate algorithm version
+	if baseline.AlgorithmVersion == 0 {
+		result = append(result, checks.Finding{
+			Path:     baselineFSPath,
+			Kind:     "missing_algorithm_version",
+			Message:  "baseline missing algorithm_version field; old format not supported, regenerate with 'make dupcode-baseline'",
+			Severity: checks.SeverityError,
+		})
+	} else if baseline.AlgorithmVersion != AlgorithmVersion {
+		result = append(result, checks.Finding{
+			Path:     baselineFSPath,
+			Kind:     "algorithm_version_mismatch",
+			Message:  fmt.Sprintf("baseline algorithm_version %d does not match current %d; regenerate with 'make dupcode-baseline'", baseline.AlgorithmVersion, AlgorithmVersion),
+			Severity: checks.SeverityError,
+		})
+	}
+
 	// 5. Validate threshold policy
 	if baseline.Thresholds.MinLines != policy.MinLines || baseline.Thresholds.MinTokens != policy.MinTokens {
 		result = append(result, checks.Finding{
@@ -275,11 +292,12 @@ func GenerateCanonicalBaseline(root string, report Report) Baseline {
 	}
 
 	return Baseline{
-		SchemaVersion: 1,
-		GeneratedAt:   "1970-01-01T00:00:00Z", // Deterministic timestamp
-		Tool:          "leamas dupcode",
-		Thresholds:    report.Thresholds,
-		Findings:      findings,
+		SchemaVersion:    1,
+		AlgorithmVersion: AlgorithmVersion,
+		GeneratedAt:      "1970-01-01T00:00:00Z", // Deterministic timestamp
+		Tool:             "leamas dupcode",
+		Thresholds:       report.Thresholds,
+		Findings:         findings,
 	}
 }
 

@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -28,11 +27,12 @@ var ErrBaselinePolicyMismatch = errors.New("baseline thresholds do not match pol
 
 // Baseline represents a committed baseline of duplicate code findings.
 type Baseline struct {
-	SchemaVersion int                `json:"schema_version"`
-	GeneratedAt   string             `json:"generated_at"`
-	Tool          string             `json:"tool"`
-	Thresholds    BaselineThresholds `json:"thresholds"`
-	Findings      []BaselineFinding  `json:"findings"`
+	SchemaVersion    int                `json:"schema_version"`
+	AlgorithmVersion int                `json:"algorithm_version,omitempty"`
+	GeneratedAt      string             `json:"generated_at"`
+	Tool             string             `json:"tool"`
+	Thresholds       BaselineThresholds `json:"thresholds"`
+	Findings         []BaselineFinding  `json:"findings"`
 }
 
 // BaselineThresholds records the thresholds used when generating the baseline.
@@ -115,6 +115,19 @@ func LoadBaseline(path string) (Baseline, error) {
 		return Baseline{}, &ErrInvalidBaseline{fmt.Errorf("unsupported schema version: %d", baseline.SchemaVersion)}
 	}
 
+	// Validate algorithm version
+	if baseline.AlgorithmVersion == 0 {
+		return Baseline{}, &ErrInvalidBaseline{
+			fmt.Errorf("missing algorithm_version: old baseline format not supported; regenerate with 'make dupcode-baseline'"),
+		}
+	}
+	if baseline.AlgorithmVersion != AlgorithmVersion {
+		return Baseline{}, &ErrInvalidBaseline{
+			fmt.Errorf("algorithm_version mismatch: baseline has %d, current detector uses %d; regenerate with 'make dupcode-baseline'",
+				baseline.AlgorithmVersion, AlgorithmVersion),
+		}
+	}
+
 	// Validate thresholds match policy
 	if baseline.Thresholds.MinLines != PolicyMinLines || baseline.Thresholds.MinTokens != PolicyMinTokens {
 		return Baseline{}, &ErrInvalidBaseline{
@@ -183,11 +196,12 @@ func (bw *BaselineWriter) Write(path string, report Report) error {
 	})
 
 	baseline := Baseline{
-		SchemaVersion: 1,
-		GeneratedAt:   bw.Now().UTC().Format(time.RFC3339),
-		Tool:          "leamas dupcode",
-		Thresholds:    report.Thresholds,
-		Findings:      findings,
+		SchemaVersion:    1,
+		AlgorithmVersion: AlgorithmVersion,
+		GeneratedAt:      bw.Now().UTC().Format(time.RFC3339),
+		Tool:             "leamas dupcode",
+		Thresholds:       report.Thresholds,
+		Findings:         findings,
 	}
 
 	// Sort occurrences within each finding
@@ -332,14 +346,7 @@ func CheckReport(root string, cfg Config) (Report, error) {
 		return Report{}, err
 	}
 
-	// Normalize paths in findings to repo-relative
-	for i := range findings {
-		for j := range findings[i].Occurrences {
-			findings[i].Occurrences[j].Path = NormalizePathForBaseline(
-				findings[i].Occurrences[j].Path, root)
-		}
-	}
-
+	// Paths are already normalized in CheckRepo, no need to normalize again.
 	return Report{
 		Findings: findings,
 		Thresholds: BaselineThresholds{
@@ -348,53 +355,4 @@ func CheckReport(root string, cfg Config) (Report, error) {
 		},
 		Root: root,
 	}, nil
-}
-
-// PrintCompareResult prints the comparison result in human-readable format.
-func PrintCompareResult(result CompareResult) {
-	if !result.HasChanges {
-		fmt.Println("No new or worsened duplicate code detected.")
-		return
-	}
-
-	if len(result.NewFindings) > 0 {
-		fmt.Printf("\nNew duplicate code blocks (%d):\n\n", len(result.NewFindings))
-		for i, f := range result.NewFindings {
-			fmt.Printf("%d. New duplicate block (%d tokens, ~%d lines):\n", i+1, f.TokenCount, f.LineCount)
-			for _, occ := range f.Occurrences {
-				fmt.Printf("   - %s:%d-%d\n", occ.Path, occ.StartLine, occ.EndLine)
-			}
-			fmt.Println()
-		}
-	}
-
-	if len(result.WorsenedFindings) > 0 {
-		fmt.Printf("\nWorsened duplicate code blocks (%d):\n\n", len(result.WorsenedFindings))
-		for i, f := range result.WorsenedFindings {
-			fmt.Printf("%d. Worsened fingerprint (now %d occurrences, was %d):\n", i+1, f.TotalNow, len(f.BaselineOccurrences))
-			fmt.Printf("   Baseline locations (%d):\n", len(f.BaselineOccurrences))
-			for _, occ := range f.BaselineOccurrences {
-				fmt.Printf("     - %s:%d-%d\n", occ.Path, occ.StartLine, occ.EndLine)
-			}
-			fmt.Printf("   New locations (%d):\n", len(f.NewOccurrences))
-			for _, occ := range f.NewOccurrences {
-				fmt.Printf("     + %s:%d-%d\n", occ.Path, occ.StartLine, occ.EndLine)
-			}
-			fmt.Println()
-		}
-	}
-}
-
-// ExitCodeFromCompareResult returns the appropriate exit code for a compare result.
-func ExitCodeFromCompareResult(result CompareResult) int {
-	if result.HasChanges {
-		return 1
-	}
-	return 0
-}
-
-// NormalizeFingerprintForBaseline returns a stable, normalized fingerprint for baseline storage.
-func NormalizeFingerprintForBaseline(tokens []string) string {
-	normalized := strings.Join(tokens, " ")
-	return StableFingerprintHash(normalized)
 }

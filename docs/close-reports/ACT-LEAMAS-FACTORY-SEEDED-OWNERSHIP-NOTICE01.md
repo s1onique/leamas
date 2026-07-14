@@ -39,7 +39,7 @@ Recompilation does not overwrite existing seeded `Makefile` files. Custom target
 
 **No version change required.**
 
-No pack-version change is required because `pack_version` represents doctrine-inventory semantics, which are unchanged. The current `pack_digest` covers the canonical pack JSON bytes (`Pack.RawBytes`) and therefore does not detect this renderer-only seeded-template correction. Existing seeded Makefiles are intentionally preserved and require the documented manual header correction.
+No pack-version change is required because `pack_version` represents doctrine-inventory semantics, which are unchanged. The current `pack_digest` covers the canonical pack JSON bytes and therefore does not detect this renderer correction.
 
 Per the pack versioning policy documented in `docs/doctrine/doctrine-compiler.md`:
 - `pack_version` — semantic version of the doctrine inventory
