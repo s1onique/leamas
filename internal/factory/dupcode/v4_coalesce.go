@@ -92,16 +92,17 @@ func v4FingerprintFromChain(chain cloneChain) string {
 	return v4SeedFingerprint(chain.ContentHash)
 }
 
-// v4FindingsFromChains converts clone chains to coalesced findings using V4 semantics.
-// Uses internal v4Finding type to preserve token positions through N-way merging.
-func v4FindingsFromChains(chains []cloneChain) []coalescedFinding {
+// v4InternalFindingsFromChains is the production V4 merge seam. It retains
+// token positions until the public projection, so all callers observe the
+// same grouping, deduplication, sorting, and ordering behavior.
+func v4InternalFindingsFromChains(chains []cloneChain) []v4InternalFinding {
 	if len(chains) == 0 {
 		return nil
 	}
 
-	var findings []v4Finding
+	var findings []v4InternalFinding
 	for _, chain := range chains {
-		// Each chain gets its own occurrences (coalesced per file)
+		// Each chain gets its own occurrences (coalesced per file).
 		occurrences := v4OccurrenceFromChain(chain)
 		if len(occurrences) < 2 {
 			continue
@@ -109,7 +110,7 @@ func v4FindingsFromChains(chains []cloneChain) []coalescedFinding {
 
 		stableFP := v4FingerprintFromChain(chain)
 
-		findings = append(findings, v4Finding{
+		findings = append(findings, v4InternalFinding{
 			StableFingerprint: stableFP,
 			TokenCount:        chain.TokenSpan,
 			LineCount:         chain.LineSpan,
@@ -117,11 +118,11 @@ func v4FindingsFromChains(chains []cloneChain) []coalescedFinding {
 		})
 	}
 
-	// Merge by stable fingerprint (content-based) for N-way clones
+	// Merge by stable fingerprint (content-based) for N-way clones.
 	findings = v4MergeFindings(findings)
 
 	// Sort deterministically by total order:
-	// StableFingerprint -> TokenCount -> LineCount -> canonical occurrence sequence
+	// StableFingerprint -> TokenCount -> LineCount -> canonical occurrence sequence.
 	sort.Slice(findings, func(i, j int) bool {
 		if findings[i].StableFingerprint != findings[j].StableFingerprint {
 			return findings[i].StableFingerprint < findings[j].StableFingerprint
@@ -132,11 +133,20 @@ func v4FindingsFromChains(chains []cloneChain) []coalescedFinding {
 		if findings[i].LineCount != findings[j].LineCount {
 			return findings[i].LineCount < findings[j].LineCount
 		}
-		// Compare canonical occurrence sequences
 		return canonicalOccurrenceSetFromV4(findings[i].Occurrences) < canonicalOccurrenceSetFromV4(findings[j].Occurrences)
 	})
 
-	// Convert to public type
+	return findings
+}
+
+// v4FindingsFromChains projects the production-owned internal findings into
+// the existing public coalesced type. It intentionally contains no merge or
+// deduplication logic of its own.
+func v4FindingsFromChains(chains []cloneChain) []coalescedFinding {
+	if len(chains) == 0 {
+		return nil
+	}
+	findings := v4InternalFindingsFromChains(chains)
 	result := make([]coalescedFinding, len(findings))
 	for i, f := range findings {
 		result[i] = coalescedFinding{
@@ -148,7 +158,6 @@ func v4FindingsFromChains(chains []cloneChain) []coalescedFinding {
 			Occurrences:       convertOccurrences(f.Occurrences),
 		}
 	}
-
 	return result
 }
 

@@ -15,13 +15,18 @@ type maximalOccurrence struct {
 	EndLine   int
 }
 
-// v4Finding is an internal representation with token positions.
-type v4Finding struct {
+// v4InternalFinding is the production-owned V4 finding representation that
+// retains token positions through merge and public projection.
+type v4InternalFinding struct {
 	StableFingerprint string
 	TokenCount        int
 	LineCount         int
 	Occurrences       []maximalOccurrence
 }
+
+// v4Finding is retained as a package-private compatibility alias for existing
+// focused tests. The merge implementation uses v4InternalFinding values.
+type v4Finding = v4InternalFinding
 
 // v4OccurrenceFromChain converts a cloneChain to maximalOccurrences.
 // Preserves token positions for later deduplication during N-way merging.
@@ -128,13 +133,13 @@ type mergeKey struct {
 
 // v4MergeFindings merges v4Findings representing the same N-way clone.
 // Merges by (stable fingerprint, token count) and deduplicates by token position.
-func v4MergeFindings(findings []v4Finding) []v4Finding {
+func v4MergeFindings(findings []v4InternalFinding) []v4InternalFinding {
 	if len(findings) <= 1 {
 		return findings
 	}
 
 	// Group by (stable fingerprint, token count)
-	byKey := make(map[mergeKey][]v4Finding)
+	byKey := make(map[mergeKey][]v4InternalFinding)
 	for _, f := range findings {
 		key := mergeKey{
 			StableFingerprint: f.StableFingerprint,
@@ -155,7 +160,7 @@ func v4MergeFindings(findings []v4Finding) []v4Finding {
 		return keys[i].TokenCount < keys[j].TokenCount
 	})
 
-	var merged []v4Finding
+	var merged []v4InternalFinding
 	for _, key := range keys {
 		group := byKey[key]
 		if len(group) == 0 {
@@ -178,9 +183,9 @@ func v4MergeFindings(findings []v4Finding) []v4Finding {
 // Invariant: callers (v4MergeFindings) group by (StableFingerprint, TokenCount),
 // so all group members are guaranteed to share TokenCount.
 // A mismatch indicates a programming error and must not silently lose findings.
-func v4MergeToNWayClone(group []v4Finding) v4Finding {
+func v4MergeToNWayClone(group []v4InternalFinding) v4InternalFinding {
 	if len(group) == 0 {
-		return v4Finding{}
+		return v4InternalFinding{}
 	}
 
 	if len(group) == 1 {
@@ -244,8 +249,9 @@ func projectToPublicOccurrence(mo maximalOccurrence) Occurrence {
 	}
 }
 
-// convertV4FindingToFinding converts internal v4Finding to public Finding.
-func convertV4FindingToFinding(f v4Finding) Finding {
+// convertV4FindingToFinding converts a production internal finding to public
+// Finding. Public projection intentionally drops token positions.
+func convertV4FindingToFinding(f v4InternalFinding) Finding {
 	occurrences := make([]Occurrence, len(f.Occurrences))
 	for i, mo := range f.Occurrences {
 		occurrences[i] = projectToPublicOccurrence(mo)

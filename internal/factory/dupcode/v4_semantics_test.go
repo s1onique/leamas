@@ -51,12 +51,13 @@ func generateForLoopClone(fileId string, bodyId int) string {
 	return fmt.Sprintf("func %s() {\n%s}\n\n", name, body)
 }
 
-// generateWhileLoopClone generates a clone using while-style loop with unique name.
+// generateWhileLoopClone generates the second independent loop-shaped body.
+// Its subtraction operator remains distinct after identifier normalization.
 func generateWhileLoopClone(fileId string, bodyId int) string {
 	name := fmt.Sprintf("WhileCloneFunc_%s_%d", fileId, bodyId)
 	body := "    k := 0\n"
 	for i := 0; i < 80; i++ {
-		body += fmt.Sprintf("    k = k + 1\n")
+		body += fmt.Sprintf("    k = k - 1\n")
 	}
 	return fmt.Sprintf("func %s() {\n%s}\n\n", name, body)
 }
