@@ -220,3 +220,91 @@ func traceForLiveTree(t *testing.T) (
 	}
 	return leftFile, rightFile, trace, finals
 }
+
+
+// TestV4PipelineTrace_StagesNonEmpty runs the live trace and
+// asserts every stage is non-empty. The maximality proof requires
+// the live pre-publication pipeline stages to be observable.
+
+func TestV4PipelineTrace_StagesNonEmpty(t *testing.T) {
+	leftFile, rightFile, trace, finals := traceForLiveTree(t)
+	if leftFile == nil || rightFile == nil {
+		t.Fatal("live analysis files missing")
+	}
+	if len(trace.FilteredWindows) == 0 {
+		t.Fatal("FilteredWindows is empty")
+	}
+	if len(trace.Partitions) == 0 {
+		t.Fatal("Partitions is empty")
+	}
+	if len(trace.ChainsBeforeShadow) == 0 {
+		t.Fatal("ChainsBeforeShadow is empty")
+	}
+	if len(trace.ChainsAfterShadow) == 0 {
+		t.Fatal("ChainsAfterShadow is empty")
+	}
+	if len(trace.PairEvidence) == 0 {
+		t.Fatal("PairEvidence is empty")
+	}
+	if len(trace.ComponentsBeforeShadow) == 0 {
+		t.Fatal("ComponentsBeforeShadow is empty")
+	}
+	canonical := canonicalLiveFinding(t, finals)
+	if canonical.TokenCount != 504 {
+		t.Fatalf("canonical finding must have TokenCount=504, got %d", canonical.TokenCount)
+	}
+	t.Logf("trace stages: windows=%d partitions=%d chains_before=%d chains_after=%d pair_evidence=%d components_before=%d components_after=%d final_findings=%d",
+		len(trace.FilteredWindows),
+		len(trace.Partitions),
+		len(trace.ChainsBeforeShadow),
+		len(trace.ChainsAfterShadow),
+		len(trace.PairEvidence),
+		len(trace.ComponentsBeforeShadow),
+		len(trace.ComponentsAfterShadow),
+		len(trace.FinalFindings),
+	)
+}
+// TestV4PipelineTrace_PairEvidenceDrivesMaterializer asserts that
+// every surviving chain produces exactly one pair evidence entry
+// before materialization. The pair-evidence step rejects chains
+// whose left/right widths or digests disagree; the surviving
+// evidence is therefore the set that drives the
+// connected-component materializer.
+
+func TestV4PipelineTrace_PairEvidenceDrivesMaterializer(t *testing.T) {
+	_, _, trace, _ := traceForLiveTree(t)
+	if len(trace.PairEvidence) != len(trace.ChainsAfterShadow) {
+		t.Fatalf("PairEvidence=%d must equal ChainsAfterShadow=%d",
+			len(trace.PairEvidence), len(trace.ChainsAfterShadow))
+	}
+	for i, ev := range trace.PairEvidence {
+		if ev.ContentKey.TokenCount != 504 {
+			t.Errorf("pair_evidence[%d].TokenCount=%d, want 504",
+				i, ev.ContentKey.TokenCount)
+		}
+		if ev.Left.StartPos < 0 || ev.Right.StartPos < 0 {
+			t.Errorf("pair_evidence[%d] missing left/right", i)
+		}
+	}
+}
+// TestV4PipelineTrace_ComponentsBeforeShadowContains504 asserts
+// that the 504-token canonical component is present BEFORE
+// structural-shadow suppression runs. The maximality proof uses
+// this as the starting point for the larger-component audit.
+
+func TestV4PipelineTrace_ComponentsBeforeShadowContains504(t *testing.T) {
+	_, _, trace, _ := traceForLiveTree(t)
+	if len(trace.ComponentsBeforeShadow) == 0 {
+		t.Fatal("ComponentsBeforeShadow is empty")
+	}
+	saw504 := false
+	for _, c := range trace.ComponentsBeforeShadow {
+		if c.TokenCount == 504 && len(c.Occurrences) == 2 {
+			saw504 = true
+			break
+		}
+	}
+	if !saw504 {
+		t.Fatalf("ComponentsBeforeShadow must contain a 504-token component with 2 occurrences")
+	}
+}
