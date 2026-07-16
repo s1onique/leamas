@@ -60,13 +60,7 @@ func occurrenceFromChain(chain cloneChain) []Occurrence {
 
 // fingerprintFromChain computes the stable fingerprint from the final chain content.
 func fingerprintFromChain(chain cloneChain) string {
-	// Build path set from chain PathSet
-	pathSet := chain.PathSet
-
-	// Include offset in fingerprint to distinguish clones at different positions
-	// This prevents duplicate fingerprints for clones at different offsets
-	contentKey := fmt.Sprintf("%d-%d-%s", chain.TokenSpan, chain.Offset, pathSet)
-	return v3SeedFingerprint(contentKey, pathSet)
+	return v4FingerprintFromChain(chain)
 }
 
 // findingsKey identifies unique clone bodies for consolidation.

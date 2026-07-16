@@ -15,8 +15,8 @@ func TestLoadBaseline_Success(t *testing.T) {
 
 	baseline := Baseline{
 		SchemaVersion:    1,
-		AlgorithmVersion: 3,
-		GeneratedAt:      "2026-07-09T00:00:00Z",
+		AlgorithmVersion: 4,
+		GeneratedAt:      "2026-07-14T00:00:00Z",
 		Tool:             "leamas dupcode",
 		Thresholds: BaselineThresholds{
 			MinLines:  40,

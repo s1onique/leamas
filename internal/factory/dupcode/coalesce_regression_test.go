@@ -245,3 +245,56 @@ func TestRegression_ComputeMaxTokenSpan(t *testing.T) {
 		t.Errorf("expected union token span 80, got %d", span2)
 	}
 }
+
+// TestV4_PositionalMergePreservesOffset tests that v4MergeFindings preserves
+// occurrences with the same path, same line range, but different token positions.
+// This is a regression test for the fixed token-identity defect.
+func TestV4_PositionalMergePreservesOffset(t *testing.T) {
+	// Two v4Findings with same stable fingerprint and token count,
+	// but same-file occurrences with different token positions (same line range)
+	finding1 := v4Finding{
+		StableFingerprint: "test-fp",
+		TokenCount:        400,
+		LineCount:         50,
+		Occurrences: []maximalOccurrence{
+			{Path: "file.go", StartLine: 10, EndLine: 60, StartPos: 0, EndPos: 399},
+			{Path: "other.go", StartLine: 100, EndLine: 150, StartPos: 0, EndPos: 399},
+		},
+	}
+	finding2 := v4Finding{
+		StableFingerprint: "test-fp",
+		TokenCount:        400,
+		LineCount:         50,
+		Occurrences: []maximalOccurrence{
+			// Same path and line range as finding1's first occurrence,
+			// but different token positions (offset by 50 tokens)
+			{Path: "file.go", StartLine: 10, EndLine: 60, StartPos: 50, EndPos: 449},
+			{Path: "third.go", StartLine: 200, EndLine: 250, StartPos: 0, EndPos: 399},
+		},
+	}
+
+	// Merge findings
+	merged := v4MergeFindings([]v4Finding{finding1, finding2})
+
+	// Should have 1 merged finding with all 4 occurrences preserved
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 merged finding, got %d", len(merged))
+	}
+
+	// Should have 4 distinct occurrences (deduplication is by Path+StartPos+EndPos)
+	if len(merged[0].Occurrences) != 4 {
+		t.Errorf("expected 4 distinct occurrences, got %d: %+v",
+			len(merged[0].Occurrences), merged[0].Occurrences)
+	}
+
+	// Verify the two different token positions for file.go are both preserved
+	var fileOccurrences []maximalOccurrence
+	for _, occ := range merged[0].Occurrences {
+		if occ.Path == "file.go" {
+			fileOccurrences = append(fileOccurrences, occ)
+		}
+	}
+	if len(fileOccurrences) != 2 {
+		t.Errorf("expected 2 file.go occurrences (different token positions), got %d", len(fileOccurrences))
+	}
+}

@@ -44,13 +44,13 @@ type alignedComponent struct {
 	MaxLineCount  int
 }
 
-// coalesceFindings is the v3 implementation for finding maximal clones.
+// coalesceFindings is the v4 implementation for finding maximal clones.
 // It uses aligned seed-match chaining to produce one maximal finding per clone
 // rather than one finding per overlapping MinTokens window.
 func coalesceFindings(
 	windowMap map[string][]rawWindow,
 	fingerprintTokens map[string]int,
 ) []coalescedFinding {
-	// Delegate to v3 algorithm
-	return v3CoalesceFindings(windowMap, fingerprintTokens)
+	// Delegate to v4 algorithm
+	return v4CoalesceFindings(windowMap, fingerprintTokens)
 }

@@ -7,7 +7,8 @@ import (
 )
 
 // buildSeedMatches generates seed matches from raw windows for a fingerprint.
-// Matches all window pairs across different files with signed offset.
+// Matches all window pairs across different files AND within the same file.
+// This enables detection of repeated occurrences in a single file.
 func buildSeedMatches(fp string, windows []rawWindow) []seedMatch {
 	if len(windows) < 2 {
 		return nil
@@ -19,27 +20,54 @@ func buildSeedMatches(fp string, windows []rawWindow) []seedMatch {
 		pathWindows[w.Path] = append(pathWindows[w.Path], w)
 	}
 
-	// Need at least 2 distinct paths for a match
-	if len(pathWindows) < 2 {
-		return nil
+	var matches []seedMatch
+
+	// For each path, match windows within same file AND across different files
+	for _, fileWindows := range pathWindows {
+		// Within-file matches for repeated occurrences - require non-overlapping
+		if len(fileWindows) >= 2 {
+			// Sort by StartPos first to ensure consistent ordering
+			sorted := make([]rawWindow, len(fileWindows))
+			copy(sorted, fileWindows)
+			sort.Slice(sorted, func(i, j int) bool {
+				return sorted[i].StartPos < sorted[j].StartPos
+			})
+
+			for i := 0; i < len(sorted); i++ {
+				for j := i + 1; j < len(sorted); j++ {
+					lw, rw := sorted[i], sorted[j]
+					// Require non-overlapping for within-file matches
+					if lw.EndPos >= rw.StartPos {
+						continue
+					}
+					// Lexicographic ordering for Left/Right
+					if lw.Path > rw.Path || (lw.Path == rw.Path && lw.StartPos > rw.StartPos) {
+						lw, rw = rw, lw
+					}
+					matches = append(matches, seedMatch{
+						SeedFingerprint: fp,
+						Left:            lw,
+						Right:           rw,
+						Offset:          rw.StartPos - lw.StartPos,
+					})
+				}
+			}
+		}
 	}
 
+	// Cross-file matches
 	var paths []string
 	for path := range pathWindows {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
 
-	var matches []seedMatch
-
-	// For each pair of files, match all windows with signed offset
 	for i := 0; i < len(paths); i++ {
 		for j := i + 1; j < len(paths); j++ {
 			leftPath, rightPath := paths[i], paths[j]
 			leftWindows := pathWindows[leftPath]
 			rightWindows := pathWindows[rightPath]
 
-			// Match all pairs with relative offset as alignment invariant
 			for _, lw := range leftWindows {
 				for _, rw := range rightWindows {
 					matches = append(matches, seedMatch{
@@ -57,14 +85,15 @@ func buildSeedMatches(fp string, windows []rawWindow) []seedMatch {
 }
 
 // groupMatchesByChainKey partitions matches by chain key for chaining.
+// V4: Uses (LeftPath, RightPath, Offset) as the partition key, NOT SeedFingerprint.
+// This allows consecutive sliding windows with different fingerprints to chain together.
 func groupMatchesByChainKey(matches []seedMatch) map[chainKey][]seedMatch {
 	groups := make(map[chainKey][]seedMatch)
 	for _, m := range matches {
 		key := chainKey{
-			SeedFingerprint: m.SeedFingerprint,
-			LeftPath:        m.Left.Path,
-			RightPath:       m.Right.Path,
-			Offset:          m.Offset,
+			LeftPath:  m.Left.Path,
+			RightPath: m.Right.Path,
+			Offset:    m.Offset,
 		}
 		groups[key] = append(groups[key], m)
 	}
@@ -222,9 +251,7 @@ func buildChainsWithPartitioning(matches []seedMatch) []cloneChain {
 		keys = append(keys, k)
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].SeedFingerprint != keys[j].SeedFingerprint {
-			return keys[i].SeedFingerprint < keys[j].SeedFingerprint
-		}
+		// Total order: LeftPath → RightPath → Offset
 		if keys[i].LeftPath != keys[j].LeftPath {
 			return keys[i].LeftPath < keys[j].LeftPath
 		}

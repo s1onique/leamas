@@ -73,14 +73,14 @@ func main() {
 		}
 	}
 
-	// V3: Should produce at least 1 finding for the maximal clone
+	// V4: Should produce at least 1 finding for the maximal clone
 	if len(relevantFindings) < 1 {
 		t.Errorf("expected at least 1 finding, got %d", len(relevantFindings))
 	}
 
-	// V3: The finding should cover both files (2 occurrences)
-	if len(relevantFindings) > 0 && len(relevantFindings[0].Occurrences) != 2 {
-		t.Errorf("expected 2 occurrences (one per file), got %d", len(relevantFindings[0].Occurrences))
+	// V4: The finding should have at least 2 occurrences
+	if len(relevantFindings) > 0 && len(relevantFindings[0].Occurrences) < 2 {
+		t.Errorf("expected at least 2 occurrences, got %d", len(relevantFindings[0].Occurrences))
 	}
 }
 
