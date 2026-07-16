@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "algorithm_version": 4,
-  "generated_at": "2026-07-15T17:34:06Z",
+  "generated_at": "2026-07-16T14:54:08Z",
   "tool": "leamas dupcode",
   "thresholds": {
     "min_lines": 40,
@@ -9,36 +9,19 @@
   },
   "findings": [
     {
-      "fingerprint": "2a6f1fe82e4e6d9c9fb6657c70e090e3ef0aa30fbf509d1e436a957d40af2f51",
-      "token_count": 877,
-      "line_count": 153,
+      "fingerprint": "86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b",
+      "token_count": 504,
+      "line_count": 73,
       "occurrences": [
         {
           "path": "cmd/leamas/claim_commands.go",
-          "start_line": 188,
+          "start_line": 268,
           "end_line": 340
         },
         {
           "path": "cmd/leamas/evidence_commands.go",
-          "start_line": 230,
+          "start_line": 310,
           "end_line": 382
-        }
-      ]
-    },
-    {
-      "fingerprint": "d6f73e96d57f4f5efa898e7b15f7eaa92623de1fd55368a3573ae938184e53d8",
-      "token_count": 514,
-      "line_count": 92,
-      "occurrences": [
-        {
-          "path": "cmd/leamas/claim_commands.go",
-          "start_line": 87,
-          "end_line": 178
-        },
-        {
-          "path": "cmd/leamas/evidence_commands.go",
-          "start_line": 132,
-          "end_line": 222
         }
       ]
     }

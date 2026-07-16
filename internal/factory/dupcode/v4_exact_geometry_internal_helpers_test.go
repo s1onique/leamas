@@ -6,14 +6,15 @@
 package dupcode
 
 import (
-	"sort"
 	"testing"
 )
 
-// v4PipelineInternal invokes production tokenization, seed discovery,
-// chaining, and v4InternalFindingsFromChains. The last function owns grouping,
-// N-way merge, deduplication, occurrence sorting, and finding ordering for both
-// this internal projection and the public v4FindingsFromChains path.
+// v4PipelineInternal invokes production tokenization, region-aware
+// analysis, and the shared V4 internal pipeline
+// (v4BuildInternalFindings). The exact same internal findings are
+// produced for both this internal projection and the public
+// v4FindingsFromChains path; the public projection is a direct view
+// of the same internal values.
 func v4PipelineInternal(t *testing.T, root string, paths []string, cfg Config) []exactInternalFindingGeometry {
 	t.Helper()
 
@@ -29,53 +30,57 @@ func v4PipelineInternal(t *testing.T, root string, paths []string, cfg Config) [
 		normRoot = root
 	}
 
-	allFiles := make([]fileTokens, 0, len(paths))
+	type entry struct {
+		path     string
+		fileToks fileTokens
+		analysis v4FileAnalysis
+		analyzed v4AnalyzedFile
+	}
+	entries := make([]entry, 0, len(paths))
+	allAnalyses := make(map[string]*v4FileAnalysis)
+	allAnalyzedFiles := make(map[string]*v4AnalyzedFile)
 	for _, path := range paths {
-		ft, err := tokenizeFile(path)
+		analyzed, err := analyzeV4AnalyzedFile(path)
 		if err != nil {
-			t.Fatalf("tokenize %s: %v", path, err)
+			t.Fatalf("analyse %s: %v", path, err)
 		}
-		ft.path = NormalizePathForBaseline(ft.path, normRoot)
-		allFiles = append(allFiles, ft)
+		normalized := NormalizePathForBaseline(analyzed.FileTokens.path, normRoot)
+		rebaseV4AnalyzedFilePath(&analyzed, normalized)
+
+		entries = append(entries, entry{
+			path:     normalized,
+			fileToks: analyzed.FileTokens,
+			analysis: analyzed.Analysis,
+			analyzed: analyzed,
+		})
+	}
+	for i := range entries {
+		allAnalyses[entries[i].path] = &entries[i].analysis
+		allAnalyzedFiles[entries[i].path] = &entries[i].analyzed
 	}
 
 	windowMap := make(map[string][]rawWindow)
 	fingerprintTokens := make(map[string]int)
-	for i := 0; i < len(allFiles); i++ {
-		if len(allFiles[i].tokens) < cfg.MinTokens {
+	for i := 0; i < len(entries); i++ {
+		if len(entries[i].fileToks.tokens) < cfg.MinTokens {
 			continue
 		}
-		for j := i + 1; j < len(allFiles); j++ {
-			if len(allFiles[j].tokens) < cfg.MinTokens {
+		for j := i + 1; j < len(entries); j++ {
+			if len(entries[j].fileToks.tokens) < cfg.MinTokens {
 				continue
 			}
-			findCommonWindows(allFiles[i], allFiles[j], cfg, windowMap, fingerprintTokens)
+			findCommonWindows(entries[i].fileToks, entries[j].fileToks, cfg, windowMap, fingerprintTokens)
 		}
 	}
 	if len(windowMap) == 0 {
 		return nil
 	}
-
-	fps := make([]string, 0, len(windowMap))
-	for fp := range windowMap {
-		fps = append(fps, fp)
-	}
-	sort.Strings(fps)
-
-	var allMatches []seedMatch
-	for _, fp := range fps {
-		allMatches = append(allMatches, buildSeedMatches(fp, windowMap[fp])...)
-	}
-	if len(allMatches) == 0 {
-		return nil
+	// Same checked production seam as the public CheckRepo path.
+	internal, err := v4BuildInternalFindingsChecked(windowMap, allAnalyses, allAnalyzedFiles)
+	if err != nil {
+		t.Fatalf("build internal findings: %v", err)
 	}
 
-	chains := v4BuildChainsWithPartitioning(allMatches)
-	if len(chains) == 0 {
-		return nil
-	}
-
-	internal := v4InternalFindingsFromChains(chains)
 	projected := make([]exactInternalFindingGeometry, len(internal))
 	for i, finding := range internal {
 		occurrences := make([]exactInternalOccurrenceGeometry, len(finding.Occurrences))

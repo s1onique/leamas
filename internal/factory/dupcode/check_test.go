@@ -2,6 +2,7 @@
 package dupcode
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -212,61 +213,168 @@ func funcB() {
 	}
 }
 
-func TestCheckRepo_WithDuplicates(t *testing.T) {
-	tmpDir := t.TempDir()
+// TestCheckRepo_HealthyFixtureReturnsFinding is the region-aware
+// public-acceptance test for CheckRepo. It exercises CheckRepo on a
+// two-file fixture where each file carries unowned top-level tokens
+// (package declaration, var and const declarations) and contains
+// multiple function declarations. The duplicate function-local body
+// across files must be detected as a single finding whose occurrences
+// are bounded by executable regions.
+//
+// The test asserts, for every retained finding:
+//
+//   - every retained finding spans at least two distinct files;
+//   - every occurrence's public line range resolves to internal
+//     token positions via the production scanner/parser;
+//   - every token in the canonical body has a non-zero TokenOwner
+//     (i.e. belongs to one executable region);
+//   - every token in the canonical body shares one owner (i.e. the
+//     body does NOT cross region boundaries);
+//   - the owner corresponds to the cloneA / cloneB function (not to
+//     the top-level var/const declarations or the topFunc / bottom
+//     functions);
+//   - the public lines match the internal start/end lines exactly;
+//   - the occurrence does NOT include package, var, const, or
+//     inter-function tokens.
+//
+// The test does NOT rely on `occ.StartLine >= 3` as a substitute for
+// the region-boundary check; the per-token TokenOwner walk is the
+// authoritative region-ownership witness.
+func TestCheckRepo_HealthyFixtureReturnsFinding(t *testing.T) {
+	root := t.TempDir()
+	fileA := filepath.Join(root, "a.go")
+	fileB := filepath.Join(root, "b.go")
 
-	// Large code block with enough tokens (MinLines=15, MinTokens=150)
-	identicalCode := `package main
+	// sharedStatements(80) is 4 + 6*80 = 484 normalized tokens,
+	// comfortably exceeding the default MinTokens=400 / MinLines=40
+	// thresholds used by Config{MinLines: 40, MinTokens: 400}.
+	cloneBody := sharedStatements(80)
 
-import "fmt"
+	// contentA and contentB:
+	//   * carry a top-level var and const declaration (unowned tokens);
+	//   * declare three distinct functions so the file has more than
+	//     one executable region;
+	//   * declare a clone_NNN function whose body is identical to the
+	//     clone_NNN body in the other file.
+	//
+	// writeTestFile prepends "package test\n\n" to whatever we supply,
+	// which contributes the unowned package declaration. None of those
+	// tokens may leak into a finding geometry.
+	cloneCounter = 0
+	contentA := fmt.Sprintf(`var topVarA = 1
+const otherA = 2
 
-func processData() {
-	data := make([]int, 0)
-	for i := 0; i < 30; i++ {
-		data = append(data, i*2)
-		data = append(data, i*3)
-	}
-	result := 0
-	for _, v := range data {
-		result += v
-	}
-	fmt.Println("Processing data:", result)
+func topFuncA() {
+	_ = topVarA
 }
 
-func processMore() {
-	data := make([]int, 0)
-	for i := 0; i < 30; i++ {
-		data = append(data, i*2)
-		data = append(data, i*3)
-	}
-	result := 0
-	for _, v := range data {
-		result += v
-	}
-	fmt.Println("Processing more:", result)
+func cloneA() {
+%s}
+
+func bottomA() {
+	_ = otherA
 }
-`
+`, cloneBody)
+	contentB := fmt.Sprintf(`var topVarB = 1
+const otherB = 2
 
-	file1 := filepath.Join(tmpDir, "file1.go")
-	if err := os.WriteFile(file1, []byte(identicalCode), 0644); err != nil {
-		t.Fatalf("failed to write file1: %v", err)
-	}
+func topFuncB() {
+	_ = topVarB
+}
 
-	file2 := filepath.Join(tmpDir, "file2.go")
-	if err := os.WriteFile(file2, []byte(identicalCode), 0644); err != nil {
-		t.Fatalf("failed to write file2: %v", err)
-	}
+func cloneB() {
+%s}
 
-	cfg := DefaultConfig()
-	cfg.MinLines = 15
-	cfg.MinTokens = 150
+func bottomB() {
+	_ = otherB
+}
+`, cloneBody)
+	writeTestFile(t, fileA, contentA)
+	writeTestFile(t, fileB, contentB)
+	verifyFixturesTypeCheck(t, fileA, fileB)
 
-	findings, err := CheckRepo(tmpDir, cfg)
+	cfg := Config{MinLines: 40, MinTokens: 400}
+	findings, err := CheckRepo(root, cfg)
 	if err != nil {
 		t.Fatalf("CheckRepo failed: %v", err)
 	}
-
 	if len(findings) == 0 {
-		t.Fatal("expected to detect duplicates but found none")
+		t.Fatalf("expected at least one duplicate finding, got 0")
+	}
+
+	// Per-token ownership inventory built from the production analysis
+	// of each fixture file. The inventory is keyed by relative path so
+	// the per-occurrence walk can find the file's TokenOwner array.
+	analyses := map[string]*v4FileAnalysis{}
+	for _, path := range []string{fileA, fileB} {
+		analyzed, err := analyzeV4AnalyzedFile(path)
+		if err != nil {
+			t.Fatalf("analyze %s: %v", path, err)
+		}
+		normalized := NormalizePathForBaseline(analyzed.FileTokens.path, root)
+		rebaseV4AnalyzedFilePath(&analyzed, normalized)
+		analyses[normalized] = &analyzed.Analysis
+	}
+
+	sawExpected := false
+	for _, f := range findings {
+		if f.TokenCount < cfg.MinTokens || len(f.Occurrences) < 2 {
+			continue
+		}
+		sawExpected = true
+
+		uniqueFiles := make(map[string]bool)
+		for _, occ := range f.Occurrences {
+			uniqueFiles[occ.Path] = true
+			if occ.EndLine < occ.StartLine {
+				t.Errorf("occurrence has inverted line range: %s:%d-%d", occ.Path, occ.StartLine, occ.EndLine)
+			}
+			analysis, ok := analyses[occ.Path]
+			if !ok {
+				t.Errorf("occurrence %s has no analysis map", occ.Path)
+				continue
+			}
+			// Resolve the public line range back to internal token
+			// positions via the production scanner/parser.
+			startPos, endPos := mapLineRangeToTokenRange(*analysis, occ.StartLine, occ.EndLine)
+			if startPos < 0 || endPos < startPos {
+				t.Errorf("occurrence %s:%d-%d does not resolve to tokens (start=%d end=%d)",
+					occ.Path, occ.StartLine, occ.EndLine, startPos, endPos)
+				continue
+			}
+			// Public lines must match internal start/end lines exactly.
+			if analysis.Lines[startPos] != occ.StartLine || analysis.Lines[endPos] != occ.EndLine {
+				t.Errorf("occurrence %s: public lines %d-%d do not match internal lines %d-%d",
+					occ.Path, occ.StartLine, occ.EndLine,
+					analysis.Lines[startPos], analysis.Lines[endPos])
+			}
+			// Every token in the canonical body must have a non-zero
+			// TokenOwner (i.e. lie inside an executable region).
+			owners := collectOwnersInRange(analysis.TokenOwner, startPos, endPos)
+			if len(owners) == 0 {
+				t.Errorf("occurrence %s:%d-%d has no executable region owner",
+					occ.Path, occ.StartLine, occ.EndLine)
+				continue
+			}
+			for _, owner := range owners {
+				if owner.Path == "" {
+					t.Errorf("occurrence %s:%d-%d includes unowned tokens (package/var/const/inter-function)",
+						occ.Path, occ.StartLine, occ.EndLine)
+				}
+			}
+			// Every token must share ONE owner; otherwise the body
+			// crosses a region boundary and the public line range
+			// cannot be a valid single-region clone.
+			if len(owners) != 1 {
+				t.Errorf("occurrence %s:%d-%d spans %d regions (must be 1): %+v",
+					occ.Path, occ.StartLine, occ.EndLine, len(owners), owners)
+			}
+		}
+		if len(uniqueFiles) < 2 {
+			t.Errorf("finding should span at least two files, got %d: %+v", len(uniqueFiles), f.Occurrences)
+		}
+	}
+	if !sawExpected {
+		t.Fatalf("no finding met MinTokens/MinLines thresholds with >=2 occurrences: %+v", findings)
 	}
 }

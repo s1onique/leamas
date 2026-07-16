@@ -48,7 +48,7 @@ func generateForLoopClone(fileId string, bodyId int) string {
 	for i := 0; i < 80; i++ {
 		body += fmt.Sprintf("    j = j + 1\n")
 	}
-	return fmt.Sprintf("func %s() {\n%s}\n\n", name, body)
+	return fmt.Sprintf("func %s() {\n%s}\n", name, body)
 }
 
 // generateWhileLoopClone generates the second independent loop-shaped body.
@@ -59,7 +59,7 @@ func generateWhileLoopClone(fileId string, bodyId int) string {
 	for i := 0; i < 80; i++ {
 		body += fmt.Sprintf("    k = k - 1\n")
 	}
-	return fmt.Sprintf("func %s() {\n%s}\n\n", name, body)
+	return fmt.Sprintf("func %s() {\n%s}\n", name, body)
 }
 
 // writeTestFile writes a valid Go source file with unique top-level declarations.
