@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 )
@@ -47,10 +46,21 @@ type BaselineValidationResult struct {
 	Findings []BaselineValidationFinding
 }
 
-// NormalizeOccurrencePath normalizes a path to be repo-relative with forward slashes.
+// NormalizeOccurrencePath normalizes a path to be repo-relative with forward
+// slashes. The result is slash-normalized and safe to embed in baseline JSON.
+//
+// Containment uses filepath.IsLocal, which lexically guarantees the relative
+// path is nonempty, non-absolute, and contains no parent-directory
+// components. This is a true path-component check; a prefix test against
+// ".." would incorrectly reject legitimate local names such as
+// "..generated.go" that happen to start with ".." but are not escapes.
+//
+// When the path is outside root, Rel returns a "../..." form which IsLocal
+// rejects. The function then returns the slash-normalized original as a
+// fallback so callers can still record the absolute location.
 func NormalizeOccurrencePath(root, p string) string {
 	rel, err := filepath.Rel(root, p)
-	if err == nil && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel) {
+	if err == nil && filepath.IsLocal(rel) {
 		return filepath.ToSlash(rel)
 	}
 	return filepath.ToSlash(p)

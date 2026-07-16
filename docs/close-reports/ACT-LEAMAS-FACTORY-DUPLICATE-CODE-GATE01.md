@@ -7,6 +7,10 @@ Leamas Factory quality gate. The detector uses scanner-based tokenization and
 normalization to detect copy-paste duplication, with path+count comparison to avoid
 false positives from line-number shifts.
 
+R1 scope: the exact-semantic-tests ACT is COMPLETE as a red cardinality/multiplicity
+specification; the geometry ACT is OPEN; the production ACT depends on both; the
+performance ACT depends on the production ACT closing.
+
 ## Files Changed
 
 ### New Files
@@ -99,3 +103,21 @@ CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
    TypeScript/Python repos (deferred, not in scope)
 2. **Config file**: If Leamas adopts a Factory config pattern, consider
    `.leamas.yaml` for dupcode settings (deferred)
+3. **R1: Exact semantic tests**: ACT-LEAMAS-FACTORY-DUPCODE-V4-EXACT-SEMANTICS-TESTS01
+   - Status: COMPLETE (red cardinality/multiplicity specification)
+   - Installs: exact finding cardinalities, occurrence multiplicities, valid geometry,
+     canonical sortedness, and absence of additional findings
+   - Defers: exact maximal-body identity to geometry ACT
+   - The semantics ACT is COMPLETE in the sense that all the cardinality, validity,
+     sortedness, and occurrence-multiple contracts it owns are installed and
+     function as a regression-detection suite. They fail against current production,
+     which is the documented purpose.
+4. **R2: Exact geometry tests**: ACT-LEAMAS-FACTORY-DUPCODE-V4-EXACT-GEOMETRY-TESTS01
+   - Status: OPEN
+   - Depends on: EXACT-SEMANTICS-TESTS01
+   - Downstream consumer: EXACT-SEMANTICS-PRODUCTION01
+5. **R3: Production correction**: ACT-LEAMAS-FACTORY-DUPCODE-V4-EXACT-SEMANTICS-PRODUCTION01
+   - Status: OPEN (depends on geometry red specification being installed)
+   - Dependency upstream: both EXACT-SEMANTICS-TESTS01 and EXACT-GEOMETRY-TESTS01
+6. **R4: All-pairs materialization performance**: ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01
+   - Status: PLANNED (depends on production correction)
