@@ -9,7 +9,6 @@ import (
 	"testing"
 )
 
-
 // canonicalLiveFinding returns the single canonical finding from
 // the live trace, asserting exactly one finding with TokenCount=504.
 

@@ -15,7 +15,6 @@ import (
 	"testing"
 )
 
-
 // TestV4BaselineForensics_504_NoLargerLiveChain asserts no live
 // pre-suppression chain whose width is strictly greater than 504
 // produces a valid pair-evidence entry whose content key would

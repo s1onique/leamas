@@ -221,7 +221,6 @@ func traceForLiveTree(t *testing.T) (
 	return leftFile, rightFile, trace, finals
 }
 
-
 // TestV4PipelineTrace_StagesNonEmpty runs the live trace and
 // asserts every stage is non-empty. The maximality proof requires
 // the live pre-publication pipeline stages to be observable.
@@ -264,6 +263,7 @@ func TestV4PipelineTrace_StagesNonEmpty(t *testing.T) {
 		len(trace.FinalFindings),
 	)
 }
+
 // TestV4PipelineTrace_PairEvidenceDrivesMaterializer asserts that
 // every surviving chain produces exactly one pair evidence entry
 // before materialization. The pair-evidence step rejects chains
@@ -287,6 +287,7 @@ func TestV4PipelineTrace_PairEvidenceDrivesMaterializer(t *testing.T) {
 		}
 	}
 }
+
 // TestV4PipelineTrace_ComponentsBeforeShadowContains504 asserts
 // that the 504-token canonical component is present BEFORE
 // structural-shadow suppression runs. The maximality proof uses

@@ -14,7 +14,6 @@ import (
 	"testing"
 )
 
-
 // TestV4BaselineForensics_504_CannotExtendOneToken inspects every
 // legal one-token extension of the canonical occurrence pair on
 // both files. For each extension it asserts exactly why the

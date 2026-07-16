@@ -9,7 +9,6 @@ import (
 	"testing"
 )
 
-
 // TestV4BaselineForensics_877_LockFacts asserts the concrete
 // forensic facts quoted by the CORRECTION03/CORRECTION04 reports
 // for the 877 historical public line range: owner count,
@@ -157,7 +156,6 @@ func TestV4BaselineForensics_PublicGeometryClassification(t *testing.T) {
 		)
 	}
 }
-
 
 // TestV4BaselineForensics_504_SortedFingerprintStable asserts the
 // 504 canonical finding's StableFingerprint equals the production
