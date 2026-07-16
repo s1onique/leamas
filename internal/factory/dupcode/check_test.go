@@ -369,6 +369,20 @@ func bottomB() {
 				t.Errorf("occurrence %s:%d-%d spans %d regions (must be 1): %+v",
 					occ.Path, occ.StartLine, occ.EndLine, len(owners), owners)
 			}
+			// The owner must be the clone region, not topFunc or
+			// bottomFunc. In the fixture each file declares
+			// topFunc (ordinal 0), clone (ordinal 1), bottomFunc
+			// (ordinal 2); only the clone body is the duplicated
+			// region.
+			if len(owners) == 1 {
+				cloneOwner := owners[0]
+				if cloneOwner.Ordinal != 1 {
+					t.Errorf("occurrence %s:%d-%d owner ordinal=%d, "+
+						"want 1 (clone region); got owner=%+v",
+						occ.Path, occ.StartLine, occ.EndLine,
+						cloneOwner.Ordinal, cloneOwner)
+				}
+			}
 		}
 		if len(uniqueFiles) < 2 {
 			t.Errorf("finding should span at least two files, got %d: %+v", len(uniqueFiles), f.Occurrences)
