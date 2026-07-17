@@ -200,24 +200,43 @@ func v4SlidingAlignedFixture(n int) v4PerfFixture {
 	}
 }
 
-// v4AsymmetricLeadingExtra constructs left=[0,1,2], right=[50,100,101,102]
-// which CANNOT be paired by the unconditional same-index diagonal.
-func v4AsymmetricLeadingExtra() v4PerfFixture {
-	mkLeft := func(starts []int) []v4RawWindow {
-		out := make([]v4RawWindow, 0, len(starts))
-		for i, sp := range starts {
-			out = append(out, v4RawWindow{
-				Path: "alpha.go", StartPos: sp, EndPos: sp + 80,
-				StartLine: 100 + i, EndLine: 100 + i + 80,
-			})
-		}
-		return out
+// makeRawWindows constructs a per-path sequence of v4RawWindow for the
+// supplied path and start positions. Every window is 80 tokens wide;
+// the line numbers follow the index so each window has a unique
+// non-overlapping line range that survives coalesce.
+//
+// The path is REQUIRED; the fixture MUST NOT infer a window's side
+// from its position in some enclosing fixture. The
+// CORRECTION02-R1 cross-region proof depends on the explicit path.
+func makeRawWindows(path string, starts []int) []v4RawWindow {
+	out := make([]v4RawWindow, 0, len(starts))
+	for i, sp := range starts {
+		out = append(out, v4RawWindow{
+			Path:      path,
+			StartPos:  sp,
+			EndPos:    sp + 80,
+			StartLine: 100 + i,
+			EndLine:   100 + i + 80,
+		})
 	}
+	return out
+}
+
+// v4AsymmetricLeadingExtra constructs left=alpha.go[0,1,2],
+// right=beta.go[50,100,101,102]. The two paths resolve to distinct
+// production syntax regions, the right side has an extra leading
+// occurrence, the diagonal guard returns false, and the maximal
+// offset-100 chain survives the conservative all-pairs fallback.
+//
+// The fixture MUST use the path-aware makeRawWindows constructor;
+// using a single-path helper for both sides silently re-collapses
+// the fixture to within-region matching.
+func v4AsymmetricLeadingExtra() v4PerfFixture {
 	return v4PerfFixture{
 		Name:          "AsymmetricLeadingExtra",
 		WindowSize:    3,
-		LeftWindows:   mkLeft([]int{0, 1, 2}),
-		RightWindows:  mkLeft([]int{50, 100, 101, 102}),
+		LeftWindows:   makeRawWindows("alpha.go", []int{0, 1, 2}),
+		RightWindows:  makeRawWindows("beta.go", []int{50, 100, 101, 102}),
 		PerPathLength: map[string]int{"alpha.go": 200, "beta.go": 200},
 	}
 }
