@@ -1,0 +1,16 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/s1onique/leamas/internal/factory/dupcode
+cpu: Apple M3 Max
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     105	   2227189 ns/op	 2027510 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2281177 ns/op	 2027530 B/op	    2790 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2212547 ns/op	 2027541 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2270152 ns/op	 2027605 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2209072 ns/op	 2027513 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2220548 ns/op	 2027563 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2213830 ns/op	 2027549 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2222740 ns/op	 2027584 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2213605 ns/op	 2027534 B/op	    2791 allocs/op
+BenchmarkV4Perf_LiveTreeClaimEvidence-16    	     100	   2235942 ns/op	 2027532 B/op	    2791 allocs/op
+PASS
+ok  	github.com/s1onique/leamas/internal/factory/dupcode	3.197s
