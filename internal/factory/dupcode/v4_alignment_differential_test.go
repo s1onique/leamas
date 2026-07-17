@@ -2,8 +2,8 @@
 // ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01.
 //
 // The differential tests consume the oracle from
-// v4_alignment_oracle_test.go and assert byte-identical canonical
-// findings for the production pipeline.
+// v4_alignment_oracle_test.go and assert complete canonical internal
+// structural equality with the production pipeline.
 //
 // This file owns:
 //
@@ -11,12 +11,11 @@
 //   - v4PerfFixture: the corpus case record;
 //   - v4BuildAlignedWindowMap / v4MakeAlignedAnalyses /
 //     v4MakeAlignedFiles: synthetic analysis/file constructors;
-//   - v4RunDifferentialCase: the byte-identical production-vs-oracle
-//     comparison helper;
+//   - v4RunDifferentialCase: the authoritative structural
+//     production-vs-oracle comparison adapter;
 //   - v4SlidingAlignedFixture / v4AsymmetricLeadingExtra: the two
-//     fixture constructors exposed to the corpus builder;
-//   - the TestV4Alignment_* tests and the v4BuildDeterministicCorpus
-//     builder.
+//     legacy R1 fixture constructors;
+//   - the retained R1 regression and alignment-guard tests.
 package dupcode
 
 import (
@@ -131,46 +130,14 @@ type v4PerfFixture struct {
 	PerPathLength map[string]int
 }
 
-// v4RunDifferentialCase runs a single differential corpus case and
-// returns true iff the production and oracle canonical findings are
-// byte-identical. Each difference is reported via t.Errorf so a
-// single failing case is easy to localise.
+// v4RunDifferentialCase preserves the R1 helper name while routing every
+// comparison through the authoritative complete structural projection.
 func v4RunDifferentialCase(t *testing.T, fx v4PerfFixture) {
 	t.Helper()
-	wm := v4BuildAlignedWindowMap("seed", fx.LeftWindows, fx.RightWindows)
-	analyses := v4MakeAlignedAnalyses(fx.PerPathLength, nil)
-	files := v4MakeAlignedFiles(fx.PerPathLength, nil, analyses)
-	prod, err := v4BuildInternalFindings(wm, analyses, files)
-	if err != nil {
-		t.Fatalf("%s: production pipeline error: %v", fx.Name, err)
-	}
-	oracle, err := v4BuildInternalFindingsOracle(wm, analyses, files, v4GenerateAllPairsMatchesOracle)
-	if err != nil {
-		t.Fatalf("%s: oracle pipeline error: %v", fx.Name, err)
-	}
-	if len(prod) != len(oracle) {
-		t.Fatalf("%s: finding-count drift production=%d oracle=%d", fx.Name, len(prod), len(oracle))
-	}
-	for i := range prod {
-		pa, oa := prod[i], oracle[i]
-		if pa.StableFingerprint != oa.StableFingerprint {
-			t.Errorf("%s: fingerprint drift at finding %d\n  prod=%q\n  ora =%q", fx.Name, i, pa.StableFingerprint, oa.StableFingerprint)
-		}
-		if pa.TokenCount != oa.TokenCount {
-			t.Errorf("%s: token-count drift at finding %d prod=%d ora=%d", fx.Name, i, pa.TokenCount, oa.TokenCount)
-		}
-		if len(pa.Occurrences) != len(oa.Occurrences) {
-			t.Errorf("%s: occurrence-count drift at finding %d prod=%d ora=%d", fx.Name, i, len(pa.Occurrences), len(oa.Occurrences))
-		}
-		for j := range pa.Occurrences {
-			po, oo := pa.Occurrences[j], oa.Occurrences[j]
-			if po.Path != oo.Path || po.StartLine != oo.StartLine || po.EndLine != oo.EndLine {
-				t.Errorf("%s: occurrence drift f%d o%d\n  prod=(%s %d-%d)\n  ora =(%s %d-%d)",
-					fx.Name, i, j, po.Path, po.StartLine, po.EndLine,
-					oo.Path, oo.StartLine, oo.EndLine)
-			}
-		}
-	}
+	fixture := v4CorpusFixtureFromPerf(fx)
+	production := v4RunProductionCorpusFixture(fixture)
+	oracle := v4RunOracleCorpusFixture(fixture)
+	v4AssertDifferentialResultsEqual(t, fx.Name, production, oracle)
 }
 
 // v4SlidingAlignedFixture constructs the canonical aligned sliding
@@ -268,11 +235,14 @@ func TestV4Alignment_AsymmetricLeadingExtra_Regression(t *testing.T) {
 // differential corpus case and asserts production matches the
 // all-pairs oracle on the final canonical output.
 func TestV4Alignment_DeterministicCorpus(t *testing.T) {
-	corpus := v4BuildDeterministicCorpus()
-	for _, fx := range corpus {
-		fx := fx
-		t.Run(fx.Name, func(t *testing.T) {
-			v4RunDifferentialCase(t, fx)
+	corpus := v4BuildAlignmentCorpus()
+	v4RequireCorpusContracts(t, corpus)
+	for _, fixture := range corpus {
+		fixture := fixture
+		t.Run(fixture.Name, func(t *testing.T) {
+			production := v4RunProductionCorpusFixture(fixture)
+			oracle := v4RunOracleCorpusFixture(fixture)
+			v4AssertDifferentialResultsEqual(t, fixture.Name, production, oracle)
 		})
 	}
 }

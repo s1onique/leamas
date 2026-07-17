@@ -272,66 +272,9 @@ func TestV4Alignment_AsymmetricLeadingExtra_ConservativeCandidateGeometry(t *tes
 // canonical structs field-by-field.
 func TestV4Alignment_AsymmetricLeadingExtra_ProductionEqualsOracle(t *testing.T) {
 	fx := asymmetricRightFixture()
-	wm := v4BuildAlignedWindowMap("seed", fx.LeftWindows, fx.RightWindows)
-	analyses := v4MakeAlignedAnalyses(fx.PerPathLength, nil)
-	files := v4MakeAlignedFiles(fx.PerPathLength, nil, analyses)
-
-	prod, err := v4BuildInternalFindings(wm, analyses, files)
-	if err != nil {
-		t.Fatalf("production pipeline error: %v", err)
-	}
-	oracle, err := v4BuildInternalFindingsOracle(wm, analyses, files, v4GenerateAllPairsMatchesOracle)
-	if err != nil {
-		t.Fatalf("oracle pipeline error: %v", err)
-	}
-
-	if len(prod) != len(oracle) {
-		t.Fatalf("finding-count drift prod=%d oracle=%d", len(prod), len(oracle))
-	}
-	for i := range prod {
-		pa, oa := prod[i], oracle[i]
-		if pa.StableFingerprint != oa.StableFingerprint {
-			t.Errorf("finding %d fingerprint drift\n  prod=%q\n  ora =%q",
-				i, pa.StableFingerprint, oa.StableFingerprint)
-		}
-		if pa.TokenCount != oa.TokenCount {
-			t.Errorf("finding %d token-count drift prod=%d ora=%d",
-				i, pa.TokenCount, oa.TokenCount)
-		}
-		if pa.LineCount != oa.LineCount {
-			t.Errorf("finding %d line-count drift prod=%d ora=%d",
-				i, pa.LineCount, oa.LineCount)
-		}
-		if len(pa.Occurrences) != len(oa.Occurrences) {
-			t.Errorf("finding %d occurrence-count drift prod=%d ora=%d",
-				i, len(pa.Occurrences), len(oa.Occurrences))
-			continue
-		}
-		for j := range pa.Occurrences {
-			po, oo := pa.Occurrences[j], oa.Occurrences[j]
-			if po.Path != oo.Path {
-				t.Errorf("finding %d occurrence %d path drift\n  prod=%q\n  ora =%q",
-					i, j, po.Path, oo.Path)
-			}
-			if po.StartPos != oo.StartPos || po.EndPos != oo.EndPos {
-				t.Errorf("finding %d occurrence %d token-position drift\n"+
-					"  prod=(%s pos=%d-%d)\n  ora =(%s pos=%d-%d)",
-					i, j, po.Path, po.StartPos, po.EndPos,
-					oo.Path, oo.StartPos, oo.EndPos)
-			}
-			if po.StartLine != oo.StartLine || po.EndLine != oo.EndLine {
-				t.Errorf("finding %d occurrence %d line-range drift\n"+
-					"  prod=(%s line=%d-%d)\n  ora =(%s line=%d-%d)",
-					i, j, po.Path, po.StartLine, po.EndLine,
-					oo.Path, oo.StartLine, oo.EndLine)
-			}
-		}
-	}
-
-	// Closing wording for the close report: the production and
-	// legacy-oracle canonical internal findings are structurally
-	// equal for the corrected asymmetric cross-region fixture.
-	if len(prod) == 0 {
-		t.Fatalf("production returned zero findings; the asymmetric offset-100 chain must survive")
+	v4RunDifferentialCase(t, fx)
+	result := v4RunProductionCorpusFixture(v4CorpusFixtureFromPerf(fx))
+	if len(result.Findings) == 0 {
+		t.Fatal("production returned zero findings; the asymmetric offset-100 chain must survive")
 	}
 }

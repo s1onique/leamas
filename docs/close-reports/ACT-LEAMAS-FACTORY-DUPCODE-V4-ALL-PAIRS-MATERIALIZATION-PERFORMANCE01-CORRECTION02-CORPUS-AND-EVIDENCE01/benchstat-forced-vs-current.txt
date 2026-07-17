@@ -1,0 +1,21 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/s1onique/leamas/internal/factory/dupcode
+cpu: Apple M3 Max
+                                              │ build/forced.txt │          build/current.txt          │
+                                              │      sec/op      │   sec/op     vs base                │
+V4Perf_SlidingNWay/N128-16                          5.480m ±  3%   1.702m ± 6%  -68.95% (p=0.000 n=10)
+V4Perf_GenerateRegionAnnotatedMatches/N128-16      1869.5µ ± 18%   378.7µ ± 2%  -79.74% (p=0.000 n=10)
+geomean                                             3.201m         802.8µ       -74.92%
+
+                                              │ build/forced.txt │          build/current.txt           │
+                                              │       B/op       │     B/op      vs base                │
+V4Perf_SlidingNWay/N128-16                         25.209Mi ± 0%   7.620Mi ± 0%  -69.77% (p=0.000 n=10)
+V4Perf_GenerateRegionAnnotatedMatches/N128-16      10.304Mi ± 0%   2.694Mi ± 0%  -73.85% (p=0.000 n=10)
+geomean                                             16.12Mi        4.531Mi       -71.89%
+
+                                              │ build/forced.txt │          build/current.txt          │
+                                              │    allocs/op     │  allocs/op   vs base                │
+V4Perf_SlidingNWay/N128-16                           4.187k ± 0%   1.677k ± 0%  -59.95% (p=0.000 n=10)
+V4Perf_GenerateRegionAnnotatedMatches/N128-16         28.00 ± 0%    26.00 ± 0%   -7.14% (p=0.000 n=10)
+geomean                                               342.4         208.8       -39.02%

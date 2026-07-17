@@ -347,132 +347,19 @@ make gate
 
 All repository-wide commands PASS.
 
-## R10 — Preserve the frozen remediation target
+## R10-R12, acceptance, shortcuts, and successor
 
-The following files were NOT modified:
-
-```text
-cmd/leamas/claim_commands.go
-cmd/leamas/evidence_commands.go
-internal/factory/dupcode/baseline.json
-```
-
-The live detector retains:
+The remaining historical contract text was split without changing its
+meaning to keep this canonical ACT below the 400-line LLM-friendliness
+limit. It is preserved in:
 
 ```text
-TokenCount = 504
-
-claim_commands.go:
-    268–340
-
-evidence_commands.go:
-    310–382
-```
-
-`TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline` PASSES,
-confirming the canonical 504-token claim/evidence duplicate is
-intact at its reviewed geometry.
-
-## R11 — Minimal documentation
-
-This ACT adds:
-
-```text
-docs/acts/
-  ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-
-  PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01.md
-
 docs/close-reports/
   ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-
-  PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01.md
+  PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01/
+    act-closure-appendix.md
 ```
 
-The close report states explicitly:
-
-```text
-This ACT closes only the R1 cross-region regression-proof defect.
-
-It does not close CORRECTION02, CORRECTION01, the parent performance
-ACT, or the self-hosted-remediation prerequisite.
-```
-
-The historical parent reports are NOT rewritten.
-
-## R12 — Commit closure
-
-The focused test and documentation changes are committed on a clean
-repository state.
-
-After committing, `git status --porcelain=v1` is empty.
-
-Detached evidence binds to the literal final `HEAD`.
-
-## Acceptance criteria
-
-This ACT is PASSED only when:
-
-1. the asymmetric right-side-extra fixture uses `alpha.go` and
-   `beta.go`;
-2. the sides resolve to distinct production region IDs;
-3. the guard returns `false`;
-4. the all-pairs candidate set contains the complete offset-100 run;
-5. production canonical output structurally equals the oracle;
-6. the mirrored left-side-extra fixture also passes;
-7. the aligned distinct-region case proves the fast path remains
-   covered;
-8. the unconditional-diagonal mutation makes the asymmetric
-   regression fail;
-9. the restored guarded implementation passes;
-10. all focused and repository-wide verification passes;
-11. the 504-token live finding remains unchanged;
-12. the final commit and detached evidence bind to a clean literal
-    `HEAD`.
-
-## Prohibited shortcuts
-
-This ACT verified none of the prohibited shortcuts:
-
-* Did not use the same path for both sides.
-* Did not test only the alignment predicate without final pipeline
-  output.
-* Did not test only final oracle equality without
-  fixture-precondition assertions.
-* Did not claim that the fallback branch ran merely because output
-  matched.
-* Did not omit the exact offset-100 candidate assertions.
-* Did not skip the mirrored asymmetric case.
-* Recorded the mutation proof by actually changing the branch
-  selection.
-* Did not commit the deliberately broken mutation.
-* Did not add fuzzing or broad corpus work before the deterministic
-  fixture is valid.
-* Did not claim completion of the broader CORRECTION02 wave.
-* Did not begin self-hosted remediation.
-
-## Immediate successor
-
-After this ACT passes, execute:
-
-```text
-ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-
-PERFORMANCE01-CORRECTION02-CORPUS-AND-EVIDENCE01
-```
-
-That successor owns:
-
-* the remaining adversarial corpus dimensions;
-* structural corpus inventory;
-* committed fuzz regression;
-* 30-second fuzz run;
-* benchmark confirmation;
-* whitespace cleanup;
-* lifecycle reconciliation;
-* final performance-ACT closure.
-
-Only after that successor passes may:
-
-```text
-ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01
-```
-
-begin.
+That appendix records the frozen 504-token target, documentation and
+commit closure, acceptance criteria, prohibited shortcuts, and immediate
+successor. The split is documentation-only.

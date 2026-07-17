@@ -15,22 +15,17 @@
 //	region_a[i].StartPos - region_a[0].StartPos
 //	    == region_b[i].StartPos - region_b[0].StartPos
 //
-// and the analogous equality for EndPos - EndPos deltas. When the
-// guard passes, every (region_a[i], region_b[i]) pair shares the
-// same offset and the diagonal spans the entire aligned run; the
+// and the analogous equality for EndPos - EndPos deltas. The two base
+// windows must also have equal token widths. When the guard passes,
+// every (region_a[i], region_b[i]) pair shares the same offset and the
+// diagonal spans the entire aligned run; the
 // shadow-suppression pass never needs to revisit the off-diagonal
 // pairs because every off-diagonal chain sits strictly inside the
 // diagonal.
 //
 // When the guard fails, the conservative all-pairs fallback is
-// used. The fallback is bounded only by the same-region overlap
-// rejection; for unrelated regions every ordered pair becomes a
-// candidate.
-//
-// When alignment fails, the conservative all-pairs fallback is
-// used. The fallback is bounded only by the same-region overlap
-// rejection; for unrelated regions every ordered pair becomes a
-// candidate.
+// bounded only by same-region overlap rejection; for unrelated regions
+// every ordered pair becomes a candidate.
 //
 // Memory cost per bucket:
 //
@@ -210,6 +205,7 @@ func generateRegionAnnotatedMatches(fp string, windows []rawWindow, analysisByPa
 // per-region window-index sequences are position-by-position aligned:
 //
 //   - len(idxA) == len(idxB),
+//   - the two base windows have equal token widths,
 //   - for every i: windows[idxA[i]].StartPos - windows[idxA[0]].StartPos ==
 //     windows[idxB[i]].StartPos - windows[idxB[0]].StartPos,
 //   - the analogous equality on EndPos - EndPos deltas.
@@ -227,6 +223,9 @@ func regionsArePositionallyAligned(idxA, idxB []int, annotatedWindows []v4Annota
 	}
 	baseA := annotatedWindows[idxA[0]]
 	baseB := annotatedWindows[idxB[0]]
+	if baseA.w.EndPos-baseA.w.StartPos != baseB.w.EndPos-baseB.w.StartPos {
+		return false
+	}
 	deltaStartA := baseA.w.StartPos
 	deltaEndA := baseA.w.EndPos
 	deltaStartB := baseB.w.StartPos

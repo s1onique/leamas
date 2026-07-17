@@ -4,103 +4,103 @@ pkg: github.com/s1onique/leamas/internal/factory/dupcode
 cpu: Apple M3 Max
                                               │ docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01/before-correction.txt │ docs/close-reports/ACT-LEA
 MAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01/after-correction.txt │
-                                              │                                                           sec/op                                                            │                           
+                                              │                                                           sec/op                                                            │
                     sec/op                                                vs base                │
-V4Perf_SlidingNWay/N8-16                                                                                                                                      16.678µ ± 19%                             
+V4Perf_SlidingNWay/N8-16                                                                                                                                      16.678µ ± 19%
                                                             5.034µ ±  4%  -69.82% (p=0.000 n=10)
-V4Perf_SlidingNWay/N32-16                                                                                                                                     181.83µ ±  6%                             
+V4Perf_SlidingNWay/N32-16                                                                                                                                     181.83µ ±  6%
                                                             24.75µ ±  2%  -86.39% (p=0.000 n=10)
-V4Perf_SlidingNWay/N128-16                                                                                                                                     5.427m ± 10%                             
+V4Perf_SlidingNWay/N128-16                                                                                                                                     5.427m ± 10%
                                                             1.638m ±  1%  -69.82% (p=0.000 n=10)
-V4Perf_GenerateRegionAnnotatedMatches/N8-16                                                                                                                    4.194µ ±  3%                             
+V4Perf_GenerateRegionAnnotatedMatches/N8-16                                                                                                                    4.194µ ±  3%
                                                             3.484µ ±  5%  -16.94% (p=0.000 n=10)
-V4Perf_GenerateRegionAnnotatedMatches/N32-16                                                                                                                   35.41µ ±  6%                             
+V4Perf_GenerateRegionAnnotatedMatches/N32-16                                                                                                                   35.41µ ±  6%
                                                             20.03µ ±  6%  -43.42% (p=0.000 n=10)
-V4Perf_GenerateRegionAnnotatedMatches/N128-16                                                                                                                 1748.3µ ±  2%                             
+V4Perf_GenerateRegionAnnotatedMatches/N128-16                                                                                                                 1748.3µ ±  2%
                                                             403.5µ ± 14%  -76.92% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N8-16                                                                                                                             18.634µ ± 10%                             
+V4Perf_TwoIndependentBodies/N8-16                                                                                                                             18.634µ ± 10%
                                                             7.291µ ±  2%  -60.87% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N32-16                                                                                                                            190.59µ ±  6%                             
+V4Perf_TwoIndependentBodies/N32-16                                                                                                                            190.59µ ±  6%
                                                             26.69µ ±  8%  -86.00% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N128-16                                                                                                                            5.580m ±  4%                             
+V4Perf_TwoIndependentBodies/N128-16                                                                                                                            5.580m ±  4%
                                                             1.648m ±  3%  -70.46% (p=0.000 n=10)
-V4Perf_ShadowFixture-16                                                                                                                                        3.636µ ±  5%                             
+V4Perf_ShadowFixture-16                                                                                                                                        3.636µ ±  5%
                                                             2.395µ ±  4%  -34.14% (p=0.000 n=10)
-V4Perf_RepeatedMultiplicity-16                                                                                                                                 1.713µ ±  4%                             
+V4Perf_RepeatedMultiplicity-16                                                                                                                                 1.713µ ±  4%
                                                             1.831µ ±  2%   +6.86% (p=0.002 n=10)
-V4Perf_EmptyCorpus-16                                                                                                                                          2.796n ± 30%                             
+V4Perf_EmptyCorpus-16                                                                                                                                          2.796n ± 30%
                                                             2.760n ±  2%   -1.27% (p=0.025 n=10)
-V4Perf_LiveTreeClaimEvidence-16                                                                                                                                2.345m ±  2%                             
+V4Perf_LiveTreeClaimEvidence-16                                                                                                                                2.345m ±  2%
                                                             2.299m ±  3%   -1.95% (p=0.019 n=10)
-geomean                                                                                                                                                        45.38µ                                   
+geomean                                                                                                                                                        45.38µ
                                                             19.29µ        -57.48%
 
                                               │ docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01/before-correction.txt │ docs/close-reports/ACT-LEA
 MAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01/after-correction.txt │
-                                              │                                                            B/op                                                             │                           
+                                              │                                                            B/op                                                             │
                     B/op                                                vs base                  │
-V4Perf_SlidingNWay/N8-16                                                                                                                                     57.84Ki ± 0%                               
+V4Perf_SlidingNWay/N8-16                                                                                                                                     57.84Ki ± 0%
                                                           19.91Ki ± 0%  -65.57% (p=0.000 n=10)
-V4Perf_SlidingNWay/N32-16                                                                                                                                    844.5Ki ± 0%                               
+V4Perf_SlidingNWay/N32-16                                                                                                                                    844.5Ki ± 0%
                                                           208.5Ki ± 0%  -75.31% (p=0.000 n=10)
-V4Perf_SlidingNWay/N128-16                                                                                                                                  25.209Mi ± 0%                               
+V4Perf_SlidingNWay/N128-16                                                                                                                                  25.209Mi ± 0%
                                                           7.620Mi ± 0%  -69.77% (p=0.000 n=10)
-V4Perf_GenerateRegionAnnotatedMatches/N8-16                                                                                                                  14.98Ki ± 0%                               
+V4Perf_GenerateRegionAnnotatedMatches/N8-16                                                                                                                  14.98Ki ± 0%
                                                           14.98Ki ± 0%        ~ (p=1.000 n=10) ¹
-V4Perf_GenerateRegionAnnotatedMatches/N32-16                                                                                                                 190.0Ki ± 0%                               
+V4Perf_GenerateRegionAnnotatedMatches/N32-16                                                                                                                 190.0Ki ± 0%
                                                           190.0Ki ± 0%        ~ (p=1.000 n=10)
-V4Perf_GenerateRegionAnnotatedMatches/N128-16                                                                                                               10.304Mi ± 0%                               
+V4Perf_GenerateRegionAnnotatedMatches/N128-16                                                                                                               10.304Mi ± 0%
                                                           2.694Mi ± 0%  -73.85% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N8-16                                                                                                                            61.86Ki ± 0%                               
+V4Perf_TwoIndependentBodies/N8-16                                                                                                                            61.86Ki ± 0%
                                                           22.93Ki ± 0%  -62.93% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N32-16                                                                                                                           855.2Ki ± 0%                               
+V4Perf_TwoIndependentBodies/N32-16                                                                                                                           855.2Ki ± 0%
                                                           211.2Ki ± 0%  -75.31% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N128-16                                                                                                                         25.212Mi ± 0%                               
+V4Perf_TwoIndependentBodies/N128-16                                                                                                                         25.212Mi ± 0%
                                                           7.622Mi ± 0%  -69.77% (p=0.000 n=10)
-V4Perf_ShadowFixture-16                                                                                                                                      9.008Ki ± 0%                               
+V4Perf_ShadowFixture-16                                                                                                                                      9.008Ki ± 0%
                                                           6.102Ki ± 0%  -32.26% (p=0.000 n=10)
-V4Perf_RepeatedMultiplicity-16                                                                                                                               3.164Ki ± 0%                               
+V4Perf_RepeatedMultiplicity-16                                                                                                                               3.164Ki ± 0%
                                                           3.164Ki ± 0%        ~ (p=1.000 n=10) ¹
-V4Perf_EmptyCorpus-16                                                                                                                                          0.000 ± 0%                               
+V4Perf_EmptyCorpus-16                                                                                                                                          0.000 ± 0%
                                                             0.000 ± 0%        ~ (p=1.000 n=10) ¹
-V4Perf_LiveTreeClaimEvidence-16                                                                                                                              1.938Mi ± 0%                               
+V4Perf_LiveTreeClaimEvidence-16                                                                                                                              1.938Mi ± 0%
                                                           1.938Mi ± 0%        ~ (p=0.197 n=10)
-geomean                                                                                                                                                                   ²                             
+geomean                                                                                                                                                                   ²
                                                                         -49.88%                ²
 ¹ all samples are equal
 ² summaries must be >0 to compute geomean
 
                                               │ docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01/before-correction.txt │ docs/close-reports/ACT-LEA
 MAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01/after-correction.txt │
-                                              │                                                          allocs/op                                                          │                           
+                                              │                                                          allocs/op                                                          │
                  allocs/op                                              vs base                  │
-V4Perf_SlidingNWay/N8-16                                                                                                                                      113.00 ± 0%                               
+V4Perf_SlidingNWay/N8-16                                                                                                                                      113.00 ± 0%
                                                             28.00 ± 0%  -75.22% (p=0.000 n=10)
-V4Perf_SlidingNWay/N32-16                                                                                                                                     531.00 ± 0%                               
+V4Perf_SlidingNWay/N32-16                                                                                                                                     531.00 ± 0%
                                                             34.00 ± 0%  -93.60% (p=0.000 n=10)
-V4Perf_SlidingNWay/N128-16                                                                                                                                    4.187k ± 0%                               
+V4Perf_SlidingNWay/N128-16                                                                                                                                    4.187k ± 0%
                                                            1.677k ± 0%  -59.95% (p=0.000 n=10)
-V4Perf_GenerateRegionAnnotatedMatches/N8-16                                                                                                                    18.00 ± 0%                               
+V4Perf_GenerateRegionAnnotatedMatches/N8-16                                                                                                                    18.00 ± 0%
                                                             18.00 ± 0%        ~ (p=1.000 n=10) ¹
-V4Perf_GenerateRegionAnnotatedMatches/N32-16                                                                                                                   22.00 ± 0%                               
+V4Perf_GenerateRegionAnnotatedMatches/N32-16                                                                                                                   22.00 ± 0%
                                                             22.00 ± 0%        ~ (p=1.000 n=10) ¹
-V4Perf_GenerateRegionAnnotatedMatches/N128-16                                                                                                                  28.00 ± 0%                               
+V4Perf_GenerateRegionAnnotatedMatches/N128-16                                                                                                                  28.00 ± 0%
                                                             26.00 ± 0%   -7.14% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N8-16                                                                                                                             140.00 ± 0%                               
+V4Perf_TwoIndependentBodies/N8-16                                                                                                                             140.00 ± 0%
                                                             55.00 ± 0%  -60.71% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N32-16                                                                                                                            558.00 ± 0%                               
+V4Perf_TwoIndependentBodies/N32-16                                                                                                                            558.00 ± 0%
                                                             61.00 ± 0%  -89.07% (p=0.000 n=10)
-V4Perf_TwoIndependentBodies/N128-16                                                                                                                           4.214k ± 0%                               
+V4Perf_TwoIndependentBodies/N128-16                                                                                                                           4.214k ± 0%
                                                            1.704k ± 0%  -59.56% (p=0.000 n=10)
-V4Perf_ShadowFixture-16                                                                                                                                        39.00 ± 0%                               
+V4Perf_ShadowFixture-16                                                                                                                                        39.00 ± 0%
                                                             25.00 ± 0%  -35.90% (p=0.000 n=10)
-V4Perf_RepeatedMultiplicity-16                                                                                                                                 21.00 ± 0%                               
+V4Perf_RepeatedMultiplicity-16                                                                                                                                 21.00 ± 0%
                                                             21.00 ± 0%        ~ (p=1.000 n=10) ¹
-V4Perf_EmptyCorpus-16                                                                                                                                          0.000 ± 0%                               
+V4Perf_EmptyCorpus-16                                                                                                                                          0.000 ± 0%
                                                             0.000 ± 0%        ~ (p=1.000 n=10) ¹
-V4Perf_LiveTreeClaimEvidence-16                                                                                                                               3.001k ± 0%                               
+V4Perf_LiveTreeClaimEvidence-16                                                                                                                               3.001k ± 0%
                                                            3.000k ± 0%        ~ (p=0.350 n=10)
-geomean                                                                                                                                                                   ²                             
+geomean                                                                                                                                                                   ²
                                                                         -52.33%                ²
 ¹ all samples are equal
 ² summaries must be >0 to compute geomean

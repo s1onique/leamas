@@ -1,0 +1,15 @@
+fuzz: elapsed: 0s, gathering baseline coverage: 0/18 completed
+fuzz: elapsed: 0s, gathering baseline coverage: 18/18 completed, now fuzzing with 16 workers
+fuzz: elapsed: 3s, execs: 132116 (44037/sec), new interesting: 108 (total: 126)
+fuzz: elapsed: 6s, execs: 191885 (19918/sec), new interesting: 144 (total: 162)
+fuzz: elapsed: 9s, execs: 245339 (17817/sec), new interesting: 190 (total: 208)
+fuzz: elapsed: 12s, execs: 270671 (8445/sec), new interesting: 226 (total: 244)
+fuzz: elapsed: 15s, execs: 311261 (13529/sec), new interesting: 254 (total: 272)
+fuzz: elapsed: 18s, execs: 339270 (9336/sec), new interesting: 262 (total: 280)
+fuzz: elapsed: 21s, execs: 370985 (10572/sec), new interesting: 272 (total: 290)
+fuzz: elapsed: 24s, execs: 385452 (4823/sec), new interesting: 278 (total: 296)
+fuzz: elapsed: 27s, execs: 400792 (5114/sec), new interesting: 287 (total: 305)
+fuzz: elapsed: 30s, execs: 421785 (6997/sec), new interesting: 301 (total: 319)
+fuzz: elapsed: 31s, execs: 421785 (0/sec), new interesting: 301 (total: 319)
+PASS
+ok  	github.com/s1onique/leamas/internal/factory/dupcode	31.431s

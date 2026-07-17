@@ -365,125 +365,19 @@ evidence_commands.go:
 confirming the canonical 504-token claim/evidence duplicate is
 intact at its reviewed geometry.
 
-## R11 — Documentation
+## R11-R12, shortcuts, accounting, and successor
 
-This ACT adds:
+The remaining historical closure text was split without changing its
+meaning to keep this canonical close report below the 400-line
+LLM-friendliness limit. It is preserved in:
 
 ```text
-docs/acts/
-  ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-
-  PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01.md
-
 docs/close-reports/
   ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-
-  PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01.md
+  PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01/
+    close-closure-appendix.md
 ```
 
-This ACT closes only the R1 cross-region regression-proof defect.
-It does NOT close CORRECTION02, CORRECTION01, the parent
-performance ACT, or the self-hosted-remediation prerequisite.
-
-The historical parent reports (`ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01.md`
-and `ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01.md`)
-are NOT rewritten. Lifecycle-document reconciliation belongs to the
-successor ACT.
-
-## R12 — Commit closure
-
-The focused test and documentation changes are committed on a clean
-repository state. `git status --porcelain=v1` after committing is
-empty. Detached evidence binds to the literal final `HEAD`.
-
-```text
-commit_oid     = (the literal HEAD commit)
-head_tree_oid  = git rev-parse HEAD^{tree}
-index_tree_oid = git write-tree
-
-head_tree_oid == index_tree_oid
-```
-
-No commit is made after the detached evidence is written.
-
-## Prohibited shortcuts
-
-This ACT verified none of the prohibited shortcuts:
-
-* The fixture does NOT use the same path for both sides.
-* The tests assert more than the alignment predicate alone —
-  R3 is paired with R5 (final pipeline output) and R2 (fixture
-  preconditions).
-* Final oracle equality is paired with fixture-precondition
-  assertions (R2) and the candidate-geometry assertions (R4).
-* The fallback branch is NOT assumed to have run; the test pins
-  the candidate set's exact membership and the constant-offset
-  partition's existence.
-* The exact offset-100 candidate assertions are explicit and
-  exhaustive.
-* The mirrored asymmetric case (`AsymmetricLeadingExtraLeft`) IS
-  covered.
-* The mutation proof recorded an actual production-source change
-  with the failing diagnostic and was restored before the rerun.
-* The deliberately broken mutation was NOT committed.
-* Fuzzing and broad corpus work are deferred to the successor ACT.
-* The broader CORRECTION02 wave is NOT claimed complete.
-* Self-hosted remediation is NOT begun.
-
-## Honest accounting
-
-The asymmetric fixture in the CORRECTION01 test suite was
-incorrectly constructed because the right-side window slice reused
-the left-side path. The two sides collapsed to the same production
-syntax region, so the cross-region all-pairs fallback was never
-exercised — and the alignment guard was never tested in the
-asymmetric configuration the original ACT was meant to catch.
-
-This ACT repairs the defect by introducing a path-aware constructor
-that writes the path of every raw window explicitly. The R2 fixture
-contract test fails closed if both sides ever use the same path
-again. The R3 guard-rejection test, R4 candidate-geometry test, R5
-production-equals-oracle test, and R6 three-case table together
-prove the corrected fixture exercises the cross-region all-pairs
-fallback in the canonical way.
-
-The R7 mutation proof demonstrates that the new tests detect a
-regression where the production selection logic is changed to
-unconditional diagonal: every asymmetric test fails with a precise
-diagnostic that names the missing match, the missing partition, or
-the geometric drift.
-
-The 232+337+145 line file split (all under the 400-line LLM-friendly
-threshold) keeps every test file reviewable and conforms to the
-factory LLM-friendliness doctrine.
-
-The canonical 504-token claim/evidence duplicate remains intact at
-its reviewed geometry (`268–340` in `claim_commands.go`,
-`310–382` in `evidence_commands.go`), and the committed baseline
-file is unchanged.
-
-## Follow-up ACTs
-
-The successor ACT may now begin:
-
-```text
-ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-
-PERFORMANCE01-CORRECTION02-CORPUS-AND-EVIDENCE01
-```
-
-That successor owns:
-
-* the remaining adversarial corpus dimensions;
-* structural corpus inventory;
-* committed fuzz regression;
-* 30-second fuzz run;
-* benchmark confirmation;
-* whitespace cleanup;
-* lifecycle reconciliation;
-* final performance-ACT closure.
-
-Only after that successor passes may:
-
-```text
-ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01
-```
-
-begin.
+That appendix records documentation and commit closure, prohibited
+shortcuts, honest accounting, and successor scope. The split is
+historical-document hygiene only.

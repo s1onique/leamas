@@ -1,0 +1,31 @@
+Condensed mutation evidence (not raw terminal output)
+
+Mutation:
+  replace the guarded branch in generateRegionAnnotatedMatches with an
+  unconditional call to emitCrossRegionDiagonalMatches
+
+Command:
+  go test ./internal/factory/dupcode \
+    -run='^FuzzV4RegionPairingEquivalentToAllPairs/3fc61698be2e2294$' \
+    -count=1 -v
+
+Observed result:
+  exit code: 1
+  failing case: FuzzV4RegionPairingEquivalentToAllPairs/3fc61698be2e2294
+  failure class: canonical internal structural mismatch
+
+Key mismatch:
+  production unconditional diagonal:
+    two findings with token counts 17 and 16
+  legacy all-pairs oracle:
+    two findings with token counts 16 and 18
+
+The persistent seed therefore rejects unconditional diagonal selection.
+The production guard was restored immediately. A post-restoration targeted
+run passed, and git diff confirmed only the intended base-width guard change
+remained in v4_chain_inputs.go.
+
+The full terminal output contained multi-kilobyte one-line Go projections
+and is intentionally not committed because it violates the repository's
+240-character LLM-friendliness limit. This condensed record reports only
+observed values from that output.

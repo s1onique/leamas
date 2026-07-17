@@ -1,6 +1,20 @@
 # ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01
 
-## Status: PASSED — diagonal-by-region materialization preserves all contracts and meets every quantitative criterion
+> [!IMPORTANT]
+> **SUPERSEDED SEMANTIC CLOSURE — HISTORICAL BENCHMARK RECORD ONLY.**
+> The parent ACT's unconditional same-index diagonal was invalid for
+> asymmetric cross-region occurrence sequences. CORRECTION01 installed
+> the valid alignment-guarded architecture and conservative fallback,
+> but its asymmetric fixture accidentally resolved both sides to one
+> path and did not prove that fallback. CORRECTION02-R1-CROSS-REGION-
+> PROOF01 repaired the fixture with distinct `alpha.go` / `beta.go`
+> regions. CORRECTION02-CORPUS-AND-EVIDENCE01 supplies the complete
+> corpus, persistent fuzz regressions, base-window-width guard tightening,
+> hygiene repair, performance confirmation, and lifecycle closure.
+> Historical benchmark numbers below are preserved; unconditional-O(N)
+> and byte-identity claims below are not current semantic truth.
+
+## Historical status: SUPERSEDED — original performance data preserved
 
 `ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01`
 is **PASSED**. The optimization replaces the O(N²) all-pairs loop in

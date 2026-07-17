@@ -1,0 +1,34 @@
+Condensed initial 30-second fuzz RED (not raw terminal output)
+
+Command:
+  go test ./internal/factory/dupcode \
+    -run='^$' \
+    -fuzz='^FuzzV4RegionPairingEquivalentToAllPairs$' \
+    -fuzztime=30s
+
+Observed result:
+  exit code: 1
+  elapsed before minimized failure: 24.511s
+  last reported executions before minimization: 385977
+  minimized input: 8c14c01ed68fc293
+  serialized value: []byte("1210012000110")
+
+Observed semantic mismatch:
+  both region sequences had equal cardinality and equal relative start/end
+  deltas, but their corresponding base windows had different token widths;
+  production selected the diagonal and returned no finding;
+  the all-pairs oracle returned one 256-token finding spanning alpha.go and
+  shared.go at token positions 49-304.
+
+Correction:
+  TestV4Alignment_VariableWidthCrossBaseMismatchRejectsDiagonal and
+  TestV4Alignment_VariableWidthCrossBaseMismatchProductionEqualsOracle
+  established deterministic RED. regionsArePositionallyAligned now also
+  requires equal base-window widths, routing this geometry to all-pairs.
+  The minimized input is committed as persistent fuzz regression
+  8c14c01ed68fc293.
+
+The full terminal output contained multi-kilobyte one-line Go projections
+and is intentionally not committed because it violates the repository's
+240-character LLM-friendliness limit. The required successful run's raw
+output is preserved separately in fuzz-30s.txt.

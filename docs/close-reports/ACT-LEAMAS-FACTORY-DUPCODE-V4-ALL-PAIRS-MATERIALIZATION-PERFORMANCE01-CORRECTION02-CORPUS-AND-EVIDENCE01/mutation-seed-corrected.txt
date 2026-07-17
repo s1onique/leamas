@@ -1,0 +1,6 @@
+=== RUN   FuzzV4RegionPairingEquivalentToAllPairs
+=== RUN   FuzzV4RegionPairingEquivalentToAllPairs/3fc61698be2e2294
+--- PASS: FuzzV4RegionPairingEquivalentToAllPairs (0.00s)
+    --- PASS: FuzzV4RegionPairingEquivalentToAllPairs/3fc61698be2e2294 (0.00s)
+PASS
+ok  	github.com/s1onique/leamas/internal/factory/dupcode	0.202s

@@ -108,7 +108,19 @@ func v4RunFullPipelineForOracle(
 		return nil, nil
 	}
 	regionFiltered := filterWindowsToRegions(windowMap, analyses)
-	if len(regionFiltered) == 0 {
+	return v4RunFullPipelineForOracleFiltered(regionFiltered, analyses, files, generator)
+}
+
+// v4RunFullPipelineForOracleFiltered accepts an independently filtered
+// window map. The semantic corpus uses this seam so ownership filtering
+// is compared separately instead of sharing production's filter helper.
+func v4RunFullPipelineForOracleFiltered(
+	regionFiltered map[string][]rawWindow,
+	analyses map[string]*v4FileAnalysis,
+	files map[string]*v4AnalyzedFile,
+	generator func(fp string, windows []rawWindow, analysisByPath map[string]*v4FileAnalysis) []v4RegionSeedMatch,
+) ([]v4InternalFinding, error) {
+	if len(regionFiltered) == 0 || len(analyses) == 0 || len(files) == 0 {
 		return nil, nil
 	}
 

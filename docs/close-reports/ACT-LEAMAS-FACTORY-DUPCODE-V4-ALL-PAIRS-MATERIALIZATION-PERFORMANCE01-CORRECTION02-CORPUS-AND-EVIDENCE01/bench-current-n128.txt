@@ -1,0 +1,26 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/s1onique/leamas/internal/factory/dupcode
+cpu: Apple M3 Max
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     190	   1863335 ns/op	 7989859 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     218	   1705998 ns/op	 7989848 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     220	   1637948 ns/op	 7989854 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     207	   1657286 ns/op	 7989874 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     225	   1693002 ns/op	 7989848 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     218	   1703813 ns/op	 7989850 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     206	   1658925 ns/op	 7989878 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     219	   1699353 ns/op	 7989851 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     210	   1810917 ns/op	 7989848 B/op	    1677 allocs/op
+BenchmarkV4Perf_SlidingNWay/N128-16                  	     212	   1738943 ns/op	 7989855 B/op	    1677 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     961	    370380 ns/op	 2825073 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     968	    382520 ns/op	 2825073 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     914	    375101 ns/op	 2825073 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     843	    382913 ns/op	 2825074 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     970	    373096 ns/op	 2825073 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     987	    374604 ns/op	 2825074 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	    1000	    382351 ns/op	 2825073 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     852	    387196 ns/op	 2825073 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	    1054	    363963 ns/op	 2825073 B/op	      26 allocs/op
+BenchmarkV4Perf_GenerateRegionAnnotatedMatches/N128-16         	     975	    389649 ns/op	 2825073 B/op	      26 allocs/op
+PASS
+ok  	github.com/s1onique/leamas/internal/factory/dupcode	9.916s

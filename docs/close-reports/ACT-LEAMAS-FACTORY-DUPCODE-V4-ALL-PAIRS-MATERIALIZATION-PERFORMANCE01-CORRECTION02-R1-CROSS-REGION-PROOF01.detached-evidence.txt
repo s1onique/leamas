@@ -1,0 +1,27 @@
+Detached evidence for ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01
+
+binding to the literal final HEAD:
+
+commit_oid     = 169efd98af2a0e2d8808910eb5baf4f9d867582f
+head_tree_oid  = 760799de14a6ce263742f20a2dffa134c97aae4a
+index_tree_oid = 760799de14a6ce263742f20a2dffa134c97aae4a
+
+relationships (per ACT spec):
+  commit_oid     == git rev-parse HEAD                            ✓
+  head_tree_oid  == git rev-parse HEAD^{tree}                     ✓
+  index_tree_oid == git write-tree                                ✓
+  head_tree_oid  == index_tree_oid                                ✓
+
+working tree state:
+  git status --porcelain=v1 → empty                                ✓
+
+files in commit (6 changed):
+  M  internal/factory/dupcode/v4_alignment_differential_test.go
+  ?? internal/factory/dupcode/v4_alignment_cross_region_asymmetric_test.go
+  ?? internal/factory/dupcode/v4_alignment_cross_region_corpus_test.go
+  ?? internal/factory/dupcode/v4_alignment_cross_region_fixtures_test.go
+  ?? docs/acts/.../CORRECTION02-R1-CROSS-REGION-PROOF01.md
+  ?? docs/close-reports/.../CORRECTION02-R1-CROSS-REGION-PROOF01.md
+
+detached evidence written by this ACT.
+no further commits after detached evidence.

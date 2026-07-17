@@ -1,6 +1,20 @@
 # ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01
 
-## Status: PASSED — diagonal is now an alignment-guarded proved fast path; differential + fuzz evidence attached
+> [!IMPORTANT]
+> **SUPERSEDED EVIDENCE CLAIMS — PRODUCTION GUARD RETAINED.**
+> CORRECTION01 correctly replaced the parent's invalid unconditional
+> diagonal with an alignment guard and O(N_left × N_right) fallback for
+> unaligned fixed-width region sequences. Its advertised asymmetric
+> regression fixture was nevertheless broken: both sides reused one
+> path, resolved to one region, and never exercised the cross-region
+> fallback. CORRECTION02-R1-CROSS-REGION-PROOF01 repaired that fixture
+> with distinct `alpha.go` / `beta.go` regions. CORRECTION02-CORPUS-AND-
+> EVIDENCE01 adds the 17-dimension corpus, persistent fuzz regressions,
+> variable-width base guard, whitespace repair, benchmark confirmation,
+> and final lifecycle evidence. Historical benchmark data below remains
+> authoritative; superseded corpus and byte-identity claims do not.
+
+## Historical status: SUPERSEDED EVIDENCE — guarded architecture retained
 
 `ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION01`
 is **PASSED**. The unconditional same-index diagonal implemented by the

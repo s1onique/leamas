@@ -107,39 +107,9 @@ func TestV4Alignment_MinimalCrossRegionCorpus(t *testing.T) {
 					tc.Name, tc.WantOffset, summarizePartitions(partitions))
 			}
 
-			// Final canonical equivalence with the legacy all-pairs
-			// oracle. Production and oracle must agree on every
-			// canonical field of every finding.
-			wm := v4BuildAlignedWindowMap("seed", fx.LeftWindows, fx.RightWindows)
-			analyses := v4MakeAlignedAnalyses(fx.PerPathLength, nil)
-			files := v4MakeAlignedFiles(fx.PerPathLength, nil, analyses)
-			prod, err := v4BuildInternalFindings(wm, analyses, files)
-			if err != nil {
-				t.Fatalf("%s: production pipeline error: %v", tc.Name, err)
-			}
-			oracle, err := v4BuildInternalFindingsOracle(wm, analyses, files, v4GenerateAllPairsMatchesOracle)
-			if err != nil {
-				t.Fatalf("%s: oracle pipeline error: %v", tc.Name, err)
-			}
-			if len(prod) != len(oracle) {
-				t.Fatalf("%s: finding-count drift prod=%d oracle=%d",
-					tc.Name, len(prod), len(oracle))
-			}
-			for i := range prod {
-				pa, oa := prod[i], oracle[i]
-				if pa.StableFingerprint != oa.StableFingerprint {
-					t.Errorf("%s: fingerprint drift at finding %d\n  prod=%q\n  ora =%q",
-						tc.Name, i, pa.StableFingerprint, oa.StableFingerprint)
-				}
-				if pa.TokenCount != oa.TokenCount {
-					t.Errorf("%s: token-count drift at finding %d prod=%d ora=%d",
-						tc.Name, i, pa.TokenCount, oa.TokenCount)
-				}
-				if len(pa.Occurrences) != len(oa.Occurrences) {
-					t.Errorf("%s: occurrence-count drift at finding %d prod=%d ora=%d",
-						tc.Name, i, len(pa.Occurrences), len(oa.Occurrences))
-				}
-			}
+			// Final canonical equivalence uses the one authoritative
+			// complete structural comparator shared by corpus and fuzz.
+			v4RunDifferentialCase(t, fx)
 		})
 	}
 }
