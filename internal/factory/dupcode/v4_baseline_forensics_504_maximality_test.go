@@ -32,8 +32,8 @@ import (
 //     same relative offset.
 
 func TestV4BaselineForensics_504_NoLargerLiveChain(t *testing.T) {
-	_, _, trace, finals := traceForLiveTree(t)
-	canonical := canonicalLiveFinding(t, finals)
+	_, _, trace, finals := traceForSelfHostedFixture(t)
+	canonical := canonicalSelfHostedFinding(t, finals)
 	leftOcc, rightOcc, ok := sortedLeftRight(canonical)
 	if !ok {
 		t.Fatal("canonical finding does not have 2 occurrences")
@@ -46,10 +46,11 @@ func TestV4BaselineForensics_504_NoLargerLiveChain(t *testing.T) {
 	for i, chain := range trace.ChainsAfterShadow {
 		// Every surviving chain has TokenSpan fields that capture
 		// the chain's effective width on each side. A chain whose
-		// token span exceeds 504 cannot directly absorb the 504-token
-		// occurrence pair unless the chain's left and right ranges
-		// contain the canonical occurrence pair at the same
-		// relative offset AND the pair evidence hashes agree.
+		// token span exceeds the canonical cannot directly absorb
+		// the canonical occurrence pair unless the chain's left
+		// and right ranges contain the canonical occurrence pair
+		// at the same relative offset AND the pair evidence hashes
+		// agree.
 		if !largerChainCoversPair(chain, leftOcc, rightOcc) {
 			continue
 		}
@@ -63,7 +64,7 @@ func TestV4BaselineForensics_504_NoLargerLiveChain(t *testing.T) {
 			continue
 		}
 		ev := trace.PairEvidence[i]
-		if ev.ContentKey.TokenCount > 504 {
+		if ev.ContentKey.TokenCount > selfHostedFixtureCanonicalTokenCount {
 			t.Fatalf("chain[%d]: larger chain produced wider pair evidence "+
 				"TokenCount=%d; current canonical is NOT maximal", i,
 				ev.ContentKey.TokenCount)
@@ -79,16 +80,22 @@ func TestV4BaselineForensics_504_NoLargerLiveChain(t *testing.T) {
 // canonical occurrences at one consistent relative offset with
 // equal normalized sub-slices.
 
+// TestV4BaselineForensics_504_NoLargerLiveComponent asserts no
+// pre-shadow component with TokenCount greater than the canonical
+// contains both canonical occurrences at one consistent relative
+// offset with equal normalized sub-slices. The fixture replaces
+// the historical claim/evidence production source.
+
 func TestV4BaselineForensics_504_NoLargerLiveComponent(t *testing.T) {
-	_, rightFile, trace, finals := traceForLiveTree(t)
-	canonical := canonicalLiveFinding(t, finals)
+	_, rightFile, trace, finals := traceForSelfHostedFixture(t)
+	canonical := canonicalSelfHostedFinding(t, finals)
 	leftOcc, rightOcc, ok := sortedLeftRight(canonical)
 	if !ok {
 		t.Fatal("canonical finding does not have 2 occurrences")
 	}
 
 	for i, comp := range trace.ComponentsBeforeShadow {
-		if comp.TokenCount <= 504 {
+		if comp.TokenCount <= selfHostedFixtureCanonicalTokenCount {
 			continue
 		}
 		if !largerComponentContainsPair(comp, leftOcc, rightOcc) {
@@ -116,18 +123,21 @@ func TestV4BaselineForensics_504_NoLargerLiveComponent(t *testing.T) {
 // given trace. Used by tests that already have a trace and need
 // the file analyses.
 // TestV4BaselineForensics_504_SurvivesStructuralShadow asserts
-// the canonical 504-token component is present BEFORE structural
-// shadow suppression runs, and that no pre-shadow component with
-// TokenCount > 504 classifies it as a shadow via the production
-// `componentIsStructuralShadow` helper.
+// the canonical component is present BEFORE structural-shadow
+// suppression runs, and that no pre-shadow component with
+// TokenCount greater than the canonical classifies it as a
+// shadow via the production `componentIsStructuralShadow`
+// helper. The fixture replaces the historical claim/evidence
+// production source; the "504" name in the test identifier is
+// preserved for closure traceability.
 //
 // The test invokes `componentIsStructuralShadow` directly against
-// the live pre-shadow components; the textual-guard witness is
-// retained as a characterization assertion only.
+// the fixture's pre-shadow components; the textual-guard witness
+// is retained as a characterization assertion only.
 
 func TestV4BaselineForensics_504_SurvivesStructuralShadow(t *testing.T) {
-	leftFile, rightFile, trace, finals := traceForLiveTree(t)
-	canonical := canonicalLiveFinding(t, finals)
+	leftFile, rightFile, trace, finals := traceForSelfHostedFixture(t)
+	canonical := canonicalSelfHostedFinding(t, finals)
 	leftOcc, rightOcc, ok := sortedLeftRight(canonical)
 	if !ok {
 		t.Fatal("canonical finding does not have 2 occurrences")
@@ -136,29 +146,31 @@ func TestV4BaselineForensics_504_SurvivesStructuralShadow(t *testing.T) {
 	// (1) Canonical component present BEFORE shadow suppression.
 	foundBefore := false
 	for _, c := range trace.ComponentsBeforeShadow {
-		if c.TokenCount == 504 && len(c.Occurrences) == 2 {
+		if c.TokenCount == selfHostedFixtureCanonicalTokenCount && len(c.Occurrences) == 2 {
 			foundBefore = true
 			break
 		}
 	}
 	if !foundBefore {
-		t.Fatal("canonical 504-token component not in ComponentsBeforeShadow")
+		t.Fatalf("canonical %d-token component not in ComponentsBeforeShadow",
+			selfHostedFixtureCanonicalTokenCount)
 	}
 
 	// (2) Canonical component still present AFTER shadow suppression.
 	foundAfter := false
 	for _, c := range trace.ComponentsAfterShadow {
-		if c.TokenCount == 504 && len(c.Occurrences) == 2 {
+		if c.TokenCount == selfHostedFixtureCanonicalTokenCount && len(c.Occurrences) == 2 {
 			foundAfter = true
 			break
 		}
 	}
 	if !foundAfter {
-		t.Fatal("canonical 504-token component not in ComponentsAfterShadow")
+		t.Fatalf("canonical %d-token component not in ComponentsAfterShadow",
+			selfHostedFixtureCanonicalTokenCount)
 	}
 
-	// (3) No pre-shadow component with TokenCount > 504 classifies
-	// the canonical finding as a shadow.
+	// (3) No pre-shadow component with TokenCount greater than the
+	// canonical classifies it as a shadow.
 	canonicalComp := v4InternalFinding{
 		StableFingerprint: canonical.StableFingerprint,
 		TokenCount:        canonical.TokenCount,
@@ -169,7 +181,7 @@ func TestV4BaselineForensics_504_SurvivesStructuralShadow(t *testing.T) {
 		rightFile.FileTokens.path: rightFile,
 	}
 	for i, larger := range trace.ComponentsBeforeShadow {
-		if larger.TokenCount <= 504 {
+		if larger.TokenCount <= selfHostedFixtureCanonicalTokenCount {
 			continue
 		}
 		if !largerComponentContainsPair(larger, leftOcc, rightOcc) {
@@ -177,20 +189,21 @@ func TestV4BaselineForensics_504_SurvivesStructuralShadow(t *testing.T) {
 		}
 		if componentIsStructuralShadow(canonicalComp, larger, files) {
 			t.Fatalf("larger_component[%d] (TokenCount=%d) classifies "+
-				"the canonical 504-token finding as a shadow; "+
+				"the canonical finding as a shadow; "+
 				"current canonical is NOT maximal", i, larger.TokenCount)
 		}
 	}
 
 	// (4) v4SuppressComponentShadows does not remove the canonical
-	// component when run against the live pre-shadow set.
+	// component when run against the fixture's pre-shadow set.
 	suppressed := v4SuppressComponentShadows(trace.ComponentsBeforeShadow, files)
 	for _, c := range suppressed {
-		if c.TokenCount == 504 && len(c.Occurrences) == 2 {
+		if c.TokenCount == selfHostedFixtureCanonicalTokenCount && len(c.Occurrences) == 2 {
 			return // canonical survived
 		}
 	}
-	t.Fatal("v4SuppressComponentShadows removed the canonical 504-token component")
+	t.Fatalf("v4SuppressComponentShadows removed the canonical %d-token component",
+		selfHostedFixtureCanonicalTokenCount)
 }
 
 // TestV4BaselineForensics_877_LockFacts asserts the concrete

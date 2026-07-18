@@ -1,0 +1,1 @@
+{"status":"failed","baseline":".factory/dupcode-baseline.json","findings":[{"path":".factory/dupcode-baseline.json","kind":"dupcode_baseline_drift","message":"dupcode baseline is stale; run 'make dupcode-baseline' and review the diff"}]}

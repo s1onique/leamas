@@ -1,0 +1,25 @@
+Running quality gate...
+  agent-context: OK
+  docs: OK
+  doctrine: OK
+  doctrine-agent-contracts: OK
+  domain-boundaries: OK
+  dupcode: OK
+  dupcode-baseline: OK
+  exec-gate: OK
+  executable-contract-first: OK
+  forbidden-patterns: OK
+  git-hooks: OK
+  language: OK
+  llm-friendly: OK
+  static-binary: OK
+  tooling-boundaries: OK
+
+--- Go toolchain ---
+  go mod tidy... OK
+  gofmt... OK
+  go vet ./... OK
+  go test ./... OK
+  static build... OK
+
+*** GATE PASSED ***

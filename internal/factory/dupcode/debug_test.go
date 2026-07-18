@@ -1,82 +1,96 @@
+// Package dupcode provides the post-convergence convergence
+// witness test for the dupcode baseline.
+//
+// TestDebugBaselines used to print a verbose comparison of the
+// committed baseline and the live canonical scan. After
+// ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01 the
+// historical 504-token claim/evidence finding is gone, and the
+// canonical duplicate code gate is now a convergence check
+// against the frozen zero-finding invariant.
+//
+// The test has been repurposed as a deterministic equality
+// witness. It reads the committed baseline, runs CheckReport
+// against the live tree, generates the canonical baseline from
+// the live report, and asserts:
+//
+//   - both the committed and canonical reports contain zero
+//     findings (the live tree is clean and the committed baseline
+//     has converged to that state);
+//   - the two reports are byte-equal via baselinesEqual;
+//   - the policy thresholds remain at 40/400.
+//
+// The test no longer emits verbose stdout/Printf because the
+// only useful artifact is the PASS/FAIL outcome.
+
 package dupcode
 
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
+// TestDebugBaselines asserts the committed baseline and the
+// live scan are equal and both contain zero findings after the
+// baseline convergence ACT. The test is the live-tree
+// convergence witness for
+// ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01.
 func TestDebugBaselines(t *testing.T) {
-	// Find repo root
-	wd, _ := os.Getwd()
-	repoRoot := wd
-	for {
-		if filepath.Base(wd) == "leamas" {
-			repoRoot = wd
-			break
-		}
-		parent := filepath.Dir(wd)
-		if parent == wd {
-			break
-		}
-		wd = parent
-	}
+	baselinePath := deltaRepoRoot(t) + "/.factory/dupcode-baseline.json"
 
-	baselinePath := filepath.Join(repoRoot, ".factory/dupcode-baseline.json")
-
-	// Load committed baseline
+	// Load committed baseline.
 	committed, err := LoadBaseline(baselinePath)
 	if err != nil {
-		t.Fatalf("Error loading committed: %v", err)
+		t.Fatalf("Error loading committed baseline: %v", err)
 	}
 
-	// Run current scan
+	// Run current scan against the live repository.
 	cfg := DefaultConfig()
 	cfg.MinLines = committed.Thresholds.MinLines
 	cfg.MinTokens = committed.Thresholds.MinTokens
-	cfg.Root = repoRoot
+	root := deltaRepoRoot(t)
+	cfg.Root = root
 
-	report, err := CheckReport(repoRoot, cfg)
+	report, err := CheckReport(root, cfg)
 	if err != nil {
 		t.Fatalf("Error running scan: %v", err)
 	}
 
-	// Generate canonical baseline
-	canonical := GenerateCanonicalBaseline(repoRoot, report)
+	// Generate the canonical baseline from the live report.
+	canonical := GenerateCanonicalBaseline(root, report)
 
-	fmt.Printf("Repo root: %s\n", repoRoot)
-	fmt.Printf("Committed findings: %d\n", len(committed.Findings))
-	fmt.Printf("Canonical findings: %d\n", len(canonical.Findings))
-
-	for i, cf := range committed.Findings {
-		if i >= len(canonical.Findings) {
-			fmt.Printf("Extra finding in committed at index %d: %s\n", i, cf.Fingerprint)
-			continue
-		}
-		ccf := canonical.Findings[i]
-		if cf.Fingerprint != ccf.Fingerprint {
-			fmt.Printf("Finding %d: committed=%s canonical=%s\n", i, cf.Fingerprint, ccf.Fingerprint)
-			fmt.Printf("  committed tokens=%d lines=%d\n", cf.TokenCount, cf.LineCount)
-			fmt.Printf("  canonical tokens=%d lines=%d\n", ccf.TokenCount, ccf.LineCount)
-		}
+	// Setup witnesses: the scan must have completed without error
+	// and the live tree must be clean. A nil findings slice with
+	// a nil error is the canonical "clean tree" signal, not a
+	// setup failure; the comparison below relies on len() rather
+	// than a nil check so the witness holds either way.
+	if err != nil {
+		// (Already checked above; kept as a witness.)
+		_ = err
+	}
+	if len(committed.Findings) != 0 {
+		t.Fatalf("committed baseline must report zero findings after convergence; got %d: %+v",
+			len(committed.Findings), committed.Findings)
+	}
+	if len(canonical.Findings) != 0 {
+		t.Fatalf("canonical baseline must report zero findings; got %d: %+v",
+			len(canonical.Findings), canonical.Findings)
+	}
+	if len(report.Findings) != 0 {
+		t.Fatalf("live report must report zero findings after remediation; got %d: %+v",
+			len(report.Findings), report.Findings)
+	}
+	if committed.Thresholds.MinLines != 40 || committed.Thresholds.MinTokens != 400 {
+		t.Fatalf("baseline thresholds drifted from policy 40/400: min_lines=%d min_tokens=%d",
+			committed.Thresholds.MinLines, committed.Thresholds.MinTokens)
 	}
 
-	if baselinesEqual(committed, canonical) {
-		fmt.Println("baselinesEqual: EQUAL")
-	} else {
-		fmt.Println("baselinesEqual: DIFFER")
+	// Equality witness: the committed baseline and the canonical
+	// baseline must be byte-equal so the baseline-verify gate
+	// can no longer report drift.
+	if !baselinesEqual(committed, canonical) {
+		t.Fatal("committed baseline differs from canonical baseline (drift would re-open the gate)")
 	}
-
-	committedJSON, _ := json.MarshalIndent(committed.Findings, "", "  ")
-	canonicalJSON, _ := json.MarshalIndent(canonical.Findings, "", "  ")
-	fmt.Println("\n--- COMMITTED FINDINGS ---")
-	os.Stdout.Write(committedJSON)
-	fmt.Println("\n--- CANONICAL FINDINGS ---")
-	os.Stdout.Write(canonicalJSON)
-	fmt.Println()
 }
 
 // TestDeterministicCoalescing verifies that the v3 algorithm produces byte-identical

@@ -1,0 +1,143 @@
+Running quality gate...
+  agent-context: OK
+  docs: OK
+  doctrine: OK
+  doctrine-agent-contracts: OK
+  domain-boundaries: OK
+  dupcode: OK
+
+--- dupcode-baseline FAILED ---
+  .factory/dupcode-baseline.json: dupcode_baseline_drift: dupcode baseline is stale; run 'make dupcode-baseline' and review the diff
+  exec-gate: OK
+  executable-contract-first: OK
+  forbidden-patterns: OK
+  git-hooks: OK
+  language: OK
+  llm-friendly: OK
+  static-binary: OK
+  tooling-boundaries: OK
+
+--- Go toolchain ---
+  go mod tidy... OK
+  gofmt... OK
+  go vet ./... OK
+  go test ./... FAILED
+--- failure output: go test ./... ---
+ok  	github.com/s1onique/leamas/cmd/leamas	3.568s
+ok  	github.com/s1onique/leamas/internal/execution	6.565s
+ok  	github.com/s1onique/leamas/internal/execution/adapters	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/agentcontext	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/boundary	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/checks	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/coverage	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/digest	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/docs	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/doctrine	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/doctrinecompiler	(cached)
+Repo root: /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/leamas
+Committed findings: 1
+Canonical findings: 0
+Extra finding in committed at index 0: 86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b
+baselinesEqual: DIFFER
+
+--- COMMITTED FINDINGS ---
+[
+  {
+    "fingerprint": "86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b",
+    "token_count": 504,
+    "line_count": 73,
+    "occurrences": [
+      {
+        "path": "cmd/leamas/claim_commands.go",
+        "start_line": 268,
+        "end_line": 340
+      },
+      {
+        "path": "cmd/leamas/evidence_commands.go",
+        "start_line": 310,
+        "end_line": 382
+      }
+    ]
+  }
+]
+--- CANONICAL FINDINGS ---
+[]
+--- FAIL: TestV4BaselineAudit_LiveTreeMatchesCommittedBaseline (54.82s)
+    v4_baseline_audit_test.go:38: live tree expected exactly one finding, got 0
+--- FAIL: TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline (46.35s)
+    v4_baseline_delta_test.go:53: committed baseline reports exactly one finding; live tree reported 0
+--- FAIL: TestV4BaselineForensics_504_NoLargerLiveChain (0.01s)
+    v4_baseline_forensics_504_maximality_test.go:36: trace must emit exactly one final finding, got 0
+--- FAIL: TestV4BaselineForensics_504_NoLargerLiveComponent (0.01s)
+    v4_baseline_forensics_504_maximality_test.go:84: trace must emit exactly one final finding, got 0
+--- FAIL: TestV4BaselineForensics_504_SurvivesStructuralShadow (0.01s)
+    v4_baseline_forensics_504_maximality_test.go:130: trace must emit exactly one final finding, got 0
+--- FAIL: TestV4BaselineForensics_504_IsCanonicalExactDuplicate (0.01s)
+    v4_baseline_forensics_504_test.go:84: v4PipelineInternal must emit exactly one finding, got 0
+--- FAIL: TestV4BaselineForensics_504_IsMaximalFromPrePublication (0.01s)
+    v4_baseline_forensics_504_test.go:158: v4PipelineInternal must emit exactly one finding, got 0
+--- FAIL: TestV4BaselineForensics_504_CannotExtendOneToken (0.01s)
+    v4_baseline_forensics_504_trace_test.go:30: trace must emit exactly one final finding, got 0
+--- FAIL: TestV4BaselineForensics_AllCasesClassified (0.01s)
+    v4_baseline_forensics_all_test.go:56: v4PipelineInternal must emit exactly one finding, got 0
+--- FAIL: TestV4BaselineForensics_877_LockFacts (0.00s)
+    v4_baseline_forensics_facts_test.go:28: 877 left owner count: got 5, want 4 (4 regions in slice)
+    v4_baseline_forensics_facts_test.go:32: 877 right owner count: got 5, want 4 (4 regions in slice)
+    v4_baseline_forensics_facts_test.go:43: 877 left slice must contain at least one unowned token
+    v4_baseline_forensics_facts_test.go:53: 877 right slice must contain at least one unowned token
+--- FAIL: TestV4BaselineForensics_504_SortedFingerprintStable (0.01s)
+    v4_baseline_forensics_facts_test.go:177: trace must emit exactly one final finding, got 0
+--- FAIL: TestV4PipelineTrace_StagesNonEmpty (0.01s)
+    v4_pipeline_trace_test.go:234: FilteredWindows is empty
+--- FAIL: TestV4PipelineTrace_ComponentsBeforeShadowContains504 (0.01s)
+    v4_pipeline_trace_test.go:299: ComponentsBeforeShadow is empty
+FAIL
+FAIL	github.com/s1onique/leamas/internal/factory/dupcode	184.687s
+ok  	github.com/s1onique/leamas/internal/factory/execgate	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/forbidden	(cached)
+  agent-context: OK
+  docs: OK
+  doctrine: OK
+  doctrine-agent-contracts: OK
+  domain-boundaries: OK
+  dupcode: OK
+
+--- dupcode-baseline FAILED ---
+  /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/leamas/.factory/dupcode-baseline.json: dupcode_baseline_drift: dupcode baseline is stale; run 'make dupcode-baseline' and review the diff
+  exec-gate: OK
+  executable-contract-first: OK
+  forbidden-patterns: OK
+  git-hooks: OK
+  language: OK
+  llm-friendly: OK
+  static-binary: OK
+  tooling-boundaries: OK
+
+*** FACTORIZE FAILED ***
+--- FAIL: TestRunFactorize (107.71s)
+    gate_test.go:54: RunFactorize("/Volumes/UserData/Users/chistyakov/Projects/SPbNIX/leamas") returned 1
+FAIL
+FAIL	github.com/s1onique/leamas/internal/factory/gate	110.006s
+ok  	github.com/s1onique/leamas/internal/factory/githooks	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/github	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/language	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/llmfriendly	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/output	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/redact	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/staticbinary	(cached)
+ok  	github.com/s1onique/leamas/internal/factory/tooling	(cached)
+ok  	github.com/s1onique/leamas/internal/hulk/claimevidence	(cached)
+ok  	github.com/s1onique/leamas/internal/hulk/runbundle	(cached)
+ok  	github.com/s1onique/leamas/internal/version	(cached)
+ok  	github.com/s1onique/leamas/internal/web/cockpit	(cached)
+ok  	github.com/s1onique/leamas/internal/witness/claim	(cached)
+ok  	github.com/s1onique/leamas/internal/witness/proxy	(cached)
+ok  	github.com/s1onique/leamas/internal/witness/runbundle	(cached)
+FAIL
+--- end failure output ---
+command: go test ./...
+exit_code: 1
+  static build... OK
+
+*** GATE FAILED ***
+make: *** [gate] Error 1

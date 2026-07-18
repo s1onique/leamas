@@ -1,0 +1,26 @@
+Running factory factorize...
+  agent-context: OK
+  docs: OK
+  doctrine: OK
+  doctrine-agent-contracts: OK
+  domain-boundaries: OK
+  dupcode: OK
+
+--- dupcode-baseline FAILED ---
+  .factory/dupcode-baseline.json: dupcode_baseline_drift: dupcode baseline is stale; run 'make dupcode-baseline' and review the diff
+  exec-gate: OK
+  executable-contract-first: OK
+  forbidden-patterns: OK
+  git-hooks: OK
+  language: OK
+
+--- llm-friendly FAILED ---
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-go-test.txt: long_line: line 433: 628 > 240 chars
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-go-test.txt: long_line: line 436: 435 > 240 chars
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-go-test.txt: too_many_lines: 516 > 400
+  static-binary: OK
+  tooling-boundaries: OK
+
+*** FACTORIZE FAILED ***
+exit status 1
+make: *** [factorize] Error 1

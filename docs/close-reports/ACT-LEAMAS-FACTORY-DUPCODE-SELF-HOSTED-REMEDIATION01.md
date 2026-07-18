@@ -3,8 +3,7 @@
 ## Closure Status
 
 ```
-PRODUCTION REMEDIATION COMPLETE
-BASELINE CONVERGENCE PENDING
+COMPLETE
 ```
 
 This ACT removed the canonical 504-token duplicate code shared by
@@ -392,3 +391,82 @@ That successor owns:
 * full green baseline verification;
 * full green `make gate`;
 * final meta-epic closure.
+
+## Convergence Addendum
+
+The successor ACT
+`ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01`
+completes the remediation cycle.
+
+### Intermediate state preserved
+
+Between the remediation commit and the successor convergence
+commit the intermediate state recorded in this predecessor's
+`BASELINE CONVERGENCE PENDING` header is preserved in
+`docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/`:
+
+* `dupcode-before.json`           — frozen pre-refactor scan
+* `dupcode-before.txt`             — human-readable dump
+* `dupcode-after.json`             — frozen post-refactor scan (zero findings)
+* `dupcode-after.txt`              — human-readable dump
+* `dupcode-delta.txt`              — canonical detector delta
+* `failure-inventory.md` (copy)   — pre-convergence failure inventory
+
+The intermediate state is:
+
+```text
+live findings       = 0
+baseline findings   = 1   (historical 504-token finding frozen in
+                          .factory/dupcode-baseline.json)
+factorize           = FAIL on dupcode-baseline (drift)
+go test ./...        = FAIL on pre-existing forensics tests that pin
+                        historical line ranges
+```
+
+The successor convergence ACT resolves this state by reconciling
+the pre-existing forensics tests against the post-refactor tree,
+regenerating the canonical baseline, and rerunning every gate.
+
+### Production remediation commit
+
+```text
+commit_oid            = 9ec6ec290af4928e2254f1854fba7ec54ea432af
+head_tree_oid         = (git rev-parse HEAD^{tree} at the remediation commit)
+index_tree_oid        = (git write-tree at the remediation commit)
+```
+
+### Baseline convergence commit
+
+```text
+commit_oid            = (final convergence commit recorded by the
+                       successor ACT)
+head_tree_oid         = (git rev-parse HEAD^{tree} at the convergence commit)
+index_tree_oid        = (git write-tree at the convergence commit)
+```
+
+### Detector result
+
+```text
+live findings   = 0
+baseline        = 0 (committed baseline after convergence)
+```
+
+### Full gate
+
+```text
+make factorize   = PASS
+make gate        = PASS
+go test ./...    = PASS
+go test -race    = PASS
+```
+
+### Reproduction commands
+
+```bash
+go test ./internal/factory/dupcode -count=1
+go test ./... -count=1
+./bin/leamas factory verify dupcode --json
+./bin/leamas factory verify dupcode-baseline --json
+make factorize
+make gate
+```

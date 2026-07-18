@@ -1,0 +1,85 @@
+ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01 — detached evidence
+
+commit_oid:    9ec6ec290af4928e2254f1854fba7ec54ea432af
+head_tree_oid: 2ed53d1f3aa09da534a6cedadcbc84629eed2365
+index_tree_oid: 2ed53d1f3aa09da534a6cedadcbc84629eed2365
+binding:       head_tree_oid == index_tree_oid
+generated_at:  2026-07-18T18:16:09Z (post-commit, pre-push)
+
+detector delta (R10) — exact proof:
+
+  removed findings:
+      exactly the frozen 504-token claim/evidence finding
+          fingerprint=86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b
+          token_count=504
+          line_count=73
+          occurrences:
+              cmd/leamas/claim_commands.go:268-340
+              cmd/leamas/evidence_commands.go:310-382
+
+  added findings:
+      none
+
+  changed surviving findings:
+      none
+
+live scan evidence:
+
+  before (frozen baseline, unchanged):
+      docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-before.json
+      docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-before.txt
+          fingerprint = 86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b
+          token_count  = 504
+          line_count   = 73
+          occurrences  = 2 (claim_commands.go:268-340, evidence_commands.go:310-382)
+
+  after (live scan against refactored tree):
+      docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-after.json
+      docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-after.txt
+          findings     = 0
+
+  delta:
+      docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-delta.txt
+
+R12 narrowly-scoped delta test:
+
+  file:    internal/factory/dupcode/v4_remediation_delta_test.go
+  name:    TestRemediationDelta_504FindingRemoved
+  command: go test -count=1 -run TestRemediationDelta ./internal/factory/dupcode/
+  result:  PASS (1.392s)
+
+verification:
+
+  gofmt:          clean (gofmt -w applied; test -z "$(gofmt -l ...)" empty)
+  go vet:         ok
+  go build:       ok (CGO_ENABLED=0)
+  go test ./cmd/leamas:        ok
+  go test -race ./cmd/leamas:  ok
+  TestRemediationDelta_504FindingRemoved:  PASS
+
+  make factorize:
+    agent-context:               OK
+    docs:                        OK
+    doctrine:                    OK
+    doctrine-agent-contracts:    OK
+    domain-boundaries:           OK
+    dupcode:                     OK (live scan: 0 findings)
+    dupcode-baseline:            FAILED (expected — stale baseline, R13)
+    exec-gate:                   OK
+    executable-contract-first:   OK
+    forbidden-patterns:          OK
+    git-hooks:                   OK
+    language:                    OK
+    llm-friendly:                OK
+    static-binary:               OK
+    tooling-boundaries:           OK
+
+  make gate: same checks + go test ./... which currently fails only in
+  the pre-existing forensics tests in internal/factory/dupcode whose
+  line ranges this ACT necessarily invalidated; the narrowly-scoped
+  delta test above passes and is the R12 proof.
+
+closure status: PRODUCTION REMEDIATION COMPLETE, BASELINE CONVERGENCE PENDING
+
+successor: ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01
+

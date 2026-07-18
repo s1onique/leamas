@@ -1,0 +1,91 @@
+Detached evidence for ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION02-CORPUS-AND-EVIDENCE01
+Final evidence and race closure correction
+
+commit_oid = 7f81c0046e492bdb1479d87dd503eebd65a4ec99
+head_tree_oid = 9f3f0e44dabf84760cdeaca0224b3dd6ab6df8a2
+index_tree_oid = 9f3f0e44dabf84760cdeaca0224b3dd6ab6df8a2
+
+pre_evidence_git_status = empty
+post_evidence_git_status = ?? docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION02-CORPUS-AND-EVIDENCE01.detached-evidence.txt
+tracked_worktree_status = clean
+staged_status = clean
+post_evidence_untracked_paths = docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION02-CORPUS-AND-EVIDENCE01.detached-evidence.txt
+
+gate_summary_path = .factory/gate-summary.json
+gate_summary_source_status = present
+gate_summary_generated_at = 2026-07-18T02:15:55Z
+gate_summary_overall_status = pass
+gate_summary_checks_failed = 0
+gate_summary_checks_unavailable = 0
+gate_summary_sha256 = c38dcd53803f7c5ee7ea6c821fd0af3e10065fbae1bd95b158570fb08af071c7
+final_gate_started_at = 2026-07-18T02:11:53Z
+final_gate_exit_code = 0
+
+race_verification_mode = bounded_alternative
+race_command = go test -race -timeout=30m -skip='^TestDebugBaselines$' ./internal/factory/dupcode
+race_exit_code = 0
+race_excluded_tests = TestDebugBaselines
+race_elapsed_seconds = 1667.70
+race_package_elapsed_seconds = 1666.860
+race_diagnostics = 0
+
+full_race_command = go test -race -timeout=30m ./internal/factory/dupcode
+full_race_exit_code = 1
+full_race_elapsed_seconds = 1801.00
+full_race_termination = package timeout after 30m0s
+full_race_last_executing_test = TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline (4m42s)
+full_race_diagnostics_before_termination = 0
+full_race_note = TestDebugBaselines completed and printed baselinesEqual: EQUAL before the package timeout; the literal full-package run is not claimed as a pass
+
+excluded_test_command = go test -timeout=30m -run='^TestDebugBaselines$' ./internal/factory/dupcode
+excluded_test_exit_code = 0
+excluded_test_elapsed_seconds = 39.76
+focused_alignment_race_command = go test -race -run='^TestV4Alignment_' ./internal/factory/dupcode
+focused_alignment_race_exit_code = 0
+focused_alignment_race_elapsed_seconds = 2.27
+
+fuzz_seed_suite_command = go test ./internal/factory/dupcode -run='^FuzzV4RegionPairingEquivalentToAllPairs$'
+fuzz_seed_suite_exit_code = 0
+fuzz_seed_1_path = internal/factory/dupcode/testdata/fuzz/FuzzV4RegionPairingEquivalentToAllPairs/3fc61698be2e2294
+fuzz_seed_1_sha256 = 3fc61698be2e22940717afed57b7f563e49a15201582e060ee1e212da4a30a70
+fuzz_seed_1_exit_code = 0
+fuzz_seed_2_path = internal/factory/dupcode/testdata/fuzz/FuzzV4RegionPairingEquivalentToAllPairs/8c14c01ed68fc293
+fuzz_seed_2_sha256 = 8c14c01ed68fc29339f518ff8f9de3a669294b7947e8170496be3506bcb30b5b
+fuzz_seed_2_exit_code = 0
+
+range_patch_hygiene = git diff --check HEAD~1..HEAD -> clean
+
+required_repository_verification:
+  gofmt -l internal/factory/dupcode = pass (empty output)
+  git diff --check = pass
+  git diff --cached --check = pass
+  go test ./internal/factory/dupcode = pass (142.951s)
+  go test ./... = pass
+  go vet ./... = pass
+  CGO_ENABLED=0 go build ./... = pass
+  make factorize = pass
+  ./bin/leamas factory verify dupcode-baseline = pass
+  make gate = pass
+
+canonical_duplicate:
+  TokenCount = 504
+  LineCount = 73
+  cmd/leamas/claim_commands.go = lines 268-340
+  cmd/leamas/evidence_commands.go = lines 310-382
+
+protected_file_sha256:
+  cmd/leamas/claim_commands.go = 19c2b44ab3eae10c7bdfee516f01a38b7c9c177559b6d138c70438b5b2a93873
+  cmd/leamas/evidence_commands.go = 0a283d0a5acc7fd261351614cf6891f6141c524982a87a08e2ce045ef7a7a84e
+  .factory/dupcode-baseline.json = 829e9ee14583fc85b039fdb6145700588ed2ddcc79852861c8d4f3b851745fa1
+
+relationships:
+  commit_oid == git rev-parse HEAD
+  head_tree_oid == git rev-parse HEAD^{tree}
+  index_tree_oid == git write-tree
+  head_tree_oid == index_tree_oid
+
+Pre-evidence ordinary git status --porcelain=v1 was empty.
+Post-evidence ordinary git status --porcelain=v1 contains exactly the one untracked detached-evidence path recorded above.
+No production code was excluded from race instrumentation.
+No additional package test was omitted.
+No further commit follows this detached evidence.

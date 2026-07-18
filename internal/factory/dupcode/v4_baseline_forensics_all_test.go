@@ -1,6 +1,14 @@
 // Package dupcode provides the closure oracle for the baseline
 // forensics suite. It asserts that every historical public line
 // range receives exactly one definitive classification.
+//
+// The 877 and 514 cases classify their historical line ranges
+// against the current production source using the line-range-only
+// forensics oracle (no fixture required). The 504 case asserts
+// the same detector properties on the self-hosted fixture pair
+// (testdata/self-hosted-remediation/...) because the historical
+// claim/evidence production source no longer exists after
+// ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01.
 package dupcode
 
 import (
@@ -9,22 +17,15 @@ import (
 
 // TestV4BaselineForensics_AllCasesClassified is the closure oracle.
 // It asserts that every historical public line range receives
-// exactly one definitive classification. The cross-region cases
-// (877 and 514) are classified by the line-range-to-token-range
-// oracle directly. The current 504 range is the line range that
-// contains the canonical 504-token body; its line-range map is
-// wider than the canonical body, so the line-range-only oracle
-// reports the wider slice differs. The closure therefore asserts:
+// exactly one definitive classification.
 //
 //   - 877-historical: line range is "invalid because geometry
 //     crosses executable-region ownership" (multi-region span).
 //   - 514-historical: line range is "invalid because geometry
 //     crosses executable-region ownership" (multi-region span).
-//   - 504-current-canonical: line range RESOLVES to the canonical
-//     504-token body which IS a "valid canonical exact duplicate".
-//
-// The closure report records each classification as the single
-// result proved by the test, with no unresolved disjunction.
+//   - 504-current-canonical: the self-hosted fixture's canonical
+//     component IS a "valid canonical exact duplicate" with the
+//     pinned token count and two occurrences.
 func TestV4BaselineForensics_AllCasesClassified(t *testing.T) {
 	cases := forensicsCases()
 	type recorded struct {
@@ -45,30 +46,28 @@ func TestV4BaselineForensics_AllCasesClassified(t *testing.T) {
 				t.Errorf("case %s: classification=%q expected=%q\n  %s",
 					c.Name, got, c.Classification, formatDisposition(d))
 			}
-		case 2: // 504: the line range RESOLVES to a canonical exact duplicate.
-			// For the 504 case, the line-range-only oracle reports the
-			// line range maps to wider slices (512/509 tokens) that do
-			// not match. The canonical 504-token body found inside those
-			// line ranges IS a valid exact duplicate; the closure
-			// classification therefore relies on canonicalBody, not the
-			// raw line-range-to-token-range map.
+		case 2: // 504: the canonical component from the self-hosted fixture.
+			// The historical line range no longer maps to the canonical
+			// component because the production source has been reflowed.
+			// The canonicalBody helper produces the canonical component
+			// from the self-hosted fixture and asserts its properties.
 			leftFile, rightFile, leftStart, leftEnd, rightStart, rightEnd,
 				leftTokens, rightTokens, leftDigest, rightDigest := canonicalBody(t)
-			if leftTokens != 504 || rightTokens != 504 {
-				t.Errorf("504 canonical body: token count drift left=%d right=%d",
-					leftTokens, rightTokens)
+			if leftTokens != selfHostedFixtureCanonicalTokenCount || rightTokens != selfHostedFixtureCanonicalTokenCount {
+				t.Errorf("canonical body: token count drift left=%d right=%d (want both %d)",
+					leftTokens, rightTokens, selfHostedFixtureCanonicalTokenCount)
 			}
 			if leftDigest != rightDigest {
-				t.Errorf("504 canonical body: digests disagree\n  left=%s\n  right=%s",
+				t.Errorf("canonical body: digests disagree\n  left=%s\n  right=%s",
 					leftDigest, rightDigest)
 			}
 			leftOwners := collectOwnersInRange(leftFile.Analysis.TokenOwner, leftStart, leftEnd)
 			rightOwners := collectOwnersInRange(rightFile.Analysis.TokenOwner, rightStart, rightEnd)
 			if len(leftOwners) != 1 || leftOwners[0].Path == "" {
-				t.Errorf("504 canonical body: left not single-owner: %+v", leftOwners)
+				t.Errorf("canonical body: left not single-owner: %+v", leftOwners)
 			}
 			if len(rightOwners) != 1 || rightOwners[0].Path == "" {
-				t.Errorf("504 canonical body: right not single-owner: %+v", rightOwners)
+				t.Errorf("canonical body: right not single-owner: %+v", rightOwners)
 			}
 			got = "valid canonical exact duplicate"
 		}

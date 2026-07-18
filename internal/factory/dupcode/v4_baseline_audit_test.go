@@ -26,38 +26,35 @@ import (
 )
 
 // TestV4BaselineAudit_LiveTreeMatchesCommittedBaseline runs
-// CheckRepo on the actual live tree and confirms the resulting
-// finding's geometry matches the committed baseline JSON.
+// CheckRepo on the live tree and confirms the report contains
+// zero findings after ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-
+// REMEDIATION01 removed the canonical duplicate. After this
+// ACT regenerates the baseline, the live scan and committed
+// baseline both report zero findings and the policy thresholds
+// remain at 40 lines / 400 tokens.
+//
+// The historical 504-token claim/evidence finding (lines 268-340
+// and 310-382) and its fingerprint are preserved as tracked
+// evidence under
+// docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/
+// so the historical remediation proof remains auditable.
 func TestV4BaselineAudit_LiveTreeMatchesCommittedBaseline(t *testing.T) {
 	root := deltaRepoRoot(t)
 	findings, err := CheckRepo(root, DefaultConfig())
 	if err != nil {
 		t.Fatalf("CheckRepo on live tree failed: %v", err)
 	}
-	if len(findings) != 1 {
-		t.Fatalf("live tree expected exactly one finding, got %d", len(findings))
+	if len(findings) != 0 {
+		t.Fatalf("live tree must report zero findings after remediation; got %d: %+v",
+			len(findings), findings)
 	}
-	got := findings[0]
-	if got.TokenCount != 504 || got.LineCount != 73 {
-		t.Fatalf("live tree token/line geometry drift: %+v", got)
+	// Setup witness: the canonical 40-line / 400-token policy
+	// thresholds must remain in effect.
+	if got := DefaultConfig().MinLines; got != 40 {
+		t.Errorf("MinLines drift: live=%d, want 40", got)
 	}
-	if len(got.Occurrences) != 2 {
-		t.Fatalf("expected 2 occurrences, got %d", len(got.Occurrences))
-	}
-	expectedOccs := []Occurrence{
-		{Path: "cmd/leamas/claim_commands.go", StartLine: 268, EndLine: 340},
-		{Path: "cmd/leamas/evidence_commands.go", StartLine: 310, EndLine: 382},
-	}
-	for i, occ := range got.Occurrences {
-		if occ.Path != expectedOccs[i].Path {
-			t.Errorf("occurrence %d path drift: live=%q baseline=%q",
-				i, occ.Path, expectedOccs[i].Path)
-		}
-		if occ.StartLine != expectedOccs[i].StartLine || occ.EndLine != expectedOccs[i].EndLine {
-			t.Errorf("occurrence %d line drift: live=%d-%d baseline=%d-%d",
-				i, occ.StartLine, occ.EndLine,
-				expectedOccs[i].StartLine, expectedOccs[i].EndLine)
-		}
+	if got := DefaultConfig().MinTokens; got != 400 {
+		t.Errorf("MinTokens drift: live=%d, want 400", got)
 	}
 }
 

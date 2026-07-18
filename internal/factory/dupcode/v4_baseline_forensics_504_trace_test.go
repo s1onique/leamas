@@ -21,13 +21,16 @@ import (
 // disagreement, digest disagreement, or no corresponding chain).
 //
 // The test reads the canonical occurrence's internal StartPos
-// and EndPos directly from the live trace (NOT from the public
+// and EndPos directly from the fixture trace (NOT from the public
 // line range), so the extension candidates target the exact
-// pre-suppression boundary.
+// pre-suppression boundary. The fixture replaces the historical
+// claim/evidence production source per the
+// ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01
+// fixture policy.
 
 func TestV4BaselineForensics_504_CannotExtendOneToken(t *testing.T) {
-	leftFile, rightFile, trace, finals := traceForLiveTree(t)
-	canonical := canonicalLiveFinding(t, finals)
+	leftFile, rightFile, trace, finals := traceForSelfHostedFixture(t)
+	canonical := canonicalSelfHostedFinding(t, finals)
 	leftOcc, rightOcc, ok := sortedLeftRight(canonical)
 	if !ok {
 		t.Fatal("canonical finding does not have 2 occurrences")
@@ -35,9 +38,9 @@ func TestV4BaselineForensics_504_CannotExtendOneToken(t *testing.T) {
 
 	leftTokens := leftFile.NormalizedTokens[leftOcc.StartPos : leftOcc.EndPos+1]
 	rightTokens := rightFile.NormalizedTokens[rightOcc.StartPos : rightOcc.EndPos+1]
-	if len(leftTokens) != 504 || len(rightTokens) != 504 {
-		t.Fatalf("canonical tokens must be 504 each, got %d/%d",
-			len(leftTokens), len(rightTokens))
+	if len(leftTokens) != selfHostedFixtureCanonicalTokenCount || len(rightTokens) != selfHostedFixtureCanonicalTokenCount {
+		t.Fatalf("canonical tokens must be %d each, got %d/%d",
+			selfHostedFixtureCanonicalTokenCount, len(leftTokens), len(rightTokens))
 	}
 
 	cases := []struct {
@@ -97,14 +100,14 @@ func TestV4BaselineForensics_504_CannotExtendOneToken(t *testing.T) {
 					c.name)
 				return
 			}
-			// (d) chain existence: at least one live chain must
-			// span the extended range. If no live chain covers it,
+			// (d) chain existence: at least one fixture chain must
+			// span the extended range. If no fixture chain covers it,
 			// the pair-evidence step never produces a candidate.
 			if !traceContainsRange(trace, c.leftLo, c.leftHi,
-				"cmd/leamas/claim_commands.go") &&
+				selfHostedFixtureLeftRelPath) &&
 				!traceContainsRange(trace, c.rightLo, c.rightHi,
-					"cmd/leamas/evidence_commands.go") {
-				t.Logf("%s: rejected (no live chain covers extended range)",
+					selfHostedFixtureRightRelPath) {
+				t.Logf("%s: rejected (no fixture chain covers extended range)",
 					c.name)
 				return
 			}

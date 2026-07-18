@@ -1,0 +1,35 @@
+--- docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/dupcode-baseline-before.json	2026-07-18 20:21:02
++++ docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/dupcode-baseline-after.json	2026-07-18 20:55:24
+@@ -1,29 +1,11 @@
+ {
+   "schema_version": 1,
+   "algorithm_version": 4,
+-  "generated_at": "2026-07-16T14:54:08Z",
++  "generated_at": "2026-07-18T17:55:04Z",
+   "tool": "leamas dupcode",
+   "thresholds": {
+     "min_lines": 40,
+     "min_tokens": 400
+   },
+-  "findings": [
+-    {
+-      "fingerprint": "86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b",
+-      "token_count": 504,
+-      "line_count": 73,
+-      "occurrences": [
+-        {
+-          "path": "cmd/leamas/claim_commands.go",
+-          "start_line": 268,
+-          "end_line": 340
+-        },
+-        {
+-          "path": "cmd/leamas/evidence_commands.go",
+-          "start_line": 310,
+-          "end_line": 382
+-        }
+-      ]
+-    }
+-  ]
++  "findings": []
+ }
+\ No newline at end of file

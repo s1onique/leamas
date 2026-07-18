@@ -1,18 +1,14 @@
 // Package dupcode provides baseline-delta classification tests for
 // the canonical content merge.
 //
-// The committed `.factory/dupcode-baseline.json` reports a single
-// finding (504 tokens, 73 lines) spanning
-// `cmd/leamas/claim_commands.go:268-340` and
-// `cmd/leamas/evidence_commands.go:310-382`. The pre-canonical
-// baseline reported two non-overlapping findings (877 and 514
-// tokens) for the same physical clone relation.
-//
-// The tests in this file classify each prior finding's disposition
-// against the canonical materializer and prove the surviving 504
-// finding is maximal for its exact connected component. The
-// classifications recorded here mirror the table in
-// `ACT-LEAMAS-FACTORY-DUPCODE-V4-CANONICAL-MAXIMAL-COMPONENT-MERGE01-CORRECTION01`.
+// The committed `.factory/dupcode-baseline.json` reports zero
+// findings after
+// ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01
+// regenerated the baseline. The historical 504-token claim/evidence
+// finding is preserved as tracked evidence under
+// docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/
+// so the closure audit can verify that the predecessor state is
+// reproducible.
 //
 // All evidence in this file is regenerated against the live tree
 // (NOT a stale digest) so that the claims are auditable.
@@ -22,7 +18,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"testing"
 )
@@ -38,62 +33,72 @@ type deltaCanonicalOccurrence struct {
 }
 
 // TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline runs
-// CheckRepo on the live tree and verifies that the resulting
-// fingerprint, token count, line count, and occurrence geometry
-// for every finding match the committed baseline. The check guards
-// against accidental drift in production output between ACT
-// checkpoints.
+// CheckRepo on the live tree and verifies the live report equals
+// the committed baseline. After ACT-LEAMAS-FACTORY-DUPCODE-
+// SELF-HOSTED-REMEDIATION01 removed the canonical duplicate and
+// ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01
+// regenerated the baseline, both sides must report zero
+// findings. The check guards against accidental drift in
+// production output between ACT checkpoints.
 func TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline(t *testing.T) {
 	root := deltaRepoRoot(t)
 	findings, err := CheckRepo(root, DefaultConfig())
 	if err != nil {
 		t.Fatalf("CheckRepo on live tree failed: %v", err)
 	}
-	if len(findings) != 1 {
-		t.Fatalf("committed baseline reports exactly one finding; live tree reported %d", len(findings))
+	// Setup witness: the scan must complete without error and
+	// emit zero findings (the remediation removed every
+	// policy-threshold duplicate).
+	if len(findings) != 0 {
+		t.Fatalf("live tree must report zero findings after remediation; got %d: %+v",
+			len(findings), findings)
 	}
 
 	baseline, err := deltaLoadBaseline(t)
 	if err != nil {
 		t.Fatalf("load baseline: %v", err)
 	}
-	if len(baseline.Findings) != 1 {
-		t.Fatalf("baseline reports %d findings, want 1", len(baseline.Findings))
-	}
-	want := baseline.Findings[0]
-	got := findings[0]
-
-	if got.StableFingerprint != want.Fingerprint {
-		t.Errorf("fingerprint drift: live=%s baseline=%s", got.StableFingerprint, want.Fingerprint)
-	}
-	if got.TokenCount != want.TokenCount {
-		t.Errorf("token_count drift: live=%d baseline=%d", got.TokenCount, want.TokenCount)
-	}
-	if got.LineCount != want.LineCount {
-		t.Errorf("line_count drift: live=%d baseline=%d", got.LineCount, want.LineCount)
+	// Setup witness: the committed baseline must also report zero
+	// findings after this ACT regenerates it. The
+	// pre-convergence baseline still records the historical 504
+	// finding; that state is documented under
+	// docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-baseline-verify.json.
+	if len(baseline.Findings) != 0 {
+		t.Fatalf("baseline must report zero findings after convergence; got %d: %+v",
+			len(baseline.Findings), baseline.Findings)
 	}
 
-	gotOcc := deltaCanonicalizeFromPublic(got.Occurrences)
-	wantOcc := deltaCanonicalizeFromBaseline(want.Occurrences)
-	if !reflect.DeepEqual(gotOcc, wantOcc) {
-		t.Errorf("occurrence geometry drift:\n live=%+v\n baseline=%+v", gotOcc, wantOcc)
+	// Threshold witnesses: the canonical 40/400 policy must
+	// remain in effect so the baseline-verify gate continues to
+	// enforce the same policy thresholds.
+	if got := DefaultConfig().MinLines; got != 40 {
+		t.Errorf("MinLines drift: live=%d, want 40", got)
+	}
+	if got := DefaultConfig().MinTokens; got != 400 {
+		t.Errorf("MinTokens drift: live=%d, want 400", got)
+	}
+	if got, ok := baseline.Thresholds["min_lines"]; !ok || got != 40 {
+		t.Errorf("baseline thresholds.min_lines drift: got %d (ok=%v), want 40", got, ok)
+	}
+	if got, ok := baseline.Thresholds["min_tokens"]; !ok || got != 400 {
+		t.Errorf("baseline thresholds.min_tokens drift: got %d (ok=%v), want 400", got, ok)
 	}
 }
 
 // TestV4BaselineDelta_SurvivingFindingIsMaximalForComponent
-// proves the surviving 504-token finding is maximal for its exact
-// connected component. The proof constructs a synthetic fixture
-// whose two files declare a single shared function body identical
-// to the production canonical content body, exercises the public
-// CheckRepo path, and asserts the returned finding has exactly two
-// occurrences across two files (one connected component). Any
-// sub-finding geometry (positional shadow, threshold-window, or
-// region-split fragment) is suppressed by
+// proves the canonical synthetic duplicate is maximal for its
+// exact connected component. The proof constructs a synthetic
+// fixture whose two files declare a single shared function body
+// identical to the production canonical content body, exercises
+// the public CheckRepo path, and asserts the returned finding
+// has exactly two occurrences across two files (one connected
+// component). Any sub-finding geometry (positional shadow,
+// threshold-window, or region-split fragment) is suppressed by
 // v4SuppressComponentShadows / v4SuppressContainedSameFileShadows
 // before the finding reaches the caller.
 //
-// The test is the structural-shadow witness for the surviving 504
-// finding; it does not regenerate the baseline.
+// The test is the structural-shadow witness for the canonical
+// detection invariant; it does not regenerate the baseline.
 func TestV4BaselineDelta_SurvivingFindingIsMaximalForComponent(t *testing.T) {
 	root := t.TempDir()
 	cloneCounter = 0
@@ -160,6 +165,10 @@ func TestV4BaselineDelta_RemovedFindingIsStructuralShadow(t *testing.T) {
 }
 
 // deltaLoadBaseline loads the committed dupcode baseline JSON.
+//
+// Thresholds are decoded as a map[string]int because the canonical
+// baseline JSON serializes thresholds that way. Tests that need
+// typed access use BaselineThresholds from baseline.go.
 func deltaLoadBaseline(t *testing.T) (*dupcodeBaseline, error) {
 	t.Helper()
 	path := filepath.Join(deltaRepoRoot(t), ".factory", "dupcode-baseline.json")
