@@ -186,7 +186,7 @@ make factorize                                          # FACTORIZE PASSED: 415.
 | `go vet ./...` | clean |
 | `CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas` | SUCCESS (12 MB binary) |
 | `make factorize` (15 verifiers) | PASS in 415.32 s |
-| `make gate` (verifiers + toolchain) | PASS for all 15 verifiers and all 3 toolchain steps (`go mod tidy`, `gofmt`, `go vet ./...`). `go test ./...` **timed out on `TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline`** at the 10-minute package timeout. |
+| `make gate` (verifiers + toolchain) | All 15 verifiers + 3 toolchain steps (`go mod tidy`, `gofmt`, `go vet ./...`) PASS; `go test ./...` timed out on `TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline` at the 10-min package timeout. |
 
 ## Skipped / deferred checks
 
@@ -231,4 +231,4 @@ opened this ACT.
 |-----|-------------|----------|
 | ACT-LEAMAS-FACTORY-DUPCODE-PERSISTENT-FUZZ-SEED-COMMIT01-R1 | Optionally collapse the now-redundant re-include patterns for `internal/factory/doctrinecompiler/testdata/` in `.gitignore`. Harmless in the meantime. | low |
 | ACT-LEAMAS-FACTORY-WALLCLOCK-TIMINGS01 follow-up | Restructure or partition `TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline` so it fits inside the package-level 10-minute budget on the CI fleet. | medium |
-| ACT-LEAMAS-FACTORY-DIGEST-GO-TESTDATA-CLASSIFICATION01 | Fix the targeted-digest classifier so `**/testdata/fuzz/<FuzzTestName>/<corpus-entry>` is counted as a test-fixture file (not production), and `production_without_tests` is `false` for this commit. Tracked separately from this ACT. | medium |
+| ACT-LEAMAS-FACTORY-DIGEST-GO-TESTDATA-CLASSIFICATION01 | Treat `**/testdata/fuzz/<FuzzTestName>/<corpus-entry>` as test-fixture (not production); set `production_without_tests` = `false`. Tracked separately. | medium |
