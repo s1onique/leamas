@@ -2,7 +2,7 @@
 
 ## Status
 
-IN-PROGRESS
+PASSED
 
 ## Parent correction wave
 
@@ -121,6 +121,29 @@ TokenCount = 504
 claim_commands.go    = lines 268–340
 evidence_commands.go = lines 310–382
 ```
+
+## Final evidence and race closure correction
+
+The final closure correction keeps the guarded V4 implementation, corpus,
+fuzz wire format, benchmark fixtures, baseline, and 504-token remediation
+target unchanged.
+
+The literal 30-minute full-package race command timed out after 1800.456s.
+`TestDebugBaselines` completed its live-tree scan before the package timeout;
+the timeout dump named
+`TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline` as the executing test.
+No race diagnostic occurred. The accepted one-test bounded alternative then
+ran every package test except exactly `TestDebugBaselines` under `-race` and
+passed in 1666.860s. The excluded test passed separately without `-race`, and
+the focused `TestV4Alignment_` race proof also passed.
+
+Invalidating the stale gate summary exposed a separate closure-evidence defect:
+`make gate` passed but did not recreate `.factory/gate-summary.json`. The
+closure patch makes the literal gate write one aggregate, observed gate-result
+check after execution. This avoids recursive gate invocation while providing a
+fresh RFC3339 timestamp and canonical `pass` / `fail` status. Focused tests pin
+pass, fail, timestamp, duration, source-presence, unavailable-count, and
+summary-write-failure behavior.
 
 ## Immediate successor
 

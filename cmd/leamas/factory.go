@@ -4,7 +4,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
 	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/factory/output"
@@ -56,8 +58,31 @@ func handleFactory() {
 }
 
 func handleFactoryGate() {
-	exitCode := gate.RunGate(".")
+	exitCode := runFactoryGate(
+		".",
+		".factory/gate-summary.json",
+		os.Stderr,
+		gate.RunGate,
+		time.Now,
+	)
 	os.Exit(exitCode)
+}
+
+func runFactoryGate(
+	root string,
+	summaryPath string,
+	stderr io.Writer,
+	run func(string) int,
+	now func() time.Time,
+) int {
+	startedAt := now()
+	exitCode := run(root)
+	finishedAt := now()
+	if err := gate.WriteGateRunSummary(summaryPath, startedAt, finishedAt, exitCode); err != nil {
+		fmt.Fprintf(stderr, "write gate summary: %v\n", err)
+		return 1
+	}
+	return exitCode
 }
 
 func handleFactoryFactorize() {

@@ -4,14 +4,12 @@
 
 The semantic corpus, persistent fuzz regressions, 30-second fuzz GREEN,
 performance evidence, whitespace repair, lifecycle reconciliation, and
-repository-wide gate all passed. The single remaining honest observation
-is that the full-package `go test -race ./internal/factory/dupcode` run
-exceeds the available wall-clock window because the test surface
-includes the full-tree `TestDebugBaselines` and many long cross-file
-integration tests; the non-race suite passes in 252.444s and the gate
-suite (which uses the same suite without -race) passes. The deferred
-race check is recorded honestly below; no other required check is
-skipped or omitted.
+repository-wide gate passed. The final closure correction now replaces the
+previously deferred race statement with the explicit one-test bounded race
+alternative, records the literal full-package timeout without calling it a
+pass, and corrects the gate-summary generator defect exposed after the stale
+artifact was invalidated. No duplicate-detection behavior, corpus semantics,
+fuzz wire format, benchmark fixture, baseline, or remediation target changed.
 
 ## Baseline and scope
 
@@ -78,6 +76,16 @@ Lifecycle and tracked evidence:
 - CORRECTION01 `benchstat.txt` trailing whitespace removed without
   changing `before-correction.txt` or `after-correction.txt`;
 - this ACT, close report, benchmark, fuzz, and mutation evidence added.
+
+Final closure correction:
+
+- `cmd/leamas/factory.go` — bind literal gate execution to summary writing;
+- `cmd/leamas/factory_gate_run_test.go` — injected pass/fail and write-error contract;
+- `internal/factory/gate/run_summary.go` — write one observed aggregate gate result;
+- `internal/factory/gate/run_summary_test.go` — canonical field/count matrix;
+- `internal/factory/gate/summary.go` — share the non-recursive artifact writer;
+- this ACT, close report, and gate-summary Factory documentation — corrected
+  race and evidence-generator acceptance wording.
 
 ## Executable-contract RED and GREEN
 
@@ -246,36 +254,78 @@ all resulting files pass the no-allowlist 400-line gate.
 
 ## Verification record
 
-```text
-gofmt -w / gofmt -l                                    PASS
-test -z "$(gofmt -l internal/factory/dupcode)"          PASS
-git diff --check                                       PASS
-focused alignment corpus and ordinary fuzz seeds      PASS
-go test ./internal/factory/dupcode                     PASS (252.444s)
-go test -race -run='^(TestV4Alignment_)' ./internal/factory/dupcode  PASS
-30-second fuzz, clean cache                           PASS (31.431s)
-N128 accepted/forced benchmark comparisons             PASS
-make factorize                                         PASS
-go vet ./...                                           PASS
-CGO_ENABLED=0 go build ./...                           PASS
-./bin/leamas factory verify dupcode-baseline          PASS (canonical 504-token finding, line range 268-340 / 310-382)
-go test ./...                                          PASS (all packages)
-make gate                                              PASS
-```
-
-Deferred check recorded honestly:
+Original corpus, fuzz, and benchmark evidence remains as recorded above. The
+closure correction ran the required matrix against the staged patch:
 
 ```text
-go test -race ./internal/factory/dupcode
-  exceeded the available wall-clock window (full-tree TestDebugBaselines
-  plus the V4 alignment suite). The same suite without -race passes in
-  252.444s and the same suite with the alignment-filter run
-  (TestV4Alignment_*) passes under -race. A future ACT may either
-  raise the per-test wall-clock budget or split TestDebugBaselines
-  into a smaller per-subtree shape suitable for a 10-minute race run.
-  The non-race gate result is the authoritative truth for this ACT's
-  closure; the race report is recorded as deferred, not silent.
+gofmt -l internal/factory/dupcode                    PASS (empty)
+gofmt -l <changed Go files>                          PASS (empty)
+git diff --check                                     PASS
+git diff --cached --check                            PASS
+go test ./internal/factory/dupcode                   PASS (142.951s)
+go test ./internal/factory/gate ./cmd/leamas         PASS (80.782s / 3.644s)
+go test ./...                                        PASS (all packages)
+go vet ./...                                         PASS
+CGO_ENABLED=0 go build ./...                         PASS
+make factorize                                       PASS (15/15)
+./bin/leamas factory verify dupcode-baseline         PASS (36.14s)
+make gate                                            PASS
+.factory/gate-summary.json                           regenerated 2026-07-18T02:07:42Z,
+                                                      overall_status=pass
 ```
+
+The focused gate-summary contract established semantic RED on missing
+`WriteGateRunSummary` / `runFactoryGate`, then GREEN in 0.403s / 0.256s.
+The literal full and bounded race outcomes are recorded separately below.
+
+## Final race and evidence closure
+
+The first literal complete command was given the required package timeout:
+
+```text
+go test -race -timeout=30m ./internal/factory/dupcode
+  FAIL: package timeout after 1800.456s (real 1801.00s)
+  last executing test:
+    TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline (4m42s)
+  TestDebugBaselines had completed and printed baselinesEqual: EQUAL
+  race diagnostics before timeout: 0
+```
+
+A three-minute verbose diagnostic independently identified
+`TestDebugBaselines` inside its live-tree `CheckReport` scan. The permitted
+bounded alternative omitted exactly that one test and no production code:
+
+```text
+go test -race -timeout=30m -skip='^TestDebugBaselines$' ./internal/factory/dupcode
+  PASS (1666.860s; real 1667.70s; race diagnostics: 0)
+
+go test -timeout=30m -run='^TestDebugBaselines$' ./internal/factory/dupcode
+  PASS (39.122s; real 39.76s)
+
+go test -race -run='^TestV4Alignment_' ./internal/factory/dupcode
+  PASS (1.864s; real 2.27s)
+```
+
+This is a bounded alternative, not a successful literal full-package race
+run. Every package test except exactly `TestDebugBaselines` remained under
+race instrumentation, the excluded test passed without `-race`, and no
+production file was tagged or excluded.
+
+Both persistent corpus regressions passed as ordinary tests. Their SHA-256
+values remain:
+
+```text
+3fc61698be2e22940717afed57b7f563e49a15201582e060ee1e212da4a30a70
+8c14c01ed68fc29339f518ff8f9de3a669294b7947e8170496be3506bcb30b5b
+```
+
+The stale summary was removed at `2026-07-18T01:39:28Z`. The ensuing literal
+`make gate` passed, but `.factory/gate-summary.json` remained missing. That
+observed RED established the evidence-generator defect. Focused executable
+contracts first failed because `WriteGateRunSummary` and `runFactoryGate` did
+not exist, then passed after the smallest correction. A rebuilt binary and
+literal `make gate` regenerated a canonical `pass` summary at
+`2026-07-18T01:53:18Z`; final post-commit regeneration is detached evidence.
 
 ## Frozen canonical duplicate
 
@@ -305,6 +355,8 @@ commit follows it.
 
 ## Deferred checks and follow-up
 
-One check is deferred as recorded above. No other required check is
-silently deferred. The immediate successor
-`ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01` may now begin.
+No check is silently deferred. The literal complete package race command
+timed out and is not claimed as a pass; the explicitly permitted one-test
+bounded alternative is the accepted package race evidence. The immediate
+successor `ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01` may begin only
+after the closure commit and detached final evidence are complete.

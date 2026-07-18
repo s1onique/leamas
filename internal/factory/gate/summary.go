@@ -56,7 +56,12 @@ type GateSummary struct {
 
 // WriteGateSummary writes the gate summary to a JSON file.
 func WriteGateSummary(root, outputPath string) error {
-	// Ensure parent directory exists
+	summary := buildGateSummary(root)
+	summary.Tool = "leamas factory gate-summary"
+	return writeGateSummaryArtifact(outputPath, summary)
+}
+
+func writeGateSummaryArtifact(outputPath string, summary GateSummary) error {
 	dir := filepath.Dir(outputPath)
 	if dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -64,18 +69,13 @@ func WriteGateSummary(root, outputPath string) error {
 		}
 	}
 
-	summary := buildGateSummary(root)
-	summary.Tool = "leamas factory gate-summary"
-
 	data, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal gate summary: %w", err)
 	}
-
 	if err := os.WriteFile(outputPath, data, 0644); err != nil {
 		return fmt.Errorf("failed to write gate summary: %w", err)
 	}
-
 	return nil
 }
 

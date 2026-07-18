@@ -23,14 +23,14 @@ Schema v1:
 {
   "schema_version": 1,
   "generated_at": "2026-07-09T21:10:00Z",
-  "tool": "leamas factory gate-summary",
+  "tool": "leamas factory gate",
   "overall_status": "pass",
   "checks": [
     {
-      "name": "go_test",
+      "name": "gate",
       "status": "pass",
       "duration_ms": 1234,
-      "evidence": "go test ./..."
+      "evidence": "leamas factory gate"
     }
   ]
 }
@@ -56,16 +56,13 @@ source_status=present
 schema_version=1
 generated_at=2026-07-09T21:10:00Z
 overall_status=pass
-checks_total=5
-checks_passed=5
+checks_total=1
+checks_passed=1
 checks_failed=0
 checks_skipped=0
 checks_unavailable=0
 checks:
-  - name=go_test status=pass duration_ms=1234 evidence=go test ./...
-  - name=go_vet status=pass duration_ms=321 evidence=go vet ./...
-  - name=factorize status=pass duration_ms=456 evidence=make factorize
-  - name=gate status=pass duration_ms=789 evidence=make gate
+  - name=gate status=pass duration_ms=1234 evidence=leamas factory gate
 ```
 
 ### Missing Case
@@ -99,37 +96,46 @@ checks_unavailable=0
 ...
 ```
 
-## Command
+## Commands
 
-Generate gate summary artifact:
+Run the quality gate and regenerate the canonical observed-result artifact:
+
+```bash
+make gate
+```
+
+Read and copy an existing artifact without recursively running the gate:
 
 ```bash
 leamas factory gate-summary --output .factory/gate-summary.json
 ```
 
-Default output: `.factory/gate-summary.json`
+The literal gate writes one aggregate `gate` check after execution. A missing
+source remains `unavailable`; the read/copy command never invents a passing
+result. The default output is `.factory/gate-summary.json`.
 
 ## Implementation
 
-- **Artifact**: `internal/factory/gate/summary.go`
+- **Artifact**: `internal/factory/gate/summary.go`, `run_summary.go`
 - **Tests**: `internal/factory/gate/summary_test.go`
 - **Digest**: `internal/factory/digest/digest.go` (reads artifact)
 - **CLI**: `cmd/leamas/factory.go` (handles gate-summary command)
 
-## Initial Checks
+## Recorded Check
 
 | Name | Command | Description |
 |------|---------|-------------|
-| `go_test` | `go test ./...` | Run Go tests |
-| `go_vet` | `go vet ./...` | Run Go vet |
-| `factorize` | `make factorize` | Run factorize checks |
-| `gate` | `make gate` | Run full gate |
+| `gate` | `leamas factory gate` | Aggregate result and elapsed duration of the literal gate run |
+
+The gate's normal output retains the individual verifier and Go-toolchain
+results. The summary check is deliberately aggregate so generation does not
+rerun or duplicate any check.
 
 ## Verification
 
 ```bash
-# Generate gate summary
-./bin/leamas factory gate-summary
+# Run the gate and generate the observed summary
+make gate
 
 # Verify artifact
 cat .factory/gate-summary.json
