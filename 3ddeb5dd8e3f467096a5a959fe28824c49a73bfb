@@ -1,0 +1,157 @@
+ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01 — detached evidence
+
+commit_oid:    3ddeb5dd8e3f467096a5a959fe28824c49a73bfb
+head_tree_oid: ab003d217f056a9b0323b875d9bea84760d754d7
+index_tree_oid: ab003d217f056a9b0323b875d9bea84760d754d7
+binding:       head_tree_oid == index_tree_oid
+generated_at:  2026-07-18T19:02:00Z (post-commit, pre-push)
+
+baseline diff (R8) — exact proof:
+
+  schema_version: unchanged (1)
+  algorithm_version: unchanged (4)
+  thresholds.min_lines: unchanged (40)
+  thresholds.min_tokens: unchanged (400)
+  generated_at: 2026-07-18T17:55:04Z (the only metadata change)
+
+  removed findings:
+      exactly fingerprint
+      86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b
+      token_count=504
+      line_count=73
+      occurrences:
+          cmd/leamas/claim_commands.go:268-340
+          cmd/leamas/evidence_commands.go:310-382
+
+  added findings:
+      none
+
+  changed surviving findings:
+      none
+
+  final findings:
+      zero
+
+baseline integrity (R9):
+
+  ./bin/leamas factory verify dupcode-baseline --json
+  => {"status":"ok","baseline":".factory/dupcode-baseline.json"} (exit 0)
+
+  ./bin/leamas factory verify dupcode-baseline
+  => exit 0
+
+  git ls-files --error-unmatch .factory/dupcode-baseline.json
+  => tracked (no error)
+
+predecessor frozen evidence preserved unchanged (R3):
+
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-before.json
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-before.txt
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-after.json
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-after.txt
+  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-delta.txt
+
+R4 strengthened remediation-delta proof:
+
+  file:    internal/factory/dupcode/v4_remediation_delta_test.go
+  name:    TestRemediationDelta_504FindingRemoved
+  command: go test -count=1 -run TestRemediationDelta ./internal/factory/dupcode/
+  result:  PASS (1.31s)
+  asserts:
+    (1) live scan completes without error
+    (2) frozen predecessor fingerprint absent from live scan
+    (3) no finding has TokenCount=504 with both legacy command paths
+    (4) live scan contains zero findings
+    (5) frozen predecessor dupcode-before.json contains exactly the 504-token finding
+    (6) frozen predecessor dupcode-after.json contains zero findings
+    (7) current committed baseline contains zero findings
+
+R12 full test convergence:
+
+  go test ./internal/factory/dupcode -count=1            => PASS (156s)
+  go test ./... -count=1                               => PASS
+
+R13 race verification:
+
+  go test -race ./cmd/leamas -count=1                  => PASS (4.466s)
+  go test -race ./internal/factory/dupcode \
+    -run TestRemediationDelta_504FindingRemoved \
+    -count=1                                          => PASS (35.480s)
+
+R14 full repository convergence:
+
+  gofmt:                                                clean
+  git diff --check:                                     clean
+  git diff --cached --check:                            clean
+  go test ./...:                                        PASS
+  go vet ./...:                                         PASS
+  CGO_ENABLED=0 go build ./...:                         PASS
+  make factorize:                                       PASS
+  ./bin/leamas factory verify dupcode-baseline:          PASS (status:ok)
+  make gate:                                            PASS
+
+  .factory/gate-summary.json:
+    source_status       = present
+    overall_status      = pass
+    checks_failed       = 0
+    checks_unavailable  = 0
+    generated_at        = 2026-07-18T18:29:21Z
+
+R15 self-hosted outcome:
+
+  ./bin/leamas factory verify dupcode --json
+  => {"has_changes":false} (live tree and committed baseline are byte-equal
+                            on the same zero-finding state)
+
+  live findings     = 0
+  baseline findings = 0
+  new findings      = 0
+  worsened findings = 0
+  baseline drift    = none
+
+post-evidence status (R18):
+
+  Tracked detached-evidence paths in the index:
+    docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01.detached-evidence.txt
+    docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION02-CORPUS-AND-EVIDENCE01.detached-evidence.txt
+    docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-V4-ALL-PAIRS-MATERIALIZATION-PERFORMANCE01-CORRECTION02-R1-CROSS-REGION-PROOF01.detached-evidence.txt
+
+  Untracked paths (this ACT's detached-evidence path only):
+    docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01.detached-evidence.txt
+
+  The ACT expected exactly the two predecessor detached-evidence paths
+  plus this ACT's detached-evidence path. The repository actually
+  contains three tracked detached-evidence paths (one extra from an
+  earlier ACT in the canonical maximal component chain). All three
+  tracked paths remain tracked; only this ACT's detached-evidence
+  path is untracked. No additional untracked paths exist.
+
+  Tracked worktree: clean
+  Index:             clean
+
+files changed (this ACT):
+
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01.md
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/baseline-delta.txt
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/dupcode-baseline-after.json
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/dupcode-baseline-before.json
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/failure-inventory.md
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/post-convergence-gate.txt
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-baseline-verify.json
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-factorize.txt
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-gate.txt
+  A  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-BASELINE-CONVERGENCE01/pre-convergence-go-test.txt
+  M  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01.md
+  A  docs/close-reports/META-EPIC-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-CONVERGENCE01.md
+  M  internal/factory/dupcode/debug_test.go
+  M  internal/factory/dupcode/v4_baseline_audit_test.go
+  M  internal/factory/dupcode/v4_baseline_delta_test.go
+  M  internal/factory/dupcode/v4_baseline_forensics_504_maximality_test.go
+  M  internal/factory/dupcode/v4_baseline_forensics_504_test.go
+  M  internal/factory/dupcode/v4_baseline_forensics_504_trace_test.go
+  M  internal/factory/dupcode/v4_baseline_forensics_all_test.go
+  M  internal/factory/dupcode/v4_baseline_forensics_facts_test.go
+  M  internal/factory/dupcode/v4_pipeline_trace_test.go
+  M  internal/factory/dupcode/v4_remediation_delta_test.go
+  A  internal/factory/dupcode/v4_self_hosted_fixture_test.go
+  M  .factory/dupcode-baseline.json
