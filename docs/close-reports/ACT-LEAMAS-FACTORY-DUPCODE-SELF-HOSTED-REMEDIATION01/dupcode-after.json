@@ -1,0 +1,8 @@
+{
+  "findings": null,
+  "thresholds": {
+    "min_lines": 40,
+    "min_tokens": 400
+  },
+  "root": "."
+}

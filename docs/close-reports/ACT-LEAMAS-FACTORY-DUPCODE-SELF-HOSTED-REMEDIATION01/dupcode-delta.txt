@@ -1,0 +1,26 @@
+Detector delta for ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01.
+
+removed findings:
+    exactly the frozen 504-token claim/evidence finding
+        fingerprint=86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b
+        token_count=504
+        line_count=73
+        occurrences:
+            cmd/leamas/claim_commands.go:268-340
+            cmd/leamas/evidence_commands.go:310-382
+
+added findings:
+    none
+
+changed surviving findings:
+    none
+
+Live snapshot count:
+    before: 1 finding
+    after:  0 findings
+
+Verification:
+    before JSON: docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-before.json
+    before TXT:  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-before.txt
+    after JSON:  docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-after.json
+    after TXT:   docs/close-reports/ACT-LEAMAS-FACTORY-DUPCODE-SELF-HOSTED-REMEDIATION01/dupcode-after.txt

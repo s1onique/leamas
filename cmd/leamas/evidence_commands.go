@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -13,6 +12,18 @@ import (
 	"github.com/s1onique/leamas/internal/witness/claim"
 	"github.com/s1onique/leamas/internal/witness/runbundle"
 )
+
+// evidenceShowOptions is the dependency-injection contract used by the
+// witness dispatcher's ShowEvidence hook (see witness.go). It is not
+// used by the production runWitnessEvidenceShow path; that path is
+// driven by runRecordShow in record_show.go. Keeping the type preserves
+// the existing public dependency surface while letting the production
+// path share its orchestration.
+type evidenceShowOptions struct {
+	Root  string
+	RunID string
+	JSON  bool
+}
 
 // ============================================================================
 // Evidence create
@@ -301,91 +312,27 @@ func listEvidence(store claim.Store) ([]claim.Evidence, error) {
 // Evidence show
 // ============================================================================
 
-type evidenceShowOptions struct {
-	Root  string
-	RunID string
-	JSON  bool
-}
-
+// runWitnessEvidenceShow implements `leamas witness evidence show <evidence-id>`.
+// The shared orchestration (flag parsing, arg/run-id/root validation,
+// run bundle opening, error formatting, exit-code selection, JSON/text
+// dispatch) lives in runRecordShow in record_show.go. This function
+// only owns the evidence-specific policy decisions.
 func runWitnessEvidenceShow(args []string) int {
-	var opts evidenceShowOptions
-	fs := flag.NewFlagSet("show", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	fs.StringVar(&opts.Root, "root", defaultRunBundleRoot, "root directory for run bundles")
-	fs.StringVar(&opts.RunID, "run-id", "", "run bundle ID (required)")
-	fs.BoolVar(&opts.JSON, "json", false, "output JSON")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "ERROR: evidence show requires <evidence-id>")
-		fs.Usage()
-		return 1
-	}
-	if opts.RunID == "" {
-		fmt.Fprintln(os.Stderr, "ERROR: evidence show requires --run-id")
-		fs.Usage()
-		return 1
-	}
-	if opts.Root == "" {
-		fmt.Fprintln(os.Stderr, "ERROR: run bundle root must be non-empty")
-		return 1
-	}
-
-	runID := runbundle.RunID(opts.RunID)
-	if err := runbundle.ValidateRunID(runID); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: invalid run ID: %v\n", err)
-		return 1
-	}
-
-	evidenceID := claim.EvidenceID(fs.Arg(0))
-	if err := claim.ValidateEvidenceID(evidenceID); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: invalid evidence ID: %v\n", err)
-		return 1
-	}
-
-	bundle, _, err := runbundle.Open(opts.Root, runID)
-	if err != nil {
-		printRunBundleError(opts.Root, runID, err)
-		return 1
-	}
-
-	store := claim.NewStore(bundle)
-	ev, err := store.ReadEvidence(evidenceID)
-	if err != nil {
-		if errors.Is(err, claim.ErrEvidenceNotFound) {
-			fmt.Fprintf(os.Stderr, "ERROR: evidence not found: %s\n", evidenceID)
-		} else {
-			fmt.Fprintf(os.Stderr, "ERROR: failed to read evidence: %v\n", err)
-		}
-		return 1
-	}
-
-	if opts.JSON {
-		output := struct {
-			OK       bool            `json:"ok"`
-			Evidence *claim.Evidence `json:"evidence"`
-		}{
-			OK:       true,
-			Evidence: &ev,
-		}
-		data, _ := json.MarshalIndent(output, "", "  ")
-		fmt.Println(string(data))
-	} else {
-		fmt.Printf("Evidence: %s\n", ev.ID)
-		fmt.Printf("Run: %s\n", ev.RunID)
-		fmt.Printf("Kind: %s\n", ev.Kind)
-		fmt.Printf("Role: %s\n", ev.Role)
-		fmt.Printf("Title: %s\n", ev.Title)
-		if ev.RelativePath != "" {
-			fmt.Printf("Path: %s\n", ev.RelativePath)
-		}
-		if ev.Summary != "" {
-			fmt.Printf("Summary: %s\n", ev.Summary)
-		}
-	}
-
-	return 0
+	return runRecordShow(args, recordShowSpec{
+		KindName:    "evidence",
+		PosArgLabel: "<evidence-id>",
+		ValidateID: func(rawID string) error {
+			return claim.ValidateEvidenceID(claim.EvidenceID(rawID))
+		},
+		NotFoundErr: claim.ErrEvidenceNotFound,
+		ReadRecord: func(store claim.Store, rawID string) (any, error) {
+			ev, err := store.ReadEvidence(claim.EvidenceID(rawID))
+			if err != nil {
+				return nil, err
+			}
+			return &ev, nil
+		},
+		RenderText: renderEvidenceRecordText,
+		RenderJSON: renderEvidenceRecordJSON,
+	})
 }

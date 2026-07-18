@@ -1,0 +1,9 @@
+findings=1
+finding[0]
+  fingerprint=86fae794736b22ea7939fefe24346360250945fa...
+  stable_fingerprint=86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b
+  token_count=504
+  line_count=73
+  occurrences=2
+    occ[0] path=cmd/leamas/claim_commands.go start_line=268 end_line=340
+    occ[1] path=cmd/leamas/evidence_commands.go start_line=310 end_line=382

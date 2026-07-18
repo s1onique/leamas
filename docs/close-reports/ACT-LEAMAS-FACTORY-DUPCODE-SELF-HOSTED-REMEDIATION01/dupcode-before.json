@@ -1,0 +1,27 @@
+{
+  "findings": [
+    {
+      "Fingerprint": "86fae794736b22ea7939fefe24346360250945fa...",
+      "StableFingerprint": "86fae794736b22ea7939fefe24346360250945fa9a13388152a5f3a96471354b",
+      "TokenCount": 504,
+      "LineCount": 73,
+      "Occurrences": [
+        {
+          "Path": "cmd/leamas/claim_commands.go",
+          "StartLine": 268,
+          "EndLine": 340
+        },
+        {
+          "Path": "cmd/leamas/evidence_commands.go",
+          "StartLine": 310,
+          "EndLine": 382
+        }
+      ]
+    }
+  ],
+  "thresholds": {
+    "min_lines": 40,
+    "min_tokens": 400
+  },
+  "root": "."
+}

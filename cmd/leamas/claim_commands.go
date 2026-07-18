@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -13,6 +12,18 @@ import (
 	"github.com/s1onique/leamas/internal/witness/claim"
 	"github.com/s1onique/leamas/internal/witness/runbundle"
 )
+
+// claimShowOptions is the dependency-injection contract used by the
+// witness dispatcher's ShowClaim hook (see witness.go). It is not used
+// by the production runWitnessClaimShow path; that path is driven by
+// runRecordShow in record_show.go. Keeping the type preserves the
+// existing public dependency surface while letting the production path
+// share its orchestration.
+type claimShowOptions struct {
+	Root  string
+	RunID string
+	JSON  bool
+}
 
 // ============================================================================
 // Claim create
@@ -259,94 +270,27 @@ func listClaims(store claim.Store) ([]claim.Claim, error) {
 // Claim show
 // ============================================================================
 
-type claimShowOptions struct {
-	Root  string
-	RunID string
-	JSON  bool
-}
-
+// runWitnessClaimShow implements `leamas witness claim show <claim-id>`.
+// The shared orchestration (flag parsing, arg/run-id/root validation,
+// run bundle opening, error formatting, exit-code selection, JSON/text
+// dispatch) lives in runRecordShow in record_show.go. This function
+// only owns the claim-specific policy decisions.
 func runWitnessClaimShow(args []string) int {
-	var opts claimShowOptions
-	fs := flag.NewFlagSet("show", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	fs.StringVar(&opts.Root, "root", defaultRunBundleRoot, "root directory for run bundles")
-	fs.StringVar(&opts.RunID, "run-id", "", "run bundle ID (required)")
-	fs.BoolVar(&opts.JSON, "json", false, "output JSON")
-
-	if err := fs.Parse(args); err != nil {
-		return 1
-	}
-
-	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "ERROR: claim show requires <claim-id>")
-		fs.Usage()
-		return 1
-	}
-	if opts.RunID == "" {
-		fmt.Fprintln(os.Stderr, "ERROR: claim show requires --run-id")
-		fs.Usage()
-		return 1
-	}
-	if opts.Root == "" {
-		fmt.Fprintln(os.Stderr, "ERROR: run bundle root must be non-empty")
-		return 1
-	}
-
-	runID := runbundle.RunID(opts.RunID)
-	if err := runbundle.ValidateRunID(runID); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: invalid run ID: %v\n", err)
-		return 1
-	}
-
-	claimID := claim.ClaimID(fs.Arg(0))
-	if err := claim.ValidateClaimID(claimID); err != nil {
-		fmt.Fprintf(os.Stderr, "ERROR: invalid claim ID: %v\n", err)
-		return 1
-	}
-
-	bundle, _, err := runbundle.Open(opts.Root, runID)
-	if err != nil {
-		printRunBundleError(opts.Root, runID, err)
-		return 1
-	}
-
-	store := claim.NewStore(bundle)
-	clm, err := store.ReadClaim(claimID)
-	if err != nil {
-		if errors.Is(err, claim.ErrClaimNotFound) {
-			fmt.Fprintf(os.Stderr, "ERROR: claim not found: %s\n", claimID)
-		} else {
-			fmt.Fprintf(os.Stderr, "ERROR: failed to read claim: %v\n", err)
-		}
-		return 1
-	}
-
-	if opts.JSON {
-		output := struct {
-			OK    bool         `json:"ok"`
-			Claim *claim.Claim `json:"claim"`
-		}{
-			OK:    true,
-			Claim: &clm,
-		}
-		data, _ := json.MarshalIndent(output, "", "  ")
-		fmt.Println(string(data))
-	} else {
-		fmt.Printf("Claim: %s\n", clm.ID)
-		fmt.Printf("Run: %s\n", clm.RunID)
-		fmt.Printf("Status: %s\n", clm.Status)
-		fmt.Printf("Verdict: %s\n", clm.Verdict)
-		fmt.Printf("Statement: %s\n", clm.Statement)
-		if len(clm.EvidenceIDs) > 0 {
-			fmt.Println("Evidence:")
-			for _, eid := range clm.EvidenceIDs {
-				fmt.Printf("  %s\n", eid)
+	return runRecordShow(args, recordShowSpec{
+		KindName:    "claim",
+		PosArgLabel: "<claim-id>",
+		ValidateID: func(rawID string) error {
+			return claim.ValidateClaimID(claim.ClaimID(rawID))
+		},
+		NotFoundErr: claim.ErrClaimNotFound,
+		ReadRecord: func(store claim.Store, rawID string) (any, error) {
+			clm, err := store.ReadClaim(claim.ClaimID(rawID))
+			if err != nil {
+				return nil, err
 			}
-		}
-		if clm.Notes != "" {
-			fmt.Printf("Notes: %s\n", clm.Notes)
-		}
-	}
-
-	return 0
+			return &clm, nil
+		},
+		RenderText: renderClaimRecordText,
+		RenderJSON: renderClaimRecordJSON,
+	})
 }
