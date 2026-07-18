@@ -3,6 +3,7 @@ package gate
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 
@@ -230,32 +231,9 @@ func RunGate(root string) int {
 }
 
 // RunFactorize runs all Factory policy verifiers without toolchain checks.
+// Wall-clock timings are emitted on each check line and on the final
+// summary line; the underlying runFactorize helper owns the timing
+// logic and is covered by deterministic tests with an injected clock.
 func RunFactorize(root string) int {
-	failed := false
-
-	verifiers := AllVerifiers()
-	sort.Slice(verifiers, func(i, j int) bool {
-		return verifiers[i].Name < verifiers[j].Name
-	})
-
-	for _, v := range verifiers {
-		findings := v.Run(root)
-		if len(findings) > 0 {
-			failed = true
-			fmt.Printf("\n--- %s FAILED ---\n", v.Name)
-			for _, f := range findings {
-				fmt.Printf("  %s: %s: %s\n", f.Path, f.Kind, f.Message)
-			}
-		} else {
-			fmt.Printf("  %s: OK\n", v.Name)
-		}
-	}
-
-	if failed {
-		fmt.Printf("\n*** FACTORIZE FAILED ***\n")
-		return 1
-	}
-
-	fmt.Printf("\n*** FACTORIZE PASSED ***\n")
-	return 0
+	return runFactorize(os.Stdout, systemClock{}, root, AllVerifiers())
 }
