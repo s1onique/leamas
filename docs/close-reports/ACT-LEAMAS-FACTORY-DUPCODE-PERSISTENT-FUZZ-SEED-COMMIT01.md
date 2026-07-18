@@ -15,6 +15,15 @@ unrelated to this ACT and explicitly documented as environment-limited
 in `ACT-LEAMAS-FACTORY-WALLCLOCK-TIMINGS01` (it passes in 204 s when
 run in isolation).
 
+Push execution: `git push origin main` for commit `a744756` returned
+exit 0 (`e9d8908..a744756  main -> main`). The remote reported
+`Required status check "Factory Gates" is expected.` and the push
+was processed under the user's existing branch-protection bypass for
+that rule (the repo's branch rule is configured to allow this
+principal through, not to bypass required status in general). The
+aggregate-gate outcome recorded as PARTIAL above is a local
+environment constraint, not a Repository-policy failure of this push.
+
 ## Baseline and scope
 
 - Baseline HEAD: `e9d890868a2d93da66c487c8fa37e8ff9e81680d`
