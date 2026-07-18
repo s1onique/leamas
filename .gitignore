@@ -13,10 +13,12 @@ dist/
 .factory/*
 !.factory/dupcode-baseline.json
 
-# Exception: keep the adversarial test helper source
-# (must come BEFORE testdata/ rule below)
+# Adversarial test helper: keep the source, ignore the local build artifact
+# (compiled binary is referenced by adversarial_harness_executor.go via
+# `internal/execution/testdata/testhelper/main`; it must NOT be committed).
+internal/execution/testdata/testhelper/main
 !internal/execution/testdata/testhelper/main.go
-testdata/
+/testdata/
 
 # Canonical doctrine compiler golden fixtures are source-controlled
 # and must be visible to `git add` despite the broad testdata/ rule above.
