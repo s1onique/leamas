@@ -16,8 +16,11 @@ before `DECODER01` begins.
 
 ## Status
 
-`IN PROGRESS`. Commit `507b686a4681eb28b97267b2ddab6c5bfc3ce7df`
-remains intact. This ACT lands only as a forward correction.
+`CLOSED (PARTIAL — reader contract frozen and committed)`. The
+implementation/freeze commit `7bf86c2` lands the contract freeze;
+this ACT closes the lifecycle by reconciling the status banners.
+Commit `507b686a4681eb28b97267b2ddab6c5bfc3ce7df` remains in history
+and is the prior correction this ACT supersedes.
 
 ## Problem
 
@@ -128,24 +131,26 @@ GREEN requires:
 
 ## Acceptance criteria
 
-- [ ] Global inventory is exactly 41 committed JSON fixtures, 38
+- [x] Global inventory is exactly 41 committed JSON fixtures, 38
       executable accept/reject fixtures, and 3 limit-shape templates.
-- [ ] The only separately reported subset is clearly named “v2-only
+- [x] The only separately reported subset is clearly named “v2-only
       executable corpus” and equals 35.
-- [ ] `02`, `-02`, and `+2` map to `GS_MALFORMED_JSON`.
-- [ ] RFC 8259 whitespace around valid integer tokens is accepted.
-- [ ] All valid integer values other than 1 and 2 are owned by version
+- [x] `02`, `-02`, and `+2` map to `GS_MALFORMED_JSON`.
+- [x] RFC 8259 whitespace around valid integer tokens is accepted.
+- [x] All valid integer values other than 1 and 2 are owned by version
       dispatch and map to `GS_UNSUPPORTED_VERSION`.
-- [ ] Schema `const` is defense in depth and never owns an ordinary
+- [x] Schema `const` is defense in depth and never owns an ordinary
       unsupported-version diagnostic.
-- [ ] The complete schema-error-to-`GS_*` translation table is frozen
+- [x] The complete schema-error-to-`GS_*` translation table is frozen
       using structured validator data rather than message strings.
-- [ ] Generated whitespace, leading-zero, plus-sign, decimal, and
+- [x] Generated whitespace, leading-zero, plus-sign, decimal, and
       exponent cases are normative for `DECODER01`/`CONFORMANCE01`.
-- [ ] No production code, schema, JSON fixture, or dependency changes.
-- [ ] `make factorize`, `make gate`, and applicable Go checks run and
-      their exact outcomes are recorded.
-- [ ] A forward commit follows `507b686a…`; history is not rewritten.
+- [x] No production code, schema, JSON fixture, or dependency changes.
+- [x] `make factorize`, `make gate`, and applicable Go checks run and
+      their exact outcomes are recorded in the close report.
+- [x] A forward commit follows `507b686a…`; history is not rewritten.
+- [x] Closure-only follow-up commit reconciles status banners and the
+      epic ACT board; `DECODER01` becomes `READY`.
 
 ## Verification commands
 

@@ -44,7 +44,7 @@ failures. `DECODER01` becomes `READY` on the epic ACT board.
 | `docs/factory/gate-summary-resource-limits.md` | status banner updated |
 | `internal/gatesummary/testdata/README.md` | rewritten — totals 41 / 38 / 3 with the v2-only 35 subset named |
 | `internal/gatesummary/testdata/limits/README.md` | status banner updated |
-| `docs/epics/EPIC-LEAMAS-GATE-SUMMARY-SCHEMA-V2-ADOPTION01.md` | ACT board reconciled: `CORRECTION02` is `CLOSED (PARTIAL — superseded)`; `CORRECTION03` is `IN PROGRESS`; `DECODER01` is `BLOCKED` until this ACT closes. |
+| `docs/epics/EPIC-LEAMAS-GATE-SUMMARY-SCHEMA-V2-ADOPTION01.md` | Two-commit board reconcile: freeze `CORRECTION02 = CLOSED (PARTIAL — superseded)`, `DECODER01 = BLOCKED`; closure `CORRECTION03 = CLOSED (PARTIAL)`, `DECODER01 = READY`. |
 | `docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02.md` | status text now records the forward supersession to `CORRECTION03` |
 | `docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION01.md` | status text now records the forward supersession to `CORRECTION03` |
 | `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01.md` | status banner points at `CORRECTION03` |
@@ -91,6 +91,8 @@ The 35-file v2-only subset is exactly 5 valid v2 + 27 invalid v2 +
 
 ### Commands Run
 
+The freeze commit `7bf86c2` ran:
+
 ```bash
 # Inventory
 find internal/gatesummary/testdata -type f -name '*.json'
@@ -111,7 +113,7 @@ go test -count=1 -timeout 60s ./internal/factory/llmfriendly/... \
 go -C /tmp/validate-gate-summary-v6 run .
 
 # Generated lexical matrix proof (raw JSON bytes, 123 cases)
-/tmp/gate-summary-correction03-lexical-binary
+go run /tmp/gate-summary-correction03-lexical.go
 
 # Schema-error tree inspection (v2 partial-test-totals fixture)
 go -C /tmp/validate-gate-summary-v6 run ./inspect
@@ -131,11 +133,29 @@ rg -n 'structural.*GS_UNSUPPORTED_VERSION|GS_UNSUPPORTED_VERSION.*structural' \
     docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01* \
     docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01* \
     docs/factory/gate-summary-*.md
+rg -n 'const: 2.*GS_UNSUPPORTED_VERSION|trailing-whitespace.*GS_INVALID_VERSION_TYPE' \
+    docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01* \
+    docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01* \
+    docs/factory/gate-summary-*.md
 
 # Git hygiene
 git diff --check
 git diff --stat
 git status --short
+```
+
+The closure bookkeeping commit re-runs:
+
+```bash
+awk 'length($0) > 240 { print FILENAME ":" FNR ":" length($0) }' \
+    docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03.md \
+    docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03.md \
+    docs/epics/EPIC-LEAMAS-GATE-SUMMARY-SCHEMA-V2-ADOPTION01.md
+wc -l docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03.md \
+      docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03.md
+bin/leamas factory verify llm-friendly
+git diff --check
+git log --oneline -2
 ```
 
 ### Results
@@ -289,11 +309,17 @@ wiring into production remains `DECODER01`'s job.
   is `DECODER01`'s responsibility. The test design and generated
   cases are normative for `CONFORMANCE01`.
 
+## Closure Range
+
+- Freeze commit: `7bf86c2` (implementation / freeze).
+- Closure bookkeeping commit: the commit produced after this
+  report lands (status banners, ACT board, completion checkboxes).
+
 ## Follow-up ACTs
 
 | ACT | Description | Priority |
 |-----|-------------|----------|
-| `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | Implement the frozen bounded reader, envelope/version dispatch, v1/v2 decoders, resource limits, and complete schema-error translation. | P0 |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | Implement the frozen bounded reader, envelope/version dispatch, v1/v2 decoders, resource limits, and complete schema-error translation. | P0 (READY) |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01` | Build the normalized `Summary` domain; convert wire `OPEN/PARTIAL/CLOSED` to normalized `open/partial/closed`. | P0 |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01` | Render v2 scope, parent, and aggregate status independently in the targeted digest. | P0 |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CLI01` | Add `validate`, `inspect`, `normalize` subcommands with the documented exit-code contract. | P0 |
