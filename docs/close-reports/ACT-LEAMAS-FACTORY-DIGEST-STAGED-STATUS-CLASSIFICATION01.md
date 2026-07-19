@@ -126,8 +126,8 @@ heuristic.
 | `git diff --check` (~10s)                                | <0.1s   | 0    | whitespace hygiene clean |
 | `CGO_ENABLED=0 go build -trimpath -o /tmp/leamas-digest-status ./cmd/leamas` (~30s) | <3s | 0 | self-hosting binary |
 | `/tmp/leamas-digest-status factory digest --staged --output /tmp/digest-status-proof.txt` (~30s) | 0.13s | 0 | self-hosting digest |
-| `make factorize` (not attempted)                          | n/a     | n/a  | out of scope (see Deferred verification) |
-| `make gate` (not attempted)                               | n/a     | n/a  | out of scope (see Deferred verification) |
+| `timeout 60 make factorize`                              | 60s     | 124 (terminated) | Got past `agent-context / docs / doctrine / doctrine-agent-contracts / domain-boundaries` (each OK in 0.00s) before timing out on the heavier duplicate-code phase. Same blocking previously documented. |
+| `timeout 60 make gate`                                   | 60s     | 124 (terminated) | Same blocking; gate re-runs the early OK phases and then hangs on the live-tree duplicate-code phase. Same blocking previously documented. |
 
 ## Self-hosting proof (literal Oracle)
 
