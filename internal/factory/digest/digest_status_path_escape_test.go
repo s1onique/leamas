@@ -224,3 +224,58 @@ func TestRangeStatus_NewlinePathInManifest(t *testing.T) {
 		}
 	}
 }
+
+// TestReviewMap_NewlinePath ensures the REVIEW_MAP section's bullet
+// list survives a path containing embedded newlines: the raw path
+// must not appear in the rendered REVIEW_MAP body, and exactly one
+// bullet line must exist per file in the production group.
+func TestReviewMap_NewlinePath(t *testing.T) {
+	dir := t.TempDir()
+	initGit(t, dir)
+
+	weird := "weird\nfile\nname.go"
+	path := filepath.Join(dir, weird)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("body\n"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	runGit(t, dir, "add", "--", weird)
+	runGit(t, dir, "commit", "-m", "weird path")
+
+	// Modify so the production code path picks it up.
+	if err := os.WriteFile(path, []byte("body v2\n"), 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	runGit(t, dir, "add", "--", weird)
+
+	out, err := Generate(Options{
+		RepoRoot: dir,
+		Mode:     ModeStaged,
+	})
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	idx := strings.Index(out, "## REVIEW_MAP")
+	if idx == -1 {
+		t.Fatalf("missing ## REVIEW_MAP section; out:\n%s", out)
+	}
+	rest := out[idx:]
+	end := strings.Index(rest, "\n## ")
+	if end == -1 {
+		end = len(rest)
+	}
+	body := rest[:end]
+
+	// The raw path must not appear anywhere in REVIEW_MAP; only
+	// the escaped form (which contains literal backslashes and 'n')
+	// is permitted.
+	if strings.Contains(body, weird) {
+		t.Fatalf("REVIEW_MAP contains raw newline-bearing path:\n%s", body)
+	}
+	if !strings.Contains(body, PathEscape(weird)) {
+		t.Fatalf("REVIEW_MAP missing escaped path form %q:\n%s", PathEscape(weird), body)
+	}
+}

@@ -54,7 +54,7 @@ func TestNormalizeHashInput_EnsuresSingleFinalNewline(t *testing.T) {
 func TestRenderEvidenceHashes_StableKeyOrder(t *testing.T) {
 	eh := EvidenceHashes{
 		HashAlgorithm:            "sha256",
-		HashScope:                "normalized_digest_v2_sections",
+		HashScope:                "normalized_digest_v3_sections",
 		ChangesetManifestSHA256:  "aaaa",
 		ChangesetStatsSHA256:     "bbbb",
 		ReviewMapSHA256:          "cccc",

@@ -12,7 +12,7 @@ const (
 	// EvidenceHashAlgorithm is the hash algorithm used for evidence hashes.
 	EvidenceHashAlgorithm = "sha256"
 	// EvidenceHashScope is the scope of evidence hashing.
-	EvidenceHashScope = "normalized_digest_v2_sections"
+	EvidenceHashScope = "normalized_digest_v3_sections"
 )
 
 // EvidenceHashes contains SHA-256 hashes for digest evidence sections.

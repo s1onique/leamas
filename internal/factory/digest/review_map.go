@@ -59,6 +59,12 @@ func BuildReviewMap(manifest []ReviewChangedFile, repoRoot string) ReviewMap {
 }
 
 // RenderReviewMap renders the REVIEW_MAP section.
+//
+// Paths are escaped at the rendering boundary via `PathEscape` so
+// a single bullet line can never split across visual lines, even
+// if the underlying filename contains a tab, newline, backslash,
+// or a control byte. Callers that want the original filename can
+// parse the rendered bullet back with `ParseEscapedPath`.
 func RenderReviewMap(rm ReviewMap) string {
 	var sb strings.Builder
 	sb.WriteString("## REVIEW_MAP\n")
@@ -81,7 +87,7 @@ func renderGroup(sb *strings.Builder, name string, paths []string) {
 	} else {
 		for _, p := range paths {
 			sb.WriteString("  - ")
-			sb.WriteString(p)
+			sb.WriteString(PathEscape(p))
 			sb.WriteString("\n")
 		}
 	}

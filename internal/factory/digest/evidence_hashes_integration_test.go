@@ -197,7 +197,7 @@ func TestRangeDigest_IncludesEvidenceHashes(t *testing.T) {
 	// Verify all expected hash fields are present
 	expectedFields := []string{
 		"hash_algorithm=sha256",
-		"hash_scope=normalized_digest_v2_sections",
+		"hash_scope=normalized_digest_v3_sections",
 		"changeset_manifest_sha256=",
 		"changeset_stats_sha256=",
 		"review_map_sha256=",

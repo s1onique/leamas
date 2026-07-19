@@ -169,6 +169,18 @@ which is too strict for the common "rename then a small edit at the
 destination" case (it would degrade to an `A` + `D` pair). Lowering
 to 30% keeps that case classified as `R`.
 
+### Copy detection coverage
+
+Git's `--find-copies` only considers source files that are
+**modified in the same changeset**. A copy of an unchanged source
+file is not surfaced as `C`; it appears as `A`. To detect copies
+from unchanged sources, Git requires `--find-copies-harder`, which
+is expensive on large repositories. The Leamas policy does not
+enable `--find-copies-harder`; ordinary unchanged-source copies
+render as `A`. When Git reports `C`, the digest preserves both
+source and destination via the canonical
+`C  source.go -> copy.go` form.
+
 Because of this Leamas policy, the authoritative oracle for digest
 reconciliation tests and self-hosting proofs is the explicit
 thresholded command, **not** plain `git diff --name-status`:
