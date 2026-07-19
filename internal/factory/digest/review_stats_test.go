@@ -158,22 +158,7 @@ func TestRenderStats_StableKeyOrder(t *testing.T) {
 
 	result := RenderStats(stats)
 
-	expectedOrder := []string{
-		"files_changed",
-		"added_files",
-		"modified_files",
-		"deleted_files",
-		"renamed_files",
-		"copied_files",
-		"untracked_files",
-		"unmerged_files",
-		"binary_files",
-		"generated_files",
-		"test_files",
-		"doc_files",
-		"source_files",
-		"config_files",
-	}
+	expectedOrder := ContractStatsKeysV3
 
 	for i, key := range expectedOrder {
 		if i > 0 {

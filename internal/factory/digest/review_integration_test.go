@@ -31,8 +31,8 @@ func TestIntegration_NewSectionsBeforeFileEvidence(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	if !strings.Contains(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
-		t.Error("expected contract version 2 in output")
+	if !strings.Contains(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3") {
+		t.Error("expected contract version 3 in output")
 	}
 
 	manifestIdx := strings.Index(content, "## CHANGESET_MANIFEST")
@@ -103,8 +103,8 @@ func TestIntegration_RangeModeWithNewSections(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	if !strings.Contains(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
-		t.Error("expected contract version 2 in output")
+	if !strings.Contains(content, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3") {
+		t.Error("expected contract version 3 in output")
 	}
 
 	if !strings.Contains(content, "## CHANGESET_MANIFEST") {

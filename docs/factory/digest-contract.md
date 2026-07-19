@@ -1,6 +1,7 @@
 # Factory: Digest Contract
-
-**ACT**: ACT-LEAMAS-FACTORY-DIGEST-REVIEW-EVIDENCE-V2-01
+**ACT**: ACT-LEAMAS-FACTORY-DIGEST-REVIEW-EVIDENCE-V2-01,
+ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01,
+ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION01 (in progress)
 
 ## Purpose
 
@@ -24,29 +25,46 @@ The contract version governs **output shape**. The application version is **buil
 
 ## Version Compatibility Policy
 
-### Contract Version `2`: Deterministic Review Evidence
+### Contract Version `2`: Frozen
 
-Contract version `2` is stable. Future versions must:
+v2 promised only the subset `A/M/D/R/C/U/?` and the v2 stats-key
+order; any digest matching that exact shape still satisfies v2.
 
-- **Add** new fields/sections only (appended, not inserted in the middle)
-- **Never remove** or **rename** existing fields
-- **Never change** field order
+### Contract Version `3`: Full Git status alphabet and rendering
 
-Breaking changes (removing fields, changing semantics, reordering) require a new contract version (`3`, `4`, etc.).
+Contract version `3` introduces:
+
+* The full Git `--name-status -z` status alphabet:
+  `A`, `M`, `D`, **`T`** (type change), **`R<N>`** (renamed, score
+  dropped), **`C<N>`** (copied, score dropped), `U`, `?`,
+  **`X`** (unknown), **`B`** (pairing broken).
+* Three additional `CHANGESET_STATS` keys:
+  `type_changed_files`, `unknown_files`, `broken_pair_files`.
+  The canonical v3 key order is documented below.
+* For **R** and **C**, both `old -> new` paths are preserved on
+  the manifest entry. (v2 preserved only the rename source path.)
+* Pathnames are rendered through `PathEscape` so unusual
+  characters (tab, newline, CR, backslash, control bytes) do not
+  split a single manifest entry across multiple visual lines.
+* Internal semantic models continue to carry raw paths; only
+  the rendering boundary applies `PathEscape`. `ComputeStats`
+  generated / binary / source / test / doc / config classification
+  still address the on-disk path.
+
+v3 is **not** wire-compatible with v2: the new status letters
+and three new statistics keys appear, and `CHANGESET_STATS` keys
+now appear in a different order. v2 consumers that split the
+section on `=`-and-newline will continue to parse the fields v2
+promised; the v3 additions are silently ignored.
 
 ### Contract Version Lifecycle
 
 ```
-1 → 2 → 3 ...
-↑        ↑
-Stable   Future
-Current
+1 → 2 (frozen) → 3 (current) → 4 ...
 ```
 
-Consumers should:
-1. Check `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION`
-2. Parse fields they recognize
-3. Ignore fields they don't (forward compatibility)
+Consumers should check the version header, parse fields they
+recognise for that version, and ignore fields they do not.
 
 ## Header Fields
 
@@ -92,7 +110,7 @@ mode (`dirty` or `range`) based on working tree state. The header reports the
 ## Example Header
 
 ```
-LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
 LEAMAS_VERSION: 0.2.0
 LEAMAS_COMMIT: abc1234
 LEAMAS_BUILD_TIME: 2026-07-09T10:24:46Z
@@ -123,14 +141,17 @@ The review evidence sections appear in this order:
 
 Stable, sorted list of changed files with Git-style status codes.
 
-**Status codes:**
-- `A` - Added
-- `M` - Modified
-- `D` - Deleted
-- `R` - Renamed (renders as `R  old/path.go -> new/path.go`)
-- `C` - Copied
-- `U` - Unmerged/Conflicted
-- `?` - Untracked
+**Status codes (v3):**
+- `A` - Added (file present in index, absent in HEAD)
+- `M` - Modified (file content differs from HEAD)
+- `D` - Deleted (file present in HEAD, absent in index)
+- `T` - Type changed (regular file ↔ symlink / submodule; file mode differs)
+- `R` - Renamed (renders as `R  old/path.go -> new/path.go`; similarity score is dropped)
+- `C` - Copied (renders as `C  source.go -> copy.go`)
+- `U` - Unmerged / conflicted
+- `?` - Untracked (`ls-files --others`; not from `git diff --name-status`)
+- `X` - Unknown change type
+- `B` - Pairing broken
 
 **Requirements:**
 - Deterministic ordering: lexical by normalized repository-relative path
@@ -150,16 +171,19 @@ A  internal/factory/digest/review_evidence_test.go
 
 Deterministic counts derived from the manifest.
 
-**Key order (stable):**
+**Key order (v3, canonical):**
 ```
 files_changed
 added_files
 modified_files
 deleted_files
+type_changed_files
 renamed_files
 copied_files
-untracked_files
 unmerged_files
+unknown_files
+broken_pair_files
+untracked_files
 binary_files
 generated_files
 test_files
@@ -167,6 +191,11 @@ doc_files
 source_files
 config_files
 ```
+
+v3 inserts `type_changed_files`, `unknown_files`, and
+`broken_pair_files` after the corresponding tracked-status keys,
+and pulls `untracked_files` ahead of the file-classification
+fields.
 
 **File classification rules:**
 
@@ -186,10 +215,13 @@ files_changed=4
 added_files=2
 modified_files=2
 deleted_files=0
+type_changed_files=0
 renamed_files=0
 copied_files=0
-untracked_files=1
 unmerged_files=0
+unknown_files=0
+broken_pair_files=0
+untracked_files=1
 binary_files=0
 generated_files=0
 test_files=1
@@ -315,11 +347,6 @@ Mode: <mode>
 
 ## Future Extensions
 
-Potential future sections not yet implemented:
-
-- SARIF/static-analysis ingestion
-- SBOM/provenance/attestation output
-
 See [digest-public-surface-delta.md](./digest-public-surface-delta.md) for PUBLIC_SURFACE_DELTA specification.
 
 ## File Content Contract
@@ -362,25 +389,12 @@ A digest with incomplete files is worse than no digest, because it creates false
 # Run contract tests
 go test ./internal/factory/digest/...
 
-# Run all digest tests
-go test ./internal/factory/digest/... -v
-
 # Generate a real digest
 go build -o bin/leamas ./cmd/leamas
 ./bin/leamas factory digest --dirty --output /tmp/digest.txt
-head -n 60 /tmp/digest.txt
-
-# Verify new sections
-grep -n "CHANGESET_MANIFEST" /tmp/digest.txt
-grep -n "CHANGESET_STATS" /tmp/digest.txt
-grep -n "REVIEW_MAP" /tmp/digest.txt
-grep -n "RISK_SIGNALS" /tmp/digest.txt
-grep -n "PATCH_HYGIENE" /tmp/digest.txt
 ```
 
 ## Related
 
 - [Digest Documentation](./digest.md)
-- [LLM-Friendliness](./llm-friendliness.md)
-- [Version Metadata](./version.md)
 - [PATCH_HYGIENE Specification](./digest-patch-hygiene.md)

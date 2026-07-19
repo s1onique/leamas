@@ -7,9 +7,32 @@ import (
 	"time"
 )
 
-func TestContractVersion_IsTwo(t *testing.T) {
-	if ContractVersion != 2 {
-		t.Errorf("ContractVersion = %d, want 2", ContractVersion)
+// ContractStatsKeysV3 is the canonical v3 key order emitted by
+// RenderStats. The order is load-bearing for downstream consumers
+// and any reordering constitutes a contract-version bump.
+var ContractStatsKeysV3 = []string{
+	"files_changed",
+	"added_files",
+	"modified_files",
+	"deleted_files",
+	"type_changed_files",
+	"renamed_files",
+	"copied_files",
+	"unmerged_files",
+	"unknown_files",
+	"broken_pair_files",
+	"untracked_files",
+	"binary_files",
+	"generated_files",
+	"test_files",
+	"doc_files",
+	"source_files",
+	"config_files",
+}
+
+func TestContractVersion_IsThree(t *testing.T) {
+	if ContractVersion != 3 {
+		t.Errorf("ContractVersion = %d, want 3", ContractVersion)
 	}
 }
 
@@ -59,14 +82,14 @@ func TestRenderContractHeader_ContractVersionIsInteger(t *testing.T) {
 	}
 	header := RenderContractHeader(info)
 
-	if !strings.Contains(header, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
-		t.Error("header should contain contract version as integer 2")
+	if !strings.Contains(header, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3") {
+		t.Error("header should contain contract version as integer 3")
 	}
 }
 
 func TestRenderContractHeader_UsesProvidedVersion(t *testing.T) {
 	info := HeaderInfo{
-		Version:   "2.0.0",
+		Version:   "3.0.0",
 		Commit:    "test-commit",
 		BuildTime: "2026-01-01T00:00:00Z",
 		Mode:      ModeStaged,
@@ -74,7 +97,7 @@ func TestRenderContractHeader_UsesProvidedVersion(t *testing.T) {
 	}
 	header := RenderContractHeader(info)
 
-	if !strings.Contains(header, "LEAMAS_VERSION: 2.0.0") {
+	if !strings.Contains(header, "LEAMAS_VERSION: 3.0.0") {
 		t.Errorf("header should contain provided version, got: %s", header)
 	}
 	if !strings.Contains(header, "LEAMAS_COMMIT: test-commit") {
@@ -145,7 +168,7 @@ func TestParseContractHeader_ExtractsHeaderAndBody(t *testing.T) {
 
 	parsedHeader, parsedBody := ParseContractHeader(content)
 
-	if !strings.Contains(parsedHeader, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 2") {
+	if !strings.Contains(parsedHeader, "LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3") {
 		t.Error("parsed header should contain contract version")
 	}
 	if !strings.Contains(parsedBody, "# Targeted digest") {
@@ -171,7 +194,7 @@ Some content`
 }
 
 func TestValidateContractHeader_ValidHeader(t *testing.T) {
-	header := `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1
+	header := `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
 LEAMAS_VERSION: dev
 LEAMAS_COMMIT: abc
 LEAMAS_BUILD_TIME: unknown
@@ -186,7 +209,7 @@ DIGEST_CREATED_AT: 2026-01-01T00:00:00Z
 
 func TestValidateContractHeader_WrongFieldOrder(t *testing.T) {
 	header := `LEAMAS_VERSION: dev
-LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
 LEAMAS_COMMIT: abc
 LEAMAS_BUILD_TIME: unknown
 DIGEST_MODE: dirty
@@ -199,7 +222,7 @@ DIGEST_CREATED_AT: 2026-01-01T00:00:00Z
 }
 
 func TestValidateContractHeader_MissingField(t *testing.T) {
-	header := `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 1
+	header := `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
 LEAMAS_VERSION: dev
 LEAMAS_COMMIT: abc
 LEAMAS_BUILD_TIME: unknown
@@ -208,5 +231,74 @@ DIGEST_MODE: dirty
 	err := ValidateContractHeader(header)
 	if err == nil {
 		t.Error("missing field should error")
+	}
+}
+
+// TestRenderStats_V3CanonicalKeyOrder locks the v3 stats-key
+// sequence. The test feeds a fully populated FileStats and parses
+// the rendered section line-by-line, then asserts the keys appear
+// in the exact v3 order. Any reordering will fail this test and is
+// not permitted without bumping the contract version.
+func TestRenderStats_V3CanonicalKeyOrder(t *testing.T) {
+	stats := FileStats{
+		FilesChanged:    5,
+		AddedFiles:      1,
+		ModifiedFiles:   2,
+		DeletedFiles:    0,
+		TypeChangedFiles: 1,
+		RenamedFiles:    1,
+		CopiedFiles:     0,
+		UntrackedFiles:  2,
+		UnmergedFiles:   0,
+		UnknownFiles:    0,
+		BrokenPairFiles: 0,
+		BinaryFiles:     0,
+		GeneratedFiles:  0,
+		TestFiles:       1,
+		DocFiles:        1,
+		SourceFiles:     2,
+		ConfigFiles:     0,
+	}
+	out := RenderStats(stats)
+
+	wantKeys := ContractStatsKeysV3
+	gotKeys := make([]string, 0, len(wantKeys))
+	for _, line := range strings.Split(out, "\n") {
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "## ") || !strings.Contains(line, "=") {
+			continue
+		}
+		gotKeys = append(gotKeys, strings.SplitN(line, "=", 2)[0])
+	}
+
+	if len(gotKeys) != len(wantKeys) {
+		t.Fatalf("rendered stats key count = %d, want %d\nrendered:\n%s",
+			len(gotKeys), len(wantKeys), out)
+	}
+	for i := range wantKeys {
+		if gotKeys[i] != wantKeys[i] {
+			t.Fatalf("stats key order mismatch at index %d: got %q, want %q\nfull order: %#v",
+				i, gotKeys[i], wantKeys[i], gotKeys)
+		}
+	}
+}
+
+// TestRenderStats_V3IncludesNewFields makes sure every v3 stats key
+// appears in the rendered output at least once. If a future
+// regression drops one of the new fields (type_changed_files,
+// unknown_files, broken_pair_files) this test catches it.
+func TestRenderStats_V3IncludesNewFields(t *testing.T) {
+	stats := FileStats{
+		TypeChangedFiles: 1,
+		UnknownFiles:      1,
+		BrokenPairFiles:   1,
+	}
+	out := RenderStats(stats)
+	for _, key := range []string{"type_changed_files", "unknown_files", "broken_pair_files"} {
+		if !strings.Contains(out, key+"=") {
+			t.Errorf("rendered stats missing v3 key %q\nout:\n%s", key, out)
+		}
 	}
 }

@@ -16,36 +16,35 @@ import (
 // should be rendered alongside the manifest entry and are independent
 // of the manifest classification.
 //
-// Paths are written through `PathEscape` so a single manifest entry
-// can never split across visual lines, even if the underlying
-// filename contains a tab, newline, carriage return, backslash, or
-// a control byte. Callers that want the original filename can parse
-// the rendered line back with `ParseEscapedPath`.
+// Paths are preserved verbatim: `ReviewChangedFile.Path` and
+// `OldPath` carry the **raw** repository-relative paths so that
+// filesystem inspection (`ComputeStats` classification, generated /
+// binary detection, review-map construction, diff lookup) still
+// addresses the on-disk path. Renderers that emit the manifest into
+// line-oriented Markdown apply `PathEscape` only at the rendering
+// boundary, never here.
+//
+// OldPath is populated only for renames and copies, only when it
+// differs from Path.
 func BuildManifest(files []ChangedFile) []ReviewChangedFile {
 	result := make([]ReviewChangedFile, 0, len(files))
 
 	for _, f := range files {
 		entry := ReviewChangedFile{
 			Status:  string(f.Kind),
-			Path:    PathEscape(f.Path),
-			OldPath: PathEscape(f.OldPath),
+			Path:    f.Path,
+			OldPath: f.OldPath,
 		}
 		// Renames and copies carry both old and new paths.
-		// The escaped form above produces the canonical printed
-		// path; OldPath is set only when it differs from Path so
-		// the renderer can emit the `R old -> new` form.
-		if f.OldPath != "" && f.OldPath != f.Path {
-			// Keep entry as constructed; entry.OldPath already set.
-		} else {
+		if f.OldPath == "" || f.OldPath == f.Path {
 			entry.OldPath = ""
 		}
 		result = append(result, entry)
 	}
 
-	// Sort by (escaped) path lexicographically. `PathEscape` is a pure
-	// formatter that does not reorder bytes inside a path, so sorting
-	// the escaped strings gives the same order as sorting the raw
-	// paths.
+	// Sort by raw path lexicographically. Sort does not reorder
+	// bytes inside a path, so sorting the raw paths produces the
+	// same order as sorting the escaped paths.
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Path < result[j].Path
 	})
@@ -58,8 +57,9 @@ func BuildManifest(files []ChangedFile) []ReviewChangedFile {
 //
 // The change kind is sourced from the RangeFile's `Status` field,
 // which is already a single-letter Git status set by the structured
-// `--name-status -z` parser. Paths are escaped on render so unusual
-// filenames survive the digest unchanged.
+// `--name-status -z` parser. Paths are preserved verbatim for the
+// same reasons as `BuildManifest` — escaping is a render concern, not
+// a semantic concern.
 func BuildRangeManifest(files []RangeFile) []ReviewChangedFile {
 	var result []ReviewChangedFile
 
@@ -88,12 +88,16 @@ func BuildRangeManifest(files []RangeFile) []ReviewChangedFile {
 
 		entry := ReviewChangedFile{
 			Status:  status,
-			Path:    PathEscape(f.Path),
-			OldPath: PathEscape(f.From),
+			Path:    f.Path,
+			OldPath: f.From,
 		}
-		if status == StatusRenamed && f.From != "" && f.From != f.Path {
-			// OldPath already set above.
-		} else {
+		// Renames AND copies carry both old and new paths; the
+		// manifest renderer emits the `R old -> new` / `C old -> new`
+		// form whenever OldPath is set and differs from Path.
+		if status != StatusRenamed && status != StatusCopied {
+			entry.OldPath = ""
+		}
+		if entry.OldPath == "" || entry.OldPath == entry.Path {
 			entry.OldPath = ""
 		}
 		result = append(result, entry)
@@ -108,9 +112,12 @@ func BuildRangeManifest(files []RangeFile) []ReviewChangedFile {
 
 // RenderManifest renders the CHANGESET_MANIFEST section.
 //
-// Manifest lines are emitted using the canonical escaped path form.
-// Callers that want to recover the original filename must call
-// `ParseEscapedPath` on the printed path.
+// Paths are escaped at the rendering boundary via `PathEscape` so a
+// single manifest entry can never split across visual lines, even
+// if the underlying filename contains a tab, newline, carriage
+// return, backslash, or a control byte. Callers that want the
+// original filename can parse the rendered line back with
+// `ParseEscapedPath`.
 func RenderManifest(manifest []ReviewChangedFile) string {
 	var sb strings.Builder
 	sb.WriteString("## CHANGESET_MANIFEST\n")
@@ -124,14 +131,14 @@ func RenderManifest(manifest []ReviewChangedFile) string {
 		if f.OldPath != "" {
 			sb.WriteString(f.Status)
 			sb.WriteString("  ")
-			sb.WriteString(f.OldPath)
+			sb.WriteString(PathEscape(f.OldPath))
 			sb.WriteString(" -> ")
-			sb.WriteString(f.Path)
+			sb.WriteString(PathEscape(f.Path))
 			sb.WriteString("\n")
 		} else {
 			sb.WriteString(f.Status)
 			sb.WriteString("  ")
-			sb.WriteString(f.Path)
+			sb.WriteString(PathEscape(f.Path))
 			sb.WriteString("\n")
 		}
 	}

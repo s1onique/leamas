@@ -11,6 +11,7 @@ package digest
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -59,11 +60,36 @@ func TestPathEscapeRoundTrip(t *testing.T) {
 	}
 }
 
+// digestManifestLines returns the rendered manifest lines exactly as
+// they appear in the digest, in order. Paths are *escaped* in the
+// output (PathEscape form) because the renderer runs only at the
+// rendering boundary.
+func escapedManifestLines(digestText string) []string {
+	idx := strings.Index(digestText, "## CHANGESET_MANIFEST")
+	if idx == -1 {
+		return nil
+	}
+	rest := digestText[idx+len("## CHANGESET_MANIFEST"):]
+	end := strings.Index(rest, "## CHANGESET_STATS")
+	if end != -1 {
+		rest = rest[:end]
+	}
+	var out []string
+	for _, line := range strings.Split(rest, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		out = append(out, strings.TrimSpace(line))
+	}
+	return out
+}
+
 // TestStagedStatus_NewlinePathInManifest renders a digest for a
 // staged file whose name contains an embedded newline. The manifest
-// must carry the escaped form on a single line, and the digester
-// must not crash. After escaping, the literal newline is gone and
-// the entry reads as `A  weird\\nfile\\nname.go`.
+// must carry **exactly one** escaped entry on a single visual line;
+// literals of the newline-bearing path must never appear in the
+// rendered output. The escaped form is at the canonical rendering
+// boundary, the raw path is preserved in ComputeStats / diff lookup.
 func TestStagedStatus_NewlinePathInManifest(t *testing.T) {
 	dir := t.TempDir()
 	initGit(t, dir)
@@ -96,25 +122,50 @@ func TestStagedStatus_NewlinePathInManifest(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	escaped := PathEscape(weird)
-	want := "M  " + escaped
-	if !strings.Contains(out, want) {
-		t.Fatalf("expected escaped manifest line %q in digest, full:\n%s",
-			want, manifestSection(out))
+	got := escapedManifestLines(out)
+	want := []string{"M  " + PathEscape(weird)}
+	if !slices.Equal(got, want) {
+		t.Fatalf("staged manifest mismatch\nwant: %#v\ngot:  %#v", want, got)
 	}
-	// The escaped form must be on a single manifest line, not split
-	// across lines.
-	lines := strings.Split(manifestSection(out), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, weird) {
-			t.Fatalf("unescaped newline-bearing path slipped through: %q", line)
+
+	// The escaping contract applies to the rendered sections only
+	// (manifest, changed-files, diff). Other documentation sections
+	// such as the redaction policy legitimately list file patterns
+	// with their original bytes.
+	for _, sect := range []string{"## Changed files", "## Diffs"} {
+		idx := strings.Index(out, sect)
+		if idx == -1 {
+			continue
 		}
+		rest := out[idx:]
+		end := strings.Index(rest, "\n## ")
+		if end == -1 {
+			end = len(rest)
+		}
+		body := rest[:end]
+		if strings.Contains(body, weird) {
+			t.Fatalf("raw path slipped through rendered section %q:\n%s", sect, body)
+		}
+	}
+	diffIdx := strings.Index(out, "## Diffs")
+	if diffIdx == -1 {
+		t.Fatalf("missing ## Diffs section; out:\n%s", out)
+	}
+	diffBody := out[diffIdx:]
+	diffHeadings := 0
+	for _, line := range strings.Split(diffBody, "\n") {
+		if strings.HasPrefix(line, "=== ") && strings.HasSuffix(line, " ===") {
+			diffHeadings++
+		}
+	}
+	if diffHeadings != 1 {
+		t.Fatalf("expected exactly one diff heading, got %d in:\n%s", diffHeadings, diffBody)
 	}
 }
 
 // TestRangeStatus_NewlinePathInManifest mirrors the staged
 // integration test for range mode. A commit introducing a path with
-// an embedded newline must render the escaped form as a single
+// an embedded newline must render the escaped form as exactly one
 // manifest entry.
 func TestRangeStatus_NewlinePathInManifest(t *testing.T) {
 	dir := t.TempDir()
@@ -148,10 +199,28 @@ func TestRangeStatus_NewlinePathInManifest(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	escaped := PathEscape(weird)
-	want := "M  " + escaped
-	if !strings.Contains(out, want) {
-		t.Fatalf("expected escaped range manifest line %q, full:\n%s",
-			want, manifestSection(out))
+	got := escapedManifestLines(out)
+	want := []string{"M  " + PathEscape(weird)}
+	if !slices.Equal(got, want) {
+		t.Fatalf("range manifest mismatch\nwant: %#v\ngot:  %#v", want, got)
+	}
+	// The escaping contract applies to the rendered sections only
+	// (manifest, changed-files, diff). Other documentation sections
+	// such as the redaction policy legitimately list file
+	// patterns with their original bytes.
+	for _, sect := range []string{"## Changed files", "## Diffs"} {
+		idx := strings.Index(out, sect)
+		if idx == -1 {
+			continue
+		}
+		rest := out[idx:]
+		end := strings.Index(rest, "\n## ")
+		if end == -1 {
+			end = len(rest)
+		}
+		body := rest[:end]
+		if strings.Contains(body, weird) {
+			t.Fatalf("raw path slipped through rendered section %q:\n%s", sect, body)
+		}
 	}
 }

@@ -8,10 +8,12 @@ import (
 
 // ComputeStats computes file statistics from a manifest.
 //
-// Each manifest entry contributes exactly one bucket to `FilesChanged`.
-// Buckets match the Git status letters: A/M/D/T/R/C/U/X/B/?.
-// Type changes (`T`) and unknown/broken-pair (`X`/`B`) are reported
-// in their own fields so reviewers can see them at a glance.
+// Each manifest entry contributes exactly one bucket to
+// `FilesChanged`. Buckets match the Git status letters. The
+// classification helpers (`isGeneratedFileAtPath`,
+// `isBinaryFileAtPath`, `classifyFile`) operate on the raw path
+// stored in `ReviewChangedFile.Path`; semantic identity is
+// preserved verbatim and `PathEscape` is never applied here.
 func ComputeStats(manifest []ReviewChangedFile, repoRoot string) FileStats {
 	var stats FileStats
 
@@ -65,9 +67,18 @@ func ComputeStats(manifest []ReviewChangedFile, repoRoot string) FileStats {
 }
 
 // RenderStats renders the CHANGESET_STATS section.
+//
+// Key order is the canonical v3 layout documented in
+// `docs/factory/digest-contract.md`. v3 inserts the three new
+// status-tracked fields after the corresponding existing keys and
+// pulls `untracked_files` ahead of the per-file classification
+// fields. The order is load-bearing for downstream consumers; do
+// not reorder without bumping the contract version.
 func RenderStats(stats FileStats) string {
 	var sb strings.Builder
 	sb.WriteString("## CHANGESET_STATS\n")
+
+	// Tracked-status keys, alphabetical by Git letter.
 	sb.WriteString("files_changed=")
 	sb.WriteString(intToString(stats.FilesChanged))
 	sb.WriteString("\nadded_files=")
@@ -82,14 +93,16 @@ func RenderStats(stats FileStats) string {
 	sb.WriteString(intToString(stats.RenamedFiles))
 	sb.WriteString("\ncopied_files=")
 	sb.WriteString(intToString(stats.CopiedFiles))
-	sb.WriteString("\nuntracked_files=")
-	sb.WriteString(intToString(stats.UntrackedFiles))
 	sb.WriteString("\nunmerged_files=")
 	sb.WriteString(intToString(stats.UnmergedFiles))
 	sb.WriteString("\nunknown_files=")
 	sb.WriteString(intToString(stats.UnknownFiles))
 	sb.WriteString("\nbroken_pair_files=")
 	sb.WriteString(intToString(stats.BrokenPairFiles))
+	sb.WriteString("\nuntracked_files=")
+	sb.WriteString(intToString(stats.UntrackedFiles))
+
+	// Per-file classification buckets.
 	sb.WriteString("\nbinary_files=")
 	sb.WriteString(intToString(stats.BinaryFiles))
 	sb.WriteString("\ngenerated_files=")

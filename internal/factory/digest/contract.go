@@ -7,10 +7,28 @@ import (
 	"strings"
 )
 
-// ContractVersion is the current digest contract version.
-// This version governs the header format and field names.
-// Breaking changes to the digest output shape require a version bump.
-const ContractVersion = 2
+// ContractVersion is the current digest contract version. This
+// version governs the rendered digest schema:
+//
+//   - The header carries the LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION
+//     integer;
+//   - the CHANGESET_MANIFEST status alphabet (A/M/D/T/R/C/U/?/X/B);
+//   - the CHANGESET_STATS key order (see `RenderStats` and the
+//     canonical v3 layout documented in docs/factory/digest-contract.md);
+//   - the RenderManifest filename escaping (PathEscape form).
+//
+// Versions are monotonic. v2 was frozen on a tighter subset of
+// status letters. v3 introduces the full Git status alphabet,
+// rename/copy old+new path preservation, controlled filename
+// escaping at render boundaries, and three new statistics fields
+// (type_changed_files, unknown_files, broken_pair_files).
+//
+// v3 is **not** wire-compatible with v2: digest consumers must
+// update their parsers. v2 consumers that read the digest will
+// continue to recognise all fields the v2 contract promised; the
+// new v3 fields appear after `unmerged_files=` and are ignored by
+// a strict v2 parser that splits on `=`-and-newline boundaries.
+const ContractVersion = 3
 
 // Contract header field names - these must remain stable.
 const (

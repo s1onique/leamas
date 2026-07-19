@@ -228,14 +228,5 @@ func TestRangeMode_TypeChange(t *testing.T) {
 	// rename + mode, or a pure type change. Both render with the
 	// leading "T  " status (or "T  " in a rename pair) and contain
 	// the destination path.
-	got := rangeLines(out)
-	if len(got) == 0 {
-		t.Fatal("expected at least one manifest line for the type change")
-	}
-	if !strings.HasPrefix(got[0], "T ") {
-		t.Fatalf("expected leading 'T ' status, got %#v", got)
-	}
-	if !strings.Contains(got[0], "linked.go") {
-		t.Fatalf("expected 'linked.go' in manifest line, got %#v", got)
-	}
+	assertManifestLinesExact(t, rangeLines(out), []string{"T  linked.go"})
 }

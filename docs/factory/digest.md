@@ -122,10 +122,10 @@ The digest passes the full set of Git `--name-status -z` status
 letters through verbatim: `A` (added), `M` (modified), `D`
 (deleted), `T` (type change, e.g. regular file to symlink or
 submodule), `R` (renamed), `C` (copied), `U` (unmerged),
-`X` (unknown / pair broken), `B` (pair broken on the other side),
-plus `?` for untracked files (sourced from `ls-files --others`,
-not from Git's diff). Rename/copy tokens like `R100`/`C075` are
-normalised to `R`/`C` (the similarity score is dropped).
+`X` (unknown change type), `B` (pairing broken), plus `?` for
+untracked files (sourced from `ls-files --others`, not from Git's
+diff). Rename/copy tokens like `R100`/`C075` are normalised to
+`R`/`C` (the similarity score is dropped).
 
 `CHANGESET_STATS` tracks each kind in its own field
 (`type_changed_files`, `unknown_files`, `broken_pair_files`,
