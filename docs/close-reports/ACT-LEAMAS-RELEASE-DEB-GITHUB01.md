@@ -12,17 +12,27 @@ installed on the development machine with clean removal.
 implementation commit: ab041dc611b276c38bc27d8d38c8159f84729c50
 correction commit 1:  3ca3a96 ACT-LEAMAS-RELEASE-DEB-GITHUB01 record blocked publication
 correction commit 2:  b49af0a ACT-LEAMAS-RELEASE-DEB-GITHUB01 correct release workflow for v0.1.0
-release tag: v0.1.0
-remote tag target: ab041dc611b276c38bc27d8d38c8159f84729c50
+close report commit:  a50fef5 ACT-LEAMAS-RELEASE-DEB-GITHUB01 close report
+release tag:          v0.1.0
+remote tag target:    ab041dc611b276c38bc27d8d38c8159f84729c50
 ```
 
-The implementation commit and the two correction commits were pushed to
-`main` before any tag was created. The annotated `v0.1.0` tag was created
-only after checking that no remote `v0.1.0` tag existed and was pushed
-without moving or recreating an existing tag. The original push of `main`
-reported that the repository's required `Factory Gates` status was expected
-and the remote bypassed that rule; this is recorded as observed evidence,
-not as a passing status check.
+The implementation commit `ab041dc` was pushed to `main`, after which the
+annotated `v0.1.0` tag was created and pushed. That original tag-triggered
+workflow failed.
+
+The blocked-publication evidence commit `3ca3a96` and workflow-correction
+commit `b49af0a` were subsequently pushed to `main`. Neither correction
+moved, deleted, or recreated `v0.1.0`.
+
+The successful workflow-dispatch run executed the corrected workflow from
+`b49af0a`, fetched and verified the existing annotated `v0.1.0` tag, checked
+out its peeled commit `ab041dc611b276c38bc27d8d38c8159f84729c50`, and built
+the published package from that immutable source.
+
+The original push of `main` reported that the repository's required
+`Factory Gates` status was expected and the remote bypassed that rule;
+this is recorded as observed evidence, not as a passing status check.
 
 ## Files changed
 
@@ -101,12 +111,12 @@ correct canonical identifier.
   `refs/tags/<release_tag>` so the released binary is built only from the
   immutable tag;
 - split the previous single `Build and verify Debian release` step into
-  thirteen named steps (`Release input preflight`, `Build canonical release
-  binary`, `Verify release stamp`, `Build Debian package`, `Inspect Debian
-  metadata`, `Verify extracted binary`, `Run Lintian`, `Generate
+  individually named steps for `Release input preflight`, `Build canonical
+  release binary`, `Verify release stamp`, `Build Debian package`, `Inspect
+  Debian metadata`, `Verify extracted binary`, `Run Lintian`, `Generate
   checksums`, `Verify checksums`, `Install package`, `Execute installed
-  package`, `Remove package`, `Refuse an existing GitHub Release`, `Publish
-  GitHub Release`);
+  package`, `Remove package`, `Refuse an existing GitHub Release`, and
+  `Publish GitHub Release`;
 - print, before packaging: `go version`, `go env GOOS GOARCH GOTOOLCHAIN
   GOPATH GOMODCACHE`, `make --version`, `dpkg-deb --version`, `lintian
   --version`, `file --version`, `git status --short`, `git rev-parse HEAD`,
@@ -137,8 +147,10 @@ inputs: release_tag=v0.1.0
 conclusion: success
 ```
 
-The run reported all thirteen named steps successful and published the
-release. Hosted release evidence:
+All workflow steps completed successfully, including tag preflight, canonical
+build, stamp verification, Debian packaging, metadata and extracted binary
+verification, Lintian, checksums, installation, execution, removal,
+release-conflict refusal, and publication. Hosted release evidence:
 
 ```text
 Release URL:    https://github.com/s1onique/leamas/releases/tag/v0.1.0
