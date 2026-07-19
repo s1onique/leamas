@@ -7,7 +7,15 @@ import (
 	"strings"
 )
 
-// RenderChangedFilesAndDiffs renders the Changed files list and diff content for dirty/staged modes.
+// RenderChangedFilesAndDiffs renders the Changed files list and diff
+// content for dirty/staged modes.
+//
+// Each entry now carries an explicit Git kind (`A` / `M` / `D` /
+// `R` / `C` / `U` / `?`), recorded on the ChangedFile by the
+// collectors. The presence flags remain independent metadata so the
+// staged and unstaged diffs can be attached whether or not the path
+// has a combined kind (e.g. a staged rename + worktree edit still
+// renders the rename kind with both the staged and unstaged patches).
 func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 	var sb strings.Builder
 
@@ -16,6 +24,10 @@ func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 		sb.WriteString("No changed files found.\n")
 	} else {
 		for _, f := range files {
+			kindStr := string(f.Kind)
+			if f.Untracked {
+				kindStr = StatusUntracked
+			}
 			if f.Tracked {
 				stagedStr := "no"
 				if f.StagedPresent {
@@ -25,8 +37,13 @@ func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 				if f.UnstagedPresent {
 					unstagedStr = "yes"
 				}
-				sb.WriteString(fmt.Sprintf("%s  [tracked, staged present: %s, unstaged present: %s]\n",
-					f.Path, stagedStr, unstagedStr))
+				if f.OldPath != "" && f.OldPath != f.Path {
+					sb.WriteString(fmt.Sprintf("%s  [tracked, kind: %s, staged present: %s, unstaged present: %s, old path: %s]\n",
+						f.Path, kindStr, stagedStr, unstagedStr, f.OldPath))
+				} else {
+					sb.WriteString(fmt.Sprintf("%s  [tracked, kind: %s, staged present: %s, unstaged present: %s]\n",
+						f.Path, kindStr, stagedStr, unstagedStr))
+				}
 			} else {
 				sb.WriteString(fmt.Sprintf("%s  [untracked, staged present: no, unstaged present: yes]\n",
 					f.Path))

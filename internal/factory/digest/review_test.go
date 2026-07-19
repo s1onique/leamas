@@ -27,16 +27,23 @@ func TestBuildManifest_DeterministicOrder(t *testing.T) {
 	}
 }
 
-func TestBuildManifest_StatusDetection(t *testing.T) {
+// TestBuildManifest_UsesExplicitKind verifies that BuildManifest
+// propagates the change kind verbatim from ChangedFile.Kind. The
+// presence flags no longer drive the classification; the collectors
+// populate `Kind` directly from authoritative Git output.
+func TestBuildManifest_UsesExplicitKind(t *testing.T) {
 	tests := []struct {
 		name       string
 		file       ChangedFile
 		wantStatus string
 	}{
-		{"untracked", ChangedFile{Path: "untracked.txt", Untracked: true}, StatusUntracked},
-		{"staged only", ChangedFile{Path: "staged.txt", Tracked: true, StagedPresent: true, UnstagedPresent: false}, StatusAdded},
-		{"unstaged only", ChangedFile{Path: "modified.txt", Tracked: true, StagedPresent: false, UnstagedPresent: true}, StatusModified},
-		{"both staged and unstaged", ChangedFile{Path: "both.txt", Tracked: true, StagedPresent: true, UnstagedPresent: true}, StatusModified},
+		{"untracked", ChangedFile{Path: "untracked.txt", Kind: KindUntracked, Untracked: true}, StatusUntracked},
+		{"added", ChangedFile{Path: "staged.txt", Kind: KindAdded, Tracked: true, StagedPresent: true}, StatusAdded},
+		{"modified", ChangedFile{Path: "modified.txt", Kind: KindModified, Tracked: true, StagedPresent: true, UnstagedPresent: true}, StatusModified},
+		{"deleted", ChangedFile{Path: "deleted.txt", Kind: KindDeleted, Tracked: true, StagedPresent: true}, StatusDeleted},
+		{"renamed", ChangedFile{Path: "renamed.go", OldPath: "old_name.go", Kind: KindRenamed, Tracked: true, StagedPresent: true}, StatusRenamed},
+		{"copied", ChangedFile{Path: "copied.go", OldPath: "src.go", Kind: KindCopied, Tracked: true, StagedPresent: true}, StatusCopied},
+		{"unmerged", ChangedFile{Path: "merged.go", Kind: KindUnmerged, Tracked: true}, StatusUnmerged},
 	}
 
 	for _, tt := range tests {
@@ -49,6 +56,25 @@ func TestBuildManifest_StatusDetection(t *testing.T) {
 				t.Errorf("status = %q, want %q", manifest[0].Status, tt.wantStatus)
 			}
 		})
+	}
+}
+
+// TestBuildManifest_NoBooleanInference locks the contract: a tracked
+// file with presence flags but no Kind must NOT be classified as `A`
+// or `M`. This is the regression guard for the original defect.
+func TestBuildManifest_NoBooleanInference(t *testing.T) {
+	files := []ChangedFile{
+		{Path: "ghost.go", Tracked: true, StagedPresent: true, UnstagedPresent: false},
+	}
+	manifest := BuildManifest(files)
+	if len(manifest) != 1 {
+		t.Fatalf("expected 1 file, got %d", len(manifest))
+	}
+	if manifest[0].Status == StatusAdded || manifest[0].Status == StatusModified {
+		t.Errorf("manifest must not infer A/M from presence; got %q", manifest[0].Status)
+	}
+	if manifest[0].Status != "" {
+		t.Errorf("manifest should reflect missing Kind; got %q, want empty", manifest[0].Status)
 	}
 }
 

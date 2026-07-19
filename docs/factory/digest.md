@@ -91,6 +91,60 @@ Digest output should be written to `build/` or another ignored artifact director
 
 **Warning**: Do not commit generated digests to version control.
 
+## Status classification
+
+`CHANGESET_MANIFEST` and `CHANGESET_STATS` always reflect Git's
+authoritative status for each path. The digest does not infer the
+classification from boolean presence flags.
+
+### Staged mode (`--staged`)
+
+For staged changes the manifest status is sourced directly from
+`git diff --cached --name-status -z --find-renames --find-copies
+<base> --` where `<base>` is `HEAD` for normal repositories and the
+empty-tree SHA otherwise. The result therefore agrees path-for-path
+with `git diff --cached --name-status HEAD --` in normal
+repositories.
+
+### Dirty mode (`--dirty`)
+
+For dirty mode the tracked-path status is the *net* change relative
+to `HEAD`, obtained from
+`git diff --name-status -z --find-renames --find-copies HEAD --`.
+Untracked files come from `git ls-files --others`. A staged rename
+followed by an unstaged edit at the destination still renders as
+`R old -> new` (the net change), not `M`, because the underlying
+file is the renamed destination.
+
+### Status tokens
+
+`A`/`M`/`D`/`U`/`?` are carried verbatim. Rename/copy tokens like
+`R100`/`C075` are normalised to `R`/`C` (the score is dropped).
+
+### NUL-safe path handling
+
+All Git output is parsed from NUL-delimited streams
+(`git diff --name-status -z`, `git ls-files --others -z`,
+`git diff --name-only -z`). Paths containing spaces, tabs,
+newlines, Unicode or leading dashes are preserved.
+
+### Similarity threshold
+
+Rename/copy detection uses a similarity threshold of `30%`. Git's
+default of `50%` is too strict for the common "rename then a small
+edit at the destination" case which would otherwise degrade to an
+`A` + `D` pair. Lowering the threshold to 30% keeps that case
+classified as `R` consistently with reviewer expectations.
+
+### Staged and unstaged presence
+
+The staged and unstaged presence flags on each file are populated
+separately from `git diff --cached --name-only` and
+`git diff --name-only`. They are independent of the manifest status
+and describe whether staged and/or unstaged patches exist for the
+same path. The diff renderer uses them to attach the right patches
+even when the net change is a single letter.
+
 ## Contract Header
 
 Every digest begins with a versioned contract header that provides metadata about the digest producer and format. See [Digest Contract](./digest-contract.md) for full documentation.

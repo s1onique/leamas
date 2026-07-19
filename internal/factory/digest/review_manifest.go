@@ -6,28 +6,34 @@ import (
 	"strings"
 )
 
-// BuildManifest builds a deterministic manifest of changed files for dirty/staged modes.
+// BuildManifest builds a deterministic manifest of changed files for
+// dirty/staged modes.
+//
+// The change kind comes directly from `ChangedFile.Kind`, which was
+// populated from Git's authoritative `--name-status -z` output. This
+// function never infers `A`/`M`/`D`/`R`/`C` from the boolean presence
+// flags; those flags describe whether staged and/or unstaged diffs
+// should be rendered alongside the manifest entry and are independent
+// of the manifest classification.
+//
+// If the kind is missing (zero value) the manifest still renders an
+// empty status slot so the evidence hashes flag any regression where
+// the caller forgets to populate it.
 func BuildManifest(files []ChangedFile) []ReviewChangedFile {
-	var result []ReviewChangedFile
+	result := make([]ReviewChangedFile, 0, len(files))
 
 	for _, f := range files {
-		status := StatusModified
-		if f.Untracked {
-			status = StatusUntracked
-		} else if f.Tracked {
-			if f.StagedPresent && !f.UnstagedPresent {
-				status = StatusAdded
-			} else if !f.StagedPresent && f.UnstagedPresent {
-				status = StatusModified
-			} else if f.StagedPresent && f.UnstagedPresent {
-				status = StatusModified
-			}
-		}
-
-		result = append(result, ReviewChangedFile{
-			Status: status,
+		entry := ReviewChangedFile{
+			Status: string(f.Kind),
 			Path:   f.Path,
-		})
+		}
+		// Renames and copies carry both old and new paths. Preserve
+		// the old path so the renderer can emit the canonical
+		// `R old -> new` / `C old -> new` form.
+		if f.OldPath != "" && f.OldPath != f.Path {
+			entry.OldPath = f.OldPath
+		}
+		result = append(result, entry)
 	}
 
 	// Sort by path lexicographically
