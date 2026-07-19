@@ -141,8 +141,9 @@ func TestDecodeV2ExitCodeNullDistinct(t *testing.T) {
 	if v2.Checks[0].Extras.ExitCode == nil {
 		t.Fatal("expected integer zero to remain non-nil")
 	}
-	if *v2.Checks[0].Extras.ExitCode != 0 {
-		t.Fatalf("integer zero corrupted to %d", *v2.Checks[0].Extras.ExitCode)
+	value, ok := v2.Checks[0].Extras.ExitCode.Int64()
+	if !ok || value != 0 {
+		t.Fatalf("integer zero corrupted: value=%d representable=%v", value, ok)
 	}
 	if v2.Checks[1].Extras.ExitCode != nil {
 		t.Fatalf("expected null exit_code to remain nil")

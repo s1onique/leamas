@@ -88,8 +88,9 @@ bounded read
 | Schema leaf | translation | every frozen structured row | exact code, path, fanout, and values | schema invoked; wire uninvoked |
 | Impossible version leaf | integration drift | post-dispatch required/type/const failure | `GS_INTERNAL` plus operational `Err` | wire uninvoked |
 | Schema/wire disagreement | integration drift | injected non-validation or strict-decode error | `GS_INTERNAL` plus wrapped `Err` | trace records invocation |
+| Unbounded integer | schema/wire width | every schema-valid evidence integer | exact `WireInteger` spelling | no `int64` overflow |
 | Valid v1/v2 | happy path | every valid fixture | sealed `Document` | selected schema and wire invoked |
-| Hostile nesting | panic safety | deep containers or wrapper tree | deterministic diagnostic | no panic |
+| Hostile nesting | panic safety | deepest accepted object/array input or wrapper tree | deterministic diagnostic | no recursive scan or panic |
 
 ### RED evidence
 
@@ -103,6 +104,12 @@ bounded read
   state, keyword identity used raw suffixes, and malformed roots could panic.
 - The review findings are additional RED evidence for `More()` misuse,
   missing root-wrapper validation, and incorrect lexical accounting.
+- The P0 wire-integer matrix then failed for `int64 max + 1`, a 512-digit
+  integer, and `int64 min - 1`: selected-schema validation passed, while strict
+  decoding returned integer-overflow errors and `GS_INTERNAL`. Direct
+  conversion tests also failed to compile because `WireInteger` did not exist.
+- Review of `walkForDuplicates` established the second P0 structurally: every
+  untrusted nested value added a recursive Go call with no explicit safe bound.
 
 ### GREEN evidence
 
@@ -116,12 +123,18 @@ go test -run='^$' -bench='BenchmarkDecode(V1Minimal|V2Minimal|V2Full)$' \
   -benchtime=1x -count=1 ./internal/gatesummary
 ```
 
-Repository-wide verification and Git closure remain required before status
-can change from `IN PROGRESS`.
+The refreshed focused suite, race suite, package vet, and benchmark smoke pass.
+Repository checks were also re-run; retained unrelated baseline failures are
+recorded exactly in the close report. Git closure remains required before
+status can change from `IN PROGRESS`.
 
 ### Exceptions
 
-None.
+The explicit-stack requirement cannot be proven by an ordinary no-panic test
+against Go's growable goroutine stack: the deepest accepted inputs completed
+under the old recursive scanner. The review finding is structural RED; the new
+full-`Decode` deepest-object/deepest-array test is regression evidence for the
+observable deterministic result, and source review confirms recursion is gone.
 
 ## Acceptance Criteria
 
@@ -143,7 +156,11 @@ None.
       impossible version, empty root, hostile nesting, and benchmarks have
       direct evidence.
 - [x] `jsonschema/v6` is a direct dependency and module metadata is tidy.
-- [ ] Required repository verification is complete with honest results.
+- [x] Every unbounded numeric evidence field preserves `int64` boundaries,
+      values beyond both boundaries where permitted, and a 512-digit integer.
+- [x] Duplicate-key scanning uses an explicit frame stack, and full `Decode`
+      rejects the deepest syntax-accepted object and array inputs without panic.
+- [x] Required repository verification is complete with honest results.
 - [ ] The full implementation changeset has been staged and reviewed through
       a staged Factory digest.
 - [ ] The implementation has a forward commit.
@@ -171,11 +188,12 @@ go run ./cmd/leamas factory digest --staged --output build/staged-digest.txt
 
 ## Reviewer Focus
 
-Review presence-vs-null handling, complete consumption of version containers,
+Review presence-vs-null handling, exact non-narrowing integer preservation,
+complete consumption of version containers, iterative duplicate scanning,
 EOF classification, exact schema keyword identity, root-wrapper handling,
 operational `Result` invariants, and proof that rejected versions cannot invoke
-schema or wire decoding. Also confirm that no semantic normalization has
-entered this ACT.
+schema or wire decoding. Also confirm that no semantic normalization entered
+this ACT.
 
 ## Close Report Stub
 

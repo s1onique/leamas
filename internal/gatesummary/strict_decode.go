@@ -21,12 +21,11 @@ type strictDecodeResult struct {
 //   - exactly one top-level value
 //   - EOF after the document
 //
-// The Go decoder cannot speak UseNumber when DisallowUnknownFields is
-// used because the wire types declare plain int fields. We split the
-// concerns: the schema has already validated the document, so we
-// decode into the typed wire struct under strict-mode JSON semantics.
+// WireInteger fields preserve exact numeric spellings while the selected
+// schema remains authoritative for integer and range constraints.
 func decodeStrict(data []byte, version Version) (strictDecodeResult, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
 	dec.DisallowUnknownFields()
 	switch version {
 	case Version1:
