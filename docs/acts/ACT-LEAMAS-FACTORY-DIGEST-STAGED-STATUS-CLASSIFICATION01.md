@@ -8,11 +8,22 @@ exactly with Git's authoritative status for each path.
 
 ## Status
 
-**PARTIAL — CORRECTION01 REQUIRED.** The initial implementation
-made the manifest agree with `git diff --cached --name-status`
-at the lowered 30% similarity threshold and reproduced the original
-four-added/one-modified fix. A reviewer pass surfaced six P1/P2
-contract defects:
+**PARTIAL — CORRECTION01 + CORRECTION02 REQUIRED.** The
+initial implementation made the manifest agree with
+`git diff --cached --name-status` at the lowered 30% similarity
+threshold and reproduced the original four-added/one-modified fix.
+A first reviewer pass surfaced six P1/P2 contract defects, addressed
+by
+[`CORRECTION01`](./ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION01.md)
+(full Git status alphabet, exact-equality range assertions, path
+escaping, helper-contract alignment, oracle wording). A second
+reviewer pass surfaced an architectural regression — the contract
+version was not bumped, paths were escaped too early, and the
+self-hosting proof used a stale binary — addressed by
+[`CORRECTION02`](./ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION02.md)
+(bump to v3, raw paths in semantic models, range copy preserves
+OldPath, self-hosting built from current commit). The original
+six P1/P2 defects are still addressed:
 
 1. Valid Git `T` (type-change), `X`, and `B` records were
    silently mapped to `M`.
