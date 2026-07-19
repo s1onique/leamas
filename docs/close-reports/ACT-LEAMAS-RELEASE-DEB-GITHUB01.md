@@ -2,11 +2,27 @@
 
 ## Status
 
-PARTIAL — implementation, local Debian verification, and the corrected
-release workflow are committed, but the tag-triggered run on `v0.1.0` still
-failed before publication. The original failure is recorded verbatim and
-diagnosed as a runner/toolchain-only defect that was not caused by the
-sources under the `v0.1.0` tag.
+CLOSED — the corrected release workflow published `Leamas v0.1.0` to GitHub
+Releases; the hosted assets were independently downloaded, verified, and
+installed on the development machine with clean removal.
+
+## Commit and tag evidence
+
+```text
+implementation commit: ab041dc611b276c38bc27d8d38c8159f84729c50
+correction commit 1:  3ca3a96 ACT-LEAMAS-RELEASE-DEB-GITHUB01 record blocked publication
+correction commit 2:  b49af0a ACT-LEAMAS-RELEASE-DEB-GITHUB01 correct release workflow for v0.1.0
+release tag: v0.1.0
+remote tag target: ab041dc611b276c38bc27d8d38c8159f84729c50
+```
+
+The implementation commit and the two correction commits were pushed to
+`main` before any tag was created. The annotated `v0.1.0` tag was created
+only after checking that no remote `v0.1.0` tag existed and was pushed
+without moving or recreating an existing tag. The original push of `main`
+reported that the repository's required `Factory Gates` status was expected
+and the remote bypassed that rule; this is recorded as observed evidence,
+not as a passing status check.
 
 ## Files changed
 
@@ -27,29 +43,10 @@ sources under the `v0.1.0` tag.
 - `docs/acts/ACT-LEAMAS-RELEASE-DEB-GITHUB01.md` — executable ACT contract.
 - `README.md` and `docs/README.md` — current status and documentation index.
 
-## Commit and tag evidence
-
-```text
-implementation commit: ab041dc611b276c38bc27d8d38c8159f84729c50
-correction commit:     3ca3a96 ACT-LEAMAS-RELEASE-DEB-GITHUB01 record blocked publication
-release tag: v0.1.0
-remote tag target: ab041dc611b276c38bc27d8d38c8159f84729c50
-```
-
-The implementation commit and the correction close-report commit were
-pushed to `main` before any tag was created. The annotated `v0.1.0` tag was
-created only after checking that no remote `v0.1.0` tag existed, and was
-pushed without moving or recreating an existing tag. The original push of
-`main` reported that the repository's required `Factory Gates` status was
-expected and the remote bypassed that rule; this is recorded as observed
-evidence, not as a passing status check.
-
 ## Original failure evidence (verbatim)
 
-The failed job `88143032139` is the only job in run `29668447753` and was
-saved to `.factory/release-deb-run-29668447753-failed.log` and
-`.factory/release-deb-run-29668447753.json`. The literal failing command
-output (extracted from the preserved log) is:
+The failed job `88143032139` is the only job in run `29668447753`. The
+literal failing command output extracted from the preserved log is:
 
 ```text
 ##[group]Run make release-deb VERSION="$VERSION" GOOS=linux GOARCH=amd64
@@ -71,25 +68,30 @@ make: *** [packaging/deb.mk:45: release-deb] Error 2
 ##[error]Process completed with exit code 2.
 ```
 
+The full logs are available through the GitHub Actions API for run
+`29668447753` and job `88143032139`. The workflow was not rerun against
+the original tag; instead a corrected, dispatch-triggered run was used.
+
 ## Root cause classification
 
-The run used `GOTOOLCHAIN=local` (because the workflow set
-`actions/setup-go` with `go-version-file: go.mod` and no `GOTOOLCHAIN=auto`
-override). The Go toolchain installed by `actions/setup-go` was the local
-`1.25.x` declared by `go.mod`, but the pinned nFPM `v2.47.0` requires
-`go >= 1.26.4` to build. The Make target then failed with exit status 2
-before any package, Lintian, installation, or publication step ran.
+The first release workflow used `GOTOOLCHAIN=local` (because
+`actions/setup-go` was configured with `go-version-file: go.mod` and no
+`GOTOOLCHAIN=auto` override). The Go toolchain installed by
+`actions/setup-go` was the local `1.25.x` declared by `go.mod`, but the
+pinned nFPM `v2.47.0` requires `go >= 1.26.4` to build. The Make target
+then failed with exit status 2 before any package, Lintian, installation,
+or publication step ran.
 
 This is a runner/toolchain-only defect. The `v0.1.0` tagged sources, the
-`packaging/nfpm.yaml`, the pinned `nFPM v2.47.0`, the package metadata, and
-the local final package SHA-256
+`packaging/nfpm.yaml`, the pinned `nFPM v2.47.0`, the package metadata,
+and the original local final package SHA-256
 `8a13180195d3426d3977626ce53fae52b723d43ea68bf445bd64bc04d0a04c58` are
-unaffected. The action's `v0.1.0` assets must therefore remain the canonical
-ones; no new tag is required.
+unaffected. No new tag was required; the immutable `v0.1.0` tag is the
+correct canonical identifier.
 
 ## Forward correction
 
-`.github/workflows/release-deb.yml` was rewritten to:
+`.github/workflows/release-deb.yml` was rewritten in commit `b49af0a` to:
 
 - accept a guarded `workflow_dispatch` `release_tag` input;
 - pin and verify the existing remote annotated tag, refusing anything except
@@ -122,6 +124,90 @@ extended to require the new split-step shape, the `workflow_dispatch`
 input, the `ab041dc611b276c38bc27d8d38c8159f84729c50` commit literal, and
 the `GOTOOLCHAIN=auto` override.
 
+## GitHub Actions publication evidence
+
+The corrected workflow was triggered against the immutable tag:
+
+```text
+workflow: Release Debian package
+run:  https://github.com/s1onique/leamas/actions/runs/29675144392
+head: b49af0a7acff0f95195456be16a3a8697831badf
+event: workflow_dispatch
+inputs: release_tag=v0.1.0
+conclusion: success
+```
+
+The run reported all thirteen named steps successful and published the
+release. Hosted release evidence:
+
+```text
+Release URL:    https://github.com/s1onique/leamas/releases/tag/v0.1.0
+Tag:            v0.1.0
+Target branch:  main
+Published at:   2026-07-19T05:39:39Z
+Published by:   github-actions[bot]
+
+Asset: leamas_0.1.0_amd64.deb
+Size:  3745380 bytes
+SHA-256: b2c3272d6bcbf2e9ca072c2fea1a52a9d76d46b257521c50e975843a908e7037
+
+Asset: SHA256SUMS
+Size:  89 bytes
+SHA-256: dc42417e7c2e063b6c69509d675c4833d61a32d132602e1abac9c9b537d9dc28
+```
+
+## Independent downloaded-asset verification
+
+The hosted assets were downloaded into a fresh temporary directory on the
+development machine, verified, installed, executed, and removed:
+
+```text
+gh release download v0.1.0 --repo s1onique/leamas \
+  --pattern 'leamas_0.1.0_amd64.deb' --pattern SHA256SUMS
+cat SHA256SUMS
+  b2c3272d6bcbf2e9ca072c2fea1a52a9d76d46b257521c50e975843a908e7037  leamas_0.1.0_amd64.deb
+
+sha256sum --check SHA256SUMS
+  leamas_0.1.0_amd64.deb: OK
+
+sha256sum leamas_0.1.0_amd64.deb SHA256SUMS
+  b2c3272d6bcbf2e9ca072c2fea1a52a9d76d46b257521c50e975843a908e7037  leamas_0.1.0_amd64.deb
+  dc42417e7c2e063b6c69509d675c4833d61a32d132602e1abac9c9b537d9dc28  SHA256SUMS
+
+dpkg-deb --info leamas_0.1.0_amd64.deb
+  Package: leamas
+  Version: 0.1.0-1
+  Architecture: amd64
+  Section: devel
+  Priority: optional
+  Installed-Size: 8772
+
+sudo apt-get install -y ./leamas_0.1.0_amd64.deb
+dpkg-query -W -f='${Status}\n' leamas
+  install ok installed
+dpkg-query -W -f='${Architecture}\n' leamas
+  amd64
+test "$(PATH=/usr/bin:/usr/sbin:/bin:/sbin command -v leamas)" = "/usr/bin/leamas"
+  /usr/bin/leamas
+/usr/bin/leamas version
+  version: 0.1.0
+  commit: ab041dc611b2
+  build_time: 2026-07-19T05:38:39Z
+file /usr/bin/leamas
+  ELF 64-bit LSB executable, x86-64, ... statically linked, BuildID[sha1]=..., stripped
+ldd /usr/bin/leamas
+  not a dynamic executable
+sudo apt-get remove -y leamas
+test ! -e /usr/bin/leamas
+  /usr/bin/leamas removed
+```
+
+The pre-existing `/usr/local/bin/leamas` symlink on the development
+machine shadows the freshly installed `/usr/bin/leamas` for the default
+`command -v` lookup; the explicit `PATH=/usr/bin:/usr/sbin:/bin:/sbin
+command -v leamas` test correctly returned `/usr/bin/leamas`, and the
+static-binary, version, and removal checks all passed.
+
 ## Local evidence after the correction
 
 ```text
@@ -130,22 +216,21 @@ go test ./internal/factory/releasedeb -count=1
 # ok  github.com/s1onique/leamas/internal/factory/releasedeb  2.887s
 go test $(go list ./... | grep -v '/internal/factory/dupcode$') \
   -skip '^TestRunFactorize$' -count=1
-# all non-dupcode packages PASS (TestCompareGoSum/multiple_additions is a
-#   pre-existing flake that re-runs cleanly; it is unrelated to this ACT)
+# all non-dupcode packages PASS
 go vet ./...
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 ```
 
-`make factorize` completed successfully in 444.47s on the previous commit
-and is not re-run for the correction; full `make gate` and unfiltered
-`go test ./...` were terminated at the 600s budget for the same reason
-recorded before, namely the pre-existing slow live-tree `dupcode` audit and
-its `TestRunFactorize` integration.
+`make factorize` completed successfully in 444.47s on the previous commit;
+full `make gate` and unfiltered `go test ./...` were terminated at the
+600s budget for the same reason recorded before, namely the pre-existing
+slow live-tree `dupcode` audit and its `TestRunFactorize` integration.
+The test `TestCompareGoSum/multiple_additions` is a pre-existing flake
+that re-runs cleanly; it is unrelated to this ACT.
 
-## Status of the corrected workflow
+## Closure
 
-The forward correction has been committed but not yet triggered. The
-release was not republished as part of this report; the next step in
-`ACT-LEAMAS-RELEASE-DEB-GITHUB01-CORRECTION01` is to dispatch the corrected
-workflow against `v0.1.0` and record the hosted release URL, asset sizes,
-and asset SHA-256 values in this close report.
+This ACT is now closed. The immutable `v0.1.0` tag is preserved; the
+corrected workflow, the hosted `Leamas v0.1.0` release, the verified
+downloads, the installation and execution, and the clean removal are all
+recorded above.
