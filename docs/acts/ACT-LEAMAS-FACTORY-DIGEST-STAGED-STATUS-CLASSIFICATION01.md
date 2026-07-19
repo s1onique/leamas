@@ -8,7 +8,8 @@ exactly with Git's authoritative status for each path.
 
 ## Status
 
-**PARTIAL — CORRECTION01 + CORRECTION02 REQUIRED.** The
+**PARTIAL — CORRECTION01, CORRECTION02, and CORRECTION03 CLOSED;
+canonical full-tree verification remains deferred.** The
 initial implementation made the manifest agree with
 `git diff --cached --name-status` at the lowered 30% similarity
 threshold and reproduced the original four-added/one-modified fix.
@@ -22,7 +23,15 @@ version was not bumped, paths were escaped too early, and the
 self-hosting proof used a stale binary — addressed by
 [`CORRECTION02`](./ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION02.md)
 (bump to v3, raw paths in semantic models, range copy preserves
-OldPath, self-hosting built from current commit). The original
+OldPath, self-hosting built from current commit). A third
+reviewer pass surfaced three remaining defects — REVIEW_MAP
+path escaping at the rendering boundary, evidence hash-scope
+migration from `v2` to `v3`, and copy-coverage documentation —
+addressed by
+[`CORRECTION03`](./ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION03.md)
+(REVIEW_MAP `PathEscape` boundary, `normalized_digest_v3_sections`
+hash-scope contract and pinning test, explicit copy-coverage
+documentation in `docs/factory/digest-contract.md`). The original
 six P1/P2 defects are still addressed:
 
 1. Valid Git `T` (type-change), `X`, and `B` records were

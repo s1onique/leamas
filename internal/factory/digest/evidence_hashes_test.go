@@ -163,3 +163,13 @@ func TestSectionHash_ChangesWhenRiskSignalChanges(t *testing.T) {
 		t.Error("section hash should change when content changes")
 	}
 }
+
+// TestEvidenceHashScope_IsV3 pins the v3 hash-scope identifier.
+// Contract version 3 uses the v3 scope; bumping the contract version
+// again must also update this string and the contract tests in lock-step.
+func TestEvidenceHashScope_IsV3(t *testing.T) {
+	const want = "normalized_digest_v3_sections"
+	if EvidenceHashScope != want {
+		t.Fatalf("EvidenceHashScope = %q, want %q", EvidenceHashScope, want)
+	}
+}

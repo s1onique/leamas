@@ -1,0 +1,160 @@
+# ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION03 — Close Report
+
+## Status
+
+CORRECTION03 is implemented. The corrector 03 round addresses
+the three remaining defects the corrector 02 reviewer surfaced:
+REVIEW_MAP path escaping at the rendering boundary, evidence
+hash-scope migration from v2 to v3, and explicit copy-coverage
+documentation. The parent ACT remains PARTIAL — canonical
+full-tree `make factorize` / `make gate` verification is still
+blocked on the previously documented duplicate-code ACTs and is
+explicitly out of scope.
+
+## Files changed (corrector 03)
+
+* `internal/factory/digest/review_map.go` — `RenderReviewMap`
+  and the `renderGroup` helper now call `PathEscape` on every
+  bullet path. The escape happens at the rendering boundary;
+  the underlying `BuildReviewMap` retains raw paths in its
+  semantic fields.
+* `internal/factory/digest/digest_status_path_escape_test.go` —
+  new `TestReviewMap_NewlinePath` covers the REVIEW_MAP escape
+  and asserts exactly one bullet line for a single-file
+  scenario.
+* `internal/factory/digest/evidence_hashes.go` — hash scope
+  `normalized_digest_v2_sections` -> `normalized_digest_v3_sections`.
+* `internal/factory/digest/evidence_hashes_test.go` — added a
+  dedicated `TestEvidenceHashScope_IsV3` that pins the v3 string.
+* `internal/factory/digest/evidence_hashes_integration_test.go` —
+  updated to the v3 string.
+* `internal/factory/digest/digest_status_range_test.go` — new
+  `TestRangeMode_CopyWithModifiedSource` exercises the C path of
+  `BuildRangeManifest`. The fixture modifies the source file in
+  the same commit and adds a copy; Git's default `--find-copies`
+  surfaces the copy and the digest renders the canonical
+  `C  source.go -> copy.go` form.
+* `docs/factory/digest.md` — explicit "Copy detection coverage"
+  subsection documenting the digest's `--find-copies=30%`
+  policy: unchanged-source copies render as `A` unless
+  `--find-copies-harder` is invoked.
+* `docs/factory/digest-contract.md` — v3 section now records the
+  normative `EVIDENCE_HASHES` parameters
+  (`hash_algorithm=sha256`, `hash_scope=normalized_digest_v3_sections`)
+  and a contract rule for when the hash-scope identifier must
+  change.
+* `docs/acts/ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION03.md`
+  (new) — the corrector 03 ACT; the C-acceptance criterion is
+  reconciled with the copy-policy documentation.
+
+## Commit accounting
+
+* `5587810` — parent implementation.
+* `aa6687f` — parent documentation update (close report
+  + `make factorize` / `make gate` timeout rows).
+* `656ee35` — corrector 01 (T/X/B, PathEscape, exact range
+  assertions, NormalizeGitStatusToken / SplitNULRecords
+  alignment, `*_files` stats fields).
+* `d31b3dd` — pre-corrector-02 staging snapshot used as the
+  corrector 02 self-hosting proof.
+* `00314cf` — corrector 02 (parent + corrector 02 act +
+  close report + contract bump to v3 + raw paths + range
+  copy + corrector 02 self-hosting proof).
+* `247cc76` — corrector 03 implementation commit (REVIEW_MAP
+  escape, v3 hash scope, copy-coverage docs, corrector 03 act
+  + close report 02 + fresh self-hosting proof at the
+  implementation commit). The closure amendments tracked in
+  this report are committed in a subsequent commit that
+  follows `247cc76`.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| `gofmt -w internal/factory/digest/*.go` | clean |
+| `go vet ./...` | clean |
+| `go test ./internal/factory/digest -count=1` | green (~140 tests, 3.6s) |
+| `go test ./cmd/leamas -count=1` | green (3.5s) |
+| `CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas` | OK |
+| `./bin/leamas factory verify llm-friendly` | PASSED |
+| `./bin/leamas factory verify agent-context` | PASSED |
+| `./bin/leamas factory verify forbidden-patterns` | PASSED |
+| `git diff --check` | clean |
+| `LEAMAS_COMMIT` in self-hosting proof | matches `git rev-parse HEAD` (`247cc7671d71ccc0fe9c8564a0176d33859daa1d`) |
+| Digest `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION` | `3` |
+| Digest `hash_scope` | `normalized_digest_v3_sections` |
+| `TestEvidenceHashScope_IsV3` | PASS |
+| `TestReviewMap_NewlinePath` | PASS (raw absent, escaped present, exactly one bullet) |
+| `TestRangeMode_CopyWithModifiedSource` | PASS (manifest `C  source.go -> copy.go`, `copied_files=1`) |
+| Focused T proof (regular file → symlink) | manifest `T  linked.go`, `type_changed_files=1` |
+| Focused newline proof | escaped form on one line; raw absent |
+| Focused C proof (source also modified) | `C  source.go -> copy.go` rendered correctly |
+| `timeout 60 make factorize` / `make gate` | `rc=124` (duplicate-code live-tree blocking, previously documented) |
+| Bounded `go test ./...` | `rc=124`, 11 of 31 packages green (literal `PIPESTATUS[0]` exit recorded) |
+
+## Self-hosting proof at the implementation commit (247cc76)
+
+CORRECTION03 implementation commit: `247cc76`. The fresh
+self-hosting proof below was generated by a binary built from
+that commit and is the authoritative pre-closure evidence.
+
+```text
+git rev-parse HEAD
+247cc7671d71ccc0fe9c8564a0176d33859daa1d
+
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
+LEAMAS_VERSION: 0.1.0+dev.247cc7671d71.20260719T090217Z
+LEAMAS_COMMIT: 247cc7671d71ccc0fe9c8564a0176d33859daa1d
+LEAMAS_BUILD_TIME: 2026-07-19T09:02:17Z
+DIGEST_MODE: range
+DIGEST_CREATED_AT: 2026-07-19T09:02:33Z
+```
+
+`EVIDENCE_HASHES` section: `hash_scope=normalized_digest_v3_sections`.
+`CHANGESET_STATS` section: contains `type_changed_files`,
+`unknown_files`, `broken_pair_files` (the v3 additions). The
+manifest includes 15 files from the corrector 02 + 03
+commit inventory.
+
+A detached post-commit digest for the closure commit is
+generated separately after this report is committed; its
+header must read `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3`
+and `hash_scope=normalized_digest_v3_sections` with
+`LEAMAS_COMMIT` matching the new committed HEAD. That
+detached digest is intentionally not inlined here and the
+close-report commit is not amended to embed its own hash.
+
+## Skipped / deferred checks
+
+`make factorize` and `make gate` were each given a 60-second
+budget and terminated by `timeout`. Both got past the early OK
+phases (`agent-context`, `docs`, `doctrine`,
+`doctrine-agent-contracts`, `domain-boundaries`) and then hung
+on the heavier live-tree duplicate-code phase. This is the same
+blocking documented in prior ACTs and is explicitly out of scope.
+
+`go test ./...` was attempted with a 180-second budget and was
+interrupted by the timeout signal. The bounded attempt completed
+11 of 31 packages successfully; the remaining 20 packages
+(notably `internal/factory/{dupcode, gate, ...}`) were not
+exercised in this run. The literal `rc=124` from `timeout` is
+recorded as the bounded-attempt exit status.
+
+## Public state
+
+The corrector 03 commits are present locally on the working
+machine at `247cc7671d71ccc0fe9c8564a0176d33859daa1d`. Public
+GitHub access is not part of this assistant's environment; the
+implementation of corrector 03 is therefore complete in the local
+repository but has not been pushed from this session.
+
+## Follow-up ACTs
+
+* `ACT-LEAMAS-FACTORY-FACTORIZE-RUNNER-FIXTURE01` —
+  prerequisite for unblocking `make factorize`.
+* `ACT-LEAMAS-FACTORY-DUPCODE-PERF-RATCHET01` — prerequisite for
+  unblocking `make gate` and the heavier packages in
+  `go test ./...`.
+
+These remain blocked on the duplicate-code runtime and are
+explicitly out of scope for this ACT and its corrections.

@@ -278,4 +278,12 @@ func TestReviewMap_NewlinePath(t *testing.T) {
 	if !strings.Contains(body, PathEscape(weird)) {
 		t.Fatalf("REVIEW_MAP missing escaped path form %q:\n%s", PathEscape(weird), body)
 	}
+	// Exactly one bullet line in the production group; a single file
+	// classified as production should produce exactly one bullet and
+	// no duplicate or split entries.
+	count := strings.Count(body, "  - "+PathEscape(weird)+"\n") +
+		strings.Count(body, "  - "+PathEscape(weird)+"\r\n")
+	if count != 1 {
+		t.Fatalf("REVIEW_MAP bullet count for %q = %d, want 1\nbody:\n%s", PathEscape(weird), count, body)
+	}
 }

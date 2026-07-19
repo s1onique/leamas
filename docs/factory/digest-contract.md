@@ -32,7 +32,27 @@ order; any digest matching that exact shape still satisfies v2.
 
 ### Contract Version `3`: Full Git status alphabet and rendering
 
-Contract version `3` introduces:
+Contract version `3` **explicitly** documents the
+`EVIDENCE_HASHES` section as carrying the following v3-scoped
+parameters:
+
+```text
+hash_algorithm=sha256
+hash_scope=normalized_digest_v3_sections
+```
+
+The `hash_scope` identifier changes on every contract bump that
+alters the normalized evidence-section semantics. A reordering,
+renaming, addition, or removal of a `CHANGESET_*` / `REVIEW_MAP` /
+`RISK_SIGNALS` / `PATCH_HYGIENE` / `EVIDENCE_HASHES` /
+`GATE_SUMMARY` / `PUBLIC_SURFACE_DELTA` / `DEPENDENCY_DELTA` /
+file-evidence section (or of an internal key like the
+`CHANGESET_STATS` key order) MUST bump the hash-scope string in
+lock-step. v3 introduced the v3 prefix; the previous v2 scope
+(`normalized_digest_v2_sections`) is frozen and reserved for
+historical digests.
+
+Contract version `3` also introduces:
 
 * The full Git `--name-status -z` status alphabet:
   `A`, `M`, `D`, **`T`** (type change), **`R<N>`** (renamed, score

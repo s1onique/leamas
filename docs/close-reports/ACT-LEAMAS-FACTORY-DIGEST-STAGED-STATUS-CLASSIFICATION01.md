@@ -2,13 +2,17 @@
 
 ## Status
 
-PARTIAL — CORRECTION01 + CORRECTION02 are documented and committed
-(commits `5587810`, `aa6687f`, `656ee35`, and `d31b3dd`). The
-parent ACT's original four-added/one-modified defect and the core
-manifest/classification change are implemented, focused-tested, and
-self-hosting-proven. The corrector ACTs address the reviewer
-findings. Canonical full-tree `make factorize` / `make gate`
-verification remains blocked on the previously documented ACTs
+PARTIAL — CORRECTION01 + CORRECTION02 + CORRECTION03 are documented
+and committed (commits `5587810`, `aa6687f`, `656ee35`, `d31b3dd`,
+`00314cf`, and `247cc76`). The parent ACT's original
+four-added/one-modified defect and the core manifest/classification
+change are implemented, focused-tested, and self-hosting-proven.
+The corrector ACTs address the reviewer findings; CORRECTION03 in
+particular closes REVIEW_MAP path escaping, evidence hash-scope
+migration to `normalized_digest_v3_sections`, and the
+copy-coverage contract text. Canonical full-tree `make factorize`
+/ `make gate` verification remains blocked on the previously
+documented ACTs
 (`ACT-LEAMAS-FACTORY-FACTORIZE-RUNNER-FIXTURE01`,
 `ACT-LEAMAS-FACTORY-DUPCODE-PERF-RATCHET01`) and is explicitly
 out of scope for this ACT and its corrections.

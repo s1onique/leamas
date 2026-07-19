@@ -230,3 +230,56 @@ func TestRangeMode_TypeChange(t *testing.T) {
 	// the destination path.
 	assertManifestLinesExact(t, rangeLines(out), []string{"T  linked.go"})
 }
+
+// TestRangeMode_CopyWithModifiedSource exercises the C path of
+// `BuildRangeManifest`. When the source file is also modified in
+// the same commit, Git's `--find-copies` will detect the copy. The
+// digest must render the source-and-destination pair in the canonical
+// `C  source.go -> copy.go` form, and `CHANGESET_STATS` must
+// record the copy in `copied_files=1`.
+func TestRangeMode_CopyWithModifiedSource(t *testing.T) {
+	dir := t.TempDir()
+	initGit(t, dir)
+
+	rangeFixtureCommit(t, dir, "source.go", "alpha\nbeta\n")
+
+	// Same commit: modify source AND add a copy of the modified
+	// content. Git's --find-copies then surfaces the copy.
+	if err := os.WriteFile(filepath.Join(dir, "source.go"), []byte("alpha\nbeta\ngamma\n"), 0644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := copyFileLike(filepath.Join(dir, "source.go"), filepath.Join(dir, "copy.go")); err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+	runGit(t, dir, "add", "source.go", "copy.go")
+	runGit(t, dir, "commit", "-m", "copy with modified source")
+
+	out, err := Generate(Options{
+		RepoRoot: dir,
+		Mode:     ModeRange,
+		Range:    "HEAD~1..HEAD",
+	})
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	assertManifestLinesExact(t, rangeLines(out), []string{
+		"C  source.go -> copy.go",
+		"M  source.go",
+	})
+	if got := digestStatValue(out, "copied_files"); got != "1" {
+		t.Fatalf("copied_files = %q, want 1", got)
+	}
+	if got := digestStatValue(out, "modified_files"); got != "1" {
+		t.Fatalf("modified_files = %q, want 1", got)
+	}
+}
+
+// copyFileLike is a tiny read/write helper local to this test file.
+func copyFileLike(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0644)
+}

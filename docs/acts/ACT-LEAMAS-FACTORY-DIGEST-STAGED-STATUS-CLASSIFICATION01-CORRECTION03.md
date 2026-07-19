@@ -69,9 +69,10 @@ remain in force.
    * a focused staged-mode fixture proof with a regular file
      staged-added and a symlink in the same commit, asserting
      `T  linked.go`;
-   * a focused range-mode fixture proof with `git add -N` and a
-     `cp` (or `--find-copies-harder` use) that produces a
-     `C  source.go -> copy.go` rendered line;
+   * a load-bearing `C` proof where the source file is also
+     modified in the same commit (Git's default `--find-copies`
+     then surfaces the copy and the digest renders the canonical
+     `C  source.go -> copy.go` form);
    * a focused staged-mode fixture proof with a path containing
      an embedded newline, asserting the manifest line is escaped
      and the raw path is not present in any rendered section.
@@ -123,8 +124,12 @@ git rev-parse HEAD
    `LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3` and
    `LEAMAS_COMMIT: <final HEAD>`.
 5. The focused `T  linked.go` proof, the focused
-   `C  source.go -> copy.go` proof, and the focused
-   newline-bearing-path proof all pass.
+   newline-bearing-path proof, and a load-bearing `C` proof
+   whose source is also modified in the same commit (so Git's
+   default `--find-copies` surfaces the copy) all pass. The
+   digest's policy is documented: unchanged-source copies may
+   render as `A` because Leamas does not enable
+   `--find-copies-harder`.
 6. `gofmt`, `go vet`, the three `leamas factory verify` checks,
    and `git diff --check` are clean.
 
