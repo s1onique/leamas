@@ -1,6 +1,6 @@
 # JSON Schema Validator Selection
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 > The selection made in this document is binding for
 > `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` and downstream ACTs.
 
@@ -82,22 +82,34 @@ The reader looks up the right schema by version, unmarshals it once at
 init, and reuses the compiled validator for the lifetime of the
 process. The schemas are not reloaded from disk at runtime.
 
-## 5. Lexical rules live outside JSON Schema
+## 5. Version and envelope rules precede JSON Schema
 
-The following rules are NOT covered by the JSON Schema validator and
-must be enforced by the pre-schema envelope scanner in `DECODER01`:
+A schema is selected only after the envelope has classified the version:
 
-- `schema_version` must be a JSON integer token **lexically** without
-  fractional part, exponent, leading zero, or surrounding whitespace.
-  Draft 2020-12 considers `2` and `2.0` equivalent integers;
-  `type: integer, const: 2` therefore does **not** distinguish them.
-  Lexical inspection uses `json.Number` via `Decoder.UseNumber()`.
-- Duplicate object member names must be rejected at every depth
-  before ordinary decoding. JSON Schema validation cannot see
-  duplicates because `encoding/json` silently uses the last occurrence.
-- Trailing JSON values after the first must be rejected. JSON Schema
-  validates exactly one JSON value; the trailing-value check happens
-  after `Decoder.Decode` returns `io.EOF`.
+- Leading-zero (`02`, `-02`) and leading-plus (`+2`) spellings are
+  malformed JSON and produce `GS_MALFORMED_JSON` during syntax scan.
+- RFC 8259 space, tab, line feed, and carriage return around a valid
+  integer value are insignificant and must not change dispatch.
+- Decimal and exponent number forms are valid JSON, but are not accepted
+  version integer forms; the version probe reports
+  `GS_INVALID_VERSION_TYPE`.
+- Every valid integer value other than 1 or 2 is rejected by version
+  dispatch with `GS_UNSUPPORTED_VERSION`.
+
+Lexical inspection uses `json.Number` via `Decoder.UseNumber()`; its
+string excludes surrounding JSON whitespace. Draft 2020-12 considers `2`
+and `2.0` equivalent integers, so schema `type`/`const` cannot own this
+classification.
+
+Duplicate object member names are rejected at every depth before ordinary
+decoding. Trailing JSON after the first value is rejected separately. The
+normative pipeline and generated matrix are in
+[`gate-summary-schema-version-translation.md`](./gate-summary-schema-version-translation.md).
+
+After dispatch, selected-schema errors are translated exclusively from
+structured `ValidationError` data according to
+[`gate-summary-schema-error-translation.md`](./gate-summary-schema-error-translation.md).
+Localized validator messages are never parsed.
 
 ## 6. Offline review workflow (this ACT)
 
@@ -111,9 +123,11 @@ offline tools (whichever is available on the reviewer's host):
 
 The chosen tool, the command sequence, and the pass/fail output for
 each fixture are recorded in the close report for
-`ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`. That ACT runs
-the chosen validator against both schemas with `AssertFormat()`
-enabled and against every fixture before the contract is closed.
+`ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`. That accepted proof
+runs the chosen validator against both schemas with `AssertFormat()`
+enabled and reports all 41 committed JSON fixtures. `CORRECTION03`
+clarifies reader semantics without changing the schemas or validator
+selection.
 
 ## 7. Acceptance criteria for the selection
 
@@ -122,10 +136,9 @@ true:
 
 - it accepts every fixture in
   `internal/gatesummary/testdata/valid/`;
-- it rejects every fixture in
-  `internal/gatesummary/testdata/invalid/` (with the appropriate
-  structural code; semantic-only violations are caught at the
-  semantic-validation layer);
+- it rejects each structurally invalid fixture and may accept fixtures
+  whose owning layer is envelope or semantic, exactly as recorded by the
+  accepted 41-fixture proof;
 - it does not emit network requests at validation time;
 - it produces a deterministic accept/reject classification for any
   given input;

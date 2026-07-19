@@ -1,6 +1,6 @@
 # Gate-Summary Schema v1 — Frozen Specification
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 > No further changes to this document are permitted without a
 > dedicated correction ACT.
 

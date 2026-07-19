@@ -1,6 +1,6 @@
 # Gate-Summary Schema v2 — Authoritative Specification
 
-> **Status:** Authoritative as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Authoritative as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 > Frozen for `DECODER01`, `NORMALIZATION01`, `DIGEST01`, `CLI01`,
 > `CONFORMANCE01`, `DOGFOOD01`, and `RELEASE01`.
 > No further changes to this document are permitted without a
@@ -64,22 +64,14 @@ ACT identifier. The aggregate derivation includes those entries.
 ## 4. Version discriminator
 
 `schema_version` must be a JSON integer token whose numeric value is
-`1` or `2`. Two layers of validation apply; the layered diagnostic
-ownership table is the normative reference and lives in
-[`gate-summary-schema-version-translation.md`](./gate-summary-schema-version-translation.md)
-to keep this spec under the line limit.
+`1` or `2`. Syntax, duplicate detection, version probing, exact
+lexical/type/value classification, and v1/v2 dispatch all happen
+**before** a JSON Schema is selected. The normative ownership table and
+generated lexical matrix live in
+[`gate-summary-schema-version-translation.md`](./gate-summary-schema-version-translation.md).
 
-1. **JSON Schema structural check**: `type: integer, const: 2` for
-   v2 (and `type: integer, const: 1` for v1).
-2. **Pre-schema envelope scanner check**: the lexical token must
-   match `^-?(0|[1-9][0-9]*)$` exactly. The leading `-` is
-   **permitted** so the lexer mirrors the JSON integer syntax RFC
-   8259 allows (for example `-1`); the dispatcher then rejects any
-   negative numeric value as `GS_UNSUPPORTED_VERSION`.
-
-The structural check is what the JSON Schema validator runs. The
-lexical check is what the envelope scanner runs in `DECODER01` using
-`json.Decoder.UseNumber()`. Both must pass.
+The schemas retain `type: integer` and `const: 1` / `const: 2` only as
+defense in depth. They never own an ordinary unsupported-version result.
 
 ## 5. Parent representation
 
@@ -355,19 +347,20 @@ produces `GS_OVERALL_STATUS_MISMATCH`.
 A v2 decoder must:
 
 - read through a bounded reader (`io.LimitReader`) capped at 4 MiB +
-  1 byte;
-- reject `GS_DOCUMENT_TOO_LARGE` before any tokenization;
-- token-scan for duplicate object member names at every depth;
-  duplicates produce `GS_DUPLICATE_KEY` and stop the pipeline;
-- enforce lexical version rules via `json.Number`;
-- decode the integer version into `int` and dispatch;
+  1 byte and reject `GS_DOCUMENT_TOO_LARGE` before tokenization;
+- syntactically scan exactly one top-level JSON object, reporting
+  `GS_MALFORMED_JSON` for grammar errors and `GS_TRAILING_JSON` for a
+  second value;
+- token-scan object names at every depth and reject duplicates with
+  `GS_DUPLICATE_KEY`;
+- probe `schema_version` with `json.Decoder.UseNumber()`, classify its
+  lexical form, type, and value, then dispatch exactly to v1 or v2;
+- run the selected embedded JSON Schema with `AssertFormat()` enabled
+  and translate structured errors using
+  [`gate-summary-schema-error-translation.md`](./gate-summary-schema-error-translation.md);
 - use `DisallowUnknownFields` for the version-specific wire struct;
-- verify the document reaches EOF after the first JSON value
-  (`GS_TRAILING_JSON`);
-- run the embedded JSON Schema with `AssertFormat()` enabled;
 - run version-specific semantic validation;
-- normalize into the common domain model;
-- run normalized-model invariants.
+- normalize into the common domain model and run normalized invariants.
 
 ## 18. Producer invariants
 

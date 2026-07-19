@@ -1,6 +1,6 @@
 # Resource-Limit Fixtures
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 
 The static fixtures in this directory capture only the **structural
 shape** of a v2 document at the resource-limit boundary. The actual

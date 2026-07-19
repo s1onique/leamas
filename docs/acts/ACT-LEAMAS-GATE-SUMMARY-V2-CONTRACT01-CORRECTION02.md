@@ -18,11 +18,10 @@ implementation-significant contradictions that block `DECODER01`.
 
 ## Status
 
-`CLOSED (PARTIAL — contract freeze committed)`. All eleven blockers
-from the post-`CORRECTION01` review are resolved in this ACT. The
-contract freeze is internally consistent and is staged and committed
-as a single honest revision. `DECODER01` is `READY` on the epic
-board.
+`CLOSED (PARTIAL — superseded by CORRECTION03)`. The validator proof and
+Git closure from this ACT remain accepted. `CORRECTION03` supersedes its
+fixture accounting, JSON grammar, version ownership, and incomplete
+schema-error translation before `DECODER01` begins.
 
 ## Problem
 
@@ -59,12 +58,10 @@ contradictions:
 9. **Schema-error → Leamas diagnostic translation is not frozen** —
    `DECODER01` cannot invent whether the schema produces a specific
    code or the umbrella `GS_SCHEMA_VIOLATION`.
-10. **Fixture counts and acceptance criteria are stale** — the
-    contract documents disagree on the inventory. Some say 37 with
-    `7+25+3+2`, others report the wrong `v2-document-too-large`
-    fixture path. The manifest is `7+27+3+3=40` artifacts, of which
-    37 are executable accept/reject fixtures and 3 are
-    limit-shape templates.
+10. **Fixture counts and acceptance criteria are stale** — the contract
+    documents disagree on the inventory. The global boundary is 7 valid
+    + 28 invalid + 3 duplicate-key + 3 limit-shape = 41 artifacts, of
+    which 38 are executable and 3 are limit-shape templates.
 11. **Lifecycle stage** — the epic board still shows the original
     contract ACT as `READY`; the close reports classify as
     `PARTIAL` but the ACT board is not updated.
@@ -88,9 +85,8 @@ In scope:
 
 - Run the chosen `santhosh-tekuri/jsonschema/v6` validator against
   both schemas with `AssertFormat()` enabled; record the output in
-  the close report. Add a frozen layered diagnostic ownership
-  table to the v2 spec (`§4.1`) that pins each `schema_version`
-  failure to exactly one layer.
+  the close report. Freeze a version ownership table that pins each
+  `schema_version` form to its pre-schema owner.
 - Update `gate-summary-vocabularies.md` and `gate-summary-v2-spec.md`
   to freeze uppercase-wire / lowercase-normalised lifecycle.
 - Remove the `parent_checks` row from `gate-summary-resource-limits.md`
@@ -104,38 +100,26 @@ In scope:
   derivation rule independently confirms it.
 - Move the document-size marker from
   `invalid/v2-document-too-large.json` to
-  `limits/v2-document-size-shape.json`; record the 40-artifact /
-  37-executable / 3-limit-shape split in the fixture README and
-  the compatibility matrix.
+  `limits/v2-document-size-shape.json`; record the global 41-artifact /
+  38-executable / 3-limit-shape split in the fixture README and the
+  compatibility matrix.
 - Correct the limit-shape fixture descriptions so they describe
   static shape only, not numeric boundaries.
 - Keep the lexical regex `^-?(0|[1-9][0-9]*)$`; remove the
   contradictory "no negative sign" wording; add the
   negative-integer conformance case
   (`invalid/v2-schema-version-negative.json`); document the
-  layered diagnostic ownership table so negative integers map to
-  `GS_UNSUPPORTED_VERSION` at the structural layer while the
-  lexical regex permits them.
+  version ownership table so negative integers map to
+  `GS_UNSUPPORTED_VERSION` at pre-schema dispatch while the lexical
+  integer grammar permits them.
 - Update the diagnostic-code doc to reference
   `limits/v2-document-size-shape.json` instead of the removed
   path; add the negative-integer fixture reference to the
   `GS_UNSUPPORTED_VERSION` row.
-- Reconcile every status-bearing document:
-  - Epic ACT board: `CONTRACT01`, `CORRECTION01`, and
-    `CORRECTION02` are `CLOSED (PARTIAL)`; `DECODER01` is
-    `READY`.
-  - Original `CONTRACT01` close report: status banner reads
-    `PARTIAL — superseded by CORRECTION02`; no longer claims
-    "corrections in flight".
-  - `CORRECTION01` close report: defect D4 reconciled to the
-    40/37/3 split with both moves (limit-shape reclassification
-    and negative-integer fixture) explicitly recorded.
-  - `CORRECTION01` ACT: status moved from `IN PROGRESS` to
-    `CLOSED (PARTIAL — superseded by CORRECTION02)`; GREEN
-    section now reports 40/37/3 instead of 35; acceptance
-    criterion references 37 executable + 3 limit-shape.
-  - Fixture README and compatibility matrix: same 40/37/3 split
-    with all three numbers and the rationale for each.
+- Reconcile every status-bearing document. `CORRECTION03` later
+  supersedes this ACT's reader-contract closure and freezes the global
+  41 / 38 / 3 inventory; `DECODER01` becomes ready only after that
+  forward correction closes.
 - Stage and commit the reconciled tree as one honest revision
   under the wording
   `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02 freeze v1/v2 contract`.
@@ -189,24 +173,15 @@ chosen JSON Schema validator.
   limit-shape fixtures as static-shape templates whose numeric
   boundary tests are programmatic in `CONFORMANCE01`.
 - **E8**: Lexical version regex negative-number contradiction. Fix:
-  keep the regex `^-?(0|[1-9][0-9]*)$`; remove the contradictory
-  "no negative sign" wording; add
-  `invalid/v2-schema-version-negative.json` (`schema_version: -1`)
-  so the conformance case is exercised; document the layered
-  ownership table so `-1` is rejected by the structural layer
-  and mapped to `GS_UNSUPPORTED_VERSION`.
-- **E9**: Schema-error → diagnostic translation not frozen. Fix:
-  the v2 spec §4.1 carries a layered diagnostic ownership table
-  that pins each `schema_version` failure to exactly one layer;
-  the compatibility matrix rows for negative, zero, leading-zero,
-  trailing-whitespace, plus-sign, decimal, and exponent versions
-  map to the owning layer.
-- **E10**: Counts and acceptance criteria stale. Fix: record the
-  40 / 37 / 3 split in the fixture README, the compatibility
-  matrix, and the `CORRECTION01` close report; remove every
-  reference to the path `invalid/v2-document-too-large.json`
-  (the file moved); remove every reference to a `37-fixture
-  total` outside the executable-corpus context.
+  keep the JSON integer grammar, remove contradictory prose, and add
+  `invalid/v2-schema-version-negative.json`. `CORRECTION03` clarifies
+  that unsupported valid integers are rejected at pre-schema dispatch.
+- **E9**: Schema-error → diagnostic translation not frozen. This ACT
+  froze only version rows and did not resolve the general mapping.
+  `CORRECTION03` supplies the complete structured-error table.
+- **E10**: Counts and acceptance criteria stale. `CORRECTION03` freezes
+  the global 41 / 38 / 3 inventory and removes the hybrid subset that
+  this ACT had mislabeled as all committed fixtures.
 - **E11**: Epic ACT board lifecycle state not updated. Fix:
   reconcile every status-bearing document (epic board, original
   `CONTRACT01` close report, `CORRECTION01` close report,
@@ -283,21 +258,14 @@ git show --stat --oneline HEAD
       limits-shape directory.
 - [ ] The limit-shape fixture descriptions match what the fixtures
       actually exercise (static shape, not numeric boundaries).
-- [ ] The lexical version regex is `^-?(0|[1-9][0-9]*)$`, the
-      negative-integer conformance case
-      (`invalid/v2-schema-version-negative.json`) is present, and
-      the layered diagnostic ownership table is normative in the
-      v2 spec §4.1.
-- [ ] The schema-error → Leamas diagnostic translation table is
-      frozen (layered ownership table in §4.1 plus the
-      compatibility matrix rows for negative, leading-zero,
-      trailing-whitespace, plus-sign, decimal, and exponent
-      versions).
-- [ ] All contract documents use the same inventory:
-      40 fixture artifacts = 7 valid + 27 invalid + 3
-      duplicate-key + 3 limit-shape templates;
-      **executable** accept/reject corpus = 37; limit-shape
-      templates = 3.
+- [ ] The JSON integer grammar is `^-?(0|[1-9][0-9]*)$`, the
+      negative-integer fixture is present, and pre-schema dispatch owns
+      unsupported integer values.
+- [ ] The complete schema-error → Leamas diagnostic translation table
+      is frozen in `gate-summary-schema-error-translation.md`.
+- [ ] All contract documents use the global inventory: 41 committed
+      JSON fixtures = 7 valid + 28 invalid + 3 duplicate-key + 3
+      limit-shape; executable corpus = 38; limit templates = 3.
 - [ ] The epic ACT board reflects the actual lifecycle state.
 - [ ] `go vet ./...`, `go build ./cmd/leamas` remain green.
 - [ ] The reconciled tree is staged and committed as a single
@@ -333,12 +301,10 @@ git show --stat --oneline HEAD
 
 ## Reviewer Focus
 
-- **Validator proof** — the chosen validator's output must be
-  recorded verbatim in the close report; the per-family tallies
-  must add up to 40.
-- **Schema-error translation** — every documented JSON Schema
-  keyword must map to exactly one Leamas diagnostic code (the
-  layered ownership table in v2 spec §4.1).
+- **Validator proof** — the chosen validator's output remains verbatim
+  in the close report; its per-family tallies add up to 41.
+- **Schema-error translation** — every selected-schema error maps through
+  the complete structured table frozen by `CORRECTION03`.
 - **Lifecycle wire / normalised distinction** — the spec must
   freeze the two distinct vocabularies.
 - **Fixture honesty** — invalid fixtures must be invalid;

@@ -1,6 +1,6 @@
 # Gate-Summary Fixture Inventory
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 > The fixture set is the source of truth for the conformance tests
 > committed in `ACT-LEAMAS-GATE-SUMMARY-V2-CONFORMANCE01`.
 
@@ -66,40 +66,44 @@ testdata/
 
 ## Totals
 
-The contract pins three numbers that must be reported together.
-Removing only `v2-document-size-shape.json` reduces the artifact
-total to 39, **not** to 37. Excluding all three limit-shape
-templates gives 37 executable accept/reject fixtures. The
-contract pins:
+The global corpus boundary pins three numbers:
 
 ```text
-fixture artifacts total     = 40
-executable classification corpus = 37
-limit-shape templates       = 3
+all committed JSON fixtures     = 41
+executable accept/reject corpus = 38
+limit-shape templates           = 3
 ```
 
 | Family | Count | Role |
 | ------ | ----- | ---- |
-| `valid/` | 7 | full-accept corpus |
-| `invalid/` | 27 | full-reject corpus (one-mutation negatives + the negative-integer conformance case) |
-| `duplicate-keys/` | 3 | lexical rejection corpus |
+| `valid/` | 7 | full-accept corpus (2 v1 + 5 v2) |
+| `invalid/` | 28 | full-reject corpus (1 v1 + 27 v2) |
+| `duplicate-keys/` | 3 | lexical rejection corpus (all v2) |
 | `limits/` | 3 | static-shape templates only; numeric boundary tests are programmatic in `CONFORMANCE01` |
-| **Total artifacts** | **40** | 7 + 27 + 3 + 3 |
+| **All committed JSON fixtures** | **41** | 7 + 28 + 3 + 3 |
+
+The separately named **v2-only executable corpus is 35**: 5 valid v2 +
+27 invalid v2 + 3 duplicate-key v2. It is a subset of the 38-file global
+executable corpus, not an alternative manifest. The three limit-shape
+templates are excluded from both executable counts.
 
 `valid/v2-clinemm-microc3.json` is the canary: it carries a
-`parent_production_bundle` check with `status=fail`, so the
-derivation rule yields `overall_status=fail`. This is the v2
-explanation of "child closed, parent open, aggregate fail."
+`parent_production_bundle` check with `status=fail`, so the derivation
+rule yields `overall_status=fail`.
 
-`invalid/v2-skip-nonnull-exit.json` carries a `status=skip` check
-with a non-null `exit_code`. The recorded `overall_status` is
-`unavailable`, so the all-skipped derivation rule still applies.
+`invalid/v2-skip-nonnull-exit.json` carries a `status=skip` check with a
+non-null `exit_code`. Its `overall_status` is `unavailable`, so this
+fixture isolates the exit-code invariant.
 
-`invalid/v2-schema-version-negative.json` exercises the
-negative-integer conformance case for `schema_version=-1`: the
-envelope regex allows the form (matching RFC 8259 integer syntax),
-the structural `const: 2` check rejects it, and the decoder maps
-the rejection to `GS_UNSUPPORTED_VERSION`.
+`invalid/v2-schema-version-negative.json` exercises `schema_version=-1`.
+It is valid JSON integer syntax, and the pre-schema version dispatcher
+maps its unsupported value to `GS_UNSUPPORTED_VERSION`. The selected
+schema is never invoked for this ordinary input.
+
+Whitespace, leading-zero, plus-sign, decimal, and exponent variants are
+programmatically generated from valid documents as frozen in
+[`gate-summary-schema-version-translation.md`](../../../docs/factory/gate-summary-schema-version-translation.md).
+They are not extra committed JSON fixtures.
 
 ## Conventions
 
@@ -131,9 +135,9 @@ the rejection to `GS_UNSUPPORTED_VERSION`.
 | `v1-unknown-field.json` | `GS_UNKNOWN_FIELD` |
 | `v2-missing-schema-version.json` | `GS_VERSION_MISSING` |
 | `v2-schema-version-string.json` | `GS_INVALID_VERSION_TYPE` |
-| `v2-schema-version-decimal.json` | `GS_INVALID_VERSION_TYPE` (envelope scanner, lexical rule) |
-| `v2-schema-version-zero.json` | `GS_UNSUPPORTED_VERSION` |
-| `v2-schema-version-negative.json` | `GS_UNSUPPORTED_VERSION` (envelope regex passes; `const: 2` rejects) |
+| `v2-schema-version-decimal.json` | `GS_INVALID_VERSION_TYPE` (version probe) |
+| `v2-schema-version-zero.json` | `GS_UNSUPPORTED_VERSION` (version dispatch) |
+| `v2-schema-version-negative.json` | `GS_UNSUPPORTED_VERSION` (version dispatch) |
 | `v2-unsupported-version-3.json` | `GS_UNSUPPORTED_VERSION` |
 | `v2-empty-generated-at.json` | `GS_INVALID_TIMESTAMP` |
 | `v2-invalid-timestamp.json` | `GS_INVALID_TIMESTAMP` |
@@ -176,14 +180,12 @@ actual numeric boundary tests (4 MiB+1 document, 10,000 checks,
 
 - Every `valid/` fixture has at least one matching `invalid/`
   mutation in the same file family.
-- Every diagnostic code in
-  [`gate-summary-diagnostic-codes.md`](../../../docs/factory/gate-summary-diagnostic-codes.md)
-  is either referenced from at least one fixture or marked as
-  **test-only fault injection** (`GS_NORMALIZATION_FAILURE`,
-  `GS_INTERNAL`).
-- `GS_SCHEMA_VIOLATION` is the umbrella code emitted when the JSON
-  Schema validator reports a violation that does not map to a more
-  specific semantic code.
+- Every ordinary-input diagnostic is covered by a fixture or a frozen
+  generated case. `GS_NORMALIZATION_FAILURE` and `GS_INTERNAL` use
+  injected internal-failure tests.
+- `GS_SCHEMA_VIOLATION` is the umbrella code emitted when a selected
+  schema failure does not map to a specific row in
+  [`gate-summary-schema-error-translation.md`](../../../docs/factory/gate-summary-schema-error-translation.md).
 - `GS_COLLECTION_LIMIT` is exercised by the programmatic boundary
   generator in `CONFORMANCE01`; the static `limits/` fixtures only
   document the structural shape.

@@ -1,6 +1,6 @@
 # Gate-Summary Vocabularies
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 
 This document pins the controlled vocabularies used by the gate-summary
 contract. Every status a producer can emit, every normalized status a

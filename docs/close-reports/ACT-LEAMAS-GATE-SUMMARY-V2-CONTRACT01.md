@@ -1,11 +1,9 @@
 # Close Report: ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01
 
 > **Status:** PARTIAL — superseded by
-> [`ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`](../acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02.md).
-> Corrections are no longer in flight; they are committed as a
-> single honest revision. See the
-> [`CORRECTION02` close report](./ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02.md)
-> for the merged evidence trail.
+> [`ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`](../acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03.md).
+> The CORRECTION02 validator/Git proof remains accepted. See the
+> CORRECTION03 close report for the final reader-contract evidence.
 
 ## ACT Reference
 
@@ -29,10 +27,9 @@ correction ACT is repairing.
 `CLOSED`, but the post-close review identified twelve concrete
 defects. Those twelve are resolved in `CONTRACT01-CORRECTION01` and
 the eleven follow-up items identified by the post-`CORRECTION01`
-review are resolved in `CONTRACT01-CORRECTION02`. The contract
-freeze is now internally consistent and committed as a single
-honest revision; `DECODER01` is unblocked and `READY` on the epic
-ACT board.
+review's validator and Git proof remain accepted. Reader-contract
+semantics are superseded and closed by `CONTRACT01-CORRECTION03`;
+`DECODER01` becomes `READY` only after that forward correction.
 
 ## Files Changed
 
@@ -137,12 +134,12 @@ review flagged as defective. Each decision is corrected in
 | `2.0` rejected via `type: integer, const: 2` (false claim). | Lexical version validation moved to the pre-schema envelope scanner. |
 | `format: date-time` assumed asserted by default. | Frozen `compiler.AssertFormat()` policy. |
 | Validator selection: "v6 or v5 if unavailable." | Pinned to `v6` only. |
-| Fixture count claimed 32 but actually 35. | Fixed to 35 (now 37 after corrections add `v2-bad-status-enum.json`, `v2-overall-mismatch.json`, `v2-lower-lifecycle.json`, `v2-document-too-large.json`, `v2-truncated.json`). |
-| Diagnostic coverage claimed but several codes lacked fixtures. | Added fixtures; classified `GS_NORMALIZATION_FAILURE` and `GS_INTERNAL` as test-only fault injection. |
+| Fixture count claimed 32 but actually 35. | Final global inventory is 41 JSON artifacts, 38 executable fixtures, and 3 limit-shape templates; v2-only executable subset is 35. |
+| Diagnostic coverage claimed but several codes lacked fixtures. | Ordinary-input codes use fixtures/generated cases; internal failures use fault injection. |
 | Diagnostic ordering defined twice (Code-Path vs precedence list). | Unified on `precedence rank, then path, then encounter index`. |
 | Limit fixtures named `v2-checks-{max,over-max}.json`. | Renamed to `v2-checks-{boundary,over-boundary}-shape.json`. |
 | Closure claimed despite non-green gates. | Reclassified as `PARTIAL` in the correction ACT. |
-| Schemas not validated against the chosen Draft 2020-12 validator. | Recorded as a known gap; the validator runs in `CONFORMANCE01` and `DECODER01`. |
+| Schemas not validated against the chosen Draft 2020-12 validator. | CORRECTION02 recorded the accepted v6.0.2 `AssertFormat()` proof. |
 
 ## Agent Doctrine Impact
 

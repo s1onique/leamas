@@ -18,13 +18,10 @@ inconsistencies that must be resolved before `DECODER01` can begin.
 
 ## Status
 
-`CLOSED (PARTIAL — superseded by CORRECTION02)`. The original ACT
-reported itself closed but the review identified twelve concrete
-defects. `CORRECTION01` resolved those twelve defects but left
-eleven follow-up items, which `CORRECTION02` resolved in turn. The
-contract freeze is now internally consistent and committed as a
-single honest revision; see the `CORRECTION02` close report for
-the merged evidence trail.
+`CLOSED (PARTIAL — superseded by CORRECTION03)`. `CORRECTION02`
+accepted the validator/Git proof but left four reader-contract blockers.
+`CORRECTION03` owns the current fixture accounting, JSON grammar,
+version ownership, and schema-error translation.
 
 ## Problem
 
@@ -179,13 +176,11 @@ Focused commands:
 # See: docs/factory/gate-summary-schema-validator-selection.md.
 
 # 2. Re-run the scratch structural validator on every fixture.
-# Expected: 37 executable fixtures reviewed (7 valid + 27 invalid + 3 duplicate-key).
+# Expected: 38 executable fixtures reviewed (7 valid + 28 invalid + 3 duplicate-key).
 # Plus 3 limit-shape templates (well-formed structural shapes).
-# Total committed JSON fixture artifacts: 40.
-# Note: `CORRECTION02` reconciles these numbers against the manifest
-# (7+27+3+3=40). Removing only `v2-document-size-shape.json` gives 39
-# artifacts, not 37. Excluding all three limit-shape templates gives
-# 37 executable accept/reject fixtures.
+# Total committed JSON fixture artifacts: 41.
+# `CORRECTION03` freezes the global 41 / 38 / 3 boundary. The separately
+# named v2-only executable subset is 35, not an alternative manifest.
 
 # 3. Focused Go tests on the unchanged packages.
 go test ./internal/factory/gate/...
@@ -240,10 +235,9 @@ acceptance requires documenting baseline failures.
 - [ ] Limit fixtures are renamed honestly.
 - [ ] The chosen JSON Schema validator runs against both schemas and
       the result is recorded.
-- [ ] The scratch structural validator runs against all 37
-      executable fixtures (7 valid + 27 invalid + 3 duplicate-key)
-      plus the 3 limit-shape templates (40 total artifacts) and
-      the result is recorded.
+- [ ] The scratch structural validator runs against all 38 executable
+      fixtures (7 valid + 28 invalid + 3 duplicate-key) plus the 3
+      limit-shape templates (41 total artifacts) and records the result.
 - [ ] The close report is rewritten to record PARTIAL closure with
       retained baseline failures, the corrected count of 35
       fixtures, and the actual schema-validation result.

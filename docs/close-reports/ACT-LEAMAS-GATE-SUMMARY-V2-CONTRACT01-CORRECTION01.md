@@ -16,10 +16,8 @@ output, or downstream evidence behavior was changed.
 
 ## Status
 
-`PARTIAL`. The contract freeze is now internally consistent. The
-remaining PARTIAL classification reflects pre-existing baseline
-failures in `make factorize` and `make gate` that are tracked
-by their owning ACTs, not by this one.
+`PARTIAL — superseded by CORRECTION03`. The later validator/Git proof is
+accepted; CORRECTION03 owns the final reader semantics and inventory.
 
 ## Files Changed
 
@@ -40,7 +38,7 @@ below. Every file in this list was added or modified by
 | `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01.md` | rewritten — PARTIAL closure classification, defect table |
 | `internal/gatesummary/schema/gate-summary-v1.schema.json` | narrowed — no new collection/string limits |
 | `internal/gatesummary/schema/gate-summary-v2.schema.json` | narrowed — uppercase lifecycle only, exact 64-char hashes, no `parent_checks` |
-| `internal/gatesummary/testdata/README.md` | rewritten by CORRECTION01 (7+25+3+2=37); reconciled by CORRECTION02 to 40 artifacts = 7 valid + 27 invalid + 3 duplicate-key + 3 limit-shape templates |
+| `internal/gatesummary/testdata/README.md` | rewritten by CORRECTION01; final global inventory reconciled by CORRECTION03 to 41 = 7 valid + 28 invalid + 3 duplicate-key + 3 limit-shape |
 | `internal/gatesummary/testdata/limits/README.md` | rewritten — boundary semantics clarified |
 | `internal/gatesummary/testdata/valid/v2-minimal.json` | hash normalization |
 | `internal/gatesummary/testdata/valid/v2-full.json` | hash normalization; `parent_checks` removed; added parent-state check |
@@ -71,8 +69,8 @@ The twelve defects from the post-close review are all resolved:
 | D1 | ClineMM µC-3 fixture contradicts derivation rule | resolved | `parent_production_bundle` failing check added; derivation yields `fail` matching recorded. |
 | D2 | `2.0` rejected via `type: integer, const: 2` (false claim) | resolved | Lexical version validation moved to the pre-schema envelope scanner using `json.Number`. |
 | D3 | `format: date-time` assumed asserted by default | resolved | `compiler.AssertFormat()` policy frozen; `santhosh-tekuri/jsonschema/v6` pinned. |
-| D4 | Fixture count claimed 32 but actually 35 | resolved; reconciled to 40/37/3 by CORRECTION02 | Inventory is 40 artifacts (37 executable + 3 limit-shape). |
-| D5 | Nine diagnostic codes lack fixtures | resolved | Added fixtures for `GS_INVALID_STATUS`, `GS_OVERALL_STATUS_MISMATCH`, `GS_DOCUMENT_TOO_LARGE`; `GS_NORMALIZATION_FAILURE` and `GS_INTERNAL` marked as test-only fault injection. |
+| D4 | Fixture count claimed 32 but actually 35 | superseded by CORRECTION03 | Global inventory is 41 artifacts (38 executable + 3 limit-shape); v2-only executable subset is 35. |
+| D5 | Nine diagnostic codes lack fixtures | resolved | Ordinary-input codes use fixtures/generated cases; `GS_NORMALIZATION_FAILURE` and internal `GS_INTERNAL` paths use fault injection. |
 | D6 | Diagnostic ordering defined twice | resolved | Unified on `precedence rank, then path, then encounter index`. |
 | D7 | v1 schema adds limits not in original reader | resolved | v1 schema stripped back to original reader behavior. |
 | D8a | Lifecycle wire accepts both cases | resolved | Schema restricted to uppercase only. |
@@ -80,7 +78,7 @@ The twelve defects from the post-close review are all resolved:
 | D8c | `parent_checks` was a separate array | resolved | Removed; producers record parent-state observations as ordinary `checks` with `scope=parent_act`. |
 | D9 | Limit fixtures misleadingly named | resolved | Renamed to `v2-checks-{boundary,over-boundary}-shape.json`. |
 | D10 | Closure claimed but full gates not green | resolved | Closure reclassified as `PARTIAL` with retained baseline failures. |
-| D11 | Schemas not validated against chosen Draft 2020-12 validator | resolved | Selection recorded; validator runs in `CONFORMANCE01`. |
+| D11 | Schemas not validated against chosen Draft 2020-12 validator | resolved by CORRECTION02 | Validator v6.0.2 proof with `AssertFormat()` is recorded and accepted. |
 
 ## Verification
 
@@ -147,8 +145,8 @@ PASS  v2-leamas-self-hosted  want=accept
 - **Parent-state observations:** Recorded as ordinary `checks[]`
   entries with `scope=parent_act`. The dedicated `parent_checks`
   array was removed.
-- **Fixture count:** 37 total (7 valid + 25 invalid + 3 duplicate
-  + 2 limit-shape).
+- **Historical CORRECTION01 scratch set:** 37 total. The final global
+  inventory is 41 / 38 / 3 under CORRECTION03.
 
 ## Agent Doctrine Impact
 
@@ -158,9 +156,8 @@ behavior. The CLI surface, `leamas factory verify` commands, and
 
 ## Open Questions
 
-- The validator runs are deferred to `CONFORMANCE01` because this
-  ACT is docs/schemas/fixtures only. `DECODER01` wires the
-  validator into production.
+- The selected-validator proof was completed by CORRECTION02.
+  `DECODER01` still owns production wiring.
 - The boundary-shape fixtures under `testdata/limits/` are small
   well-formed documents. Actual numeric boundary tests are
   programmatic in `CONFORMANCE01`.

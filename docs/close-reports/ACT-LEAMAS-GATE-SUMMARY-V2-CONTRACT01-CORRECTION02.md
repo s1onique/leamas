@@ -7,19 +7,16 @@
 
 ## Summary
 
-Resolved all eleven remaining blockers from the post-`CORRECTION01`
-review. The contract freeze is now genuinely frozen: the schemas
-match what a real Draft 2020-12 validator does, the lexical rules
-are unambiguous, the lifecycle wire/normalized distinction is
-explicit, the resource-limit table is consistent with the spec, and
-the fixture inventory is honest about what each family exercises.
-The selected `santhosh-tekuri/jsonschema/v6` validator was run
-against both schemas with `AssertFormat()` enabled and against every
-committed fixture; the output is recorded verbatim below.
+This ACT's Git closure and selected-validator proof remain accepted. A
+later review found four reader-contract blockers, now owned by
+`CORRECTION03`: global fixture accounting, RFC 8259 version forms,
+pre-schema unsupported-version dispatch, and complete structured
+schema-error translation. The validator was run against both schemas
+with `AssertFormat()` and all 41 fixtures; that proof remains verbatim.
 
 ## Status
 
-`PARTIAL — contract freeze committed and internally closed`.
+`PARTIAL — superseded by CORRECTION03; validator and Git proof accepted`.
 Repository-wide `make factorize` / `make gate` baseline failures
 remain externally owned by their own ACTs and are documented in
 the [`CORRECTION01` close report](./ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION01.md).
@@ -34,19 +31,19 @@ revision (no fictitious historical commits) under the wording
 |------|--------|
 | `docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02.md` | rewritten — eleven defects now resolved; validator proof referenced |
 | `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02.md` | added (this file) |
-| `docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION01.md` | status reconciled to `CLOSED (PARTIAL — superseded by CORRECTION02)`; GREEN section now reports 40 / 37 / 3 instead of 35 |
-| `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION01.md` | defect D4 reconciled to the 40 / 37 / 3 split with both moves (limit-shape reclassification, negative-integer fixture) recorded |
+| `docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION01.md` | status reconciled to `CLOSED (PARTIAL — superseded by CORRECTION02)`; later accounting superseded by CORRECTION03 |
+| `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION01.md` | defect D4 record added; final global accounting is owned by CORRECTION03 |
 | `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01.md` | status banner updated to `PARTIAL — superseded by CORRECTION02`; no longer claims "corrections in flight" |
 | `docs/epics/EPIC-LEAMAS-GATE-SUMMARY-SCHEMA-V2-ADOPTION01.md` | ACT board reconciled: CONTRACT01/CORRECTION01/CORRECTION02 = `CLOSED (PARTIAL)`; DECODER01 = `READY` |
 | `docs/factory/gate-summary-v1-spec.md` | status banner updated to CORRECTION02 |
 | `docs/factory/gate-summary-v2-spec.md` | added §4.1 layered diagnostic ownership table; removed "no negative sign" wording; status banner updated to CORRECTION02 |
 | `docs/factory/gate-summary-vocabularies.md` | status banner updated to CORRECTION02 |
 | `docs/factory/gate-summary-diagnostic-codes.md` | reference path updated; `GS_UNSUPPORTED_VERSION` row references the negative-integer case; status banner updated |
-| `docs/factory/gate-summary-compatibility-matrix.md` | added negative / leading-zero / plus-sign / trailing-whitespace rows; fixture totals reconciled to 40 / 37 / 3; status banner updated to CORRECTION02 |
+| `docs/factory/gate-summary-compatibility-matrix.md` | added version rows and inventory text; their final semantics/accounting are superseded by CORRECTION03 |
 | `docs/factory/gate-summary-resource-limits.md` | `parent_checks` row removed; status banner updated to CORRECTION02 |
 | `docs/factory/gate-summary-schema-validator-selection.md` | reviewer workflow now references CORRECTION02 close report; status banner updated to CORRECTION02 |
 | `docs/factory/gate-summary-conformance-test-design.md` | status banner updated to CORRECTION02 |
-| `internal/gatesummary/testdata/README.md` | rewritten — totals 40 / 37 / 3; limit-shape templates documented honestly; status banner updated to CORRECTION02 |
+| `internal/gatesummary/testdata/README.md` | rewritten; final 41 / 38 / 3 global inventory is owned by CORRECTION03 |
 | `internal/gatesummary/testdata/limits/README.md` | `parent_checks` row removed; static-shape fixtures section includes `v2-document-size-shape.json`; status banner updated to CORRECTION02 |
 | `internal/gatesummary/testdata/invalid/v2-schema-version-negative.json` | **added** (E8) — `schema_version: -1` conformance case |
 | `internal/gatesummary/testdata/limits/v2-document-size-shape.json` | already present (was added by CORRECTION01); now matches the limits README |
@@ -58,8 +55,8 @@ validator wiring is `DECODER01`'s job.
 
 ## Defect Resolution
 
-All eleven defects from the post-`CORRECTION01` review are
-resolved:
+The table records this ACT's disposition. E9 and E10 were only partially
+resolved and are superseded by `CORRECTION03`:
 
 | # | Defect | Status | Resolution |
 | - | ------ | ------ | ---------- |
@@ -70,43 +67,35 @@ resolved:
 | E5 | `v2-skip-nonnull-exit.json` carries two defects | resolved | `overall_status` is `unavailable`, so the all-skipped derivation rule still applies. |
 | E6 | `v2-document-too-large.json` is structurally valid | resolved | The fixture actually lives at `testdata/limits/v2-document-size-shape.json` (was already moved by CORRECTION01; verified and documented). |
 | E7 | Limit-shape fixture description overstates | resolved | README, v2 spec, and limits README now describe limit-shape fixtures as static-shape templates only; numeric boundary tests are programmatic in `CONFORMANCE01`. |
-| E8 | Lexical version regex negative-number contradiction | resolved | Regex retained; "no negative sign" wording removed; layered ownership table added in v2 spec §4.1; conformance case added. |
-| E9 | Schema-error → diagnostic translation not frozen | resolved | Layered ownership table in v2 spec §4.1 plus compatibility matrix rows for negative / leading-zero / plus-sign / trailing-whitespace / decimal / exponent versions. |
-| E10 | Counts and acceptance criteria stale | resolved | Fixture README, compatibility matrix, CORRECTION01 close report, CORRECTION01 ACT all reconciled to the 40 / 37 / 3 split with all three numbers and the rationale. |
+| E8 | Lexical version regex negative-number contradiction | resolved; clarified by CORRECTION03 | Negative fixture added; current ownership table assigns valid unsupported integers to pre-schema dispatch. |
+| E9 | Schema-error → diagnostic translation not frozen | superseded | This ACT froze version rows only. CORRECTION03 freezes the complete structured validator-error mapping. |
+| E10 | Counts and acceptance criteria stale | superseded | This ACT omitted the invalid v1 fixture. CORRECTION03 freezes global 41 / 38 / 3 accounting. |
 | E11 | Epic ACT board lifecycle state not updated | resolved | Epic ACT board, original CONTRACT01 close report, CORRECTION01 close report, CORRECTION01 ACT, and CORRECTION02 close report all reconciled. |
 
 ## Fixture Inventory Contract
 
-The contract pins three numbers that must be reported together.
-The committed JSON fixture corpus is:
+The global committed corpus is:
 
 | Family | Count | Role |
 | ------ | ----- | ---- |
-| `valid/` | 7 | full-accept corpus (5 v2 + 2 v1) |
-| `invalid/` | 27 | v2 full-reject corpus (excludes the v1-only `invalid/v1-unknown-field.json` fixture, which is v1 contract coverage and not part of the v2 manifest) |
-| `duplicate-keys/` | 3 | lexical rejection corpus |
-| `limits/` | 3 | static-shape templates only; numeric boundary tests are programmatic in `CONFORMANCE01` |
-| **All committed JSON fixtures** | **40** | 7 + 27 + 3 + 3 |
+| `valid/` | 7 | full-accept corpus (2 v1 + 5 v2) |
+| `invalid/` | 28 | full-reject corpus (1 v1 + 27 v2) |
+| `duplicate-keys/` | 3 | lexical rejection corpus (all v2) |
+| `limits/` | 3 | static-shape templates only |
+| **All committed JSON fixtures** | **41** | 7 + 28 + 3 + 3 |
 
 ```text
-fixture artifacts total     = 40
-executable classification corpus = 37
-limit-shape templates       = 3
+all committed JSON fixtures     = 41
+executable accept/reject corpus = 38
+limit-shape templates           = 3
 ```
 
-Removing only `v2-document-size-shape.json` gives **39**, not 37.
-Excluding all three limit-shape files gives **37** executable
-accept/reject fixtures. These three numbers must be reported
-together in every status-bearing document.
+The separately named v2-only executable subset is 35: 5 valid v2 +
+27 invalid v2 + 3 duplicate-key v2. It is not a separate manifest.
 
-The `valid/v2-clinemm-microc3.json` fixture is the canary: it
-carries a `parent_production_bundle` check with `status=fail`,
-so the derivation rule yields `overall_status=fail`. The
-`invalid/v2-schema-version-negative.json` fixture exercises the
-negative-integer conformance case: the envelope regex allows the
-form (matching RFC 8259 integer syntax), the structural `const: 2`
-check rejects it, and the decoder maps the rejection to
-`GS_UNSUPPORTED_VERSION`.
+The ClineMM fixture remains the derivation canary. The negative-version
+fixture is valid integer syntax; pre-schema dispatch reports
+`GS_UNSUPPORTED_VERSION` without invoking a selected schema.
 
 ## Verification
 
@@ -204,10 +193,9 @@ Notes on the per-fixture results:
   scanner); JSON Schema accepts two of them because `encoding/json`
   uses last-wins and the schema cannot see duplicates.
 
-The "invalid = 28" count above includes the v1-only
-`v1-unknown-field.json` fixture (rejected structurally for
-`additionalProperties: false` on v1). The v2 manifest excludes
-that file; the v2 invalid count is 27.
+The "invalid = 28" count includes 1 v1 and 27 v2 fixtures. The global
+inventory includes all of them. The separately named v2-only executable
+subset uses the 27 v2 invalid fixtures without calling it a manifest.
 
 ### Scratch Validator Output (per-fixture detail)
 
@@ -257,12 +245,11 @@ that file; the v2 invalid count is 27.
 
 ### Layered diagnostic ownership
 
-The v2 spec §4.1 carries the normative ownership table. The
-validator proof above confirms the structural layer:
-**every fixture assigned to the structural layer is rejected; every
-accepted fixture is accepted.** Lexical and semantic fixtures are
-allowed to be accepted by JSON Schema — that is the architectural
-truth the contract documents.
+The validator proof confirms only selected-schema behavior. The current
+normative version ownership and complete schema-error mapping live in
+`gate-summary-schema-version-translation.md` and
+`gate-summary-schema-error-translation.md`. Ordinary unsupported versions
+are rejected before schema selection.
 
 ### Skipped checks
 
@@ -284,21 +271,20 @@ truth the contract documents.
   validations.
 - **Lexical version validation:** Lives in the pre-schema envelope
   scanner using `json.Number`, not in JSON Schema.
-- **Layered diagnostic ownership:** v2 spec §4.1 pins each
-  `schema_version` failure to exactly one layer.
+- **Layered diagnostic ownership:** The current version translation pins
+  each `schema_version` form to its pre-schema owner.
 - **Output hashes:** Always 64 lowercase hex; empty stream →
   `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`.
 - **Lifecycle wire format:** Uppercase only; lowercase rejected.
 - **Parent-state observations:** Recorded as ordinary `checks[]`
   entries with `scope=parent_act`. The dedicated `parent_checks`
   array was removed.
-- **Fixture inventory:** 40 committed JSON fixtures = 7 valid +
-  27 v2 invalid + 3 duplicate-key + 3 limit-shape templates;
-  executable accept/reject corpus = 37; limit-shape templates = 3.
-- **Negative-integer conformance:** Added
-  `invalid/v2-schema-version-negative.json`; the envelope regex
-  permits `-1`, the structural `const: 2` rejects it, and the
-  decoder maps the rejection to `GS_UNSUPPORTED_VERSION`.
+- **Fixture inventory:** 41 committed JSON fixtures = 7 valid +
+  28 invalid + 3 duplicate-key + 3 limit-shape templates; executable
+  accept/reject corpus = 38; v2-only executable subset = 35.
+- **Negative-integer conformance:** Added the `-1` fixture. The current
+  contract assigns its `GS_UNSUPPORTED_VERSION` result to pre-schema
+  dispatch; schema `const` is defense in depth only.
 - **Resource limits:** `parent_checks` row removed entirely. All
   remaining limits apply to the v2 schema only.
 
@@ -311,16 +297,15 @@ wiring into production remains `DECODER01`'s job.
 
 ## Open Items
 
-None remaining for `CORRECTION02`. The contract freeze is
-internally consistent, the validator proof is recorded verbatim,
-and every status-bearing document agrees on lifecycle state and
-fixture accounting.
+The validator and Git proof remain closed. Reader-contract blockers E9,
+E10, JSON grammar, and unsupported-version ownership are superseded and
+resolved by the forward `CORRECTION03`.
 
 ## Follow-up ACTs
 
 | ACT | Description | Priority |
 |-----|-------------|----------|
-| `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | Wire the chosen JSON Schema validator into production; add bounded reader, envelope scanner, v1/v2 decoders, resource-limit enforcement, schema-error translation table. | P0 |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | Implement the frozen bounded reader, envelope/version dispatch, v1/v2 decoders, resource limits, and schema-error translation. | P0 |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01` | Build the normalized `Summary` domain; convert wire `OPEN/PARTIAL/CLOSED` to normalized `open/partial/closed`. | P0 |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01` | Render v2 scope, parent, and aggregate status independently in the targeted digest. | P0 |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CLI01` | Add `validate`, `inspect`, `normalize` subcommands with the documented exit-code contract. | P0 |
@@ -333,9 +318,8 @@ fixture accounting.
 - All 41 JSON fixtures under `testdata/` were reviewed by the
   validator; every accept / reject classification matches the
   contract's documented expectation.
-- The v2 contract manifest is 40 fixtures; the v1-only
-  `v1-unknown-field.json` lives in `testdata/invalid/` for v1
-  contract coverage and is excluded from the v2 manifest count.
+- The global corpus includes `v1-unknown-field.json`; no hybrid
+  v2-manifest count is used. The v2-only executable subset is 35.
 - The reconciled tree was committed as a single honest revision.
   No fictitious historical commits were constructed; every file
   in the line was untracked at the start of this ACT.

@@ -1,6 +1,6 @@
 # Gate-Summary Resource Limits
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 > Initial consumer-safety limits for the v1/v2 reader.
 
 This document lists the **consumer-safety** limits the v2 reader

@@ -102,8 +102,9 @@ child scope behind an open parent.
 | --- | ------ | ----- |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01` | CLOSED (PARTIAL — superseded) | Initial contract freeze; superseded by corrections. |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION01` | CLOSED (PARTIAL) | Corrected twelve defects; left eleven follow-up items. |
-| `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02` | CLOSED (PARTIAL — this ACT line, contract freeze committed) | Resolved all eleven follow-up items; validator proof recorded. |
-| `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | READY | Versioned decoder (next ACT). |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02` | CLOSED (PARTIAL — superseded) | Validator proof accepted; reader-contract semantics superseded by CORRECTION03. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03` | IN PROGRESS | Correct global inventory, JSON grammar, version ownership, and schema-error translation. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | BLOCKED | Begins after CORRECTION03 closes. |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01` | PENDING | Domain normalization |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01` | PENDING | Digest integration |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CLI01` | PENDING | CLI surface |

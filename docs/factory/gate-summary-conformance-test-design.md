@@ -1,6 +1,6 @@
 # Gate-Summary Conformance Test Design
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 > The implementation lives in
 > `ACT-LEAMAS-GATE-SUMMARY-V2-CONFORMANCE01`.
 
@@ -54,8 +54,9 @@ either step indicates schema/struct drift.
 For every invalid fixture, the conformance test must:
 
 1. Read the fixture.
-2. Run it through the full reader pipeline (envelope scanner →
-   schema validator → semantic validator → normalizer).
+2. Run it through the full reader pipeline (bounded read → syntax and
+   duplicate scan → version probe/dispatch → selected schema → semantic
+   validator → normalizer).
 3. Assert that the reader returns a non-empty diagnostic list.
 4. Assert that the diagnostic list contains the expected
    `Diagnostic.Code` from
@@ -66,16 +67,41 @@ For every invalid fixture, the conformance test must:
 
 ## 5. Lexical envelope tests
 
-The following fixtures exercise the **pre-schema envelope scanner**,
-not the JSON Schema validator. The conformance tests must confirm the
-envelope scanner rejects them before schema validation runs:
+Committed fixtures cover duplicate keys, trailing JSON, and one decimal
+version form. Programmatic tests must also generate the complete raw-byte
+matrix frozen in
+[`gate-summary-schema-version-translation.md`](./gate-summary-schema-version-translation.md):
 
-- `testdata/duplicate-keys/*.json` — `GS_DUPLICATE_KEY`.
-- `testdata/invalid/v2-trailing-second-value.json` —
-  `GS_TRAILING_JSON`.
-- `testdata/invalid/v2-schema-version-decimal.json` (and other
-  lexical decimal/exponent fixtures added in future ACTs) —
-  `GS_INVALID_VERSION_TYPE`.
+- all RFC 8259 whitespace combinations around supported `1` and `2`
+  tokens, both before a comma and before the closing brace — accept and
+  dispatch to the matching schema;
+- leading-zero forms including `02` and `-02` —
+  `GS_MALFORMED_JSON` at syntax scan;
+- leading-plus forms including `+2` — `GS_MALFORMED_JSON` at syntax
+  scan;
+- decimal and exponent forms — `GS_INVALID_VERSION_TYPE` at the version
+  probe;
+- valid unsupported integers — `GS_UNSUPPORTED_VERSION` at dispatch.
+
+Tests mutate raw JSON bytes rather than marshal Go numbers. They assert
+both the public result and that selected-schema validation is not invoked
+for a rejected version form.
+
+## 5.1 Selected-schema translation tests
+
+For every row in
+[`gate-summary-schema-error-translation.md`](./gate-summary-schema-error-translation.md),
+the suite generates a one-rule mutation from a known-valid fixture and
+asserts the exact `GS_*` code and JSON Pointer path. Tests must:
+
+- classify from `ValidationError.ErrorKind`, `InstanceLocation`, schema
+  keyword location, and `Causes`, never from `Error()` text;
+- fan out structured missing/additional property names deterministically;
+- collapse the test-total `anyOf` subtree to one
+  `GS_PARTIAL_TEST_TOTALS` diagnostic;
+- cover the `GS_SCHEMA_VIOLATION` fallback;
+- inject an impossible post-dispatch version `const` mismatch and expect
+  `GS_INTERNAL`, never `GS_UNSUPPORTED_VERSION`.
 
 ## 6. One-mutation negatives
 
@@ -124,10 +150,10 @@ The test suite includes a property test that:
 
 ## 9. Fault-injection tests
 
-`GS_NORMALIZATION_FAILURE` and `GS_INTERNAL` are documented as
-**test-only fault injection** codes. They are not fixture-driven;
-`CONFORMANCE01` adds tests that inject internal failures and assert
-the diagnostic codes are emitted without stack traces.
+`GS_NORMALIZATION_FAILURE` and internal `GS_INTERNAL` paths are not
+ordinary invalid-input fixtures. `CONFORMANCE01` injects those failures,
+including the impossible post-dispatch version mismatch, and asserts the
+diagnostic codes are emitted without stack traces.
 
 ## 10. Schema validator validation
 

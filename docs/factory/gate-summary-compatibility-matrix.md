@@ -1,6 +1,6 @@
 # Gate-Summary Compatibility Matrix
 
-> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02`.
+> **Status:** Frozen as of `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03`.
 > The matrix below is the source of truth that subsequent ACTs
 > (`DECODER01`, `NORMALIZATION01`, `CONFORMANCE01`) must satisfy.
 
@@ -19,17 +19,15 @@ diagnostics and no normalized model.
 | Invalid v2 | Reject |
 | Missing `schema_version` | Reject (`GS_VERSION_MISSING`) |
 | `"schema_version": "2"` (string) | Reject (`GS_INVALID_VERSION_TYPE`) |
-| `"schema_version": 2.0` (decimal) | Reject (`GS_INVALID_VERSION_TYPE`) |
-| `"schema_version": 2.00` (decimal) | Reject (`GS_INVALID_VERSION_TYPE`) |
-| `"schema_version": 2e0` (exponent) | Reject (`GS_INVALID_VERSION_TYPE`) |
-| `"schema_version": 2E0` (exponent) | Reject (`GS_INVALID_VERSION_TYPE`) |
-| `"schema_version": "2"` (string) | Reject (`GS_INVALID_VERSION_TYPE`) |
+| `"schema_version": 2.0` or `2.00` (decimal) | Reject (`GS_INVALID_VERSION_TYPE`) |
+| `"schema_version": 2e0` or `2E0` (exponent) | Reject (`GS_INVALID_VERSION_TYPE`) |
 | `"schema_version": 0` | Reject (`GS_UNSUPPORTED_VERSION`) |
 | `"schema_version": -1` (negative integer) | Reject (`GS_UNSUPPORTED_VERSION`) |
 | `"schema_version": 3` | Reject (`GS_UNSUPPORTED_VERSION`) |
-| `"schema_version": 02` (leading zero) | Reject (`GS_INVALID_VERSION_TYPE`) |
-| `"schema_version": +2` (explicit plus sign) | Reject (`GS_INVALID_VERSION_TYPE`) |
-| `"schema_version": 2 ` (trailing whitespace) | Reject (`GS_INVALID_VERSION_TYPE`) |
+| `"schema_version": 02` or `-02` (leading zero) | Reject (`GS_MALFORMED_JSON`) |
+| `"schema_version": +2` (explicit plus sign) | Reject (`GS_MALFORMED_JSON`) |
+| Valid document with JSON whitespace before `1` or `2` | Accept; dispatch v1/v2 |
+| Valid document with JSON whitespace after `1` or `2`, before `,` or `}` | Accept; dispatch v1/v2 |
 | Duplicate `schema_version` keys | Reject (`GS_DUPLICATE_KEY`) |
 | v1 with v2-only fields | Reject (`GS_UNKNOWN_FIELD`) |
 | v2 missing execution-binding field | Reject (`GS_REQUIRED_FIELD_MISSING`) |
@@ -55,7 +53,8 @@ diagnostics and no normalized model.
 | Invalid OID form | Reject (`GS_INVALID_OID`) |
 | Invalid lifecycle/gate status | Reject (`GS_INVALID_STATUS`) |
 | Lowercase lifecycle status | Reject (`GS_INVALID_STATUS`) |
-| Missing or malformed `generated_at` | Reject (`GS_INVALID_TIMESTAMP`) |
+| Missing `generated_at` | Reject (`GS_REQUIRED_FIELD_MISSING`) |
+| Empty or malformed `generated_at` | Reject (`GS_INVALID_TIMESTAMP`) |
 
 ## 2. Diagnostic precedence
 
@@ -103,47 +102,43 @@ The precedence table for the codes that appear in §1 is:
 Within a single code, diagnostics are sorted by `Path` and then by
 encounter index, so the order is deterministic across runs.
 
-## 3. Fixture inventory contract
+## 3. Fixture and generated-case contract
 
-Every row in §1 has at least one matching fixture under
-`internal/gatesummary/testdata/`. Each fixture is named with its
-expected result (`valid/<name>.json` or `invalid/<name>.json`) and is
-referenced from `internal/gatesummary/testdata/README.md`.
+Rows in §1 are covered by committed fixtures or by the generated lexical
+matrix in
+[`gate-summary-schema-version-translation.md`](./gate-summary-schema-version-translation.md).
+Generated raw-number cases are not committed JSON fixtures.
 
-Fixture coverage is summarized with three numbers that must be
-reported together. Removing one limit-shape template does **not**
-reduce the executable corpus from 40 to 37; it reduces the artifact
-total to 39. The contract pins all three counts:
+The global fixture boundary has three numbers that must be reported
+together:
 
-- **Fixture artifacts total: 40.** Committed JSON files under
+- **All committed JSON fixtures: 41.** The 7 valid + 28 invalid + 3
+  duplicate-key + 3 limit-shape files under
   `internal/gatesummary/testdata/`.
-- **Executable classification corpus: 37.** The 7 valid + 27
-  invalid + 3 duplicate-key files; every one is exercised by the
-  conformance tests as an accept or reject case.
-- **Limit-shape templates: 3.** Static-shape markers only; the
-  actual numeric boundary tests are programmatic generators in
-  `CONFORMANCE01`.
+- **Executable accept/reject corpus: 38.** The 7 valid + 28 invalid + 3
+  duplicate-key files.
+- **Limit-shape templates: 3.** Static-shape markers; numeric boundaries
+  are generated programmatically in `CONFORMANCE01`.
+
+The separately named **v2-only executable corpus is 35**: 5 valid v2 +
+27 invalid v2 + 3 duplicate-key v2. It is a version-specific subset of
+the 38-file executable corpus, not an alternative fixture manifest.
 
 Fixture family breakdown:
 
-- Valid: 7 (v1-minimal, v1-full, v2-minimal, v2-full, v2-root-scope,
-  v2-clinemm-microc3, v2-leamas-self-hosted).
-- Invalid: 27 (one-mutation negatives, including
-  `v2-schema-version-negative.json` for the negative-integer
-  conformance case).
-- Duplicate-key: 3 (lexical corpus).
-- Limit-shape: 3 (`v2-checks-boundary-shape.json`,
-  `v2-checks-over-boundary-shape.json`,
-  `v2-document-size-shape.json`).
-- **Total: 40 fixture artifacts; 37 executable accept/reject
-  fixtures; 3 limit-shape templates.**
+- Valid: 7 (2 v1 + 5 v2).
+- Invalid: 28 (1 v1 + 27 v2).
+- Duplicate-key: 3 (all v2).
+- Limit-shape: 3 (all v2).
+- **All committed JSON fixtures: 41; executable accept/reject fixtures:
+  38; limit-shape templates: 3.**
 
-Two codes are documented as **test-only fault injection** rather
-than fixture-driven: `GS_NORMALIZATION_FAILURE` and `GS_INTERNAL`.
-`GS_SCHEMA_VIOLATION` is the umbrella code for schema violations
-that do not map to a more specific semantic code; concrete
-over-limit fixtures exercise `GS_COLLECTION_LIMIT` instead, with
-the umbrella code reserved for type or format errors.
+`GS_NORMALIZATION_FAILURE` and `GS_INTERNAL` use injected internal-failure
+tests rather than ordinary invalid-input fixtures. The impossible
+post-dispatch schema-version mismatch is one `GS_INTERNAL` case.
+`GS_SCHEMA_VIOLATION` is the fallback for a selected-schema leaf that the
+complete translation table does not map more specifically:
+[`gate-summary-schema-error-translation.md`](./gate-summary-schema-error-translation.md).
 
 ## 4. Producer policy after release
 
@@ -167,4 +162,6 @@ must:
 - run the chosen Draft 2020-12 JSON Schema validator with
   `AssertFormat()` enabled;
 - run the chosen validator against the schemas to confirm they
-  parse as Draft 2020-12.
+  parse as Draft 2020-12;
+- exercise the complete structured schema-error translation table;
+- generate every lexical case frozen in the version-translation matrix.
