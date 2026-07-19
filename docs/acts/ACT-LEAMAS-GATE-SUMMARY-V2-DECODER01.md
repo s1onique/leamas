@@ -10,8 +10,9 @@ Implement the frozen strict gate-summary v1/v2 decoder.
 
 ## Status
 
-`IN PROGRESS`. The implementation and executable contract are under review.
-`NORMALIZATION01` remains pending and is not ready.
+`CLOSED (PARTIAL — retained unrelated baseline failures)`. Implementation
+commit `37d9720` and forward P0 fix `a14a3d7` preserve the frozen decoder
+contract. This closure reconciles lifecycle state; `NORMALIZATION01` is `READY`.
 
 ## Problem
 
@@ -125,8 +126,8 @@ go test -run='^$' -bench='BenchmarkDecode(V1Minimal|V2Minimal|V2Full)$' \
 
 The refreshed focused suite, race suite, package vet, and benchmark smoke pass.
 Repository checks were also re-run; retained unrelated baseline failures are
-recorded exactly in the close report. Git closure remains required before
-status can change from `IN PROGRESS`.
+recorded exactly in the close report. The implementation and forward P0 fix
+were reviewed and committed without rewriting history.
 
 ### Exceptions
 
@@ -161,11 +162,11 @@ observable deterministic result, and source review confirms recursion is gone.
 - [x] Duplicate-key scanning uses an explicit frame stack, and full `Decode`
       rejects the deepest syntax-accepted object and array inputs without panic.
 - [x] Required repository verification is complete with honest results.
-- [ ] The full implementation changeset has been staged and reviewed through
-      a staged Factory digest.
-- [ ] The implementation has a forward commit.
-- [ ] A separate closure-only status commit is made only if review permits;
-      until then this ACT remains `IN PROGRESS` and `NORMALIZATION01` pending.
+- [x] The full implementation changeset and forward P0 fix were staged and
+      reviewed through Factory digests.
+- [x] Implementation commit `37d9720` and forward P0 fix `a14a3d7` are landed.
+- [x] This separate closure-only status commit reconciles the ACT and epic
+      lifecycle; `NORMALIZATION01` becomes `READY`.
 
 ## Verification Commands
 
@@ -195,8 +196,8 @@ operational `Result` invariants, and proof that rejected versions cannot invoke
 schema or wire decoding. Also confirm that no semantic normalization entered
 this ACT.
 
-## Close Report Stub
+## Close Report
 
-The draft report is at
+The closure record is at
 [`docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01.md`](../close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01.md).
-It is not a closure claim while this ACT remains `IN PROGRESS`.
+It records the exact partial-closure evidence and retained unrelated failures.

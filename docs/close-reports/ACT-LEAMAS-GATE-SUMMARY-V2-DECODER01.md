@@ -1,14 +1,14 @@
-# ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01 — Draft Close Report
+# Close Report: ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01
 
-> **Status:** `IN PROGRESS`.
+> **Status:** `CLOSED (PARTIAL — retained unrelated baseline failures)`.
 >
-> This is a verification record and closure draft, not a claim that the ACT
-> is closed. The implementation must be committed and reviewed before any
-> separate closure-only status change. `NORMALIZATION01` remains pending.
+> The decoder contract and both implementation commits are reviewed and
+> committed. Repository-wide failures retained below predate and remain
+> unrelated to DECODER01. `NORMALIZATION01` is now `READY`.
 
 ## Summary
 
-The working implementation provides a strict, bounded, versioned v1/v2
+The implementation provides a strict, bounded, versioned v1/v2
 gate-summary decoder. It performs complete envelope scanning, iterative
 duplicate-key rejection, exact version dispatch, embedded Draft 2020-12 schema
 validation, structured schema-error translation, and strict version-specific
@@ -20,12 +20,23 @@ The active contract now exists at
 
 ## Status and Git disposition
 
+```text
+implementation commit = 37d9720
+working tree after implementation = clean
+staged digest before implementation commit = reviewed
+```
+
 - Contract base: `a9af32318be3709ac408b122f0028cb45469a82a`.
-- ACT status: `IN PROGRESS`.
-- `NORMALIZATION01`: `PENDING`, blocked on DECODER01 closure.
-- Implementation commit: pending at the time of this draft.
-- Closure-only status commit: deferred unless a later review permits closure.
-- Force-push, amend, and history rewriting: not used.
+- Implementation commit: `37d972053a472aeacbc5588f2be7960d3c177950`.
+- Forward P0 fix: `a14a3d70b058cab83cc652b6bd79b22c27b3b7a2`.
+- Forward-fix staged digest: reviewed; 10 files, no untracked content,
+  `git_diff_check=pass`, and no dependency delta.
+- Forward range digest: `37d9720..a14a3d7`, reviewed with the same manifest
+  and patch-hygiene result.
+- Closure-only status commit: this commit.
+- ACT status: `CLOSED (PARTIAL — retained unrelated baseline failures)`.
+- `NORMALIZATION01`: `READY`.
+- Force-push, amend, reset, and history rewriting: not used.
 
 ## Files changed
 
@@ -286,11 +297,18 @@ repository-wide green claim is made.
   in their named downstream ACTs.
 - Fuzz campaign execution is deferred to `CONFORMANCE01`; deterministic
   hostile-nesting no-panic tests are present here.
-- The staged digest, implementation commit, and any closure-only commit were
-  not yet complete when this draft was written.
+- The retained exec-boundary, LLM-friendliness, baseline gofmt, and dupcode
+  timeout findings are unrelated and remain owned outside DECODER01.
+
+## Closure range
+
+- Contract base: `a9af323`.
+- Implementation checkpoint: `37d9720`.
+- Forward P0 fix: `a14a3d7`.
+- Lifecycle reconciliation: this closure-only commit.
 
 ## Follow-up disposition
 
-Keep `DECODER01` as `IN PROGRESS` and `NORMALIZATION01` as `PENDING` until a
-later closure review explicitly authorizes the status transition. No
-closure-only status commit should be inferred from the implementation commit.
+`DECODER01` is `CLOSED (PARTIAL — retained unrelated baseline failures)`.
+`NORMALIZATION01` is `READY`; semantic validation and normalization remain
+strictly downstream and were not introduced by this ACT.
