@@ -1,0 +1,35 @@
+name: leamas
+arch: amd64
+platform: linux
+version: ${LEAMAS_PACKAGE_VERSION}
+release: "1"
+
+section: devel
+priority: optional
+
+maintainer: "Alex Chistyakov <s1onique@users.noreply.github.com>"
+
+description: |-
+  Local-first software Factory and verification CLI.
+  Leamas provides repository verification, deterministic evidence,
+  quality gates, and development workflow tooling.
+
+homepage: "https://github.com/s1onique/leamas"
+changelog: "packaging/changelog"
+
+license: "Apache-2.0"
+
+contents:
+  - src: "${LEAMAS_RELEASE_BINARY}"
+    dst: /usr/bin/leamas
+    expand: true
+    file_info:
+      mode: 0755
+  - src: "packaging/debian-copyright"
+    dst: /usr/share/doc/leamas/copyright
+    file_info:
+      mode: 0644
+  - src: "packaging/lintian-overrides"
+    dst: /usr/share/lintian/overrides/leamas
+    file_info:
+      mode: 0644

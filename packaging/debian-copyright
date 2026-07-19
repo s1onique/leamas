@@ -1,0 +1,8 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Leamas
+Upstream-Contact: Alex Chistyakov <s1onique@users.noreply.github.com>
+Source: https://github.com/s1onique/leamas
+
+Files: *
+Copyright: 2026 Alex Chistyakov
+License: Apache-2.0

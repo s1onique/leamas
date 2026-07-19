@@ -6,6 +6,8 @@
 .PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
 .PHONY: coverage dupcode-baseline release release-build release-checksum release-verify release-clean
 .PHONY: test-helper stamp-check stamp-check-build release-stamp-verify
+.PHONY: package-deb package-deb-inspect package-deb-install-smoke
+.PHONY: package-deb-verify release-deb release-deb-preflight
 
 # Install variables (GNU conventions)
 PREFIX ?= /usr/local
@@ -46,6 +48,14 @@ DIST_DIR ?= dist
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 ARTIFACT_DIR = $(DIST_DIR)/leamas_$(VERSION)_$(GOOS)_$(GOARCH)
+
+# Debian release packaging variables. The package consumes ARTIFACT_DIR.
+NFPM_VERSION ?= v2.47.0
+DEB_ARCH ?= amd64
+DEB_PACKAGE := $(DIST_DIR)/leamas_$(VERSION)_$(DEB_ARCH).deb
+LEAMAS_LICENSE ?= Apache-2.0
+
+include packaging/deb.mk
 
 # Stamp check: assert that the built binary reports a real
 # SemVer effective version. Override STAMP_BINARY to point at a
@@ -311,7 +321,7 @@ release-build:
 	fi
 	@echo "Building release for version $(VERSION)..."
 	@mkdir -p "$(ARTIFACT_DIR)"
-	@CGO_ENABLED=0 go build -trimpath \
+	@GOOS="$(GOOS)" GOARCH="$(GOARCH)" CGO_ENABLED=0 go build -trimpath \
 		-ldflags "$(LDFLAGS) -s -w" \
 		-o "$(ARTIFACT_DIR)/leamas" ./cmd/leamas
 	@echo "version=$(VERSION)" > "$(ARTIFACT_DIR)/release.txt"
@@ -323,6 +333,11 @@ release-build:
 
 release-stamp-verify:
 	@$(MAKE) stamp-check STAMP_BINARY="$(ARTIFACT_DIR)/leamas"
+	@actual_version=$$($(ARTIFACT_DIR)/leamas version | sed -n 's/^version: //p' | head -1); \
+	if [ "$$actual_version" != "$(VERSION)" ]; then \
+		echo "ERROR: release binary reports version $$actual_version, expected $(VERSION)" >&2; \
+		exit 1; \
+	fi
 
 release-checksum:
 	@echo "Generating checksums for $(ARTIFACT_DIR)..."

@@ -1,0 +1,94 @@
+name: Release Debian package
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish Debian package
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout complete tag history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up repository Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Validate clean checked-out tag and remote binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain)"
+          test "$(git tag --points-at HEAD)" = "$GITHUB_REF_NAME"
+          git rev-parse "$GITHUB_REF_NAME^{commit}"
+          test "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$(git rev-parse HEAD)"
+          VERSION="${GITHUB_REF_NAME#v}"
+          GOOS=linux GOARCH=amd64 go run ./cmd/leamas factory verify release-deb preflight \
+            --version "$VERSION" --goos linux --goarch amd64 \
+            --license-file LICENSE --license Apache-2.0 --nfpm-version v2.47.0
+          remote_commit="$(git ls-remote --tags origin \
+            "refs/tags/$GITHUB_REF_NAME" "refs/tags/$GITHUB_REF_NAME^{}" | \
+            awk '$2 == "refs/tags/" ENVIRON["GITHUB_REF_NAME"] "^{}" { print $1; exit }')"
+          test -n "$remote_commit"
+          test "$remote_commit" = "$(git rev-parse HEAD)"
+          GOOS=linux GOARCH=amd64 go run ./cmd/leamas factory verify release-deb publication \
+            --repo . --remote origin --tag "$GITHUB_REF_NAME" \
+            --asset "dist/leamas_${VERSION}_amd64.deb" --asset dist/SHA256SUMS
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Install Debian validation tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lintian
+
+      - name: Run practical release checks
+        run: |
+          go vet ./...
+          go test ./internal/factory/gate \
+            -run 'TestRun(Check|Factorize)_' \
+            -count=1
+
+      - name: Build and verify Debian release
+        run: |
+          make release-deb VERSION="$VERSION" GOOS=linux GOARCH=amd64
+          (cd dist && sha256sum --check SHA256SUMS)
+          test -f "dist/leamas_${VERSION}_amd64.deb"
+          test -f dist/SHA256SUMS
+
+      - name: Install and remove Debian package
+        run: |
+          make package-deb-install-smoke VERSION="$VERSION" GOOS=linux GOARCH=amd64
+
+      - name: Refuse an existing GitHub release
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "ERROR: GitHub release $GITHUB_REF_NAME already exists; refusing duplicate assets" >&2
+            exit 1
+          fi
+
+      - name: Publish verified assets
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/leamas_${VERSION}_amd64.deb#Leamas Debian package (amd64)" \
+            "dist/SHA256SUMS#SHA-256 checksums" \
+            --verify-tag \
+            --generate-notes \
+            --title "Leamas ${GITHUB_REF_NAME}"

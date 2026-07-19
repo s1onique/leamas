@@ -1,0 +1,2 @@
+# The release binary is intentionally a static Go executable.
+leamas: statically-linked-binary

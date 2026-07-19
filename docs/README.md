@@ -7,6 +7,8 @@ This directory contains Leamas project documentation.
 - [doctrine/](doctrine/) — Core principles and design philosophy
 - [adr/](adr/) — Architecture Decision Records
 - [playbooks/](playbooks/) — Runbooks and operational playbooks
+- [install/](install/) — Installation guides
+- [acts/](acts/) — Active change contracts
 - [templates/](templates/) — Document templates for epics, acts, etc.
 - [close-reports/](close-reports/) — Close reports for completed ACTs and Epics
 

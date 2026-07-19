@@ -198,6 +198,8 @@ func handleFactoryVerify() {
 		handleFactoryVerifyDupcode()
 	case "dupcode-baseline":
 		handleFactoryVerifyDupcodeBaseline()
+	case "release-deb":
+		handleFactoryVerifyReleaseDeb()
 	case "act-doctrine-compiler":
 		runDoctrineCompilerVerifier()
 	default:
@@ -277,6 +279,7 @@ func knownFactoryVerifyChecks() []string {
 		"github",
 		"domain-boundaries",
 		"coverage",
+		"release-deb",
 		"act-doctrine-compiler",
 	}
 }
@@ -308,4 +311,5 @@ func printFactoryVerifyUsage() {
 	fmt.Println("  github               Check GitHub policy compliance")
 	fmt.Println("  domain-boundaries    Check domain boundary import policies")
 	fmt.Println("  coverage             Check coverage threshold")
+	fmt.Println("  release-deb          Check Debian release artifacts and publication")
 }

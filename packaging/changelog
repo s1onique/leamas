@@ -1,0 +1,11 @@
+- deb:
+    urgency: medium
+    distributions:
+      - stable
+  semver: "0.1.0-1"
+  date: "2026-07-19T00:00:00Z"
+  packager: "Alex Chistyakov <s1onique@users.noreply.github.com>"
+  urgency: "medium"
+  distribution: "stable"
+  changes:
+    - note: "First Debian package release."

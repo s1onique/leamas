@@ -1,17 +1,34 @@
 # Leamas
 
-A Golang-only, local-first tool distributed as a single static binary.
-Leamas makes test/verification harnesses accountable.
-Future iterations may intercept/proxy LLM interactions so harness behavior and
-LLM evaluation can become part of a repeatable feedback loop.
+A Go-only, local-first verification witness distributed as a single static
+binary. Leamas makes AI-assisted test and verification harnesses accountable
+by recording evidence, checking repository contracts, and exposing practical
+Factory quality gates.
 
 ## Status
 
-**v0.0.0** — Initial seed documentation only. No implementation yet.
+The Leamas implementation is available. The first release target is `v0.1.0`
+for Linux amd64, distributed as a Debian package through GitHub Releases.
 
 ## Quick Start
 
-TBD once implementation is ready.
+Build and inspect a local development binary:
+
+```bash
+make build
+./bin/leamas version
+./bin/leamas doctor
+```
+
+Run the repository quality gates:
+
+```bash
+make factorize
+make gate
+```
+
+For the released Linux amd64 package, see
+[Debian installation](docs/install/debian.md).
 
 ## Constraints
 
@@ -30,12 +47,13 @@ TBD once implementation is ready.
 - [docs/doctrine/README.md](docs/doctrine/README.md) — Core principles
 - [docs/adr/README.md](docs/adr/README.md) — Architecture Decision Records
 - [docs/playbooks/README.md](docs/playbooks/README.md) — Playbooks index
+- [docs/install/debian.md](docs/install/debian.md) — Debian package installation
 
 ## Quality Gates
 
 ```bash
-chmod +x scripts/quality_gate.sh
-./scripts/quality_gate.sh
+make factorize
 make gate
-make test
+go test ./...
+go vet ./...
 ```
