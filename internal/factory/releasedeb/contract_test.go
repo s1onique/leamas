@@ -84,6 +84,8 @@ func TestReleaseWorkflowDeclaresPublicationSafetyContract(t *testing.T) {
 	workflow := readRepositoryFile(t, ".github/workflows/release-deb.yml")
 	for _, want := range []string{
 		"\"v[0-9]+.[0-9]+.[0-9]+\"",
+		"workflow_dispatch:",
+		"release_tag:",
 		"contents: write",
 		"runs-on: ubuntu-24.04",
 		"actions/checkout@v7",
@@ -94,9 +96,26 @@ func TestReleaseWorkflowDeclaresPublicationSafetyContract(t *testing.T) {
 		"test -z \"$(git status --porcelain)\"",
 		"git tag --points-at HEAD",
 		"git ls-remote",
-		"make release-deb",
-		"make package-deb-install-smoke",
-		"gh release create \"$GITHUB_REF_NAME\"",
+		"refs/tags/$RELEASE_TAG",
+		"ab041dc611b276c38bc27d8d38c8159f84729c50",
+		"GOTOOLCHAIN=auto",
+		"name: Release input preflight",
+		"name: Build canonical release binary",
+		"name: Verify release stamp",
+		"name: Build Debian package",
+		"name: Inspect Debian metadata",
+		"name: Verify extracted binary",
+		"name: Run Lintian",
+		"name: Generate checksums",
+		"name: Verify checksums",
+		"name: Install package",
+		"name: Execute installed package",
+		"name: Remove package",
+		"name: Publish GitHub Release",
+		"go env GOOS GOARCH GOTOOLCHAIN GOPATH GOMODCACHE",
+		"lintian --version",
+		"git rev-parse \"${RELEASE_TAG}^{commit}\"",
+		"gh release create \"$RELEASE_TAG\"",
 		"--verify-tag",
 		"--generate-notes",
 		"GH_TOKEN: ${{ github.token }}",
@@ -105,6 +124,8 @@ func TestReleaseWorkflowDeclaresPublicationSafetyContract(t *testing.T) {
 		requireText(t, workflow, want, ".github/workflows/release-deb.yml")
 	}
 	rejectText(t, workflow, "--clobber", ".github/workflows/release-deb.yml")
+	rejectText(t, workflow, "git tag -f", ".github/workflows/release-deb.yml")
+	rejectText(t, workflow, "git push --force", ".github/workflows/release-deb.yml")
 }
 
 func TestFactoryWorkflowUsesRepositoryGoAuthority(t *testing.T) {

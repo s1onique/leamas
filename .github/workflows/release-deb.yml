@@ -4,13 +4,24 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing immutable stable release tag"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.release_tag || github.ref_name }}
   cancel-in-progress: false
+
+env:
+  RECOVERY_RELEASE_TAG: v0.1.0
+  RECOVERY_RELEASE_COMMIT: ab041dc611b276c38bc27d8d38c8159f84729c50
+  NFPM_VERSION: v2.47.0
 
 jobs:
   release:
@@ -19,7 +30,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout complete tag history
+      - name: Checkout workflow ref
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -32,63 +43,209 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
-      - name: Validate clean checked-out tag and remote binding
+      - name: Install Debian validation tools
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain)"
-          test "$(git tag --points-at HEAD)" = "$GITHUB_REF_NAME"
-          git rev-parse "$GITHUB_REF_NAME^{commit}"
-          test "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$(git rev-parse HEAD)"
-          VERSION="${GITHUB_REF_NAME#v}"
-          GOOS=linux GOARCH=amd64 go run ./cmd/leamas factory verify release-deb preflight \
-            --version "$VERSION" --goos linux --goarch amd64 \
-            --license-file LICENSE --license Apache-2.0 --nfpm-version v2.47.0
-          remote_commit="$(git ls-remote --tags origin \
-            "refs/tags/$GITHUB_REF_NAME" "refs/tags/$GITHUB_REF_NAME^{}" | \
-            awk '$2 == "refs/tags/" ENVIRON["GITHUB_REF_NAME"] "^{}" { print $1; exit }')"
-          test -n "$remote_commit"
-          test "$remote_commit" = "$(git rev-parse HEAD)"
-          GOOS=linux GOARCH=amd64 go run ./cmd/leamas factory verify release-deb publication \
-            --repo . --remote origin --tag "$GITHUB_REF_NAME" \
-            --asset "dist/leamas_${VERSION}_amd64.deb" --asset dist/SHA256SUMS
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-
-      - name: Install Debian validation tools
-        run: |
           sudo apt-get update
-          sudo apt-get install -y lintian
+          sudo apt-get install -y file lintian
+
+      - name: Release input preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            RELEASE_TAG='${{ inputs.release_tag }}'
+          else
+            RELEASE_TAG="$GITHUB_REF_NAME"
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "ERROR: release tag must be strict stable vX.Y.Z: $RELEASE_TAG" >&2
+            exit 2
+          fi
+          remote_refs="$(git ls-remote --tags origin \
+            "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}")"
+          tag_object="$(printf '%s\n' "$remote_refs" | awk -v ref="refs/tags/$RELEASE_TAG" '$2 == ref { print $1; exit }')"
+          release_commit="$(printf '%s\n' "$remote_refs" | awk -v ref="refs/tags/$RELEASE_TAG^{}" '$2 == ref { print $1; exit }')"
+          test -n "$tag_object"
+          test -n "$release_commit"
+          git fetch --force --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          test "$(git cat-file -t "refs/tags/$RELEASE_TAG")" = "tag"
+          test "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$release_commit"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            test "$RELEASE_TAG" = "$RECOVERY_RELEASE_TAG"
+            test "$release_commit" = "$RECOVERY_RELEASE_COMMIT"
+          else
+            test "$release_commit" = "$GITHUB_SHA"
+          fi
+          git checkout --detach "refs/tags/$RELEASE_TAG"
+          test -z "$(git status --porcelain)"
+          test "$(git tag --points-at HEAD)" = "$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$release_commit"
+          test "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$RECOVERY_RELEASE_COMMIT"
+          VERSION="${RELEASE_TAG#v}"
+          RELEASE_BINARY="dist/leamas_${VERSION}_linux_amd64/leamas"
+          DEB_PACKAGE="dist/leamas_${VERSION}_amd64.deb"
+          RELEASE_COMMIT_SHORT="${release_commit:0:12}"
+          {
+            echo "RELEASE_TAG=$RELEASE_TAG"
+            echo "VERSION=$VERSION"
+            echo "RELEASE_BINARY=$RELEASE_BINARY"
+            echo "DEB_PACKAGE=$DEB_PACKAGE"
+            echo "RELEASE_COMMIT=$release_commit"
+            echo "RELEASE_COMMIT_SHORT=$RELEASE_COMMIT_SHORT"
+          } >> "$GITHUB_ENV"
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "ERROR: GitHub release $RELEASE_TAG already exists" >&2
+            exit 1
+          fi
+          GOTOOLCHAIN=local go run ./cmd/leamas factory verify release-deb publication \
+            --repo . --remote origin --tag "$RELEASE_TAG" \
+            --asset "$DEB_PACKAGE" --asset dist/SHA256SUMS
+          go version
+          go env GOOS GOARCH GOTOOLCHAIN GOPATH GOMODCACHE
+          make --version
+          dpkg-deb --version
+          lintian --version
+          file --version
+          git status --short
+          git rev-parse HEAD
+          git rev-parse "${RELEASE_TAG}^{commit}"
 
       - name: Run practical release checks
+        shell: bash
         run: |
+          set -euo pipefail
           go vet ./...
           go test ./internal/factory/gate \
             -run 'TestRun(Check|Factorize)_' \
             -count=1
 
-      - name: Build and verify Debian release
+      - name: Build canonical release binary
+        shell: bash
         run: |
-          make release-deb VERSION="$VERSION" GOOS=linux GOARCH=amd64
+          set -euo pipefail
+          make release-build VERSION="$VERSION" GOOS=linux GOARCH=amd64
+          test -x "$RELEASE_BINARY"
+
+      - name: Verify release stamp
+        shell: bash
+        run: |
+          set -euo pipefail
+          make release-stamp-verify VERSION="$VERSION" GOOS=linux GOARCH=amd64
+          version_output="$("$RELEASE_BINARY" version)"
+          printf '%s\n' "$version_output"
+          grep -Fx "version: $VERSION" <<<"$version_output"
+          grep -Fx "commit: $RELEASE_COMMIT_SHORT" <<<"$version_output"
+
+      - name: Build Debian package
+        shell: bash
+        run: |
+          set -euo pipefail
+          make release-deb-preflight VERSION="$VERSION" GOOS=linux GOARCH=amd64
+          LEAMAS_PACKAGE_VERSION="$VERSION" \
+          LEAMAS_RELEASE_BINARY="$RELEASE_BINARY" \
+          LEAMAS_LICENSE=Apache-2.0 \
+          GOTOOLCHAIN=auto \
+            go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0 \
+              package \
+              --config packaging/nfpm.yaml \
+              --packager deb \
+              --target "$DEB_PACKAGE"
+          test -f "$DEB_PACKAGE"
+
+      - name: Inspect Debian metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          make package-deb-inspect \
+            VERSION="$VERSION" GOOS=linux GOARCH=amd64
+
+      - name: Verify extracted binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          make package-deb-verify \
+            VERSION="$VERSION" GOOS=linux GOARCH=amd64 \
+            COMMIT="$RELEASE_COMMIT_SHORT"
+
+      - name: Run Lintian
+        shell: bash
+        run: |
+          set -euo pipefail
+          lintian --fail-on error "$DEB_PACKAGE"
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOTOOLCHAIN=local go run ./cmd/leamas factory verify release-deb checksum \
+            --package "$DEB_PACKAGE" --output dist/SHA256SUMS
+
+      - name: Verify checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(awk 'NF == 2 { print $2 }' dist/SHA256SUMS)" = "$(basename "$DEB_PACKAGE")"
           (cd dist && sha256sum --check SHA256SUMS)
-          test -f "dist/leamas_${VERSION}_amd64.deb"
-          test -f dist/SHA256SUMS
 
-      - name: Install and remove Debian package
+      - name: Install package
+        shell: bash
         run: |
-          make package-deb-install-smoke VERSION="$VERSION" GOOS=linux GOARCH=amd64
+          set -euo pipefail
+          if dpkg-query -W leamas >/dev/null 2>&1; then
+            echo "ERROR: leamas is already installed" >&2
+            exit 1
+          fi
+          sudo apt-get install -y "./$DEB_PACKAGE"
+          test "$(dpkg-query -W -f='${Status}' leamas)" = "install ok installed"
+          test "$(dpkg-query -W -f='${Architecture}' leamas)" = "amd64"
 
-      - name: Refuse an existing GitHub release
+      - name: Execute installed package
+        shell: bash
         run: |
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "ERROR: GitHub release $GITHUB_REF_NAME already exists; refusing duplicate assets" >&2
+          set -euo pipefail
+          test "$(PATH=/usr/bin:/usr/sbin:/bin:/sbin command -v leamas)" = "/usr/bin/leamas"
+          version_output="$(/usr/bin/leamas version)"
+          printf '%s\n' "$version_output"
+          grep -Fx "version: $VERSION" <<<"$version_output"
+          grep -Fx "commit: $RELEASE_COMMIT_SHORT" <<<"$version_output"
+          file /usr/bin/leamas | grep -F "statically linked"
+          if ldd /usr/bin/leamas > /tmp/leamas-ldd.txt 2>&1; then
+            cat /tmp/leamas-ldd.txt
+            echo "ERROR: installed binary is dynamically linked" >&2
+            exit 1
+          fi
+          cat /tmp/leamas-ldd.txt
+          /usr/bin/leamas doctor
+
+      - name: Remove package
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if dpkg-query -W -f='${Status}' leamas 2>/dev/null | grep -Fxq "install ok installed"; then
+            sudo apt-get remove -y leamas
+          fi
+          test ! -e /usr/bin/leamas
+
+      - name: Refuse an existing GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "ERROR: GitHub release $RELEASE_TAG already exists; refusing duplicate assets" >&2
             exit 1
           fi
 
-      - name: Publish verified assets
+      - name: Publish GitHub Release
+        shell: bash
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/leamas_${VERSION}_amd64.deb#Leamas Debian package (amd64)" \
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            "$DEB_PACKAGE#Leamas Debian package (amd64)" \
             "dist/SHA256SUMS#SHA-256 checksums" \
+            --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \
-            --title "Leamas ${GITHUB_REF_NAME}"
+            --title "Leamas $RELEASE_TAG"
