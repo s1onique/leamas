@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-19T08:43:26Z",
+  "scope_id": "ACT-DOCUMENT-TOO-LARGE",
+  "scope_status": "OPEN",
+  "scope_disposition": "boundary fixture: a real document-too-large input is generated programmatically in CONFORMANCE01 because a static 4 MiB+ fixture would exceed the LLM-friendliness gate",
+  "parent_act": "",
+  "parent_status": "CLOSED",
+  "parent_disposition": "root scope; no parent",
+  "overall_status": "pass",
+  "overall_disposition": "see CONFORMANCE01 for the actual size boundary test",
+  "execution_head_oid": "0123456789abcdef0123456789abcdef01234567",
+  "execution_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "subject_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": []
+}

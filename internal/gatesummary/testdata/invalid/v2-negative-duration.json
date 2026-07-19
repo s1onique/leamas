@@ -1,0 +1,33 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-19T08:43:26Z",
+  "scope_id": "ACT-X",
+  "scope_status": "CLOSED",
+  "scope_disposition": "negative duration",
+  "parent_act": "",
+  "parent_status": "CLOSED",
+  "parent_disposition": "root scope; no parent",
+  "overall_status": "pass",
+  "overall_disposition": "negative duration is rejected",
+  "execution_head_oid": "0123456789abcdef0123456789abcdef01234567",
+  "execution_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "subject_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": [
+    {
+      "name": "neg_duration",
+      "scope": "ROOT",
+      "status": "pass",
+      "evidence": "fake",
+      "detail": "negative duration",
+      "extras": {
+        "argv": ["fake"],
+        "exit_code": 0,
+        "duration_ms": -1,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

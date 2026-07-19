@@ -1,0 +1,33 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-19T09:00:00Z",
+  "scope_id": "ACT-LEAMAS-ROOT",
+  "scope_status": "CLOSED",
+  "scope_disposition": "root scope; parent is empty by convention",
+  "parent_act": "",
+  "parent_status": "CLOSED",
+  "parent_disposition": "root scope; no parent",
+  "overall_status": "pass",
+  "overall_disposition": "all root-scope checks passed",
+  "execution_head_oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "execution_tree_oid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "subject_tree_oid": "cccccccccccccccccccccccccccccccccccccccc",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": [
+    {
+      "name": "root_smoke",
+      "scope": "ACT-LEAMAS-ROOT",
+      "status": "pass",
+      "evidence": "root_smoke.sh",
+      "detail": "root scope smoke test",
+      "extras": {
+        "argv": ["root_smoke.sh"],
+        "exit_code": 0,
+        "duration_ms": 100,
+        "stdout_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leamas.local/schemas/gate-summary-v2.schema.json",
+  "title": "Gate Summary v2",
+  "description": "Authoritative v2 wire contract. See gate-summary-v2-spec.md. Schema covers structural rules only; lexical version, duplicate-key, and trailing-JSON checks live in the pre-schema envelope scanner.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "scope_id",
+    "scope_status",
+    "scope_disposition",
+    "parent_act",
+    "parent_status",
+    "parent_disposition",
+    "overall_status",
+    "overall_disposition",
+    "execution_head_oid",
+    "execution_tree_oid",
+    "subject_tree_oid",
+    "worktree_clean_before",
+    "worktree_clean_after",
+    "checks"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Integer discriminator. Must equal 2. Lexical form is enforced by the pre-schema envelope scanner.",
+      "type": "integer",
+      "const": 2
+    },
+    "generated_at": {
+      "description": "Non-empty RFC 3339 timestamp with explicit UTC offset. Format is asserted by the chosen validator's AssertFormat() call.",
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time"
+    },
+    "scope_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 16384
+    },
+    "scope_status": {
+      "description": "Bounded-scope lifecycle status. Wire form is uppercase only.",
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "PARTIAL",
+        "CLOSED"
+      ]
+    },
+    "scope_disposition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1048576
+    },
+    "parent_act": {
+      "description": "Parent ACT identifier; empty string for root scopes.",
+      "type": "string",
+      "maxLength": 16384
+    },
+    "parent_status": {
+      "description": "Parent lifecycle status. Wire form is uppercase only.",
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "PARTIAL",
+        "CLOSED"
+      ]
+    },
+    "parent_disposition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1048576
+    },
+    "overall_status": {
+      "description": "Aggregate machine-gate status. Vocabulary is pass | fail | unavailable. skip is allowed on checks but is never derived.",
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "unavailable"
+      ]
+    },
+    "overall_disposition": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1048576
+    },
+    "execution_head_oid": {
+      "description": "Git object ID for the execution head (40 or 64 lowercase hex).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"
+    },
+    "execution_tree_oid": {
+      "description": "Git tree object ID for the executed tree (40 or 64 lowercase hex).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"
+    },
+    "subject_tree_oid": {
+      "description": "Git tree object ID for the subject under test (40 or 64 lowercase hex).",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"
+    },
+    "worktree_clean_before": {
+      "type": "boolean"
+    },
+    "worktree_clean_after": {
+      "type": "boolean"
+    },
+    "checks": {
+      "description": "List of recorded checks. Producers record parent-state observations as ordinary checks with scope=parent_act; the dedicated parent_checks array was removed in CONTRACT01-CORRECTION01.",
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/check" }
+    }
+  },
+  "$defs": {
+    "gate_status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "skip",
+        "unavailable"
+      ]
+    },
+    "oid_hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "exit_code_or_null": {
+      "type": ["integer", "null"]
+    },
+    "extras": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "exit_code",
+        "duration_ms",
+        "stdout_sha256",
+        "stderr_sha256"
+      ],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        },
+        "exit_code": { "$ref": "#/$defs/exit_code_or_null" },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "stdout_sha256": {
+          "description": "Lowercase SHA-256 hex of the producer's exact stdout byte stream. Empty streams produce the SHA-256 of the empty string: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stderr_sha256": {
+          "description": "Lowercase SHA-256 hex of the producer's exact stderr byte stream. Empty streams produce the SHA-256 of the empty string: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "scope",
+        "status",
+        "evidence",
+        "detail",
+        "extras"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "status": { "$ref": "#/$defs/gate_status" },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1048576
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1048576
+        },
+        "extras": { "$ref": "#/$defs/extras" },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pass_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fail_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skip_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unavailable_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "anyOf": [
+        {
+          "description": "All five test-count fields must be present together.",
+          "required": [
+            "total",
+            "pass_count",
+            "fail_count",
+            "skip_count",
+            "unavailable_count"
+          ]
+        },
+        {
+          "description": "Or none of them may be present.",
+          "not": {
+            "anyOf": [
+              { "required": ["total"] },
+              { "required": ["pass_count"] },
+              { "required": ["fail_count"] },
+              { "required": ["skip_count"] },
+              { "required": ["unavailable_count"] }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

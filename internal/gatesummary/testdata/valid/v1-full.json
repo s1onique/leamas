@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-19T08:43:26Z",
+  "tool": "leamas factory gate",
+  "overall_status": "pass",
+  "checks": [
+    {
+      "name": "factory_gate",
+      "status": "pass",
+      "duration_ms": 1234,
+      "evidence": "make gate"
+    },
+    {
+      "name": "go_test",
+      "status": "pass",
+      "duration_ms": 9000,
+      "evidence": "go test ./..."
+    },
+    {
+      "name": "go_vet",
+      "status": "pass",
+      "duration_ms": 750,
+      "evidence": "go vet ./..."
+    },
+    {
+      "name": "static_binary_intent",
+      "status": "skip",
+      "duration_ms": 0,
+      "evidence": "skipped because env var RELEASE=1"
+    }
+  ]
+}

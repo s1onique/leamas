@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leamas.local/schemas/gate-summary-v1.schema.json",
+  "title": "Gate Summary v1",
+  "description": "Frozen v1 wire contract. Mirrors the public shape of internal/factory/gate/summary.go. No collection or string limits are added by the schema; only the soft MaxEvidenceLength=240 rendering cap is enforced today.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "overall_status",
+    "checks"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Integer discriminator. Must equal 1. Lexical form is enforced by the pre-schema envelope scanner.",
+      "type": "integer",
+      "const": 1
+    },
+    "generated_at": {
+      "description": "RFC 3339 timestamp emitted by the producer.",
+      "type": "string",
+      "minLength": 1,
+      "format": "date-time"
+    },
+    "tool": {
+      "description": "Optional producer-identification string.",
+      "type": "string",
+      "minLength": 1
+    },
+    "overall_status": {
+      "description": "Aggregate machine-gate status.",
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "skip",
+        "unavailable"
+      ]
+    },
+    "checks": {
+      "description": "List of recorded checks. The original reader does not enforce a collection limit at the wire boundary; consumers may add one separately as a consumer-safety guard without changing the wire contract.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/check" }
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "status"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "skip",
+            "unavailable"
+          ]
+        },
+        "duration_ms": {
+          "description": "Optional wall-clock duration. The original reader does not enforce a minimum or any wire-level constraint here.",
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "Optional human-readable evidence pointer. The original reader applies a 240-character rendering cap (MaxEvidenceLength) but does not enforce a wire-level string limit.",
+          "type": "string"
+        }
+      }
+    }
+  }
+}

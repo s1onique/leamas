@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "generated_at": "",
+  "scope_id": "ACT-X",
+  "scope_status": "CLOSED",
+  "scope_disposition": "empty generated_at",
+  "parent_act": "",
+  "parent_status": "CLOSED",
+  "parent_disposition": "root scope; no parent",
+  "overall_status": "pass",
+  "overall_disposition": "empty timestamp is rejected",
+  "execution_head_oid": "0123456789abcdef0123456789abcdef01234567",
+  "execution_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "subject_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": []
+}

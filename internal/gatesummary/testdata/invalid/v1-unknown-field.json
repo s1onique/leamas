@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-19T08:43:26Z",
+  "overall_status": "pass",
+  "checks": [],
+  "scope_id": "ACT-FROM-V2-PRODUCER",
+  "scope_status": "CLOSED",
+  "tool": "leamas factory gate"
+}

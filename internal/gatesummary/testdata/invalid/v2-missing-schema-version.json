@@ -1,0 +1,17 @@
+{
+  "generated_at": "2026-07-19T08:43:26Z",
+  "scope_id": "ACT-X",
+  "scope_status": "CLOSED",
+  "scope_disposition": "missing schema_version",
+  "parent_act": "",
+  "parent_status": "CLOSED",
+  "parent_disposition": "root scope; no parent",
+  "overall_status": "pass",
+  "overall_disposition": "missing schema_version is rejected",
+  "execution_head_oid": "0123456789abcdef0123456789abcdef01234567",
+  "execution_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "subject_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": []
+}

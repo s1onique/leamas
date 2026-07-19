@@ -1,0 +1,33 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-19T08:43:26Z",
+  "scope_id": "ACT-LIMITS-OVER-MAX-CHECKS",
+  "scope_status": "CLOSED",
+  "scope_disposition": "boundary fixture: structural shape for the 10,001-check over-limit",
+  "parent_act": "",
+  "parent_status": "CLOSED",
+  "parent_disposition": "root scope; no parent",
+  "overall_status": "pass",
+  "overall_disposition": "structural-shape fixture only; the actual 10,001-check over-limit test is programmatic in CONFORMANCE01",
+  "execution_head_oid": "0123456789abcdef0123456789abcdef01234567",
+  "execution_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "subject_tree_oid": "0123456789abcdef0123456789abcdef01234567",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": [
+    {
+      "name": "boundary_marker_over",
+      "scope": "ROOT",
+      "status": "pass",
+      "evidence": "structural shape over-limit",
+      "detail": "see testdata/limits/README.md for the programmatic 10,001-check over-limit test",
+      "extras": {
+        "argv": ["limit_marker_over"],
+        "exit_code": 0,
+        "duration_ms": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

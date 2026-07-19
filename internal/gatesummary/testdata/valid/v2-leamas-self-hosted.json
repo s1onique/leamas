@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-19T10:00:00Z",
+  "scope_id": "ACT-LEAMAS-FACTORY-GATE-SUMMARY-V2-CONTRACT01",
+  "scope_status": "CLOSED",
+  "scope_disposition": "leamas self-hosted v2 sample for dogfood proof",
+  "parent_act": "ACT-LEAMAS-FACTORY-GATE-SUMMARY-V2-ADOPTION01",
+  "parent_status": "OPEN",
+  "parent_disposition": "epic in progress; CONFORMANCE01 not yet closed",
+  "overall_status": "pass",
+  "overall_disposition": "all self-hosted checks passed",
+  "execution_head_oid": "1111111111111111111111111111111111111111",
+  "execution_tree_oid": "2222222222222222222222222222222222222222",
+  "subject_tree_oid": "3333333333333333333333333333333333333333",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": [
+    {
+      "name": "llm_friendly_gate",
+      "scope": "ROOT",
+      "status": "pass",
+      "evidence": "leamas factory verify llm-friendly",
+      "detail": "LLM-friendliness gate green",
+      "extras": {
+        "argv": ["leamas", "factory", "verify", "llm-friendly"],
+        "exit_code": 0,
+        "duration_ms": 250,
+        "stdout_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    {
+      "name": "schema_validation",
+      "scope": "ROOT",
+      "status": "pass",
+      "evidence": "embedded Draft 2020-12 schemas",
+      "detail": "every frozen fixture validates against its embedded schema",
+      "extras": {
+        "argv": [],
+        "exit_code": 0,
+        "duration_ms": 5,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}

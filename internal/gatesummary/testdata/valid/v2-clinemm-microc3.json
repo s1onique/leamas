@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-07-19T08:43:26.649Z",
+  "scope_id": "ACT-CLINEMM-FORK-BASELINE01-CORRECTION21-MICROC3",
+  "scope_status": "CLOSED",
+  "scope_disposition": "µC-3 reader authority closed",
+  "parent_act": "ACT-CLINEMM-FORK-BASELINE01-CORRECTION21",
+  "parent_status": "OPEN",
+  "parent_disposition": "production bundle absent",
+  "overall_status": "fail",
+  "overall_disposition": "child closed; parent open",
+  "execution_head_oid": "4bd2c5646f7a4d9c8e1f0123456789abcdef0123",
+  "execution_tree_oid": "984aaf36abc12345def67890abcdef0123456789",
+  "subject_tree_oid": "fedcba9876543210fedcba9876543210fedcba98",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "checks": [
+    {
+      "name": "strict_typecheck",
+      "scope": "MICROC3",
+      "status": "pass",
+      "evidence": "factory/scripts/tsconfig.json",
+      "detail": "strict TypeScript check passed",
+      "extras": {
+        "argv": ["bunx", "tsc", "--project", "factory/scripts/tsconfig.json"],
+        "exit_code": 0,
+        "duration_ms": 1287,
+        "stdout_sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "total": 177,
+      "pass_count": 177,
+      "fail_count": 0,
+      "skip_count": 0,
+      "unavailable_count": 0
+    },
+    {
+      "name": "parent_production_bundle",
+      "scope": "ACT-CLINEMM-FORK-BASELINE01-CORRECTION21",
+      "status": "fail",
+      "evidence": "parent production bundle",
+      "detail": "required parent production bundle is absent",
+      "extras": {
+        "argv": [],
+        "exit_code": null,
+        "duration_ms": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    }
+  ]
+}
