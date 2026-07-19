@@ -67,6 +67,13 @@ func GetRangeFiles(repoRoot, revRange string) ([]RangeFile, error) {
 }
 
 // statusToHuman converts git status letter to human-readable string.
+//
+// The renamed/copied human names only fire for those leading letters;
+// other status letters (T, U, X, B) carry through as the lowercase
+// form so BuildRangeManifest can map them to the corresponding single
+// letter status code. The default clause only catches truly unknown
+// letters and collapses them to "modified" so the rest of the digest
+// pipeline remains robust.
 func statusToHuman(status string) string {
 	switch {
 	case strings.HasPrefix(status, "A"):
@@ -79,6 +86,14 @@ func statusToHuman(status string) string {
 		return "renamed"
 	case strings.HasPrefix(status, "C"):
 		return "copied"
+	case strings.HasPrefix(status, "T"):
+		return "type_changed"
+	case strings.HasPrefix(status, "U"):
+		return "unmerged"
+	case strings.HasPrefix(status, "X"):
+		return "unknown"
+	case strings.HasPrefix(status, "B"):
+		return "broken_pair"
 	default:
 		return "modified"
 	}

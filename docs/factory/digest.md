@@ -118,8 +118,19 @@ file is the renamed destination.
 
 ### Status tokens
 
-`A`/`M`/`D`/`U`/`?` are carried verbatim. Rename/copy tokens like
-`R100`/`C075` are normalised to `R`/`C` (the score is dropped).
+The digest passes the full set of Git `--name-status -z` status
+letters through verbatim: `A` (added), `M` (modified), `D`
+(deleted), `T` (type change, e.g. regular file to symlink or
+submodule), `R` (renamed), `C` (copied), `U` (unmerged),
+`X` (unknown / pair broken), `B` (pair broken on the other side),
+plus `?` for untracked files (sourced from `ls-files --others`,
+not from Git's diff). Rename/copy tokens like `R100`/`C075` are
+normalised to `R`/`C` (the similarity score is dropped).
+
+`CHANGESET_STATS` tracks each kind in its own field
+(`type_changed_files`, `unknown_files`, `broken_pair_files`,
+etc.) so reviewers can spot type-change and unknown-status
+records at a glance.
 
 ### NUL-safe path handling
 
@@ -128,13 +139,50 @@ All Git output is parsed from NUL-delimited streams
 `git diff --name-only -z`). Paths containing spaces, tabs,
 newlines, Unicode or leading dashes are preserved.
 
-### Similarity threshold
+### Path escaping in rendered output
 
-Rename/copy detection uses a similarity threshold of `30%`. Git's
-default of `50%` is too strict for the common "rename then a small
-edit at the destination" case which would otherwise degrade to an
-`A` + `D` pair. Lowering the threshold to 30% keeps that case
-classified as `R` consistently with reviewer expectations.
+A filename containing a literal newline or tab would, if written
+naively into the digest, split a single manifest or changed-files
+record across multiple visual lines and silently corrupt the
+output. Git itself uses a `-z` form precisely so callers can decide
+how to render; the digest therefore writes every rendered path
+through `PathEscape` before it reaches the output buffer. The
+encoding covers backslash, tab, CR, LF, and every other control
+byte (0x00..0x1f, 0x7f), and is symmetric: `ParseEscapedPath` inverts
+the encoding exactly. Printable UTF-8 (including leading dashes,
+spaces, Unicode, etc.) passes through unchanged.
+
+This means a path such as `weird\nfile\nname.go` (an actual
+filename with embedded newlines) renders as a single manifest
+entry `M  weird\\nfile\\nname.go`, and reviewers can recover the
+original filename by running `ParseEscapedPath` on the rendered
+path. Tests covering this round-trip and the integration tests for
+newline-bearing staged/range paths are part of the parser and
+digest integration test matrix.
+
+### Similarity threshold (Leamas policy)
+
+The digest always invokes Git with **explicit
+`--find-renames=30% --find-copies=30%`** on every mode that gathers
+status from `git diff`. The default Git similarity threshold is 50%,
+which is too strict for the common "rename then a small edit at the
+destination" case (it would degrade to an `A` + `D` pair). Lowering
+to 30% keeps that case classified as `R`.
+
+Because of this Leamas policy, the authoritative oracle for digest
+reconciliation tests and self-hosting proofs is the explicit
+thresholded command, **not** plain `git diff --name-status`:
+
+```bash
+git diff   --cached   --name-status   -z   --find-renames=30%   --find-copies=30%   HEAD   --
+```
+
+Stated informally: the manifest status agrees with Git's
+`--name-status -z` output **at the 30% threshold**, not at Git's
+default. Tests and reviewers should not treat the two as
+interchangeable; for example, a rename with similarity 40% reports
+as `R` in the digest but as an `A` + `D` pair in plain
+`git diff --name-status`.
 
 ### Staged and unstaged presence
 

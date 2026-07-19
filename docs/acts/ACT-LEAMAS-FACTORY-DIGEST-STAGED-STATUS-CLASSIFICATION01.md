@@ -8,7 +8,34 @@ exactly with Git's authoritative status for each path.
 
 ## Status
 
-Implemented (pending close report).
+**PARTIAL — CORRECTION01 REQUIRED.** The initial implementation
+made the manifest agree with `git diff --cached --name-status`
+at the lowered 30% similarity threshold and reproduced the original
+four-added/one-modified fix. A reviewer pass surfaced six P1/P2
+contract defects:
+
+1. Valid Git `T` (type-change), `X`, and `B` records were
+   silently mapped to `M`.
+2. The implementation used `--find-renames=30% --find-copies=30%`
+   but the ACT text claimed agreement with the unqualified `git diff
+   --name-status` (which uses Git's default 50% threshold).
+3. `TestRangeMode_Addition`, `_Modification`, and `_Deletion` used a
+   vacuous `for ... range` loop.
+4. The parser preserved filenames with embedded newlines but the
+   renderer wrote them through `WriteString(path)` directly into
+   line-oriented Markdown, so a multi-line path could split one
+   manifest entry across multiple lines.
+5. `NormalizeGitStatusToken` accepted bare `R` / `C` even though
+   `ParseGitStatusRecords` rejects them; `SplitNULRecords` did not
+   implement its documented "drop trailing empty" behaviour.
+6. The ACT body required a bounded `go test ./...` attempt; only
+   `make factorize` / `make gate` were attempted.
+
+These defects are addressed in
+[`ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION01`](./ACT-LEAMAS-FACTORY-DIGEST-STAGED-STATUS-CLASSIFICATION01-CORRECTION01.md).
+The parent ACT remains the authoritative scope; canonical full-tree
+`make factorize` / `make gate` verification continues to be blocked
+on the previously-documented duplicate-code ACTs.
 
 ## Context
 

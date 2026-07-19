@@ -7,6 +7,11 @@ import (
 )
 
 // ComputeStats computes file statistics from a manifest.
+//
+// Each manifest entry contributes exactly one bucket to `FilesChanged`.
+// Buckets match the Git status letters: A/M/D/T/R/C/U/X/B/?.
+// Type changes (`T`) and unknown/broken-pair (`X`/`B`) are reported
+// in their own fields so reviewers can see them at a glance.
 func ComputeStats(manifest []ReviewChangedFile, repoRoot string) FileStats {
 	var stats FileStats
 
@@ -20,6 +25,8 @@ func ComputeStats(manifest []ReviewChangedFile, repoRoot string) FileStats {
 			stats.ModifiedFiles++
 		case StatusDeleted:
 			stats.DeletedFiles++
+		case StatusTypeChanged:
+			stats.TypeChangedFiles++
 		case StatusRenamed:
 			stats.RenamedFiles++
 		case StatusCopied:
@@ -28,23 +35,29 @@ func ComputeStats(manifest []ReviewChangedFile, repoRoot string) FileStats {
 			stats.UntrackedFiles++
 		case StatusUnmerged:
 			stats.UnmergedFiles++
+		case StatusUnknown:
+			stats.UnknownFiles++
+		case StatusBrokenPair:
+			stats.BrokenPairFiles++
 		}
 
 		if isGeneratedFileAtPath(filepath.Join(repoRoot, f.Path)) {
 			stats.GeneratedFiles++
-		} else if isBinaryFileAtPath(filepath.Join(repoRoot, f.Path)) {
+			continue
+		}
+		if isBinaryFileAtPath(filepath.Join(repoRoot, f.Path)) {
 			stats.BinaryFiles++
-		} else {
-			switch classifyFile(f.Path) {
-			case "test":
-				stats.TestFiles++
-			case "doc":
-				stats.DocFiles++
-			case "config":
-				stats.ConfigFiles++
-			case "source":
-				stats.SourceFiles++
-			}
+			continue
+		}
+		switch classifyFile(f.Path) {
+		case "test":
+			stats.TestFiles++
+		case "doc":
+			stats.DocFiles++
+		case "config":
+			stats.ConfigFiles++
+		case "source":
+			stats.SourceFiles++
 		}
 	}
 
@@ -63,6 +76,8 @@ func RenderStats(stats FileStats) string {
 	sb.WriteString(intToString(stats.ModifiedFiles))
 	sb.WriteString("\ndeleted_files=")
 	sb.WriteString(intToString(stats.DeletedFiles))
+	sb.WriteString("\ntype_changed_files=")
+	sb.WriteString(intToString(stats.TypeChangedFiles))
 	sb.WriteString("\nrenamed_files=")
 	sb.WriteString(intToString(stats.RenamedFiles))
 	sb.WriteString("\ncopied_files=")
@@ -71,6 +86,10 @@ func RenderStats(stats FileStats) string {
 	sb.WriteString(intToString(stats.UntrackedFiles))
 	sb.WriteString("\nunmerged_files=")
 	sb.WriteString(intToString(stats.UnmergedFiles))
+	sb.WriteString("\nunknown_files=")
+	sb.WriteString(intToString(stats.UnknownFiles))
+	sb.WriteString("\nbroken_pair_files=")
+	sb.WriteString(intToString(stats.BrokenPairFiles))
 	sb.WriteString("\nbinary_files=")
 	sb.WriteString(intToString(stats.BinaryFiles))
 	sb.WriteString("\ngenerated_files=")

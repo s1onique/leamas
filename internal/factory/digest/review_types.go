@@ -4,39 +4,49 @@ package digest
 import "regexp"
 
 // Status constants for changed files.
+//
+// These mirror the single-letter codes emitted by
+// `git diff --name-status` so that statistics, manifest lines and
+// evidence hashes all compare typed values.
 const (
-	StatusAdded     = "A"
-	StatusModified  = "M"
-	StatusDeleted   = "D"
-	StatusRenamed   = "R"
-	StatusCopied    = "C"
-	StatusUnmerged  = "U"
-	StatusUntracked = "?"
+	StatusAdded       = "A"
+	StatusModified    = "M"
+	StatusDeleted     = "D"
+	StatusTypeChanged = "T"
+	StatusRenamed     = "R"
+	StatusCopied      = "C"
+	StatusUnmerged    = "U"
+	StatusUntracked   = "?"
+	StatusUnknown     = "X"
+	StatusBrokenPair  = "B"
 )
 
 // ReviewChangedFile represents a file with its review-oriented status.
 type ReviewChangedFile struct {
-	Status  string // Single-letter status: A, M, D, R, C, U, ?
+	Status  string // Single-letter status: A, M, D, T, R, C, U, ?, X, B
 	Path    string
 	OldPath string // For renames/copies: the original path
 }
 
 // FileStats holds counts of different file types in the changeset.
 type FileStats struct {
-	FilesChanged   int
-	AddedFiles     int
-	ModifiedFiles  int
-	DeletedFiles   int
-	RenamedFiles   int
-	CopiedFiles    int
-	UntrackedFiles int
-	UnmergedFiles  int
-	BinaryFiles    int
-	GeneratedFiles int
-	TestFiles      int
-	DocFiles       int
-	SourceFiles    int
-	ConfigFiles    int
+	FilesChanged     int
+	AddedFiles       int
+	ModifiedFiles    int
+	DeletedFiles     int
+	TypeChangedFiles int
+	RenamedFiles     int
+	CopiedFiles      int
+	UntrackedFiles   int
+	UnmergedFiles    int
+	UnknownFiles     int
+	BrokenPairFiles  int
+	BinaryFiles      int
+	GeneratedFiles   int
+	TestFiles        int
+	DocFiles         int
+	SourceFiles      int
+	ConfigFiles      int
 }
 
 // ReviewMap groups files by reviewer role.

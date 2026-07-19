@@ -10,12 +10,14 @@ import (
 // RenderChangedFilesAndDiffs renders the Changed files list and diff
 // content for dirty/staged modes.
 //
-// Each entry now carries an explicit Git kind (`A` / `M` / `D` /
-// `R` / `C` / `U` / `?`), recorded on the ChangedFile by the
-// collectors. The presence flags remain independent metadata so the
-// staged and unstaged diffs can be attached whether or not the path
-// has a combined kind (e.g. a staged rename + worktree edit still
-// renders the rename kind with both the staged and unstaged patches).
+// Each entry carries an explicit Git kind (`A` / `M` / `D` / `T` /
+// `R` / `C` / `U` / `?` / `X` / `B`) sourced from the structured
+// parser. Paths are written through `PathEscape` so the section
+// stays one record per line even when the original filename contains
+// bytes that would otherwise break the rendering (tab, newline,
+// backslash, control bytes). The staged/unstaged presence flags
+// remain independent metadata that the renderer uses to attach the
+// right patches.
 func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 	var sb strings.Builder
 
@@ -28,6 +30,7 @@ func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 			if f.Untracked {
 				kindStr = StatusUntracked
 			}
+			escapedPath := PathEscape(f.Path)
 			if f.Tracked {
 				stagedStr := "no"
 				if f.StagedPresent {
@@ -38,15 +41,21 @@ func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 					unstagedStr = "yes"
 				}
 				if f.OldPath != "" && f.OldPath != f.Path {
-					sb.WriteString(fmt.Sprintf("%s  [tracked, kind: %s, staged present: %s, unstaged present: %s, old path: %s]\n",
-						f.Path, kindStr, stagedStr, unstagedStr, f.OldPath))
+					sb.WriteString(fmt.Sprintf(
+						"%s  [tracked, kind: %s, staged present: %s, unstaged present: %s, old path: %s]\n",
+						escapedPath, kindStr, stagedStr, unstagedStr, PathEscape(f.OldPath),
+					))
 				} else {
-					sb.WriteString(fmt.Sprintf("%s  [tracked, kind: %s, staged present: %s, unstaged present: %s]\n",
-						f.Path, kindStr, stagedStr, unstagedStr))
+					sb.WriteString(fmt.Sprintf(
+						"%s  [tracked, kind: %s, staged present: %s, unstaged present: %s]\n",
+						escapedPath, kindStr, stagedStr, unstagedStr,
+					))
 				}
 			} else {
-				sb.WriteString(fmt.Sprintf("%s  [untracked, staged present: no, unstaged present: yes]\n",
-					f.Path))
+				sb.WriteString(fmt.Sprintf(
+					"%s  [untracked, staged present: no, unstaged present: yes]\n",
+					escapedPath,
+				))
 			}
 		}
 	}
@@ -58,7 +67,7 @@ func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 	} else {
 		for _, f := range files {
 			fullPath := filepath.Join(repoRoot, f.Path)
-			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", f.Path))
+			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", PathEscape(f.Path)))
 
 			if f.Tracked {
 				stagedStr := "yes"
@@ -108,7 +117,9 @@ func RenderChangedFilesAndDiffs(repoRoot string, files []ChangedFile) string {
 	return sb.String()
 }
 
-// RenderRangeFileEvidence renders the Changed files list and diffs for range mode.
+// RenderRangeFileEvidence renders the Changed files list and diffs for
+// range mode. Paths are escaped on render for the same reason as in
+// the dirty/staged renderer.
 func RenderRangeFileEvidence(repoRoot string, files []RangeFile, rangeSpec string) string {
 	var sb strings.Builder
 
@@ -117,7 +128,7 @@ func RenderRangeFileEvidence(repoRoot string, files []RangeFile, rangeSpec strin
 		sb.WriteString("No changed files found in range.\n")
 	} else {
 		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("%s  [%s]\n", f.Path, f.Status))
+			sb.WriteString(fmt.Sprintf("%s  [%s]\n", PathEscape(f.Path), f.Status))
 		}
 	}
 	sb.WriteString("\n")
@@ -127,7 +138,7 @@ func RenderRangeFileEvidence(repoRoot string, files []RangeFile, rangeSpec strin
 		sb.WriteString("No diffs to show.\n")
 	} else {
 		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", f.Path))
+			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", PathEscape(f.Path)))
 			sb.WriteString(fmt.Sprintf("Status: %s\n\n", f.Status))
 
 			diff, err := RunGit(repoRoot, []string{"diff", "--unified=3", rangeSpec, "--", f.Path})

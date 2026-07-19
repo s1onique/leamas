@@ -2,6 +2,7 @@
 package digest
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -15,6 +16,12 @@ func joinFields(parts ...string) string {
 	return strings.Join(parts, nul)
 }
 
+// TestParseGitStatusRecords_TableDriven covers every status letter the
+// parser accepts (A, M, D, T, U, X, B, R*, C*), example paths with
+// spaces / tabs / newlines / Unicode / leading dashes, multiple
+// records, empty input, and every malformed form the parser must
+// reject. The data is intentionally conservative — only stable
+// asserted behavior is encoded.
 func TestParseGitStatusRecords_TableDriven(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -51,114 +58,148 @@ func TestParseGitStatusRecords_TableDriven(t *testing.T) {
 			},
 		},
 		{
-			name:  "5. rename with R100",
+			name:  "5. type-change file (regular -> symlink/submodule)",
+			input: joinFields("T", "linked.go"),
+			want: []GitChange{
+				{Kind: KindTypeChanged, Path: "linked.go"},
+			},
+		},
+		{
+			name:  "6. unknown (X) status",
+			input: joinFields("X", "mystery.go"),
+			want: []GitChange{
+				{Kind: KindUnknown, Path: "mystery.go"},
+			},
+		},
+		{
+			name:  "7. broken-pair (B) status",
+			input: joinFields("B", "broken.go"),
+			want: []GitChange{
+				{Kind: KindBrokenPair, Path: "broken.go"},
+			},
+		},
+		{
+			name:  "8. rename with R100",
 			input: joinFields("R100", "old/path.go", "new/path.go"),
 			want: []GitChange{
 				{Kind: KindRenamed, OldPath: "old/path.go", Path: "new/path.go"},
 			},
 		},
 		{
-			name:  "6. rename with non-100 score",
+			name:  "9. rename with non-100 score",
 			input: joinFields("R087", "old.go", "new.go"),
 			want: []GitChange{
 				{Kind: KindRenamed, OldPath: "old.go", Path: "new.go"},
 			},
 		},
 		{
-			name:  "7. copy with C100",
+			name:  "10. copy with C100",
 			input: joinFields("C100", "source.go", "copy.go"),
 			want: []GitChange{
 				{Kind: KindCopied, OldPath: "source.go", Path: "copy.go"},
 			},
 		},
 		{
-			name:  "8. copy with non-100 score",
+			name:  "11. copy with non-100 score",
 			input: joinFields("C075", "src.go", "dest.go"),
 			want: []GitChange{
 				{Kind: KindCopied, OldPath: "src.go", Path: "dest.go"},
 			},
 		},
 		{
-			name:  "9. paths with spaces",
+			name:  "12. paths with spaces",
 			input: joinFields("M", "path with spaces.go"),
 			want: []GitChange{
 				{Kind: KindModified, Path: "path with spaces.go"},
 			},
 		},
 		{
-			name:  "10. paths with tabs",
+			name:  "13. paths with tabs",
 			input: joinFields("A", "tab\tin\tpath.go"),
 			want: []GitChange{
 				{Kind: KindAdded, Path: "tab\tin\tpath.go"},
 			},
 		},
 		{
-			name:  "11. paths with newlines",
+			name:  "14. paths with newlines",
 			input: joinFields("D", "weird\nnewline\npath.go"),
 			want: []GitChange{
 				{Kind: KindDeleted, Path: "weird\nnewline\npath.go"},
 			},
 		},
 		{
-			name:  "12. unicode paths",
+			name:  "15. unicode paths",
 			input: joinFields("A", "путь/файл.go"),
 			want: []GitChange{
 				{Kind: KindAdded, Path: "путь/файл.go"},
 			},
 		},
 		{
-			name:  "13. leading-dash paths",
+			name:  "16. leading-dash paths",
 			input: joinFields("M", "-dashed-flag.go"),
 			want: []GitChange{
 				{Kind: KindModified, Path: "-dashed-flag.go"},
 			},
 		},
 		{
-			name: "14. multiple adjacent records",
+			name: "17. multiple adjacent records",
 			input: joinFields(
 				"A", "a.go",
 				"M", "b.go",
 				"D", "c.go",
-				"R100", "d.go", "d2.go",
-				"C075", "e.go", "e2.go",
+				"T", "d.go",
+				"U", "e.go",
+				"R100", "f.go", "f2.go",
+				"C075", "g.go", "g2.go",
+				"X", "h.go",
+				"B", "i.go",
 			),
 			want: []GitChange{
 				{Kind: KindAdded, Path: "a.go"},
 				{Kind: KindModified, Path: "b.go"},
 				{Kind: KindDeleted, Path: "c.go"},
-				{Kind: KindRenamed, OldPath: "d.go", Path: "d2.go"},
-				{Kind: KindCopied, OldPath: "e.go", Path: "e2.go"},
+				{Kind: KindTypeChanged, Path: "d.go"},
+				{Kind: KindUnmerged, Path: "e.go"},
+				{Kind: KindRenamed, OldPath: "f.go", Path: "f2.go"},
+				{Kind: KindCopied, OldPath: "g.go", Path: "g2.go"},
+				{Kind: KindUnknown, Path: "h.go"},
+				{Kind: KindBrokenPair, Path: "i.go"},
 			},
 		},
 		{
-			name:  "15. empty input",
+			name:  "18. empty input",
 			input: "",
 			want:  nil,
 		},
 		{
-			name:    "16. truncated normal record (M with no path)",
+			name:    "19. truncated normal record (M with no path)",
 			input:   "M",
 			wantErr: "missing path for M record",
 		},
 		{
-			name:    "17. truncated rename (R100 with no paths)",
+			name:    "20. truncated rename (R100 with no paths)",
 			input:   "R100",
 			wantErr: "truncated R record",
 		},
 		{
-			name:    "18. truncated copy (C075 missing new path)",
+			name:    "21. truncated copy (C075 missing new path)",
 			input:   joinFields("C075", "src.go"),
 			wantErr: "truncated C record",
 		},
 		{
-			name:    "19. unknown status",
-			input:   joinFields("X", "weird.go"),
+			name:    "22. unknown status",
+			input:   joinFields("X1", "weird.go"),
 			wantErr: "unsupported status token",
 		},
 		{
-			name:    "20. empty destination path (A with NUL followed by NUL)",
+			name:    "23. empty destination path",
 			input:   "A" + nul + nul,
 			wantErr: "empty destination path for A record",
+		},
+		{
+			name:    "24. type-change with no path",
+			input:   "T",
+			wantErr: "missing path for T record",
 		},
 	}
 
@@ -196,14 +237,13 @@ func TestParseGitStatusRecords_TableDriven(t *testing.T) {
 }
 
 func TestParseGitStatusRecords_DoesNotPanic(t *testing.T) {
-	// A handful of additional abuse cases; the parser must surface
-	// errors rather than panic.
 	bad := []string{
-		"M\x00",                    // explicit empty destination
+		"M\x00",                    // ordinary record with empty destination
 		"R100\x00old.go\x00",       // rename missing destination
 		"R12x\x00old.go\x00new.go", // non-numeric similarity
 		" \x00foo.go",              // unsupported token (space)
-		"AA\x00foo.go",             // unsupported token prefix
+		"AA\x00foo.go",             // unsupported token form
+		"t\x00foo.go",              // lowercase rewrite is not a -z token
 	}
 	for _, in := range bad {
 		_, _ = ParseGitStatusRecords(in) // must not panic
@@ -211,8 +251,6 @@ func TestParseGitStatusRecords_DoesNotPanic(t *testing.T) {
 }
 
 func TestParseGitStatusRecords_OrderPreserved(t *testing.T) {
-	// Multiple records arriving in arbitrary order should come out
-	// in the same order they were written, never re-ordered.
 	in := joinFields(
 		"A", "z.go",
 		"M", "a.go",
@@ -236,22 +274,97 @@ func TestNormalizeGitStatusToken(t *testing.T) {
 		want   ChangeKind
 		wantOK bool
 	}{
+		// Plain uppercase status letters are accepted.
 		{"A", KindAdded, true},
 		{"M", KindModified, true},
 		{"D", KindDeleted, true},
+		{"T", KindTypeChanged, true},
 		{"U", KindUnmerged, true},
+		{"X", KindUnknown, true},
+		{"B", KindBrokenPair, true},
+		// Rename/copy with a numeric similarity score.
 		{"R100", KindRenamed, true},
 		{"R087", KindRenamed, true},
 		{"C100", KindCopied, true},
 		{"C075", KindCopied, true},
+		// Empty input is rejected.
 		{"", "", false},
-		{"X", "", false},
+		// Bare R/C without a numeric score are rejected; they would
+		// correspond to a malformed `git diff --name-status -z`
+		// record and the parser already rejects them at the structured
+		// layer.
+		{"R", "", false},
+		{"C", "", false},
+		// Bare letters outside the supported set are rejected.
+		{"X1", "", false},
 		{"AA", "", false},
+		{"Y", "", false},
+		// Lowercase rewrites are rejected: Git's `-z` form emits only
+		// uppercase letters and we refuse to guess.
+		{"a", "", false},
+		{"m", "", false},
+		{"r100", "", false},
 	}
 	for _, tt := range tests {
 		got, ok := NormalizeGitStatusToken(tt.in)
 		if ok != tt.wantOK || got != tt.want {
-			t.Errorf("NormalizeGitStatusToken(%q) = (%q,%v), want (%q,%v)", tt.in, got, ok, tt.want, tt.wantOK)
+			t.Errorf("NormalizeGitStatusToken(%q) = (%q,%v), want (%q,%v)",
+				tt.in, got, ok, tt.want, tt.wantOK)
 		}
+	}
+}
+
+// TestSplitNULRecords locks the helper's documented behaviour:
+// trailing NUL yields no trailing empty field, interior empty fields
+// are preserved.
+func TestSplitNULRecords(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{
+			name: "empty input",
+			in:   "",
+			want: nil,
+		},
+		{
+			name: "single field without trailing NUL",
+			in:   "M",
+			want: []string{"M"},
+		},
+		{
+			name: "single field with trailing NUL drops empty",
+			in:   "M\x00",
+			want: []string{"M"},
+		},
+		{
+			name: "two fields with trailing NUL",
+			in:   "M\x00file.go\x00",
+			want: []string{"M", "file.go"},
+		},
+		{
+			name: "two fields without trailing NUL",
+			in:   "M\x00file.go",
+			want: []string{"M", "file.go"},
+		},
+		{
+			name: "interior empty field preserved",
+			in:   "M\x00\x00file.go\x00",
+			want: []string{"M", "", "file.go"},
+		},
+		{
+			name: "rename-style layout",
+			in:   "R100\x00old.go\x00new.go\x00",
+			want: []string{"R100", "old.go", "new.go"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SplitNULRecords(tt.in)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("SplitNULRecords(%q) = %#v, want %#v", tt.in, got, tt.want)
+			}
+		})
 	}
 }

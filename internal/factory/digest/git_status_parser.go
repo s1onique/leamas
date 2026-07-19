@@ -3,10 +3,11 @@
 // `diff --name-status -z` output. It is the single source of truth for
 // translating Git's authoritative change records into typed Go values.
 //
-// The parser is intentionally narrow:
-//   - It only handles the status records emitted by the targeted Git invocations
-//     documented in this package.
-//   - It refuses malformed records rather than guessing.
+// The parser handles the full set of status letters Git emits in
+// `diff --name-status -z` for an unstaged or staged diff against a
+// baseline: A, M, D, T (type change), R<score>, C<score>, U (unmerged),
+// X (unknown), B (broken pairing). Parsing refuses malformed records
+// rather than guessing.
 //
 // Shared parser invariants:
 //   - Fields are delimited by NUL (\x00), not by whitespace or newlines.
@@ -33,15 +34,36 @@ const (
 	// derived from `ls-files --others --exclude-standard`.
 	KindUntracked ChangeKind = "?"
 
-	// KindAdded, KindModified, KindDeleted, KindRenamed, KindCopied,
-	// KindUnmerged correspond to the matching Git status letters.
-	KindAdded    ChangeKind = "A"
-	KindModified ChangeKind = "M"
-	KindDeleted  ChangeKind = "D"
-	KindRenamed  ChangeKind = "R"
-	KindCopied   ChangeKind = "C"
-	KindUnmerged ChangeKind = "U"
+	// KindAdded, KindModified, KindDeleted, KindTypeChanged,
+	// KindRenamed, KindCopied, KindUnmerged, KindUnknown, KindBroken
+	// correspond to the matching Git status letters (see
+	// `git-diff-tree --help` and `git diff --help` for the canonical
+	// list). The lowercase token forms from `--name-status` -z output
+	// while the uppercase letters signal the unrewritten status.
+	KindAdded       ChangeKind = "A"
+	KindModified    ChangeKind = "M"
+	KindDeleted     ChangeKind = "D"
+	KindTypeChanged ChangeKind = "T"
+	KindRenamed     ChangeKind = "R"
+	KindCopied      ChangeKind = "C"
+	KindUnmerged    ChangeKind = "U"
+	KindUnknown     ChangeKind = "X"
+	KindBrokenPair  ChangeKind = "B"
 )
+
+// IsInternalDeltaKind reports whether k is one of the kinds the parser
+// can derive from `git diff --name-status -z` against a working-tree
+// baseline. Untracked and unknown are handled separately.
+func (k ChangeKind) IsInternalDeltaKind() bool {
+	switch k {
+	case KindAdded, KindModified, KindDeleted, KindTypeChanged,
+		KindRenamed, KindCopied, KindUnmerged,
+		KindUnknown, KindBrokenPair:
+		return true
+	default:
+		return false
+	}
+}
 
 // GitChange is one parsed record from `git diff --name-status -z`.
 //
@@ -110,7 +132,8 @@ func ParseGitStatusRecords(input string) ([]GitChange, error) {
 		}
 
 		switch {
-		case token == "A", token == "M", token == "D", token == "U":
+		case token == "A", token == "M", token == "D", token == "T",
+			token == "U", token == "X", token == "B":
 			if i >= len(fields) {
 				return nil, fmt.Errorf("git status record at field %d: missing path for %s record", i-1, token)
 			}
@@ -157,32 +180,42 @@ func ParseGitStatusRecords(input string) ([]GitChange, error) {
 // NormalizeGitStatusToken reduces a Git status token to its single-letter kind.
 //
 // Tokens like "R100" or "C075" collapse to "R" / "C"; similarity scores are
-// discarded. Any unrecognized letter returns ("", false).
+// discarded. Tokens like "R" or "C" without a numeric score are rejected
+// because they would correspond to a malformed `git diff --name-status -z`
+// record; this stays consistent with ParseGitStatusRecords. Unknown letters
+// return ("", false). Lowercase rewrites ("a", "m", "d", "t") are rejected
+// for the same reason: Git's `-z` form emits only uppercase letters.
 func NormalizeGitStatusToken(token string) (ChangeKind, bool) {
 	switch token {
-	case "A", "M", "D", "U":
+	case "A", "M", "D", "T", "U", "X", "B":
 		return ChangeKind(token), true
 	case "":
 		return "", false
 	}
-	switch token[:1] {
-	case "R", "C":
+	if len(token) >= 2 && (token[0] == 'R' || token[0] == 'C') {
+		rest := token[1:]
+		for _, c := range rest {
+			if c < '0' || c > '9' {
+				return "", false
+			}
+		}
 		return ChangeKind(token[:1]), true
 	}
 	return "", false
 }
 
-// SplitNULRecords splits a NUL-delimited byte stream into ordered field tokens.
-//
-// Unlike `strings.Split(s, "\x00")`, this helper retains empty interior
-// fields, which the parser needs to detect truncated records. A trailing
-// NUL yields no trailing empty field, matching how Git terminates output.
-//
-// Callers that only need non-empty paths (e.g. `git ls-files --others -z`)
-// should use the existing `splitNULList` helper instead.
+// SplitNULRecords splits a NUL-delimited byte stream into ordered field
+// tokens, retaining empty interior fields (the parser requires that to
+// detect truncated records) and dropping a single trailing empty
+// element that arises when the input ends with NUL. The returned slice
+// mirrors `strings.Split(s, "\x00")` with that one adjustment.
 func SplitNULRecords(input string) []string {
 	if input == "" {
 		return nil
 	}
-	return strings.Split(input, "\x00")
+	parts := strings.Split(input, "\x00")
+	if n := len(parts); n > 0 && parts[n-1] == "" && strings.HasSuffix(input, "\x00") {
+		parts = parts[:n-1]
+	}
+	return parts
 }
