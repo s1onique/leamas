@@ -42,29 +42,27 @@ func TestCacheClassification_AllCanonicalVerifiersClassified(t *testing.T) {
 	}
 
 	for _, name := range verifiers {
-		class := classifyCacheObservation(name, nil)
+		class := classifyCacheObservation(name)
 		if class == "" {
 			t.Errorf("verifier %q has no cache classification", name)
 		}
 	}
 }
 
-// TestCacheClassification_NoUnknownVerifiers verifies that unknown or phantom
-// verifiers get a default classification.
+// TestCacheClassification_NoUnknownVerifiersGetDefault verifies unknown verifiers.
 func TestCacheClassification_UnknownVerifiersGetDefault(t *testing.T) {
-	class := classifyCacheObservation("unknown-phantom-verifier", nil)
+	class := classifyCacheObservation("unknown-phantom-verifier")
 	if class == "" {
 		t.Errorf("unknown verifier must still get a classification")
 	}
 }
 
-// TestCacheClassification_ExactlyOneClassification verifies that each verifier
-// gets exactly one classification string.
+// TestCacheClassification_ExactlyOneClassification verifies structured format.
 func TestCacheClassification_ExactlyOneClassification(t *testing.T) {
 	verifiers := canonicalVerifiers()
 
 	for _, name := range verifiers {
-		class := classifyCacheObservation(name, nil)
+		class := classifyCacheObservation(name)
 		if strings.Contains(class, ";") {
 			parts := strings.Split(class, ";")
 			if len(parts) != 2 {
@@ -74,13 +72,12 @@ func TestCacheClassification_ExactlyOneClassification(t *testing.T) {
 	}
 }
 
-// TestCacheClassification_StructuredFormat verifies that cache observations
-// use a structured format with named fields.
+// TestCacheClassification_StructuredFormat verifies key=value format.
 func TestCacheClassification_StructuredFormat(t *testing.T) {
 	verifiers := canonicalVerifiers()
 
 	for _, name := range verifiers {
-		class := classifyCacheObservation(name, nil)
+		class := classifyCacheObservation(name)
 
 		pairs := strings.Split(class, ";")
 		if len(pairs) < 1 {
@@ -91,27 +88,25 @@ func TestCacheClassification_StructuredFormat(t *testing.T) {
 		for _, pair := range pairs {
 			kv := strings.Split(pair, "=")
 			if len(kv) != 2 {
-				t.Errorf("verifier %q classification %q has malformed pair %q (expected key=value)", name, class, pair)
+				t.Errorf("verifier %q classification %q has malformed pair %q", name, class, pair)
 			}
 		}
 	}
 }
 
-// TestCacheClassification_DupcodeUsesTestResultCacheDisabled verifies that
-// dupcode verifiers disable test result cache.
+// TestCacheClassification_DupcodeUsesTestResultCacheDisabled verifies dupcode.
 func TestCacheClassification_DupcodeUsesTestResultCacheDisabled(t *testing.T) {
 	dupcodeVerifiers := []string{"dupcode", "dupcode-baseline"}
 
 	for _, name := range dupcodeVerifiers {
-		class := classifyCacheObservation(name, nil)
+		class := classifyCacheObservation(name)
 		if !strings.Contains(class, "go_test_result_cache=disabled") {
 			t.Errorf("verifier %q must have go_test_result_cache=disabled, got %q", name, class)
 		}
 	}
 }
 
-// TestCacheClassification_NoGocoverageInCanonical verifies that go-coverage
-// is not among the 15 canonical verifiers.
+// TestCacheClassification_NoGocoverageInCanonical verifies go-coverage not in list.
 func TestCacheClassification_NoGocoverageInCanonical(t *testing.T) {
 	verifiers := canonicalVerifiers()
 
@@ -122,13 +117,12 @@ func TestCacheClassification_NoGocoverageInCanonical(t *testing.T) {
 	}
 }
 
-// TestCacheClassification_AllowlistDerived verifies that cache semantics
-// come from verifier metadata allowlist, not hardcoded strings.
+// TestCacheClassification_AllowlistDerived verifies classification derives from.
 func TestCacheClassification_AllowlistDerived(t *testing.T) {
 	verifiers := canonicalVerifiers()
 
 	for _, name := range verifiers {
-		class := classifyCacheObservation(name, nil)
+		class := classifyCacheObservation(name)
 		if class == "" {
 			t.Errorf("verifier %q has no classification", name)
 			continue
@@ -137,21 +131,6 @@ func TestCacheClassification_AllowlistDerived(t *testing.T) {
 		if !strings.Contains(class, "=") {
 			t.Errorf("verifier %q classification %q lacks key=value format", name, class)
 		}
-	}
-}
-
-// TestClassifyCacheObservation_FindingsUnused verifies that findings parameter
-// is unused (as noted in the review).
-func TestClassifyCacheObservation_FindingsUnused(t *testing.T) {
-	name := "dupcode"
-	nilFindings := classifyCacheObservation(name, nil)
-	emptyFindings := classifyCacheObservation(name, []checks.Finding{})
-	realFindings := classifyCacheObservation(name, []checks.Finding{
-		{Path: "test.go", Kind: "error", Message: "test error"},
-	})
-
-	if nilFindings != emptyFindings || emptyFindings != realFindings {
-		t.Errorf("findings parameter should not affect classification")
 	}
 }
 
@@ -165,13 +144,82 @@ func verifierNames(verifiers []Verifier) []string {
 	return names
 }
 
-// TestAllVerifiersCount_MatchesCanonical verifies AllVerifiers returns
-// exactly 15 verifiers.
+// TestAllVerifiersCount_MatchesCanonical verifies AllVerifiers returns 15.
 func TestAllVerifiersCount_MatchesCanonical(t *testing.T) {
 	verifiers := AllVerifiers()
 
 	if len(verifiers) != canonicalVerifierCount {
 		t.Errorf("AllVerifiers() returned %d verifiers, expected %d:\n%v",
 			len(verifiers), canonicalVerifierCount, verifierNames(verifiers))
+	}
+}
+
+// TestMetricsCheck_Fields verifies MetricsCheck struct has required fields.
+func TestMetricsCheck_Fields(t *testing.T) {
+	mc := &MetricsCollection{}
+
+	// Test AddCheck with valid input
+	err := mc.AddCheck(
+		"test-verifier",
+		1,
+		nil, // no findings
+		0,
+		rusageMetrics{},
+		"/checkout",
+		"go_test_result_cache=not-applicable;go_build_cache=not-applicable",
+		[]string{"test-verifier"},
+		[]string{"GOFLAGS=-v"},
+		"",
+	)
+	if err != nil {
+		t.Fatalf("AddCheck failed: %v", err)
+	}
+
+	if len(mc.Checks) != 1 {
+		t.Fatalf("expected 1 check, got %d", len(mc.Checks))
+	}
+
+	check := mc.Checks[0]
+	if check.ID != "test-verifier" {
+		t.Errorf("expected ID=test-verifier, got %s", check.ID)
+	}
+	if check.Status != "pass" {
+		t.Errorf("expected status=pass, got %s", check.Status)
+	}
+	if check.CommandFingerprint == "" {
+		t.Errorf("CommandFingerprint must not be empty")
+	}
+}
+
+// TestMetricsCheck_FailureStatus verifies failure status propagation.
+func TestMetricsCheck_FailureStatus(t *testing.T) {
+	mc := &MetricsCollection{}
+
+	findings := []checks.Finding{
+		{Path: "test.go", Kind: "error", Message: "test error"},
+	}
+
+	err := mc.AddCheck(
+		"test-verifier",
+		1,
+		findings,
+		0,
+		rusageMetrics{},
+		"/checkout",
+		"go_test_result_cache=not-applicable;go_build_cache=not-applicable",
+		[]string{"test-verifier"},
+		[]string{"GOFLAGS=-v"},
+		"",
+	)
+	if err != nil {
+		t.Fatalf("AddCheck failed: %v", err)
+	}
+
+	check := mc.Checks[0]
+	if check.Status != "fail" {
+		t.Errorf("expected status=fail, got %s", check.Status)
+	}
+	if check.ExitCode != 1 {
+		t.Errorf("expected exit_code=1, got %d", check.ExitCode)
 	}
 }

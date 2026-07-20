@@ -42,6 +42,7 @@ func (systemClock) Now() time.Time { return time.Now() }
 // by the check so the caller can render detail lines when needed.
 //
 // If metrics is non-nil, resource usage is also collected for the check.
+// Returns any error from metrics collection.
 func runCheck(
 	out io.Writer,
 	clk clock,
@@ -50,7 +51,7 @@ func runCheck(
 	metrics *MetricsCollection,
 	ordinal int,
 	root string,
-) []checks.Finding {
+) ([]checks.Finding, error) {
 	started := clk.Now()
 	findings := check()
 	elapsed := clk.Now().Sub(started)
@@ -66,18 +67,20 @@ func runCheck(
 	if metrics != nil {
 		rusage := collectRusage()
 		// Determine cache observation based on verifier
-		cacheObs := classifyCacheObservation(name, findings)
-		// Get executable path and environment for fingerprinting
-		execPath, _ := os.Executable()
+		cacheObs := classifyCacheObservation(name)
+		// Get argv and environment for fingerprinting
+		argv := []string{name}
 		env := os.Environ()
-		metrics.AddCheck(name, ordinal, findings, elapsed, rusage, root, cacheObs, []string{name}, env, execPath)
+		if err := metrics.AddCheck(name, ordinal, findings, elapsed, rusage, root, cacheObs, argv, env, ""); err != nil {
+			return findings, fmt.Errorf("metrics collection for %s: %w", name, err)
+		}
 	}
 
-	return findings
+	return findings, nil
 }
 
 // classifyCacheObservation determines the cache classification for a verifier.
-func classifyCacheObservation(name string, findings []checks.Finding) string {
+func classifyCacheObservation(name string) string {
 	// Verifiers that run go test with -count=1 (test-result caching disabled)
 	goTestVerifiers := map[string]bool{
 		"dupcode":          true,
@@ -92,7 +95,6 @@ func classifyCacheObservation(name string, findings []checks.Finding) string {
 		"static-binary":   true,
 		"executable-contract-first": true,
 		"exec-gate":       true,
-		"go-coverage":     true,
 	}
 	if goBuildRelevant[name] {
 		return "go_test_result_cache=not-applicable;go_build_cache=relevant"
@@ -143,9 +145,13 @@ func runFactorize(
 
 	ordinal := 1
 	for _, v := range sorted {
-		findings := runCheck(out, clk, v.Name, func() []checks.Finding {
+		findings, err := runCheck(out, clk, v.Name, func() []checks.Finding {
 			return v.Run(root)
 		}, metrics, ordinal, root)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			failed = true
+		}
 		if len(findings) > 0 {
 			failed = true
 			printFailureFindings(out, v.Name, findings)

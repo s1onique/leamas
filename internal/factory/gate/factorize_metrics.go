@@ -89,45 +89,47 @@ type rusageMetrics struct {
 	maxRSS    int64
 }
 
-// relevantEnvVars contains the LEAMAS_* environment variables that affect
-// verifier execution and must be included in the fingerprint.
-// Instrumentation-only variables are excluded.
-var relevantEnvVars = map[string]bool{
-	"LEAMAS_FACTORIZE_SCENARIO": true,
-	"LEAMAS_FACTORIZE_SEQUENCE": true,
-	// Note: LEAMAS_FACTORIZE_METRICS_FILE is excluded (evidence-only)
+// FingerprintError represents an error in computing a command fingerprint.
+type FingerprintError struct {
+	Reason string
+}
+
+func (e *FingerprintError) Error() string {
+	return "command fingerprint error: " + e.Reason
 }
 
 // commandFingerprint computes a digest of a verifier's execution definition.
-// It binds the verifier ID, executable identity, argv, and relevant environment.
+// It binds the verifier ID, argv, and execution-relevant environment.
+// Returns an error if the execution definition is incomplete.
 // The fingerprint is invariant under checkout relocation.
-func commandFingerprint(name string, root string, argv []string, env []string, execPath string) string {
+func commandFingerprint(name string, root string, argv []string, env []string, execPath string) (string, error) {
+	// Validate required fields - fail closed for incomplete definitions
+	if name == "" {
+		return "", &FingerprintError{Reason: "verifier name is required"}
+	}
+	if len(argv) == 0 {
+		return "", &FingerprintError{Reason: "argv is required"}
+	}
+
 	h := sha256.New()
-	h.Write([]byte("factorize-v1"))
+	h.Write([]byte("factorize-v2"))
 	h.Write([]byte{0})
 	h.Write([]byte(name))
 	h.Write([]byte{0})
-	// Bind executable identity (empty exec path fails closed)
-	h.Write([]byte(execPath))
-	h.Write([]byte{0})
-	// Bind argv
+
+	// Bind argv - the verifier's logical invocation
 	for _, arg := range argv {
 		h.Write([]byte(arg))
 		h.Write([]byte{0})
 	}
 	h.Write([]byte{0}) // argv terminator
-	// Bind relevant LEAMAS_* environment variables (sorted for determinism)
+
+	// Bind relevant Go execution environment (sorted for determinism)
+	// These affect Go tool behavior and should be included in fingerprint
 	var relevant []string
 	for _, e := range env {
-		if strings.HasPrefix(e, "LEAMAS_") {
-			// Extract key (up to '=')
-			keyEnd := strings.IndexByte(e, '=')
-			if keyEnd > 8 {
-				key := e[:keyEnd]
-				if relevantEnvVars[key] {
-					relevant = append(relevant, e)
-				}
-			}
+		if hasExecEnvPrefix(e) && isExecRelevantEnv(e) {
+			relevant = append(relevant, e)
 		}
 	}
 	sort.Strings(relevant) // deterministic ordering
@@ -135,7 +137,67 @@ func commandFingerprint(name string, root string, argv []string, env []string, e
 		h.Write([]byte(e))
 		h.Write([]byte{0})
 	}
-	return hex.EncodeToString(h.Sum(nil))
+
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+// hasExecEnvPrefix returns true if the env var starts with a known
+// execution-affecting prefix.
+func hasExecEnvPrefix(env string) bool {
+	execPrefixes := []string{
+		"GO",
+		"CGO_",
+		"GOPROXY",
+		"GOSUMDB",
+		"GOPRIVATE",
+		"PATH",
+	}
+	for _, prefix := range execPrefixes {
+		if strings.HasPrefix(env, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isExecRelevantEnv returns true if the env var affects verifier execution.
+// Excludes instrumentation-only and observation metadata.
+func isExecRelevantEnv(env string) bool {
+	// Excluded: instrumentation and observation metadata
+	excluded := map[string]bool{
+		"LEAMAS_FACTORIZE_METRICS_FILE": true,
+		"LEAMAS_FACTORIZE_SCENARIO":    true,
+		"LEAMAS_FACTORIZE_SEQUENCE":    true,
+	}
+
+	keyEnd := strings.IndexByte(env, '=')
+	if keyEnd <= 0 {
+		return false
+	}
+	key := env[:keyEnd]
+
+	if excluded[key] {
+		return false
+	}
+
+	// Include known execution-affecting Go variables
+	execRelevant := map[string]bool{
+		"GOFLAGS":      true,
+		"GOCACHE":      true,
+		"GOENV":        true,
+		"GOTOOLCHAIN":  true,
+		"GOMAXPROCS":   true,
+		"CGO_ENABLED":  true,
+		"GOOS":         true,
+		"GOARCH":       true,
+		"GOPROXY":      true,
+		"GONOSUMDB":    true,
+		"GOSUMDB":      true,
+		"GOPRIVATE":    true,
+		"PATH":         true,
+	}
+
+	return execRelevant[key]
 }
 
 // collectRusage collects resource usage for the current process.
@@ -237,6 +299,7 @@ func (mc *MetricsCollection) StartRun() {
 }
 
 // AddCheck records metrics for a single verifier.
+// Returns an error if the command fingerprint cannot be computed.
 func (mc *MetricsCollection) AddCheck(
 	name string,
 	ordinal int,
@@ -248,7 +311,7 @@ func (mc *MetricsCollection) AddCheck(
 	argv []string,
 	env []string,
 	execPath string,
-) {
+) error {
 	var status string
 	var exitCode int
 	if len(findings) > 0 {
@@ -271,6 +334,12 @@ func (mc *MetricsCollection) AddCheck(
 		v := rusage.maxRSS
 		maxRSS = &v
 	}
+
+	fingerprint, err := commandFingerprint(name, root, argv, env, execPath)
+	if err != nil {
+		return fmt.Errorf("command fingerprint for %s: %w", name, err)
+	}
+
 	mc.Checks = append(mc.Checks, MetricsCheck{
 		Ordinal:            ordinal,
 		ID:                 name,
@@ -281,9 +350,10 @@ func (mc *MetricsCollection) AddCheck(
 		SystemCPUNs:        systemCPU,
 		MaxRSSBytes:        maxRSS,
 		ResourceScope:      "verifier",
-		CommandFingerprint: commandFingerprint(name, root, argv, env, execPath),
+		CommandFingerprint: fingerprint,
 		CacheObservation:   cacheObservation,
 	})
+	return nil
 }
 
 // FinalizeRun completes the metrics collection and writes the artifact.

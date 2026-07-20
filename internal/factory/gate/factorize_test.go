@@ -61,9 +61,12 @@ func TestRunCheck_PrintsElapsedTimeOnSuccess(t *testing.T) {
 
 	var out bytes.Buffer
 
-	findings := runCheck(&out, clk, "docs", func() []checks.Finding {
+	findings, err := runCheck(&out, clk, "docs", func() []checks.Finding {
 		return nil
 	}, nil, 1, ".")
+	if err != nil {
+		t.Fatalf("runCheck() error: %v", err)
+	}
 	if len(findings) != 0 {
 		t.Fatalf("runCheck() findings=%v, want empty", findings)
 	}
@@ -85,11 +88,14 @@ func TestRunCheck_PrintsElapsedTimeOnFailure(t *testing.T) {
 
 	var out bytes.Buffer
 
-	findings := runCheck(&out, clk, "docs", func() []checks.Finding {
+	findings, err := runCheck(&out, clk, "docs", func() []checks.Finding {
 		return []checks.Finding{
 			{Path: "p", Kind: "k", Message: "m"},
 		}
 	}, nil, 1, ".")
+	if err != nil {
+		t.Fatalf("runCheck() error: %v", err)
+	}
 	if len(findings) != 1 {
 		t.Fatalf("runCheck() findings=%v, want 1", findings)
 	}
