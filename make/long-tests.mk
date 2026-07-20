@@ -7,18 +7,19 @@ test-fast:
 	@go test -short ./...
 
 # test-long runs all registered long tests using the baseline-driven runner
-test-long:
+# Requires build to ensure bin/leamas exists
+test-long: build
 	@echo "Running registered long tests from baseline..."
 	@bin/leamas factory test-long
 
 # gate-fast runs the full quality gate in fast mode using --test-mode=short
 # which skips long-running tests that are registered in .factory/long-tests-baseline.json
-gate-fast:
+gate-fast: build
 	@echo "Running quality gate (fast mode)..."
-	@chmod +x scripts/quality_gate.sh
-	@./scripts/quality_gate.sh --test-mode=short
+	@./bin/leamas factory gate --test-mode=short
 
-# gate is the canonical target that aggregates fast and long lanes.
-# Both lanes must pass for the gate to be considered green.
-gate: gate-fast test-long
-	@echo "Complete gate: fast and long lanes passed"
+# gate is the canonical target that runs the full factory gate with all checks.
+# Uses --test-mode=full which runs both fast and long lanes.
+gate: build
+	@echo "Running quality gate (full mode)..."
+	@./bin/leamas factory gate --test-mode=full

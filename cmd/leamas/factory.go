@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -108,10 +107,7 @@ func handleShortMode(startedAt time.Time) {
 		fmt.Fprintf(os.Stderr, "factory gate: write fast summary: %v\n", err)
 		os.Exit(1)
 	}
-	if err := writeAggregateSummary(); err != nil {
-		fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
-		os.Exit(1)
-	}
+	// Short mode does NOT publish an aggregate summary - only fast lane results
 	os.Exit(fastExitCode)
 }
 
@@ -125,14 +121,15 @@ func handleFullMode(startedAt time.Time) {
 	}
 	if fastExitCode != 0 {
 		fmt.Println("\n*** SKIPPING LONG LANE: fast lane failed ***")
-		if err := writeAggregateSummary(); err != nil {
+		// Write aggregate with only fast lane in failed state
+		if err := writeAggregateSummaryWithStatus("fail", fastExitCode != 0, -1); err != nil {
 			fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
 		}
 		os.Exit(1)
 	}
 	fmt.Println("\n=== LONG LANE ===")
 	longExitCode := runTestLongLane()
-	if err := writeAggregateSummary(); err != nil {
+	if err := writeAggregateSummaryWithStatus("pass", false, longExitCode); err != nil {
 		fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
 		os.Exit(1)
 	}
@@ -147,14 +144,47 @@ func runTestLongLane() int {
 		fmt.Fprintf(os.Stderr, "factory gate: ensure binary: %v\n", err)
 		return 1
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	// Compute timeout from baseline entries: sum of ci_timeouts + fixed overhead
+	timeout := computeLongLaneTimeout()
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := execution.RunTestLong(ctx, "./bin/leamas")
 	if result.Error != nil && result.ExitCode == -1 {
-		fmt.Fprintf(os.Stderr, "factory gate: test-long timed out\n")
+		fmt.Fprintf(os.Stderr, "factory gate: test-long timed out after %v\n", timeout)
 		return 1
 	}
 	return result.ExitCode
+}
+
+// computeLongLaneTimeout computes the timeout for the long lane based on baseline entries.
+func computeLongLaneTimeout() time.Duration {
+	baseline, err := longtest.LoadBaseline(".")
+	if err != nil {
+		// Fall back to 30 minutes if baseline can't be loaded
+		return 30 * time.Minute
+	}
+	var total time.Duration
+	for _, tt := range baseline.Tests {
+		d, err := time.ParseDuration(tt.CITimeout)
+		if err != nil {
+			continue
+		}
+		total += d
+	}
+	// Add fixed overhead: 5 minutes per test for startup/teardown
+	overhead := 5 * time.Minute * time.Duration(len(baseline.Tests))
+	total += overhead
+	// Cap at 2 hours maximum
+	const maxTimeout = 2 * time.Hour
+	if total > maxTimeout {
+		return maxTimeout
+	}
+	// Minimum 10 minutes
+	const minTimeout = 10 * time.Minute
+	if total < minTimeout {
+		return minTimeout
+	}
+	return total
 }
 
 func ensureBinary() error {
@@ -253,86 +283,4 @@ func handleFactoryOutputContract() {
 	}
 	output.WriteLine(os.Stderr, *result)
 	os.Exit(1)
-}
-
-func writeFastSummary(startedAt, finishedAt time.Time, exitCode int) error {
-	status := gate.CheckStatusPass
-	if exitCode != 0 {
-		status = gate.CheckStatusFail
-	}
-	summary := gate.GateSummary{
-		SchemaVersion: 1,
-		GeneratedAt:   finishedAt.Format(time.RFC3339),
-		Tool:          "leamas factory gate",
-		OverallStatus: string(status),
-		Checks: []gate.Check{
-			{Name: "fast-lane", Status: status},
-		},
-	}
-	data, err := json.MarshalIndent(summary, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal fast summary: %w", err)
-	}
-	return os.WriteFile(".factory/gate-fast-summary.json", data, 0644)
-}
-
-func writeAggregateSummary() error {
-	summary := gate.GateSummary{
-		SchemaVersion: 1,
-		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
-		Tool:          "leamas factory gate",
-		OverallStatus: "pass",
-		Checks:        []gate.Check{},
-	}
-	fastSummary, err := readFastSummary()
-	if err == nil && fastSummary != nil {
-		summary.Checks = append(summary.Checks, gate.Check{Name: "fast-lane", Status: gate.CheckStatusPass})
-		if fastSummary.OverallStatus == "fail" {
-			summary.OverallStatus = "fail"
-			summary.Checks = append(summary.Checks, gate.Check{Name: "fast-lane-status", Status: gate.CheckStatusFail})
-		}
-	}
-	longSummary, err := readLongSummary()
-	if err == nil && longSummary != nil {
-		summary.Checks = append(summary.Checks, gate.Check{Name: "long-lane", Status: gate.CheckStatusPass})
-		if longSummary.Failed > 0 {
-			summary.OverallStatus = "fail"
-			summary.Checks = append(summary.Checks, gate.Check{Name: "long-lane-status", Status: gate.CheckStatusFail})
-		}
-	}
-	data, err := json.MarshalIndent(summary, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal aggregate summary: %w", err)
-	}
-	return os.WriteFile(".factory/gate-summary.json", data, 0644)
-}
-
-type fastLaneSummary struct {
-	SchemaVersion int    `json:"schema_version"`
-	OverallStatus string `json:"overall_status"`
-	GeneratedAt   string `json:"generated_at"`
-}
-
-func readFastSummary() (*fastLaneSummary, error) {
-	data, err := os.ReadFile(".factory/gate-fast-summary.json")
-	if err != nil {
-		return nil, err
-	}
-	var s fastLaneSummary
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
-
-func readLongSummary() (*testLongSummary, error) {
-	data, err := os.ReadFile(".factory/gate-long-summary.json")
-	if err != nil {
-		return nil, err
-	}
-	var s testLongSummary
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
-	}
-	return &s, nil
 }

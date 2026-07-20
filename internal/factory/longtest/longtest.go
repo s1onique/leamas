@@ -10,9 +10,12 @@
 package longtest
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -42,8 +45,9 @@ var ErrBaselineMissing = errors.New("long-test baseline file is missing but is r
 
 // LoadBaseline loads the long-tests-baseline.json from the given root.
 // Returns an error if the file does not exist (fail-closed policy).
+// Uses strict JSON decoding that rejects unknown fields and trailing values.
 func LoadBaseline(root string) (*Baseline, error) {
-	path := root + "/.factory/long-tests-baseline.json"
+	path := filepath.Join(root, ".factory", "long-tests-baseline.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -52,7 +56,17 @@ func LoadBaseline(root string) (*Baseline, error) {
 		return nil, err
 	}
 	var b Baseline
-	if err := json.Unmarshal(data, &b); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&b); err != nil {
+		return nil, err
+	}
+	// Ensure no trailing JSON values
+	var dummy json.RawMessage
+	if err := decoder.Decode(&dummy); err != io.EOF {
+		if err == nil {
+			return nil, errors.New("trailing data after JSON object")
+		}
 		return nil, err
 	}
 	return &b, nil
@@ -179,6 +193,7 @@ func ValidateBaseline(baseline *Baseline) error {
 }
 
 // isValidPackageSelector checks if a package path is valid for go test.
+// It enforces containment: paths cannot escape the repository root.
 // Valid forms: "./path/to/pkg", "./path/to/pkg/...", "./..."
 func isValidPackageSelector(pkg string) bool {
 	if pkg == "" {
@@ -192,6 +207,12 @@ func isValidPackageSelector(pkg string) bool {
 	pkg = strings.TrimSuffix(pkg, "/")
 	// Path segments must not contain spaces
 	if strings.Contains(pkg, " ") {
+		return false
+	}
+	// Clean and validate containment
+	clean := filepath.Clean(pkg)
+	// Reject "." (current dir), "..", and paths that escape root
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
 		return false
 	}
 	return true

@@ -70,10 +70,11 @@ type RunGoTestResult struct {
 	Error    error
 }
 
-// RunGoTest runs "go test" with the given arguments.
+// RunGoTest runs "go test" with the given arguments in the specified directory.
 // This helper encapsulates the exec.Command call to satisfy the forbidden-exec gate.
-func RunGoTest(ctx context.Context, args ...string) *RunGoTestResult {
+func RunGoTest(ctx context.Context, dir string, args ...string) *RunGoTestResult {
 	cmd := exec.CommandContext(ctx, "go", args...)
+	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 

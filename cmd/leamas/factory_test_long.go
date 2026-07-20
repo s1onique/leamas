@@ -15,24 +15,6 @@ import (
 	"github.com/s1onique/leamas/internal/factory/longtest"
 )
 
-type testLongResult struct {
-	ID       string `json:"id"`
-	Package  string `json:"package"`
-	Test     string `json:"test"`
-	Passed   bool   `json:"passed"`
-	Duration string `json:"duration,omitempty"`
-	Error    string `json:"error,omitempty"`
-}
-
-type testLongSummary struct {
-	SchemaVersion int              `json:"schema_version"`
-	GeneratedAt   string           `json:"generated_at"`
-	Tests         []testLongResult `json:"tests"`
-	Passed        int              `json:"passed"`
-	Failed        int              `json:"failed"`
-	Total         int              `json:"total"`
-}
-
 func handleFactoryTestLong() {
 	args := os.Args[3:]
 	var groupFilter string
@@ -40,7 +22,7 @@ func handleFactoryTestLong() {
 	fs.SetOutput(os.Stderr)
 	fs.StringVar(&groupFilter, "group", "", "filter by ci_group")
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: leamas factory test-long [--group=<ci_group>]\n")
+		fmt.Fprintf(os.Stderr, "Usage: leamas factory test-long [--group=<ci_group>] [root]\n")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -50,8 +32,13 @@ func handleFactoryTestLong() {
 		fmt.Fprintf(os.Stderr, "test-long: %v\n", err)
 		os.Exit(1)
 	}
+	// Reject multiple positional arguments
+	if fs.NArg() > 1 {
+		fmt.Fprintf(os.Stderr, "test-long: multiple repository roots not supported\n")
+		os.Exit(1)
+	}
 	root := "."
-	if fs.NArg() > 0 {
+	if fs.NArg() == 1 {
 		root = fs.Arg(0)
 	}
 	baseline, err := longtest.LoadBaseline(root)
@@ -72,7 +59,7 @@ func handleFactoryTestLong() {
 	if len(filtered) == 0 {
 		if groupFilter != "" {
 			fmt.Fprintf(os.Stderr, "test-long: no tests found for group %q\n", groupFilter)
-			os.Exit(0)
+			os.Exit(1) // Fail-closed: unknown group is an error
 		}
 		fmt.Fprintf(os.Stderr, "test-long: no tests in baseline\n")
 		os.Exit(0)
@@ -139,7 +126,7 @@ func runTest(root string, tt longtest.TestSpec) (bool, time.Duration, error) {
 	pattern := "^" + regexp.QuoteMeta(tt.Test) + "$"
 	args := []string{"test", "-count=1", "-timeout=" + tt.CITimeout, "-run=" + pattern, tt.Package}
 	start := time.Now()
-	result := execution.RunGoTest(ctx, args...)
+	result := execution.RunGoTest(ctx, root, args...)
 	duration := time.Since(start)
 	if ctx.Err() == context.DeadlineExceeded {
 		return false, duration, fmt.Errorf("timeout after %s", tt.CITimeout)
