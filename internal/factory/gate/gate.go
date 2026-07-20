@@ -234,6 +234,13 @@ func RunGate(root string) int {
 // Wall-clock timings are emitted on each check line and on the final
 // summary line; the underlying runFactorize helper owns the timing
 // logic and is covered by deterministic tests with an injected clock.
+//
+// When LEAMAS_FACTORIZE_METRICS_FILE is set, machine-readable per-verifier
+// metrics are written atomically to the specified path.
 func RunFactorize(root string) int {
-	return runFactorize(os.Stdout, systemClock{}, root, AllVerifiers())
+	var mc *MetricsCollection
+	if shouldCollectMetrics() {
+		mc = &MetricsCollection{Path: metricsFilePath()}
+	}
+	return runFactorize(os.Stdout, systemClock{}, root, AllVerifiers(), mc)
 }

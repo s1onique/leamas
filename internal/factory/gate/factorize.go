@@ -4,11 +4,15 @@
 // and snapshot contracts; they live only in the interactive text
 // progress output of `leamas factory factorize`. The clock is injected
 // so tests can assert exact elapsed-time formatting without sleeping.
+//
+// When LEAMAS_FACTORIZE_METRICS_FILE is set, machine-readable per-verifier
+// metrics are written atomically to the specified path after the run.
 package gate
 
 import (
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"time"
 
@@ -36,11 +40,16 @@ func (systemClock) Now() time.Time { return time.Now() }
 // The duration is always reported, even on failure, so slow failing
 // checks remain visible. The function returns the findings produced
 // by the check so the caller can render detail lines when needed.
+//
+// If metrics is non-nil, resource usage is also collected for the check.
 func runCheck(
 	out io.Writer,
 	clk clock,
 	name string,
 	check func() []checks.Finding,
+	metrics *MetricsCollection,
+	ordinal int,
+	root string,
 ) []checks.Finding {
 	started := clk.Now()
 	findings := check()
@@ -52,7 +61,33 @@ func runCheck(
 	}
 
 	fmt.Fprintf(out, "  %s: %s: %.2fs\n", name, status, elapsed.Seconds())
+
+	// Collect metrics if enabled
+	if metrics != nil {
+		rusage := collectRusage()
+		// Determine cache observation based on verifier
+		cacheObs := classifyCacheObservation(name, findings)
+		metrics.AddCheck(name, ordinal, findings, elapsed, rusage, root, cacheObs)
+	}
+
 	return findings
+}
+
+// classifyCacheObservation determines the cache classification for a verifier.
+func classifyCacheObservation(name string, findings []checks.Finding) string {
+	// These verifiers run go test with -count=1, disabling test-result caching
+	goTestVerifiers := map[string]bool{
+		"dupcode":         true,
+		"dupcode-baseline": true,
+	}
+	if goTestVerifiers[name] {
+		return "test-result-cache-disabled"
+	}
+	// Verifiers that benefit from Go build caching
+	if _, ok := goTestVerifiers[name]; ok {
+		return "go-build-cache-relevant"
+	}
+	return "not-applicable"
 }
 
 // printFailureFindings renders the verbose failure block (one
@@ -71,11 +106,15 @@ func printFailureFindings(out io.Writer, name string, findings []checks.Finding)
 // any failed check. Execution order is the same ascending-name order
 // used by the public RunFactorize; timings appear only in this text
 // output and never in JSON, digest, or evidence artifacts.
+//
+// When metrics is non-nil and LEAMAS_FACTORIZE_METRICS_FILE is set,
+// machine-readable metrics are written atomically to the specified path.
 func runFactorize(
 	out io.Writer,
 	clk clock,
 	root string,
 	verifiers []Verifier,
+	metrics *MetricsCollection,
 ) int {
 	// Sort a local copy so we never mutate the caller's slice.
 	sorted := make([]Verifier, len(verifiers))
@@ -87,17 +126,39 @@ func runFactorize(
 	startedAt := clk.Now()
 	failed := false
 
+	// Start metrics collection if enabled
+	if metrics != nil {
+		metrics.StartRun()
+	}
+
+	ordinal := 1
 	for _, v := range sorted {
 		findings := runCheck(out, clk, v.Name, func() []checks.Finding {
 			return v.Run(root)
-		})
+		}, metrics, ordinal, root)
 		if len(findings) > 0 {
 			failed = true
 			printFailureFindings(out, v.Name, findings)
 		}
+		ordinal++
 	}
 
 	elapsed := clk.Now().Sub(startedAt)
+
+	// Finalize metrics if enabled
+	if metrics != nil {
+		rusage := collectRusage()
+		subject := MetricsSubject{
+			WorktreeState: "clean",
+		}
+		status := "pass"
+		if failed {
+			status = "fail"
+		}
+		if err := metrics.FinalizeRun(status, exitCode(failed), elapsed, rusage, subject, "controlled-warm", 1); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to write metrics: %v\n", err)
+		}
+	}
 
 	if failed {
 		fmt.Fprintf(out, "\n*** FACTORIZE FAILED: %.2fs ***\n", elapsed.Seconds())
@@ -105,5 +166,13 @@ func runFactorize(
 	}
 
 	fmt.Fprintf(out, "\n*** FACTORIZE PASSED: %.2fs ***\n", elapsed.Seconds())
+	return 0
+}
+
+// exitCode returns the appropriate exit code for the factorize run.
+func exitCode(failed bool) int {
+	if failed {
+		return 1
+	}
 	return 0
 }

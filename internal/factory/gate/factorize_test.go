@@ -63,7 +63,7 @@ func TestRunCheck_PrintsElapsedTimeOnSuccess(t *testing.T) {
 
 	findings := runCheck(&out, clk, "docs", func() []checks.Finding {
 		return nil
-	})
+	}, nil, 1, ".")
 	if len(findings) != 0 {
 		t.Fatalf("runCheck() findings=%v, want empty", findings)
 	}
@@ -89,7 +89,7 @@ func TestRunCheck_PrintsElapsedTimeOnFailure(t *testing.T) {
 		return []checks.Finding{
 			{Path: "p", Kind: "k", Message: "m"},
 		}
-	})
+	}, nil, 1, ".")
 	if len(findings) != 1 {
 		t.Fatalf("runCheck() findings=%v, want 1", findings)
 	}
@@ -109,7 +109,7 @@ func TestRunCheck_FormatsSubSecondDurations(t *testing.T) {
 
 	var out bytes.Buffer
 
-	runCheck(&out, clk, "docs", func() []checks.Finding { return nil })
+	runCheck(&out, clk, "docs", func() []checks.Finding { return nil }, nil, 1, ".")
 
 	const want = "  docs: OK: 0.01s\n"
 	if got := out.String(); got != want {
@@ -144,7 +144,7 @@ func TestRunFactorize_PrintsTotalOnSuccess(t *testing.T) {
 		{Name: "alpha", Run: func(string) []checks.Finding { return nil }},
 	}
 
-	code := runFactorize(&out, clk, ".", verifiers)
+	code := runFactorize(&out, clk, ".", verifiers, nil)
 	if code != 0 {
 		t.Fatalf("runFactorize() code=%d, want 0", code)
 	}
@@ -182,7 +182,7 @@ func TestRunFactorize_PrintsFailureAndTotalOnError(t *testing.T) {
 		}},
 	}
 
-	code := runFactorize(&out, clk, ".", verifiers)
+	code := runFactorize(&out, clk, ".", verifiers, nil)
 	if code != 1 {
 		t.Fatalf("runFactorize() code=%d, want 1", code)
 	}
@@ -220,7 +220,7 @@ func TestRunFactorize_PreservesExitCodeOnFailure(t *testing.T) {
 		}},
 	}
 
-	code := runFactorize(&bytes.Buffer{}, clk, ".", verifiers)
+	code := runFactorize(&bytes.Buffer{}, clk, ".", verifiers, nil)
 	if code != 1 {
 		t.Fatalf("runFactorize() code=%d, want 1", code)
 	}
@@ -245,7 +245,7 @@ func TestRunFactorize_SortsByName(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	runFactorize(&out, clk, ".", verifiers)
+	runFactorize(&out, clk, ".", verifiers, nil)
 
 	got := out.String()
 	wantSubstrs := []string{"  alpha: OK:", "  mu: OK:", "  zeta: OK:"}
