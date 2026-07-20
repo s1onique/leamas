@@ -62,7 +62,7 @@ func RunGate(root string) int {
 
 	// Fail closed if registry has invalid metadata
 	if err := ValidateVerifiers(verifiers); err != nil {
-		fmt.Fprintf(os.Stderr, "factorize verifier registry: %v\n", err)
+		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
 		return 1
 	}
 
@@ -102,7 +102,7 @@ func RunFactorize(root string) int {
 
 	// Fail closed if registry has invalid metadata
 	if err := ValidateVerifiers(verifiers); err != nil {
-		fmt.Fprintf(os.Stderr, "factorize verifier registry: %v\n", err)
+		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
 		return 1
 	}
 
@@ -111,4 +111,47 @@ func RunFactorize(root string) int {
 		mc = &MetricsCollection{Path: metricsFilePath()}
 	}
 	return runFactorize(os.Stdout, systemClock{}, root, verifiers, mc)
+}
+
+// RunGateFast runs the gate in fast mode with -short test flag.
+// This runs all verifiers and toolchain checks, but go test uses -short
+// so long-running tests are skipped.
+func RunGateFast(root string) int {
+	verifiers := AllVerifiers()
+
+	// Fail closed if registry has invalid metadata
+	if err := ValidateVerifiers(verifiers); err != nil {
+		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
+		return 1
+	}
+
+	sort.Slice(verifiers, func(i, j int) bool {
+		return verifiers[i].Name < verifiers[j].Name
+	})
+
+	failed := false
+
+	for _, v := range verifiers {
+		findings := v.Run(root)
+		if len(findings) > 0 {
+			failed = true
+			fmt.Printf("\n--- %s FAILED ---\n", v.Name)
+			for _, f := range findings {
+				fmt.Printf("  %s: %s: %s\n", f.Path, f.Kind, f.Message)
+			}
+		} else {
+			fmt.Printf("  %s: OK\n", v.Name)
+		}
+	}
+
+	// Run toolchain checks in fast mode (with -short)
+	runToolchainChecksFast(root, &failed)
+
+	if failed {
+		fmt.Printf("\n*** GATE FAILED ***\n")
+		return 1
+	}
+
+	fmt.Printf("\n*** GATE PASSED ***\n")
+	return 0
 }

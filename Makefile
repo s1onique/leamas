@@ -1,6 +1,9 @@
 # Leamas Makefile
 
-.PHONY: help gate test clean digest factorize verify-doctrine verify-factory
+# Include long-test tier targets
+include make/long-tests.mk
+
+.PHONY: help gate gate-fast test test-fast test-long test-long-dupcode clean digest factorize verify-doctrine verify-factory
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
 .PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
@@ -97,10 +100,13 @@ help:
 	@echo "Leamas - Make targets"
 	@echo ""
 	@echo "  make gate           - Run quality gate (verifiers + Go toolchain)"
+	@echo "  make gate-fast     - Run quality gate in fast mode (skips long tests)"
 	@echo "  make factorize     - Run factory verifiers only (no toolchain)"
 	@echo "  make coverage      - Generate coverage profile and check threshold"
 	@echo "  make bootstrap     - Configure repo-local git hooks path"
 	@echo "  make test          - Run Go tests (if module exists)"
+	@echo "  make test-fast     - Run Go tests in fast mode (skips long tests)"
+	@echo "  make test-long     - Run all registered long tests"
 	@echo "  make build         - Build static binary to bin/leamas"
 	@echo "  make clean         - Clean build artifacts"
 	@echo "  make stamp-check   - Verify a built binary reports a real SemVer stamp"
@@ -119,11 +125,6 @@ help:
 	@echo ""
 	@echo "  make install-git-hooks - Install Git hooks"
 	@echo "  make install        - Build and install leamas to $(PREFIX)/bin"
-
-gate:
-	@echo "Running quality gate..."
-	@chmod +x scripts/quality_gate.sh
-	@./scripts/quality_gate.sh
 
 factorize:
 	@echo "Running factory factorize..."

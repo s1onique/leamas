@@ -12,6 +12,7 @@ dist/
 # Factory artifacts (except committed baseline)
 .factory/*
 !.factory/dupcode-baseline.json
+!.factory/long-tests-baseline.json
 
 # Adversarial test helper: keep the source, ignore the local build artifact
 # (compiled binary is referenced by adversarial_harness_executor.go via

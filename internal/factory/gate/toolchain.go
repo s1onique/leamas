@@ -240,3 +240,86 @@ func runToolchainChecks(root string, failed *bool) {
 		fmt.Printf(" OK\n")
 	}
 }
+
+// runToolchainChecksFast runs Go toolchain checks in fast mode with -short flag.
+func runToolchainChecksFast(root string, failed *bool) {
+	fmt.Printf("\n--- Go toolchain (fast mode) ---\n")
+
+	// go mod tidy
+	fmt.Printf("  go mod tidy...")
+	output, exitCode, cmdErr := runCommandInDir(root, "go", "mod", "tidy")
+	if exitCode != 0 || cmdErr != nil {
+		fmt.Printf(" FAILED\n")
+		printFailureOutput(nil, "go mod tidy", output, exitCode, cmdErr)
+		*failed = true
+	} else {
+		fmt.Printf(" OK\n")
+	}
+
+	// Check go.mod/go.sum didn't change
+	if checks.FileExists(filepath.Join(root, "go.sum")) {
+		cmd := exec.Command("git", "diff", "--quiet", "--", "go.mod", "go.sum")
+		cmd.Dir = root
+		output, exitCode, cmdErr := runCommand(cmd)
+
+		switch exitCode {
+		case 0:
+		case 1:
+			fmt.Printf("  go.mod/go.sum changed after tidy\n")
+			*failed = true
+		default:
+			fmt.Printf("  git diff failed unexpectedly\n")
+			printFailureOutput(nil, "git diff --quiet -- go.mod go.sum", output, exitCode, cmdErr)
+			*failed = true
+		}
+	}
+
+	// gofmt check
+	fmt.Printf("  gofmt...")
+	cmd := exec.Command("gofmt", "-l", ".")
+	cmd.Dir = root
+	output, exitCode, cmdErr = runCommand(cmd)
+	if cmdErr != nil || exitCode != 0 || len(strings.TrimSpace(output)) > 0 {
+		fmt.Printf(" FAILED\n")
+		if output != "" {
+			printFailureOutput(nil, "gofmt", output, exitCode, cmdErr)
+		}
+		*failed = true
+	} else {
+		fmt.Printf(" OK\n")
+	}
+
+	// go vet
+	fmt.Printf("  go vet ./...")
+	output, exitCode, cmdErr = runCommandInDir(root, "go", "vet", "./...")
+	if exitCode != 0 || cmdErr != nil {
+		fmt.Printf(" FAILED\n")
+		printFailureOutput(nil, "go vet ./...", output, exitCode, cmdErr)
+		*failed = true
+	} else {
+		fmt.Printf(" OK\n")
+	}
+
+	// go test -short (skips long tests)
+	fmt.Printf("  go test -short ./...")
+	output, exitCode, cmdErr = runCommandInDir(root, "go", "test", "-short", "./...")
+	if exitCode != 0 || cmdErr != nil {
+		fmt.Printf(" FAILED\n")
+		printFailureOutput(nil, "go test -short ./...", output, exitCode, cmdErr)
+		*failed = true
+	} else {
+		fmt.Printf(" OK\n")
+	}
+
+	// CGO_ENABLED=0 build
+	fmt.Printf("  static build...")
+	env := append(os.Environ(), "CGO_ENABLED=0")
+	output, exitCode, cmdErr = runCommandWithEnvInDir(root, env, "go", "build", "-trimpath", "-o", "bin/leamas", "./cmd/leamas")
+	if exitCode != 0 || cmdErr != nil {
+		fmt.Printf(" FAILED\n")
+		printFailureOutput(nil, "static build", output, exitCode, cmdErr)
+		*failed = true
+	} else {
+		fmt.Printf(" OK\n")
+	}
+}

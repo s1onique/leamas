@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const canonicalVerifierCount = 15
+const canonicalVerifierCount = 16
 
 // TestCacheSemantics_AllVerifiersHaveCacheMetadata verifies all verifiers have cache semantics.
 func TestCacheSemantics_AllVerifiersHaveCacheMetadata(t *testing.T) {
@@ -125,7 +125,8 @@ func TestVerifierNames_MatchesCanonicalList(t *testing.T) {
 		"docs": true, "dupcode": true, "dupcode-baseline": true,
 		"domain-boundaries": true, "exec-gate": true, "executable-contract-first": true,
 		"forbidden-patterns": true, "git-hooks": true, "language": true,
-		"llm-friendly": true, "static-binary": true, "tooling-boundaries": true,
+		"llm-friendly": true, "long-test-policy": true, "static-binary": true,
+		"tooling-boundaries": true,
 	}
 	for _, name := range names {
 		if !expectedSet[name] {

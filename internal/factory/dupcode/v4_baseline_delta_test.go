@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+
+	"github.com/s1onique/leamas/internal/factory/longtest"
 )
 
 // deltaCanonicalOccurrence is the deduplicated, sorted
@@ -41,6 +43,8 @@ type deltaCanonicalOccurrence struct {
 // findings. The check guards against accidental drift in
 // production output between ACT checkpoints.
 func TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline(t *testing.T) {
+	longtest.RequireLongTest(t, "LT-DUPCODE-LIVE-TREE-BASELINE-01")
+
 	root := deltaRepoRoot(t)
 	findings, err := CheckRepo(root, DefaultConfig())
 	if err != nil {

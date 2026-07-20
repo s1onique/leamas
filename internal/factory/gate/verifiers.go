@@ -16,6 +16,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/github"
 	"github.com/s1onique/leamas/internal/factory/language"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
+	"github.com/s1onique/leamas/internal/factory/longtestpolicy"
 	"github.com/s1onique/leamas/internal/factory/staticbinary"
 	"github.com/s1onique/leamas/internal/factory/tooling"
 )
@@ -67,6 +68,9 @@ func AllVerifiers() []Verifier {
 		}, Cache: CacheSemantics{GoBuildCache: CacheRelevant, GoTestResultCache: CacheModeNA}},
 		{Name: "tooling-boundaries", Run: tooling.CheckRepo, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/tooling.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
+		{Name: "long-test-policy", Run: longTestPolicyVerifier, Execution: ExecutionDefinition{
+			Kind: ExecutionInProcess, ImplementationID: "internal/factory/longtestpolicy.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 	}
 }
@@ -149,4 +153,10 @@ func coverageVerifier(root string) []checks.Finding {
 		return []checks.Finding{{Path: profilePath, Kind: "coverage_threshold_fail", Message: err.Error(), Severity: checks.SeverityError}}
 	}
 	return nil
+}
+
+// longTestPolicyVerifier checks that long-test policy is enforced:
+// all RequireLongTest calls have registered baseline entries.
+func longTestPolicyVerifier(root string) []checks.Finding {
+	return longtestpolicy.CheckRepo(root)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/github"
 	"github.com/s1onique/leamas/internal/factory/language"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
+	"github.com/s1onique/leamas/internal/factory/longtestpolicy"
 	"github.com/s1onique/leamas/internal/factory/staticbinary"
 	"github.com/s1onique/leamas/internal/factory/tooling"
 )
@@ -202,6 +203,15 @@ func handleFactoryVerify() {
 		handleFactoryVerifyReleaseDeb()
 	case "act-doctrine-compiler":
 		runDoctrineCompilerVerifier()
+	case "long-test-policy":
+		f := longtestpolicy.CheckRepo(".")
+		for _, f := range f {
+			findings = append(findings, struct {
+				path    string
+				kind    string
+				message string
+			}{f.Path, f.Kind, f.Message})
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "unknown verify command: %s\n", check)
 		printFactoryVerifyUsage()
@@ -271,6 +281,7 @@ func knownFactoryVerifyChecks() []string {
 		"dupcode-baseline",
 		"forbidden-patterns",
 		"language",
+		"long-test-policy",
 		"static-binary",
 		"tooling-boundaries",
 		"llm-friendly",
@@ -303,6 +314,7 @@ func printFactoryVerifyUsage() {
 	fmt.Println("  dupcode-baseline      Check dupcode baseline integrity")
 	fmt.Println("  forbidden-patterns   Check for forbidden patterns")
 	fmt.Println("  language             Check Go-only enforcement")
+	fmt.Println("  long-test-policy    Check long-test policy compliance")
 	fmt.Println("  static-binary        Check static binary build")
 	fmt.Println("  tooling-boundaries   Check tooling boundaries")
 	fmt.Println("  llm-friendly         Check LLM-friendliness")

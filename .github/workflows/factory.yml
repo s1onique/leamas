@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 jobs:
-  factory:
-    name: Factory Gates
+  factory-fast:
+    name: Factory Fast
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,23 +35,23 @@ jobs:
           mkdir -p bin
           CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 
-      - name: Run factorize
-        run: make factorize
+      - name: Run gate-fast
+        run: make gate-fast
 
-      - name: Run gate
-        run: make gate
+  factory-long:
+    name: Factory Long
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Run LLM-friendly verify
-        run: ./bin/leamas factory verify llm-friendly
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
 
-      - name: Run agent-context verify
-        run: ./bin/leamas factory verify agent-context
-
-      - name: Run forbidden-patterns verify
-        run: ./bin/leamas factory verify forbidden-patterns
-
-      - name: Run go test
-        run: go test ./...
-
-      - name: Run go vet
-        run: go vet ./...
+      - name: Run registered long tests
+        run: make test-long
