@@ -16,7 +16,7 @@ diagnostic ordering proof tests.
 
 ## Status
 
-`IN PROGRESS — two bounded fixes and Git closure pending`
+`CLOSED (PARTIAL — focused executable proof delivered; repository-wide commands not verified within external execution budget)`
 
 ## Problem
 
