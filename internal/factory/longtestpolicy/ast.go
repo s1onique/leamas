@@ -12,17 +12,17 @@ import (
 const longtestCanonicalPath = "github.com/s1onique/leamas/internal/factory/longtest"
 
 type CallSite struct {
-	ID          string
-	File        string
-	PkgPath     string
-	TestFunc    string
-	Line        int
-	ValidTest   bool
+	ID        string
+	File      string
+	PkgPath   string
+	TestFunc  string
+	Line      int
+	ValidTest bool
 }
 
 type ScanResult struct {
 	LiteralCalls []CallSite
-	Malformed   []CallSite
+	Malformed    []CallSite
 }
 
 func scanTestFileAST(path, pkgPath string) (*ScanResult, error) {

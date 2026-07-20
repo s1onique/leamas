@@ -179,10 +179,10 @@ func writeTestSummaries(t *testing.T, dir, fastStatus, longStatus string, longFa
 	longPath := filepath.Join(dir, ".factory", "gate-long-summary.json")
 	longSummary := testLongSummary{
 		SchemaVersion: 1,
-		Total:        2,
-		Passed:       2 - longFailed,
-		Failed:       longFailed,
-		Tests:        []testLongResult{{ID: "LT-001", Passed: longFailed == 0}, {ID: "LT-002", Passed: true}},
+		Total:         2,
+		Passed:        2 - longFailed,
+		Failed:        longFailed,
+		Tests:         []testLongResult{{ID: "LT-001", Passed: longFailed == 0}, {ID: "LT-002", Passed: true}},
 	}
 	data, _ = json.Marshal(longSummary)
 	os.WriteFile(longPath, data, 0644)
