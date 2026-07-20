@@ -34,8 +34,8 @@ func executionFingerprint(name string, exec ExecutionDefinition, env []string) (
 	if name == "" {
 		return "", &FingerprintError{Reason: "verifier name is required"}
 	}
-	if len(exec.LogicalArgv) == 0 {
-		return "", &FingerprintError{Reason: "argv is required"}
+	if exec.ImplementationID == "" {
+		return "", &FingerprintError{Reason: "implementation ID is required"}
 	}
 
 	h := sha256.New()
@@ -45,11 +45,7 @@ func executionFingerprint(name string, exec ExecutionDefinition, env []string) (
 	h.Write([]byte{0})
 	h.Write([]byte(exec.Kind))
 	h.Write([]byte{0})
-
-	for _, arg := range exec.LogicalArgv {
-		h.Write([]byte(arg))
-		h.Write([]byte{0})
-	}
+	h.Write([]byte(exec.ImplementationID))
 	h.Write([]byte{0})
 
 	// Bind relevant environment variables
@@ -164,7 +160,6 @@ func (mc *MetricsCollection) AddCheck(
 	duration time.Duration,
 	rusage rusageMetrics,
 	root string,
-	cacheObservation string,
 	env []string,
 ) error {
 	status := "pass"
@@ -204,7 +199,7 @@ func (mc *MetricsCollection) AddCheck(
 		MaxRSSBytes:        maxRSS,
 		ResourceScope:      "verifier",
 		CommandFingerprint: fingerprint,
-		CacheObservation:   cacheObservation,
+		Cache:             verifier.Cache,
 	})
 	return nil
 }
@@ -238,14 +233,14 @@ func (mc *MetricsCollection) FinalizeRun(
 		Environment: buildEnvironment(),
 		Run: MetricsRun{
 			Scenario:      scenario,
-			Sequence:      sequence,
-			StartedAt:     mc.StartTime.UTC().Format(time.RFC3339),
-			Status:        status,
-			ExitCode:      exitCode,
-			DurationNs:    totalDuration.Nanoseconds(),
-			UserCPUNs:     userCPU,
-			SystemCPUNs:   systemCPU,
-			MaxRSSBytes:   maxRSS,
+			Sequence:     sequence,
+			StartedAt:    mc.StartTime.UTC().Format(time.RFC3339),
+			Status:       status,
+			ExitCode:     exitCode,
+			DurationNs:   totalDuration.Nanoseconds(),
+			UserCPUNs:    userCPU,
+			SystemCPUNs:  systemCPU,
+			MaxRSSBytes:  maxRSS,
 			ResourceScope: "full-run",
 		},
 		Checks: mc.Checks,

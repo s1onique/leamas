@@ -64,19 +64,12 @@ func runCheck(
 	if metrics != nil {
 		rusage := collectRusage()
 		env := os.Environ()
-		cacheObs := formatCacheObservation(verifier.Cache)
-		if err := metrics.AddCheck(verifier, ordinal, findings, elapsed, rusage, root, cacheObs, env); err != nil {
+		if err := metrics.AddCheck(verifier, ordinal, findings, elapsed, rusage, root, env); err != nil {
 			return findings, fmt.Errorf("metrics collection for %s: %w", verifier.Name, err)
 		}
 	}
 
 	return findings, nil
-}
-
-// formatCacheObservation formats CacheSemantics as a string for JSON.
-func formatCacheObservation(cache CacheSemantics) string {
-	return fmt.Sprintf("go_build_cache=%s;go_test_result_cache=%s",
-		cache.GoBuildCache, cache.GoTestResultCache)
 }
 
 // printFailureFindings renders the verbose failure block.

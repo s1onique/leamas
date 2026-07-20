@@ -46,9 +46,9 @@ func testVerifier(name string, run func(string) []checks.Finding) Verifier {
 		Name: name,
 		Run:  run,
 		Execution: ExecutionDefinition{
-			Kind:        ExecutionInProcess,
-			LogicalArgv: []string{name},
-			EnvVars:     []string{"GOFLAGS"},
+			Kind:             ExecutionInProcess,
+			ImplementationID: "internal/factory/gate.testVerifier",
+			EnvVars:          []string{"GOFLAGS"},
 		},
 		Cache: CacheSemantics{
 			GoBuildCache:      CacheNotApplicable,

@@ -3,7 +3,6 @@ package gate
 
 import (
 	"sort"
-	"strings"
 	"testing"
 )
 
@@ -39,29 +38,12 @@ func TestCacheSemantics_DupcodeDisabled(t *testing.T) {
 	}
 }
 
-// TestCacheSemantics_FormatCacheObservation verifies formatCacheObservation.
-func TestCacheSemantics_FormatCacheObservation(t *testing.T) {
-	cache := CacheSemantics{
-		GoBuildCache:      CacheRelevant,
-		GoTestResultCache: CacheModeDisabled,
-	}
-	obs := formatCacheObservation(cache)
-
-	if !strings.Contains(obs, "go_build_cache=relevant") {
-		t.Errorf("expected go_build_cache=relevant, got %s", obs)
-	}
-	if !strings.Contains(obs, "go_test_result_cache=disabled") {
-		t.Errorf("expected go_test_result_cache=disabled, got %s", obs)
-	}
-}
-
 // TestCacheSemantics_ChildProcessVerifiers verifies child-process cache behavior.
 func TestCacheSemantics_ChildProcessVerifiers(t *testing.T) {
 	verifiers := AllVerifiers()
 
 	for _, v := range verifiers {
 		if v.Execution.Kind == ExecutionChild {
-			// Child-process verifiers should have cache relevance
 			if v.Cache.GoBuildCache == CacheNotApplicable {
 				t.Errorf("child-process verifier %q should have cache relevance, got %s", v.Name, v.Cache.GoBuildCache)
 			}
@@ -94,7 +76,6 @@ func TestVerifierNames_MatchesCanonicalList(t *testing.T) {
 	verifiers := AllVerifiers()
 	names := verifierNames(verifiers)
 
-	// verifierNames already sorts, so we just verify count and all expected present
 	if len(names) != canonicalVerifierCount {
 		t.Fatalf("verifier count mismatch: got %d, expected %d", len(names), canonicalVerifierCount)
 	}
@@ -153,5 +134,27 @@ func TestTestResultCacheMode_ValidValues(t *testing.T) {
 	}
 	if CacheModeNA != "not-applicable" {
 		t.Errorf("CacheModeNA = %q", CacheModeNA)
+	}
+}
+
+// TestAllVerifiers_HaveImplementationID verifies all verifiers have implementation IDs.
+func TestAllVerifiers_HaveImplementationID(t *testing.T) {
+	verifiers := AllVerifiers()
+
+	for _, v := range verifiers {
+		if v.Execution.ImplementationID == "" {
+			t.Errorf("verifier %q has no ImplementationID", v.Name)
+		}
+	}
+}
+
+// TestAllVerifiers_HaveValidExecutionKind verifies all verifiers have valid execution kinds.
+func TestAllVerifiers_HaveValidExecutionKind(t *testing.T) {
+	verifiers := AllVerifiers()
+
+	for _, v := range verifiers {
+		if v.Execution.Kind != ExecutionInProcess && v.Execution.Kind != ExecutionChild {
+			t.Errorf("verifier %q has invalid execution kind: %q", v.Name, v.Execution.Kind)
+		}
 	}
 }

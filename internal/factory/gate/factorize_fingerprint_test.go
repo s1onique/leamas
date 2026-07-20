@@ -9,9 +9,9 @@ import (
 // TestExecutionFingerprint_ReturnsErrorForEmptyName verifies fail-closed.
 func TestExecutionFingerprint_ReturnsErrorForEmptyName(t *testing.T) {
 	exec := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha"},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 	_, err := executionFingerprint("", exec, nil)
 	if err == nil {
@@ -19,25 +19,25 @@ func TestExecutionFingerprint_ReturnsErrorForEmptyName(t *testing.T) {
 	}
 }
 
-// TestExecutionFingerprint_ReturnsErrorForEmptyArgv verifies fail-closed.
-func TestExecutionFingerprint_ReturnsErrorForEmptyArgv(t *testing.T) {
+// TestExecutionFingerprint_ReturnsErrorForEmptyImplID verifies fail-closed.
+func TestExecutionFingerprint_ReturnsErrorForEmptyImplID(t *testing.T) {
 	exec := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 	_, err := executionFingerprint("verifier", exec, nil)
 	if err == nil {
-		t.Fatalf("empty argv must return error")
+		t.Fatalf("empty implementation ID must return error")
 	}
 }
 
 // TestExecutionFingerprint_IdenticalExecProduceIdenticalFingerprints verifies.
 func TestExecutionFingerprint_IdenticalExecProduceIdenticalFingerprints(t *testing.T) {
 	exec := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha", "--verbose"},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 
 	fp1, err1 := executionFingerprint("test-verifier", exec, nil)
@@ -53,9 +53,9 @@ func TestExecutionFingerprint_IdenticalExecProduceIdenticalFingerprints(t *testi
 // TestExecutionFingerprint_DifferentVerifierNamesAlterFingerprint verifies.
 func TestExecutionFingerprint_DifferentVerifierNamesAlterFingerprint(t *testing.T) {
 	exec := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha"},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 
 	fp1, err1 := executionFingerprint("verifier-alpha", exec, nil)
@@ -68,17 +68,17 @@ func TestExecutionFingerprint_DifferentVerifierNamesAlterFingerprint(t *testing.
 	}
 }
 
-// TestExecutionFingerprint_ArgvChangesAlterFingerprint verifies.
-func TestExecutionFingerprint_ArgvChangesAlterFingerprint(t *testing.T) {
+// TestExecutionFingerprint_ImplIDChangesAlterFingerprint verifies.
+func TestExecutionFingerprint_ImplIDChangesAlterFingerprint(t *testing.T) {
 	exec1 := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha", "--verbose"},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 	exec2 := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha", "--debug"},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckAlt",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 
 	fp1, err1 := executionFingerprint("test-verifier", exec1, nil)
@@ -87,16 +87,16 @@ func TestExecutionFingerprint_ArgvChangesAlterFingerprint(t *testing.T) {
 		t.Fatalf("unexpected error: %v or %v", err1, err2)
 	}
 	if fp1 == fp2 {
-		t.Fatalf("argv changes must alter the fingerprint")
+		t.Fatalf("implementation ID changes must alter the fingerprint")
 	}
 }
 
 // TestExecutionFingerprint_GoEnvChangesAlterFingerprint verifies.
 func TestExecutionFingerprint_GoEnvChangesAlterFingerprint(t *testing.T) {
 	exec := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha"},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 
 	env1 := []string{"GOFLAGS=-v"}
@@ -115,9 +115,9 @@ func TestExecutionFingerprint_GoEnvChangesAlterFingerprint(t *testing.T) {
 // TestExecutionFingerprint_EnvOrderingDoesNotMatter verifies.
 func TestExecutionFingerprint_EnvOrderingDoesNotMatter(t *testing.T) {
 	exec := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha"},
-		EnvVars:     []string{"GOFLAGS", "GOCACHE"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{"GOFLAGS", "GOCACHE"},
 	}
 
 	env1 := []string{"GOFLAGS=-v", "GOCACHE=/tmp/cache"}
@@ -136,9 +136,9 @@ func TestExecutionFingerprint_EnvOrderingDoesNotMatter(t *testing.T) {
 // TestExecutionFingerprint_FullDigestLength verifies SHA-256.
 func TestExecutionFingerprint_FullDigestLength(t *testing.T) {
 	exec := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha"},
-		EnvVars:     []string{"GOFLAGS"},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{"GOFLAGS"},
 	}
 
 	fp, err := executionFingerprint("test-verifier", exec, nil)
@@ -159,14 +159,14 @@ func TestExecutionFingerprint_FullDigestLength(t *testing.T) {
 // TestExecutionFingerprint_KindIncluded verifies execution kind is in hash.
 func TestExecutionFingerprint_KindIncluded(t *testing.T) {
 	execInProcess := ExecutionDefinition{
-		Kind:        ExecutionInProcess,
-		LogicalArgv: []string{"alpha"},
-		EnvVars:     []string{},
+		Kind:             ExecutionInProcess,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{},
 	}
 	execChild := ExecutionDefinition{
-		Kind:        ExecutionChild,
-		LogicalArgv: []string{"alpha"},
-		EnvVars:     []string{},
+		Kind:             ExecutionChild,
+		ImplementationID: "internal/factory/test.CheckRepo",
+		EnvVars:          []string{},
 	}
 
 	fp1, err1 := executionFingerprint("test-verifier", execInProcess, nil)
@@ -176,23 +176,5 @@ func TestExecutionFingerprint_KindIncluded(t *testing.T) {
 	}
 	if fp1 == fp2 {
 		t.Fatalf("execution kind must alter the fingerprint")
-	}
-}
-
-// TestExecutionFingerprint_ChildProcessVerifier verifies child-process argv.
-func TestExecutionFingerprint_ChildProcessVerifier(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:        ExecutionChild,
-		LogicalArgv: []string{"leamas", "factory", "verify", "dupcode"},
-		EnvVars:     []string{"GOFLAGS", "CGO_ENABLED", "GOCACHE"},
-	}
-
-	fp, err := executionFingerprint("dupcode", exec, nil)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(fp) != 64 {
-		t.Fatalf("expected 64-char fingerprint, got %d", len(fp))
 	}
 }

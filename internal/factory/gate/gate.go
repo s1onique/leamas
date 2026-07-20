@@ -37,9 +37,9 @@ const (
 
 // ExecutionDefinition captures the authoritative execution metadata for a verifier.
 type ExecutionDefinition struct {
-	Kind        ExecutionKind
-	LogicalArgv []string
-	EnvVars     []string
+	Kind             ExecutionKind
+	ImplementationID string
+	EnvVars          []string
 }
 
 // CacheSemantics captures the authoritative cache behavior for a verifier.
