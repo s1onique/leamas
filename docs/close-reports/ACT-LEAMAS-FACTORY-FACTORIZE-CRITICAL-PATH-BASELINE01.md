@@ -12,7 +12,7 @@
 | Branch | main |
 | Starting OID | f0ac5fc135bbca05cf12df34ceaef97573a758af |
 | Measurement subject OID | 0d61bcb |
-| Closure subject OID | (pending final commit) |
+| Closure subject OID | SUSPENDED — see CORRECTION01 |
 
 ## Measured Results
 
@@ -75,6 +75,6 @@
 
 ## Successor ACT
 
-**NEXT: ACT-LEAMAS-FACTORY-FACTORIZE-BOUNDED-PARALLELISM01**
+**NEXT: SUSPENDED — Nominate after CORRECTION01 establishes corrected measurements**
 
 **Justification**: dupcode + dupcode-baseline are 99.7% of runtime and independent. Parallel execution via bounded worker pool delivers ~2x speedup with minimal risk.
