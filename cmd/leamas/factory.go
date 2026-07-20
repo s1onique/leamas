@@ -102,9 +102,15 @@ func handleFactoryGate() {
 }
 
 func handleShortMode(startedAt time.Time) {
-	// Remove stale aggregates from prior runs
-	os.Remove(".factory/gate-summary.json")
-	os.Remove(".factory/gate-long-summary.json")
+	// Remove stale aggregates from prior runs; fail-closed on cleanup error
+	if err := removeIfExists(".factory/gate-summary.json"); err != nil {
+		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
+		os.Exit(1)
+	}
+	if err := removeIfExists(".factory/gate-long-summary.json"); err != nil {
+		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
+		os.Exit(1)
+	}
 
 	fastExitCode := gate.RunGateFast(".")
 	if err := writeFastSummary(startedAt, time.Now(), fastExitCode); err != nil {
@@ -116,10 +122,19 @@ func handleShortMode(startedAt time.Time) {
 }
 
 func handleFullMode(startedAt time.Time) {
-	// Clear all prior lane artifacts before executing
-	os.Remove(".factory/gate-summary.json")
-	os.Remove(".factory/gate-fast-summary.json")
-	os.Remove(".factory/gate-long-summary.json")
+	// Clear all prior lane artifacts before executing; fail-closed on cleanup error
+	if err := removeIfExists(".factory/gate-summary.json"); err != nil {
+		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
+		os.Exit(1)
+	}
+	if err := removeIfExists(".factory/gate-fast-summary.json"); err != nil {
+		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
+		os.Exit(1)
+	}
+	if err := removeIfExists(".factory/gate-long-summary.json"); err != nil {
+		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
+		os.Exit(1)
+	}
 
 	fmt.Println("=== FAST LANE ===")
 	fastExitCode := gate.RunGateFast(".")

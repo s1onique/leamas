@@ -165,14 +165,6 @@ func writeAggregateSummary() error {
 // writeAggregateForFullMode writes the aggregate summary after a full mode run.
 // Both lanes must have been executed and validated.
 func writeAggregateForFullMode() error {
-	summary := gate.GateSummary{
-		SchemaVersion: 1,
-		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
-		Tool:          "leamas factory gate",
-		OverallStatus: "fail",
-		Checks:        []gate.Check{},
-	}
-
 	// Read and validate fast summary
 	fastSummary, err := readFastSummary()
 	if err != nil {
@@ -184,9 +176,7 @@ func writeAggregateForFullMode() error {
 	fastStatus := gate.CheckStatusPass
 	if fastSummary.OverallStatus == "fail" {
 		fastStatus = gate.CheckStatusFail
-		summary.OverallStatus = "fail"
 	}
-	summary.Checks = append(summary.Checks, gate.Check{Name: "fast-lane", Status: fastStatus})
 
 	// Read and validate long summary
 	longSummary, err := readLongSummary()
@@ -199,9 +189,24 @@ func writeAggregateForFullMode() error {
 	longStatus := gate.CheckStatusPass
 	if longSummary.Failed > 0 {
 		longStatus = gate.CheckStatusFail
-		summary.OverallStatus = "fail"
 	}
-	summary.Checks = append(summary.Checks, gate.Check{Name: "long-lane", Status: longStatus})
+
+	// Derive overall status from lane statuses
+	overallStatus := "pass"
+	if fastStatus != gate.CheckStatusPass || longStatus != gate.CheckStatusPass {
+		overallStatus = "fail"
+	}
+
+	summary := gate.GateSummary{
+		SchemaVersion: 1,
+		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
+		Tool:          "leamas factory gate",
+		OverallStatus: overallStatus,
+		Checks: []gate.Check{
+			{Name: "fast-lane", Status: fastStatus},
+			{Name: "long-lane", Status: longStatus},
+		},
+	}
 
 	data, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
@@ -211,7 +216,7 @@ func writeAggregateForFullMode() error {
 }
 
 // writeAggregateAfterFastFailure writes the aggregate summary when fast lane fails.
-// Long lane is skipped in this case.
+// Long lane is skipped (not failed) in this case.
 func writeAggregateAfterFastFailure() error {
 	summary := gate.GateSummary{
 		SchemaVersion: 1,
@@ -219,9 +224,8 @@ func writeAggregateAfterFastFailure() error {
 		Tool:          "leamas factory gate",
 		OverallStatus: "fail",
 		Checks: []gate.Check{
-			{Name: "fast-lane", Status: gate.CheckStatusFail},
-			{Name: "fast-lane-status", Status: gate.CheckStatusFail, Evidence: "fast lane failed"},
-			{Name: "long-lane", Status: gate.CheckStatusFail, Evidence: "skipped due to fast lane failure"},
+			{Name: "fast-lane", Status: gate.CheckStatusFail, Evidence: "fast lane failed"},
+			{Name: "long-lane", Status: "skip", Evidence: "not executed due to fast lane failure"},
 		},
 	}
 
@@ -248,6 +252,16 @@ func readFastSummary() (*fastLaneSummary, error) {
 		return nil, err
 	}
 	return &s, nil
+}
+
+// removeIfExists removes a file if it exists, ignoring ErrNotExist.
+// Returns an error if removal fails for any other reason.
+func removeIfExists(path string) error {
+	err := os.Remove(path)
+	if err == nil || errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return fmt.Errorf("remove stale artifact %s: %w", path, err)
 }
 
 func readLongSummary() (*testLongSummary, error) {
