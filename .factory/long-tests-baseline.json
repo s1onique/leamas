@@ -6,7 +6,7 @@
       "package": "./internal/factory/dupcode",
       "test": "TestV4BaselineDelta_LiveTreeMatchesCommittedBaseline",
       "fast_policy": "skip-under-short",
-      "ci_timeout": "30m",
+      "ci_timeout": "15m",
       "ci_group": "dupcode-live-tree",
       "reason": "performs a full duplicate-code analysis of the repository",
       "owner": "factory/dupcode"

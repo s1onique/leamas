@@ -9,7 +9,7 @@ import (
 
 // TestValidateVerifier_EmptyName verifies validation fails for empty name.
 func TestValidateVerifier_EmptyName(t *testing.T) {
-	v := Verifier{Name: "", Run: func(string) []checks.Finding { return nil }}
+	v := Verifier{Name: "", Run: func(string) []checks.Finding { return nil }, Lane: VerifierLaneFast}
 	err := ValidateVerifier(v)
 	if err == nil {
 		t.Error("expected error for empty name")
@@ -18,10 +18,27 @@ func TestValidateVerifier_EmptyName(t *testing.T) {
 
 // TestValidateVerifier_NilRun verifies validation fails for nil Run.
 func TestValidateVerifier_NilRun(t *testing.T) {
-	v := Verifier{Name: "test", Run: nil}
+	v := Verifier{Name: "test", Run: nil, Lane: VerifierLaneFast}
 	err := ValidateVerifier(v)
 	if err == nil {
 		t.Error("expected error for nil Run")
+	}
+}
+
+// TestValidateVerifier_InvalidLane verifies validation fails for invalid lane.
+func TestValidateVerifier_InvalidLane(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Lane: "unknown",
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for invalid lane")
 	}
 }
 
@@ -30,6 +47,7 @@ func TestValidateVerifier_InvalidKind(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             "invalid",
 			ImplementationID: "test",
@@ -46,6 +64,7 @@ func TestValidateVerifier_EmptyImplID(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "",
@@ -62,6 +81,7 @@ func TestValidateVerifier_InvalidGoBuildCache(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -82,6 +102,7 @@ func TestValidateVerifier_InvalidGoTestResultCache(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -102,6 +123,7 @@ func TestValidateVerifier_DuplicateEnvKey(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -119,6 +141,7 @@ func TestValidateVerifier_MalformedEnvKeyWithEquals(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -136,6 +159,7 @@ func TestValidateVerifier_MalformedEnvKeyWithWhitespace(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -153,6 +177,7 @@ func TestValidateVerifier_MalformedEnvKeyInvalidName(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -170,6 +195,7 @@ func TestValidateVerifier_ValidEmptyEnvVars(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -191,6 +217,7 @@ func TestValidateVerifiers_NoDuplicates(t *testing.T) {
 	v := Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
+		Lane: VerifierLaneFast,
 		Execution: ExecutionDefinition{
 			Kind:             ExecutionInProcess,
 			ImplementationID: "test",
@@ -209,5 +236,45 @@ func TestValidateVerifiers_AllCanonical(t *testing.T) {
 	err := ValidateVerifiers(verifiers)
 	if err != nil {
 		t.Errorf("canonical verifiers should pass validation: %v", err)
+	}
+}
+
+// TestPartitionVerifiers validates partition of all verifiers into fast and dupcode lanes.
+func TestPartitionVerifiers(t *testing.T) {
+	all := AllVerifiers()
+	fast, dupcode, err := PartitionVerifiers(all)
+	if err != nil {
+		t.Fatalf("PartitionVerifiers failed: %v", err)
+	}
+	if len(fast)+len(dupcode) != len(all) {
+		t.Errorf("partition incomplete: got %d fast + %d dupcode = %d, want %d",
+			len(fast), len(dupcode), len(fast)+len(dupcode), len(all))
+	}
+	for _, v := range fast {
+		if v.Lane != VerifierLaneFast {
+			t.Errorf("fast verifier %q has lane %q", v.Name, v.Lane)
+		}
+	}
+	for _, v := range dupcode {
+		if v.Lane != VerifierLaneDupcode {
+			t.Errorf("dupcode verifier %q has lane %q", v.Name, v.Lane)
+		}
+	}
+}
+
+// TestPartitionVerifiers_InvalidLane verifies partition fails for unknown lane.
+func TestPartitionVerifiers_InvalidLane(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Lane: "invalid",
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+		},
+	}
+	_, _, err := PartitionVerifiers([]Verifier{v})
+	if err == nil {
+		t.Error("expected error for invalid lane")
 	}
 }

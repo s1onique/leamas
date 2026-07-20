@@ -35,6 +35,7 @@ var ForbiddenCalls = []ForbiddenCall{
 // Only the execution gateway itself and factory infrastructure require process APIs.
 var AllowedFiles = map[string]bool{
 	"internal/execution/executor.go":                       true,
+	"internal/execution/testlong.go":                       true,
 	"internal/execution/exectest/exectest.go":              true,
 	"internal/execution/adversarial_harness_test.go":       true,
 	"internal/execution/adversarial_harness_executor.go":   true,
