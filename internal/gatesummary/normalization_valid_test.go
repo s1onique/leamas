@@ -269,9 +269,9 @@ func TestSemanticInvalidFixtures(t *testing.T) {
 	}{
 		"v2-pass-nonzero-exit.json":        {CodePassExitCodeMismatch, "/checks/0/extras/exit_code"},
 		"v2-fail-exit-zero.json":           {CodeFailExitCodeMismatch, "/checks/0/extras/exit_code"},
-		"v2-skip-nonnull-exit.json":         {CodeSkipExitCodeMismatch, "/checks/0/extras/exit_code"},
-		"v2-unavailable-nonnull-exit.json":  {CodeUnavailExitCodeMismatch, "/checks/0/extras/exit_code"},
-		"v2-test-total-mismatch.json":       {CodeTestTotalMismatch, "/checks/0"},
+		"v2-skip-nonnull-exit.json":        {CodeSkipExitCodeMismatch, "/checks/0/extras/exit_code"},
+		"v2-unavailable-nonnull-exit.json": {CodeUnavailExitCodeMismatch, "/checks/0/extras/exit_code"},
+		"v2-test-total-mismatch.json":      {CodeTestTotalMismatch, "/checks/0"},
 		"v2-duplicate-check-name.json":     {CodeDuplicateCheckName, "/checks/1/name"},
 		"v2-overall-mismatch.json":         {CodeOverallStatusMismatch, "/overall_status"},
 		// Empty checks with closed scope + dirty worktree: GS_OVERALL_STATUS_MISMATCH first

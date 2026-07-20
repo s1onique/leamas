@@ -37,7 +37,7 @@ func TestNormalizationResultSuccess(t *testing.T) {
 		{
 			name: "summary with diagnostics",
 			result: NormalizationResult{
-				Summary: Summary{SchemaVersion: Version1},
+				Summary:     Summary{SchemaVersion: Version1},
 				Diagnostics: []Diagnostic{{Code: "GS_TEST"}},
 			},
 			expected: false,

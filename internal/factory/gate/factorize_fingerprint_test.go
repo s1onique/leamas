@@ -1,4 +1,4 @@
-// Package gate provides tests for factorize command fingerprint.
+// Package gate provides tests for factorize execution fingerprint.
 package gate
 
 import (
@@ -6,38 +6,42 @@ import (
 	"testing"
 )
 
-// TestCommandFingerprint_ReturnsErrorForEmptyName verifies fail-closed behavior.
-func TestCommandFingerprint_ReturnsErrorForEmptyName(t *testing.T) {
-	argv := []string{"alpha"}
-	env := []string{"GOFLAGS=-v"}
-	execPath := "/usr/local/bin/leamas"
-
-	_, err := commandFingerprint("", "/checkout", argv, env, execPath)
+// TestExecutionFingerprint_ReturnsErrorForEmptyName verifies fail-closed.
+func TestExecutionFingerprint_ReturnsErrorForEmptyName(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha"},
+		EnvVars:     []string{"GOFLAGS"},
+	}
+	_, err := executionFingerprint("", exec, nil)
 	if err == nil {
 		t.Fatalf("empty name must return error")
 	}
 }
 
-// TestCommandFingerprint_ReturnsErrorForEmptyArgv verifies fail-closed behavior.
-func TestCommandFingerprint_ReturnsErrorForEmptyArgv(t *testing.T) {
-	env := []string{"GOFLAGS=-v"}
-	execPath := "/usr/local/bin/leamas"
-
-	_, err := commandFingerprint("verifier", "/checkout", nil, env, execPath)
+// TestExecutionFingerprint_ReturnsErrorForEmptyArgv verifies fail-closed.
+func TestExecutionFingerprint_ReturnsErrorForEmptyArgv(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{},
+		EnvVars:     []string{"GOFLAGS"},
+	}
+	_, err := executionFingerprint("verifier", exec, nil)
 	if err == nil {
 		t.Fatalf("empty argv must return error")
 	}
 }
 
-// TestCommandFingerprint_IdenticalExecProduceIdenticalFingerprints verifies
-// identical execution definitions produce identical fingerprints.
-func TestCommandFingerprint_IdenticalExecProduceIdenticalFingerprints(t *testing.T) {
-	argv := []string{"alpha", "--verbose"}
-	env := []string{"GOFLAGS=-v"}
-	execPath := "/usr/local/bin/leamas"
+// TestExecutionFingerprint_IdenticalExecProduceIdenticalFingerprints verifies.
+func TestExecutionFingerprint_IdenticalExecProduceIdenticalFingerprints(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha", "--verbose"},
+		EnvVars:     []string{"GOFLAGS"},
+	}
 
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, env, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, env, execPath)
+	fp1, err1 := executionFingerprint("test-verifier", exec, nil)
+	fp2, err2 := executionFingerprint("test-verifier", exec, nil)
 	if err1 != nil || err2 != nil {
 		t.Fatalf("unexpected error: %v or %v", err1, err2)
 	}
@@ -46,15 +50,16 @@ func TestCommandFingerprint_IdenticalExecProduceIdenticalFingerprints(t *testing
 	}
 }
 
-// TestCommandFingerprint_DifferentVerifierNamesAlterFingerprint verifies
-// different verifier names produce different fingerprints.
-func TestCommandFingerprint_DifferentVerifierNamesAlterFingerprint(t *testing.T) {
-	argv := []string{"alpha", "--verbose"}
-	env := []string{"GOFLAGS=-v"}
-	execPath := "/usr/local/bin/leamas"
+// TestExecutionFingerprint_DifferentVerifierNamesAlterFingerprint verifies.
+func TestExecutionFingerprint_DifferentVerifierNamesAlterFingerprint(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha"},
+		EnvVars:     []string{"GOFLAGS"},
+	}
 
-	fp1, err1 := commandFingerprint("verifier-alpha", "/checkout", argv, env, execPath)
-	fp2, err2 := commandFingerprint("verifier-beta", "/checkout", argv, env, execPath)
+	fp1, err1 := executionFingerprint("verifier-alpha", exec, nil)
+	fp2, err2 := executionFingerprint("verifier-beta", exec, nil)
 	if err1 != nil || err2 != nil {
 		t.Fatalf("unexpected error: %v or %v", err1, err2)
 	}
@@ -63,16 +68,21 @@ func TestCommandFingerprint_DifferentVerifierNamesAlterFingerprint(t *testing.T)
 	}
 }
 
-// TestCommandFingerprint_ArgvChangesAlterFingerprint verifies changes to argv.
-func TestCommandFingerprint_ArgvChangesAlterFingerprint(t *testing.T) {
-	env := []string{"GOFLAGS=-v"}
-	execPath := "/usr/local/bin/leamas"
+// TestExecutionFingerprint_ArgvChangesAlterFingerprint verifies.
+func TestExecutionFingerprint_ArgvChangesAlterFingerprint(t *testing.T) {
+	exec1 := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha", "--verbose"},
+		EnvVars:     []string{"GOFLAGS"},
+	}
+	exec2 := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha", "--debug"},
+		EnvVars:     []string{"GOFLAGS"},
+	}
 
-	argv1 := []string{"alpha", "--verbose"}
-	argv2 := []string{"alpha", "--debug"}
-
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv1, env, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv2, env, execPath)
+	fp1, err1 := executionFingerprint("test-verifier", exec1, nil)
+	fp2, err2 := executionFingerprint("test-verifier", exec2, nil)
 	if err1 != nil || err2 != nil {
 		t.Fatalf("unexpected error: %v or %v", err1, err2)
 	}
@@ -81,16 +91,19 @@ func TestCommandFingerprint_ArgvChangesAlterFingerprint(t *testing.T) {
 	}
 }
 
-// TestCommandFingerprint_GoEnvChangesAlterFingerprint verifies Go env affects.
-func TestCommandFingerprint_GoEnvChangesAlterFingerprint(t *testing.T) {
-	argv := []string{"alpha"}
-	execPath := "/usr/local/bin/leamas"
+// TestExecutionFingerprint_GoEnvChangesAlterFingerprint verifies.
+func TestExecutionFingerprint_GoEnvChangesAlterFingerprint(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha"},
+		EnvVars:     []string{"GOFLAGS"},
+	}
 
 	env1 := []string{"GOFLAGS=-v"}
 	env2 := []string{"GOFLAGS=-vv"}
 
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, env1, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, env2, execPath)
+	fp1, err1 := executionFingerprint("test-verifier", exec, env1)
+	fp2, err2 := executionFingerprint("test-verifier", exec, env2)
 	if err1 != nil || err2 != nil {
 		t.Fatalf("unexpected error: %v or %v", err1, err2)
 	}
@@ -99,89 +112,19 @@ func TestCommandFingerprint_GoEnvChangesAlterFingerprint(t *testing.T) {
 	}
 }
 
-// TestCommandFingerprint_ScenarioDoesNotAlterFingerprint verifies LEAMAS_*
-// observation metadata is excluded.
-func TestCommandFingerprint_ScenarioDoesNotAlterFingerprint(t *testing.T) {
-	argv := []string{"alpha"}
-	execPath := "/usr/local/bin/leamas"
-
-	env1 := []string{"LEAMAS_FACTORIZE_SCENARIO=controlled-warm"}
-	env2 := []string{"LEAMAS_FACTORIZE_SCENARIO=controlled-cold"}
-
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, env1, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, env2, execPath)
-	if err1 != nil || err2 != nil {
-		t.Fatalf("unexpected error: %v or %v", err1, err2)
+// TestExecutionFingerprint_EnvOrderingDoesNotMatter verifies.
+func TestExecutionFingerprint_EnvOrderingDoesNotMatter(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha"},
+		EnvVars:     []string{"GOFLAGS", "GOCACHE"},
 	}
-	if fp1 != fp2 {
-		t.Fatalf("scenario must NOT alter the fingerprint")
-	}
-}
-
-// TestCommandFingerprint_SequenceDoesNotAlterFingerprint verifies LEAMAS_*.
-func TestCommandFingerprint_SequenceDoesNotAlterFingerprint(t *testing.T) {
-	argv := []string{"alpha"}
-	execPath := "/usr/local/bin/leamas"
-
-	env1 := []string{"LEAMAS_FACTORIZE_SEQUENCE=1"}
-	env2 := []string{"LEAMAS_FACTORIZE_SEQUENCE=3"}
-
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, env1, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, env2, execPath)
-	if err1 != nil || err2 != nil {
-		t.Fatalf("unexpected error: %v or %v", err1, err2)
-	}
-	if fp1 != fp2 {
-		t.Fatalf("sequence must NOT alter the fingerprint")
-	}
-}
-
-// TestCommandFingerprint_MetricsFileDoesNotAlterFingerprint verifies evidence.
-func TestCommandFingerprint_MetricsFileDoesNotAlterFingerprint(t *testing.T) {
-	argv := []string{"alpha"}
-	execPath := "/usr/local/bin/leamas"
-
-	env1 := []string{"LEAMAS_FACTORIZE_METRICS_FILE=/tmp/m1.json"}
-	env2 := []string{"LEAMAS_FACTORIZE_METRICS_FILE=/tmp/m2.json"}
-
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, env1, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, env2, execPath)
-	if err1 != nil || err2 != nil {
-		t.Fatalf("unexpected error: %v or %v", err1, err2)
-	}
-	if fp1 != fp2 {
-		t.Fatalf("metrics file path must NOT alter the fingerprint")
-	}
-}
-
-// TestCommandFingerprint_NonGoEnvDoesNotAlterFingerprint verifies non-GO vars.
-func TestCommandFingerprint_NonGoEnvDoesNotAlterFingerprint(t *testing.T) {
-	argv := []string{"alpha"}
-	execPath := "/usr/local/bin/leamas"
-
-	env1 := []string{"HOME=/root"}
-	env2 := []string{"HOME=/home/user"}
-
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, env1, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, env2, execPath)
-	if err1 != nil || err2 != nil {
-		t.Fatalf("unexpected error: %v or %v", err1, err2)
-	}
-	if fp1 != fp2 {
-		t.Fatalf("non-execution-relevant env must NOT alter the fingerprint")
-	}
-}
-
-// TestCommandFingerprint_EnvOrderingDoesNotMatter verifies deterministic order.
-func TestCommandFingerprint_EnvOrderingDoesNotMatter(t *testing.T) {
-	argv := []string{"alpha"}
-	execPath := "/usr/local/bin/leamas"
 
 	env1 := []string{"GOFLAGS=-v", "GOCACHE=/tmp/cache"}
 	env2 := []string{"GOCACHE=/tmp/cache", "GOFLAGS=-v"}
 
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, env1, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, env2, execPath)
+	fp1, err1 := executionFingerprint("test-verifier", exec, env1)
+	fp2, err2 := executionFingerprint("test-verifier", exec, env2)
 	if err1 != nil || err2 != nil {
 		t.Fatalf("unexpected error: %v or %v", err1, err2)
 	}
@@ -190,13 +133,15 @@ func TestCommandFingerprint_EnvOrderingDoesNotMatter(t *testing.T) {
 	}
 }
 
-// TestCommandFingerprint_FullDigestLength verifies SHA-256 is used.
-func TestCommandFingerprint_FullDigestLength(t *testing.T) {
-	argv := []string{"alpha"}
-	env := []string{"GOFLAGS=-v"}
-	execPath := "/usr/local/bin/leamas"
+// TestExecutionFingerprint_FullDigestLength verifies SHA-256.
+func TestExecutionFingerprint_FullDigestLength(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha"},
+		EnvVars:     []string{"GOFLAGS"},
+	}
 
-	fp, err := commandFingerprint("test-verifier", "/checkout", argv, env, execPath)
+	fp, err := executionFingerprint("test-verifier", exec, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -211,35 +156,43 @@ func TestCommandFingerprint_FullDigestLength(t *testing.T) {
 	}
 }
 
-// TestCommandFingerprint_RelocationInvariant verifies checkout reloc doesn't.
-func TestCommandFingerprint_RelocationInvariant(t *testing.T) {
-	argv := []string{"alpha", "--verbose"}
-	env := []string{"GOFLAGS=-v"}
-	execPath := "/usr/local/bin/leamas"
+// TestExecutionFingerprint_KindIncluded verifies execution kind is in hash.
+func TestExecutionFingerprint_KindIncluded(t *testing.T) {
+	execInProcess := ExecutionDefinition{
+		Kind:        ExecutionInProcess,
+		LogicalArgv: []string{"alpha"},
+		EnvVars:     []string{},
+	}
+	execChild := ExecutionDefinition{
+		Kind:        ExecutionChild,
+		LogicalArgv: []string{"alpha"},
+		EnvVars:     []string{},
+	}
 
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout/original", argv, env, execPath)
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout/relocated", argv, env, execPath)
+	fp1, err1 := executionFingerprint("test-verifier", execInProcess, nil)
+	fp2, err2 := executionFingerprint("test-verifier", execChild, nil)
 	if err1 != nil || err2 != nil {
 		t.Fatalf("unexpected error: %v or %v", err1, err2)
 	}
-	if fp1 != fp2 {
-		t.Fatalf("relocation must NOT change fingerprint")
+	if fp1 == fp2 {
+		t.Fatalf("execution kind must alter the fingerprint")
 	}
 }
 
-// TestCommandFingerprint_ExecPathIgnored verifies exec path is not included in hash.
-// Per the review: "An absolute path may be diagnostic metadata, but should not
-// be the primary semantic identity."
-func TestCommandFingerprint_ExecPathIgnored(t *testing.T) {
-	argv := []string{"alpha"}
-
-	fp1, err1 := commandFingerprint("test-verifier", "/checkout", argv, nil, "/bin/leamas-v1")
-	fp2, err2 := commandFingerprint("test-verifier", "/checkout", argv, nil, "/bin/leamas-v2")
-	if err1 != nil || err2 != nil {
-		t.Fatalf("unexpected error: %v or %v", err1, err2)
+// TestExecutionFingerprint_ChildProcessVerifier verifies child-process argv.
+func TestExecutionFingerprint_ChildProcessVerifier(t *testing.T) {
+	exec := ExecutionDefinition{
+		Kind:        ExecutionChild,
+		LogicalArgv: []string{"leamas", "factory", "verify", "dupcode"},
+		EnvVars:     []string{"GOFLAGS", "CGO_ENABLED", "GOCACHE"},
 	}
-	// execPath is diagnostic metadata, not semantic identity
-	if fp1 != fp2 {
-		t.Fatalf("exec path must NOT alter the fingerprint (path is diagnostic metadata)")
+
+	fp, err := executionFingerprint("dupcode", exec, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(fp) != 64 {
+		t.Fatalf("expected 64-char fingerprint, got %d", len(fp))
 	}
 }

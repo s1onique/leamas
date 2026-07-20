@@ -241,23 +241,23 @@ DIGEST_MODE: dirty
 // not permitted without bumping the contract version.
 func TestRenderStats_V3CanonicalKeyOrder(t *testing.T) {
 	stats := FileStats{
-		FilesChanged:    5,
-		AddedFiles:      1,
-		ModifiedFiles:   2,
-		DeletedFiles:    0,
+		FilesChanged:     5,
+		AddedFiles:       1,
+		ModifiedFiles:    2,
+		DeletedFiles:     0,
 		TypeChangedFiles: 1,
-		RenamedFiles:    1,
-		CopiedFiles:     0,
-		UntrackedFiles:  2,
-		UnmergedFiles:   0,
-		UnknownFiles:    0,
-		BrokenPairFiles: 0,
-		BinaryFiles:     0,
-		GeneratedFiles:  0,
-		TestFiles:       1,
-		DocFiles:        1,
-		SourceFiles:     2,
-		ConfigFiles:     0,
+		RenamedFiles:     1,
+		CopiedFiles:      0,
+		UntrackedFiles:   2,
+		UnmergedFiles:    0,
+		UnknownFiles:     0,
+		BrokenPairFiles:  0,
+		BinaryFiles:      0,
+		GeneratedFiles:   0,
+		TestFiles:        1,
+		DocFiles:         1,
+		SourceFiles:      2,
+		ConfigFiles:      0,
 	}
 	out := RenderStats(stats)
 
@@ -292,8 +292,8 @@ func TestRenderStats_V3CanonicalKeyOrder(t *testing.T) {
 func TestRenderStats_V3IncludesNewFields(t *testing.T) {
 	stats := FileStats{
 		TypeChangedFiles: 1,
-		UnknownFiles:      1,
-		BrokenPairFiles:   1,
+		UnknownFiles:     1,
+		BrokenPairFiles:  1,
 	}
 	out := RenderStats(stats)
 	for _, key := range []string{"type_changed_files", "unknown_files", "broken_pair_files"} {

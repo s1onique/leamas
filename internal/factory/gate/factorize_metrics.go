@@ -17,6 +17,9 @@ import (
 	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
+// MetricsSchema is the schema identifier for factorize metrics.
+const MetricsSchema = "factorize-performance-v2"
+
 // FingerprintError represents an error in computing a command fingerprint.
 type FingerprintError struct {
 	Reason string
@@ -26,15 +29,12 @@ func (e *FingerprintError) Error() string {
 	return "command fingerprint error: " + e.Reason
 }
 
-// commandFingerprint computes a digest of a verifier's execution definition.
-// It binds the verifier ID, argv, and execution-relevant environment.
-// Returns an error if the execution definition is incomplete.
-// The fingerprint is invariant under checkout relocation.
-func commandFingerprint(name string, root string, argv []string, env []string, execPath string) (string, error) {
+// executionFingerprint computes a digest of a verifier's execution definition.
+func executionFingerprint(name string, exec ExecutionDefinition, env []string) (string, error) {
 	if name == "" {
 		return "", &FingerprintError{Reason: "verifier name is required"}
 	}
-	if len(argv) == 0 {
+	if len(exec.LogicalArgv) == 0 {
 		return "", &FingerprintError{Reason: "argv is required"}
 	}
 
@@ -43,17 +43,23 @@ func commandFingerprint(name string, root string, argv []string, env []string, e
 	h.Write([]byte{0})
 	h.Write([]byte(name))
 	h.Write([]byte{0})
+	h.Write([]byte(exec.Kind))
+	h.Write([]byte{0})
 
-	for _, arg := range argv {
+	for _, arg := range exec.LogicalArgv {
 		h.Write([]byte(arg))
 		h.Write([]byte{0})
 	}
 	h.Write([]byte{0})
 
+	// Bind relevant environment variables
 	var relevant []string
 	for _, e := range env {
-		if hasExecEnvPrefix(e) && isExecRelevantEnv(e) {
-			relevant = append(relevant, e)
+		for _, key := range exec.EnvVars {
+			if strings.HasPrefix(e, key+"=") {
+				relevant = append(relevant, e)
+				break
+			}
 		}
 	}
 	sort.Strings(relevant)
@@ -63,56 +69,6 @@ func commandFingerprint(name string, root string, argv []string, env []string, e
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// hasExecEnvPrefix returns true if the env var starts with a known prefix.
-func hasExecEnvPrefix(env string) bool {
-	execPrefixes := []string{
-		"GO", "CGO_", "GOPROXY", "GOSUMDB", "GOPRIVATE", "PATH",
-	}
-	for _, prefix := range execPrefixes {
-		if strings.HasPrefix(env, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-// isExecRelevantEnv returns true if the env var affects verifier execution.
-func isExecRelevantEnv(env string) bool {
-	excluded := map[string]bool{
-		"LEAMAS_FACTORIZE_METRICS_FILE": true,
-		"LEAMAS_FACTORIZE_SCENARIO":    true,
-		"LEAMAS_FACTORIZE_SEQUENCE":    true,
-	}
-
-	keyEnd := strings.IndexByte(env, '=')
-	if keyEnd <= 0 {
-		return false
-	}
-	key := env[:keyEnd]
-
-	if excluded[key] {
-		return false
-	}
-
-	execRelevant := map[string]bool{
-		"GOFLAGS":     true,
-		"GOCACHE":     true,
-		"GOENV":       true,
-		"GOTOOLCHAIN": true,
-		"GOMAXPROCS":  true,
-		"CGO_ENABLED": true,
-		"GOOS":        true,
-		"GOARCH":      true,
-		"GOPROXY":     true,
-		"GONOSUMDB":   true,
-		"GOSUMDB":     true,
-		"GOPRIVATE":   true,
-		"PATH":        true,
-	}
-
-	return execRelevant[key]
 }
 
 // collectRusage collects resource usage for the current process.
@@ -131,11 +87,11 @@ func collectRusage() rusageMetrics {
 // buildEnvironment captures the measurement environment.
 func buildEnvironment() MetricsEnvironment {
 	env := MetricsEnvironment{
-		GoVersion:           runtime.Version(),
-		GoOS:                runtime.GOOS,
-		GoArch:              runtime.GOARCH,
-		GoMaxProcs:          runtime.GOMAXPROCS(0),
-		LogicalCPUCount:     runtime.NumCPU(),
+		GoVersion:            runtime.Version(),
+		GoOS:                 runtime.GOOS,
+		GoArch:               runtime.GOARCH,
+		GoMaxProcs:           runtime.GOMAXPROCS(0),
+		LogicalCPUCount:      runtime.NumCPU(),
 		MeasurementHostClass: "development-workstation",
 	}
 	if data, err := os.ReadFile("/etc/os-release"); err == nil {
@@ -200,19 +156,16 @@ func writeMetrics(path string, m *FactorizeMetrics) error {
 	return nil
 }
 
-// AddCheck records metrics for a single verifier.
-// Returns an error if the command fingerprint cannot be computed.
+// AddCheck records metrics for a single verifier using authoritative verifier metadata.
 func (mc *MetricsCollection) AddCheck(
-	name string,
+	verifier Verifier,
 	ordinal int,
 	findings []checks.Finding,
 	duration time.Duration,
 	rusage rusageMetrics,
 	root string,
 	cacheObservation string,
-	argv []string,
 	env []string,
-	execPath string,
 ) error {
 	status := "pass"
 	exitCode := 0
@@ -235,14 +188,14 @@ func (mc *MetricsCollection) AddCheck(
 		maxRSS = &v
 	}
 
-	fingerprint, err := commandFingerprint(name, root, argv, env, execPath)
+	fingerprint, err := executionFingerprint(verifier.Name, verifier.Execution, env)
 	if err != nil {
-		return fmt.Errorf("command fingerprint for %s: %w", name, err)
+		return fmt.Errorf("execution fingerprint for %s: %w", verifier.Name, err)
 	}
 
 	mc.Checks = append(mc.Checks, MetricsCheck{
 		Ordinal:            ordinal,
-		ID:                 name,
+		ID:                 verifier.Name,
 		Status:             status,
 		ExitCode:           exitCode,
 		DurationNs:         duration.Nanoseconds(),
@@ -285,14 +238,14 @@ func (mc *MetricsCollection) FinalizeRun(
 		Environment: buildEnvironment(),
 		Run: MetricsRun{
 			Scenario:      scenario,
-			Sequence:     sequence,
-			StartedAt:    mc.StartTime.UTC().Format(time.RFC3339),
-			Status:       status,
-			ExitCode:     exitCode,
-			DurationNs:   totalDuration.Nanoseconds(),
-			UserCPUNs:    userCPU,
-			SystemCPUNs:  systemCPU,
-			MaxRSSBytes:  maxRSS,
+			Sequence:      sequence,
+			StartedAt:     mc.StartTime.UTC().Format(time.RFC3339),
+			Status:        status,
+			ExitCode:      exitCode,
+			DurationNs:    totalDuration.Nanoseconds(),
+			UserCPUNs:     userCPU,
+			SystemCPUNs:   systemCPU,
+			MaxRSSBytes:   maxRSS,
 			ResourceScope: "full-run",
 		},
 		Checks: mc.Checks,

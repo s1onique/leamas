@@ -3,17 +3,14 @@ package gate
 
 import "time"
 
-// MetricsSchema is the schema identifier for factorize metrics.
-const MetricsSchema = "factorize-performance-v1"
-
 // MetricsEnvironment represents the measurement environment.
 type MetricsEnvironment struct {
-	GoVersion           string `json:"go_version"`
-	GoOS                string `json:"goos"`
-	GoArch              string `json:"goarch"`
-	GoMaxProcs          int    `json:"gomaxprocs"`
-	LogicalCPUCount     int    `json:"logical_cpu_count"`
-	OSRelease           string `json:"os_release"`
+	GoVersion            string `json:"go_version"`
+	GoOS                 string `json:"goos"`
+	GoArch               string `json:"goarch"`
+	GoMaxProcs           int    `json:"gomaxprocs"`
+	LogicalCPUCount      int    `json:"logical_cpu_count"`
+	OSRelease            string `json:"os_release"`
 	MeasurementHostClass string `json:"measurement_host_class"`
 }
 
@@ -48,18 +45,18 @@ type MetricsCheck struct {
 
 // FactorizeMetrics is the top-level metrics document.
 type FactorizeMetrics struct {
-	Schema      string           `json:"schema"`
-	Subject     MetricsSubject   `json:"subject"`
+	Schema      string             `json:"schema"`
+	Subject     MetricsSubject     `json:"subject"`
 	Environment MetricsEnvironment `json:"environment"`
-	Run         MetricsRun      `json:"run"`
-	Checks      []MetricsCheck  `json:"checks"`
+	Run         MetricsRun         `json:"run"`
+	Checks      []MetricsCheck     `json:"checks"`
 }
 
 // MetricsSubject identifies the measurement subject.
 type MetricsSubject struct {
-	HeadOID           string `json:"head_oid"`
-	TreeOID          string `json:"tree_oid"`
-	WorktreeState    string `json:"worktree_state"`
+	HeadOID            string `json:"head_oid"`
+	TreeOID            string `json:"tree_oid"`
+	WorktreeState      string `json:"worktree_state"`
 	SubjectInputDigest string `json:"subject_input_digest"`
 }
 

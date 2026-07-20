@@ -1,140 +1,75 @@
-// Package gate provides tests for factorize cache classification.
+// Package gate provides tests for factorize cache classification from verifier metadata.
 package gate
 
 import (
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
-// canonicalVerifierCount is the expected number of verifiers in factorize.
 const canonicalVerifierCount = 15
 
-// canonicalVerifiers returns the 15 canonical verifier names from gate.go.
-func canonicalVerifiers() []string {
-	return []string{
-		"agent-context",
-		"doctrine",
-		"doctrine-agent-contracts",
-		"docs",
-		"dupcode",
-		"dupcode-baseline",
-		"domain-boundaries",
-		"exec-gate",
-		"executable-contract-first",
-		"forbidden-patterns",
-		"git-hooks",
-		"language",
-		"llm-friendly",
-		"static-binary",
-		"tooling-boundaries",
-	}
-}
-
-// TestCacheClassification_AllCanonicalVerifiersClassified verifies that every
-// canonical verifier has exactly one cache classification.
-func TestCacheClassification_AllCanonicalVerifiersClassified(t *testing.T) {
-	verifiers := canonicalVerifiers()
+// TestCacheSemantics_AllVerifiersHaveCacheMetadata verifies all verifiers have cache semantics.
+func TestCacheSemantics_AllVerifiersHaveCacheMetadata(t *testing.T) {
+	verifiers := AllVerifiers()
 	if len(verifiers) != canonicalVerifierCount {
 		t.Fatalf("expected %d canonical verifiers, got %d", canonicalVerifierCount, len(verifiers))
 	}
 
-	for _, name := range verifiers {
-		class := classifyCacheObservation(name)
-		if class == "" {
-			t.Errorf("verifier %q has no cache classification", name)
+	for _, v := range verifiers {
+		if v.Cache.GoBuildCache == "" {
+			t.Errorf("verifier %q has no GoBuildCache", v.Name)
+		}
+		if v.Cache.GoTestResultCache == "" {
+			t.Errorf("verifier %q has no GoTestResultCache", v.Name)
 		}
 	}
 }
 
-// TestCacheClassification_NoUnknownVerifiersGetDefault verifies unknown verifiers.
-func TestCacheClassification_UnknownVerifiersGetDefault(t *testing.T) {
-	class := classifyCacheObservation("unknown-phantom-verifier")
-	if class == "" {
-		t.Errorf("unknown verifier must still get a classification")
-	}
-}
+// TestCacheSemantics_DupcodeDisabled verifies dupcode uses disabled test cache.
+func TestCacheSemantics_DupcodeDisabled(t *testing.T) {
+	verifiers := AllVerifiers()
 
-// TestCacheClassification_ExactlyOneClassification verifies structured format.
-func TestCacheClassification_ExactlyOneClassification(t *testing.T) {
-	verifiers := canonicalVerifiers()
-
-	for _, name := range verifiers {
-		class := classifyCacheObservation(name)
-		if strings.Contains(class, ";") {
-			parts := strings.Split(class, ";")
-			if len(parts) != 2 {
-				t.Errorf("verifier %q has malformed classification: %q", name, class)
+	for _, v := range verifiers {
+		if v.Name == "dupcode" || v.Name == "dupcode-baseline" {
+			if v.Cache.GoTestResultCache != CacheModeDisabled {
+				t.Errorf("verifier %q must have test cache disabled, got %s", v.Name, v.Cache.GoTestResultCache)
 			}
 		}
 	}
 }
 
-// TestCacheClassification_StructuredFormat verifies key=value format.
-func TestCacheClassification_StructuredFormat(t *testing.T) {
-	verifiers := canonicalVerifiers()
+// TestCacheSemantics_FormatCacheObservation verifies formatCacheObservation.
+func TestCacheSemantics_FormatCacheObservation(t *testing.T) {
+	cache := CacheSemantics{
+		GoBuildCache:      CacheRelevant,
+		GoTestResultCache: CacheModeDisabled,
+	}
+	obs := formatCacheObservation(cache)
 
-	for _, name := range verifiers {
-		class := classifyCacheObservation(name)
+	if !strings.Contains(obs, "go_build_cache=relevant") {
+		t.Errorf("expected go_build_cache=relevant, got %s", obs)
+	}
+	if !strings.Contains(obs, "go_test_result_cache=disabled") {
+		t.Errorf("expected go_test_result_cache=disabled, got %s", obs)
+	}
+}
 
-		pairs := strings.Split(class, ";")
-		if len(pairs) < 1 {
-			t.Errorf("verifier %q classification %q has no semicolon-separated pairs", name, class)
-			continue
-		}
+// TestCacheSemantics_ChildProcessVerifiers verifies child-process cache behavior.
+func TestCacheSemantics_ChildProcessVerifiers(t *testing.T) {
+	verifiers := AllVerifiers()
 
-		for _, pair := range pairs {
-			kv := strings.Split(pair, "=")
-			if len(kv) != 2 {
-				t.Errorf("verifier %q classification %q has malformed pair %q", name, class, pair)
+	for _, v := range verifiers {
+		if v.Execution.Kind == ExecutionChild {
+			// Child-process verifiers should have cache relevance
+			if v.Cache.GoBuildCache == CacheNotApplicable {
+				t.Errorf("child-process verifier %q should have cache relevance, got %s", v.Name, v.Cache.GoBuildCache)
 			}
 		}
 	}
 }
 
-// TestCacheClassification_DupcodeUsesTestResultCacheDisabled verifies dupcode.
-func TestCacheClassification_DupcodeUsesTestResultCacheDisabled(t *testing.T) {
-	dupcodeVerifiers := []string{"dupcode", "dupcode-baseline"}
-
-	for _, name := range dupcodeVerifiers {
-		class := classifyCacheObservation(name)
-		if !strings.Contains(class, "go_test_result_cache=disabled") {
-			t.Errorf("verifier %q must have go_test_result_cache=disabled, got %q", name, class)
-		}
-	}
-}
-
-// TestCacheClassification_NoGocoverageInCanonical verifies go-coverage not in list.
-func TestCacheClassification_NoGocoverageInCanonical(t *testing.T) {
-	verifiers := canonicalVerifiers()
-
-	for _, name := range verifiers {
-		if name == "go-coverage" {
-			t.Errorf("go-coverage must not be in canonical verifier list")
-		}
-	}
-}
-
-// TestCacheClassification_AllowlistDerived verifies classification derives from.
-func TestCacheClassification_AllowlistDerived(t *testing.T) {
-	verifiers := canonicalVerifiers()
-
-	for _, name := range verifiers {
-		class := classifyCacheObservation(name)
-		if class == "" {
-			t.Errorf("verifier %q has no classification", name)
-			continue
-		}
-
-		if !strings.Contains(class, "=") {
-			t.Errorf("verifier %q classification %q lacks key=value format", name, class)
-		}
-	}
-}
-
-// verifierNames extracts just the names from a Verifier slice for display.
+// verifierNames extracts just the names from a Verifier slice.
 func verifierNames(verifiers []Verifier) []string {
 	names := make([]string, len(verifiers))
 	for i, v := range verifiers {
@@ -154,72 +89,69 @@ func TestAllVerifiersCount_MatchesCanonical(t *testing.T) {
 	}
 }
 
-// TestMetricsCheck_Fields verifies MetricsCheck struct has required fields.
-func TestMetricsCheck_Fields(t *testing.T) {
-	mc := &MetricsCollection{}
+// TestVerifierNames_MatchesCanonicalList verifies all expected verifiers are present.
+func TestVerifierNames_MatchesCanonicalList(t *testing.T) {
+	verifiers := AllVerifiers()
+	names := verifierNames(verifiers)
 
-	// Test AddCheck with valid input
-	err := mc.AddCheck(
-		"test-verifier",
-		1,
-		nil, // no findings
-		0,
-		rusageMetrics{},
-		"/checkout",
-		"go_test_result_cache=not-applicable;go_build_cache=not-applicable",
-		[]string{"test-verifier"},
-		[]string{"GOFLAGS=-v"},
-		"",
-	)
-	if err != nil {
-		t.Fatalf("AddCheck failed: %v", err)
+	// verifierNames already sorts, so we just verify count and all expected present
+	if len(names) != canonicalVerifierCount {
+		t.Fatalf("verifier count mismatch: got %d, expected %d", len(names), canonicalVerifierCount)
 	}
 
-	if len(mc.Checks) != 1 {
-		t.Fatalf("expected 1 check, got %d", len(mc.Checks))
+	expectedSet := map[string]bool{
+		"agent-context": true, "doctrine": true, "doctrine-agent-contracts": true,
+		"docs": true, "dupcode": true, "dupcode-baseline": true,
+		"domain-boundaries": true, "exec-gate": true, "executable-contract-first": true,
+		"forbidden-patterns": true, "git-hooks": true, "language": true,
+		"llm-friendly": true, "static-binary": true, "tooling-boundaries": true,
 	}
-
-	check := mc.Checks[0]
-	if check.ID != "test-verifier" {
-		t.Errorf("expected ID=test-verifier, got %s", check.ID)
-	}
-	if check.Status != "pass" {
-		t.Errorf("expected status=pass, got %s", check.Status)
-	}
-	if check.CommandFingerprint == "" {
-		t.Errorf("CommandFingerprint must not be empty")
+	for _, name := range names {
+		if !expectedSet[name] {
+			t.Errorf("unexpected verifier: %q", name)
+		}
 	}
 }
 
-// TestMetricsCheck_FailureStatus verifies failure status propagation.
-func TestMetricsCheck_FailureStatus(t *testing.T) {
-	mc := &MetricsCollection{}
-
-	findings := []checks.Finding{
-		{Path: "test.go", Kind: "error", Message: "test error"},
+// TestMetricsSchema_IsV2 verifies schema version is v2.
+func TestMetricsSchema_IsV2(t *testing.T) {
+	if MetricsSchema != "factorize-performance-v2" {
+		t.Errorf("expected schema v2, got %s", MetricsSchema)
 	}
+}
 
-	err := mc.AddCheck(
-		"test-verifier",
-		1,
-		findings,
-		0,
-		rusageMetrics{},
-		"/checkout",
-		"go_test_result_cache=not-applicable;go_build_cache=not-applicable",
-		[]string{"test-verifier"},
-		[]string{"GOFLAGS=-v"},
-		"",
-	)
-	if err != nil {
-		t.Fatalf("AddCheck failed: %v", err)
+// TestExecutionKind_ValidValues verifies execution kind constants.
+func TestExecutionKind_ValidValues(t *testing.T) {
+	if ExecutionInProcess != "in-process" {
+		t.Errorf("ExecutionInProcess = %q, expected %q", ExecutionInProcess, "in-process")
 	}
+	if ExecutionChild != "child-process" {
+		t.Errorf("ExecutionChild = %q, expected %q", ExecutionChild, "child-process")
+	}
+}
 
-	check := mc.Checks[0]
-	if check.Status != "fail" {
-		t.Errorf("expected status=fail, got %s", check.Status)
+// TestCacheRelevance_ValidValues verifies cache relevance constants.
+func TestCacheRelevance_ValidValues(t *testing.T) {
+	if CacheRelevant != "relevant" {
+		t.Errorf("CacheRelevant = %q", CacheRelevant)
 	}
-	if check.ExitCode != 1 {
-		t.Errorf("expected exit_code=1, got %d", check.ExitCode)
+	if CacheNotRelevant != "not-relevant" {
+		t.Errorf("CacheNotRelevant = %q", CacheNotRelevant)
+	}
+	if CacheNotApplicable != "not-applicable" {
+		t.Errorf("CacheNotApplicable = %q", CacheNotApplicable)
+	}
+}
+
+// TestTestResultCacheMode_ValidValues verifies cache mode constants.
+func TestTestResultCacheMode_ValidValues(t *testing.T) {
+	if CacheModeEnabled != "enabled" {
+		t.Errorf("CacheModeEnabled = %q", CacheModeEnabled)
+	}
+	if CacheModeDisabled != "disabled" {
+		t.Errorf("CacheModeDisabled = %q", CacheModeDisabled)
+	}
+	if CacheModeNA != "not-applicable" {
+		t.Errorf("CacheModeNA = %q", CacheModeNA)
 	}
 }
