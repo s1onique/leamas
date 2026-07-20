@@ -2,7 +2,7 @@
 
 ## Verdict
 
-**COMPLETE** (with measurements recorded)
+**PARTIAL — CORRECTION01 OPEN** (measurements require correction)
 
 ## Repository Identity
 
@@ -36,14 +36,16 @@
 | All others | <0.05s |
 | **TOTAL** | **462.14s** |
 
-## Critical-Path Conclusions
+## Critical-Path Conclusions (Preliminary Hypotheses — Pending CORRECTION01 Validation)
 
-1. **Primary bottleneck**: dupcode + dupcode-baseline (~99.7% of runtime)
-2. **Second-largest contributor**: static-binary (1.30s, 0.3%)
-3. **Duplicated work found**: dupcode and dupcode-baseline both analyze the same repository independently
-4. **Parallelizable opportunity**: dupcode + dupcode-baseline are independent (potential ~2x speedup)
-5. **Unchanged-tree cache opportunity**: High - both use -count=1, no test-result caching
-6. **Changed-tree incremental opportunity**: Medium - dupcode re-tokenizes entire repo
+1. **Primary bottleneck** (PRELIMINARY): dupcode + dupcode-baseline (~99.7% of runtime)
+2. **Second-largest contributor** (PRELIMINARY): static-binary (1.30s, 0.3%)
+3. **Duplicated work found** (PRELIMINARY): dupcode and dupcode-baseline both analyze the same repository independently
+4. **Parallelizable opportunity** (PRELIMINARY): dupcode + dupcode-baseline are independent (potential ~2x speedup)
+5. **Unchanged-tree cache opportunity** (PRELIMINARY): High - both use -count=1, no test-result caching
+6. **Changed-tree incremental opportunity** (PRELIMINARY): Medium - dupcode re-tokenizes entire repo
+
+**Note**: These conclusions are based on unaudited measurements. CORRECTION01 must validate the instrumentation before these conclusions can be considered authoritative.
 
 ## Changes
 

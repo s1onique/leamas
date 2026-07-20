@@ -14,6 +14,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -87,15 +89,25 @@ type rusageMetrics struct {
 	maxRSS    int64
 }
 
+// relevantEnvVars contains the LEAMAS_* environment variables that affect
+// verifier execution and must be included in the fingerprint.
+// Instrumentation-only variables are excluded.
+var relevantEnvVars = map[string]bool{
+	"LEAMAS_FACTORIZE_SCENARIO": true,
+	"LEAMAS_FACTORIZE_SEQUENCE": true,
+	// Note: LEAMAS_FACTORIZE_METRICS_FILE is excluded (evidence-only)
+}
+
 // commandFingerprint computes a digest of a verifier's execution definition.
-// It binds the verifier ID, executable identity, argv, and selected environment.
+// It binds the verifier ID, executable identity, argv, and relevant environment.
+// The fingerprint is invariant under checkout relocation.
 func commandFingerprint(name string, root string, argv []string, env []string, execPath string) string {
 	h := sha256.New()
 	h.Write([]byte("factorize-v1"))
 	h.Write([]byte{0})
 	h.Write([]byte(name))
 	h.Write([]byte{0})
-	// Bind executable identity
+	// Bind executable identity (empty exec path fails closed)
 	h.Write([]byte(execPath))
 	h.Write([]byte{0})
 	// Bind argv
@@ -104,14 +116,26 @@ func commandFingerprint(name string, root string, argv []string, env []string, e
 		h.Write([]byte{0})
 	}
 	h.Write([]byte{0}) // argv terminator
-	// Bind selected environment (only LEAMAS_* vars that affect execution)
+	// Bind relevant LEAMAS_* environment variables (sorted for determinism)
+	var relevant []string
 	for _, e := range env {
-		if len(e) > 8 && e[:8] == "LEAMAS_" {
-			h.Write([]byte(e))
-			h.Write([]byte{0})
+		if strings.HasPrefix(e, "LEAMAS_") {
+			// Extract key (up to '=')
+			keyEnd := strings.IndexByte(e, '=')
+			if keyEnd > 8 {
+				key := e[:keyEnd]
+				if relevantEnvVars[key] {
+					relevant = append(relevant, e)
+				}
+			}
 		}
 	}
-	return hex.EncodeToString(h.Sum(nil))[:16]
+	sort.Strings(relevant) // deterministic ordering
+	for _, e := range relevant {
+		h.Write([]byte(e))
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // collectRusage collects resource usage for the current process.
