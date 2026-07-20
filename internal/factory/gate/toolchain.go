@@ -241,7 +241,23 @@ func runToolchainChecks(root string, failed *bool) {
 	}
 }
 
+// packagesWithoutDupcode returns the list of packages excluding dupcode.
+func packagesWithoutDupcode(root string) (string, error) {
+	output, exitCode, cmdErr := runCommandInDir(root, "go", "list", "./...")
+	if cmdErr != nil || exitCode != 0 {
+		return "", fmt.Errorf("go list ./...: %v", cmdErr)
+	}
+	var result []string
+	for _, pkg := range strings.Split(strings.TrimSpace(output), "\n") {
+		if pkg != "" && !strings.HasPrefix(pkg, "github.com/s1onique/leamas/internal/factory/dupcode") {
+			result = append(result, pkg)
+		}
+	}
+	return strings.Join(result, " "), nil
+}
+
 // runToolchainChecksFast runs Go toolchain checks in fast mode with -short flag.
+// Excludes internal/factory/dupcode packages to keep fast lane fast.
 func runToolchainChecksFast(root string, failed *bool) {
 	fmt.Printf("\n--- Go toolchain (fast mode) ---\n")
 
@@ -300,15 +316,25 @@ func runToolchainChecksFast(root string, failed *bool) {
 		fmt.Printf(" OK\n")
 	}
 
-	// go test -short (skips long tests)
-	fmt.Printf("  go test -short ./...")
-	output, exitCode, cmdErr = runCommandInDir(root, "go", "test", "-short", "./...")
-	if exitCode != 0 || cmdErr != nil {
+	// go test -short (excludes dupcode package)
+	fmt.Printf("  go test -short ./... (excluding dupcode)")
+	pkgs, err := packagesWithoutDupcode(root)
+	if err != nil {
 		fmt.Printf(" FAILED\n")
-		printFailureOutput(nil, "go test -short ./...", output, exitCode, cmdErr)
+		printFailureOutput(nil, "go list ./...", "", -1, fmt.Errorf("failed to list packages: %v", err))
 		*failed = true
+	} else if pkgs == "" {
+		fmt.Printf(" OK (no packages)\n")
 	} else {
-		fmt.Printf(" OK\n")
+		args := append([]string{"go", "test", "-short"}, strings.Fields(pkgs)...)
+		output, exitCode, cmdErr = runCommandInDir(root, args[0], args[1:]...)
+		if exitCode != 0 || cmdErr != nil {
+			fmt.Printf(" FAILED\n")
+			printFailureOutput(nil, "go test -short", output, exitCode, cmdErr)
+			*failed = true
+		} else {
+			fmt.Printf(" OK\n")
+		}
 	}
 
 	// CGO_ENABLED=0 build
@@ -318,6 +344,22 @@ func runToolchainChecksFast(root string, failed *bool) {
 	if exitCode != 0 || cmdErr != nil {
 		fmt.Printf(" FAILED\n")
 		printFailureOutput(nil, "static build", output, exitCode, cmdErr)
+		*failed = true
+	} else {
+		fmt.Printf(" OK\n")
+	}
+}
+
+// RunDupcodeToolchain runs toolchain checks for the dupcode lane.
+func RunDupcodeToolchain(root string, failed *bool) {
+	fmt.Printf("\n--- Go toolchain (dupcode lane) ---\n")
+
+	// go test -short for dupcode package only
+	fmt.Printf("  go test -short ./internal/factory/dupcode/...")
+	output, exitCode, cmdErr := runCommandInDir(root, "go", "test", "-short", "./internal/factory/dupcode/...")
+	if exitCode != 0 || cmdErr != nil {
+		fmt.Printf(" FAILED\n")
+		printFailureOutput(nil, "go test -short ./internal/factory/dupcode/...", output, exitCode, cmdErr)
 		*failed = true
 	} else {
 		fmt.Printf(" OK\n")

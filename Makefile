@@ -3,7 +3,7 @@
 # Include long-test tier targets
 include make/long-tests.mk
 
-.PHONY: help gate gate-fast test test-fast test-long test-long-dupcode clean digest factorize verify-doctrine verify-factory
+.PHONY: help gate gate-fast gate-dupcode test test-fast test-long test-long-dupcode clean digest factorize verify-doctrine verify-factory
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine
 .PHONY: verify-tooling-boundaries verify-llm-friendly verify-agent-context
 .PHONY: verify-git-hooks verify-domain-boundaries bootstrap install-git-hooks build digest install
@@ -100,7 +100,8 @@ help:
 	@echo "Leamas - Make targets"
 	@echo ""
 	@echo "  make gate           - Run quality gate (verifiers + Go toolchain)"
-	@echo "  make gate-fast     - Run quality gate in fast mode (skips long tests)"
+	@echo "  make gate-fast     - Run fast verifier lane (skips dupcode)"
+	@echo "  make gate-dupcode  - Run dupcode verifier lane"
 	@echo "  make factorize     - Run factory verifiers only (no toolchain)"
 	@echo "  make coverage      - Generate coverage profile and check threshold"
 	@echo "  make bootstrap     - Configure repo-local git hooks path"

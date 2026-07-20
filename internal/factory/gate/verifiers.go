@@ -24,52 +24,52 @@ import (
 // AllVerifiers returns all Factory policy verifiers (for factorize).
 func AllVerifiers() []Verifier {
 	return []Verifier{
-		{Name: "agent-context", Run: agentContextVerifier, Execution: ExecutionDefinition{
+		{Name: "agent-context", Run: agentContextVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.agentContextVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "doctrine", Run: doctrine.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "doctrine", Run: doctrine.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "doctrine-agent-contracts", Run: doctrine.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "doctrine-agent-contracts", Run: doctrine.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "docs", Run: docs.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "docs", Run: docs.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/docs.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "domain-boundaries", Run: boundary.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "domain-boundaries", Run: boundary.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/boundary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "dupcode-baseline", Run: dupcodeBaselineVerifier, Execution: ExecutionDefinition{
+		{Name: "dupcode-baseline", Run: dupcodeBaselineVerifier, Lane: VerifierLaneDupcode, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.dupcodeBaselineVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "dupcode", Run: dupCodeVerifier, Execution: ExecutionDefinition{
+		{Name: "dupcode", Run: dupCodeVerifier, Lane: VerifierLaneDupcode, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.dupCodeVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "exec-gate", Run: execgate.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "exec-gate", Run: execgate.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/execgate.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "executable-contract-first", Run: doctrine.CheckExecutableContractFirst, Execution: ExecutionDefinition{
+		{Name: "executable-contract-first", Run: doctrine.CheckExecutableContractFirst, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckExecutableContractFirst", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "forbidden-patterns", Run: forbidden.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "forbidden-patterns", Run: forbidden.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/forbidden.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "git-hooks", Run: gitHooksVerifier, Execution: ExecutionDefinition{
+		{Name: "git-hooks", Run: gitHooksVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.gitHooksVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "language", Run: language.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "language", Run: language.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/language.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "llm-friendly", Run: llmFriendlyVerifier, Execution: ExecutionDefinition{
+		{Name: "llm-friendly", Run: llmFriendlyVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.llmFriendlyVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "static-binary", Run: staticbinary.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "static-binary", Run: staticbinary.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/staticbinary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED", "GOCACHE"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheRelevant, GoTestResultCache: CacheModeNA}},
-		{Name: "tooling-boundaries", Run: tooling.CheckRepo, Execution: ExecutionDefinition{
+		{Name: "tooling-boundaries", Run: tooling.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/tooling.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "long-test-policy", Run: longTestPolicyVerifier, Execution: ExecutionDefinition{
+		{Name: "long-test-policy", Run: longTestPolicyVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/longtestpolicy.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 	}

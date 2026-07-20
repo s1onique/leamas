@@ -60,13 +60,16 @@ func handleFactory() {
 
 type gateOptions struct {
 	TestMode string
+	Lane     string
 }
 
 func parseGateOptions(args []string) (gateOptions, error) {
 	fs := flag.NewFlagSet("factory gate", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var mode string
+	var lane string
 	fs.StringVar(&mode, "test-mode", "full", "test mode: full or short")
+	fs.StringVar(&lane, "lane", "", "verifier lane: fast or dupcode (default runs all verifiers)")
 	if err := fs.Parse(args); err != nil {
 		return gateOptions{}, err
 	}
@@ -75,10 +78,17 @@ func parseGateOptions(args []string) (gateOptions, error) {
 	}
 	switch mode {
 	case "full", "short":
-		return gateOptions{TestMode: mode}, nil
+		// valid
 	default:
 		return gateOptions{}, fmt.Errorf("invalid --test-mode %q: expected full or short", mode)
 	}
+	switch lane {
+	case "", "fast", "dupcode":
+		// valid
+	default:
+		return gateOptions{}, fmt.Errorf("invalid --lane %q: expected fast or dupcode", lane)
+	}
+	return gateOptions{TestMode: mode, Lane: lane}, nil
 }
 
 func handleFactoryGate() {
@@ -88,6 +98,13 @@ func handleFactoryGate() {
 		fmt.Fprintf(os.Stderr, "factory gate: %v\n", err)
 		os.Exit(1)
 	}
+
+	// If a specific lane is requested, run just that lane
+	if opts.Lane != "" {
+		handleFactoryGateLane(opts.Lane)
+		return
+	}
+
 	if err := validateLongTestBaseline("."); err != nil {
 		fmt.Fprintf(os.Stderr, "long-test baseline: %v\n", err)
 		os.Exit(1)
@@ -98,6 +115,20 @@ func handleFactoryGate() {
 		handleShortMode(startedAt)
 	default:
 		handleFullMode(startedAt)
+	}
+}
+
+func handleFactoryGateLane(lane string) {
+	switch lane {
+	case "fast":
+		fastExitCode := gate.RunGateFast(".")
+		os.Exit(fastExitCode)
+	case "dupcode":
+		dupcodeExitCode := gate.RunGateDupcode(".")
+		os.Exit(dupcodeExitCode)
+	default:
+		fmt.Fprintf(os.Stderr, "factory gate: unknown lane %q\n", lane)
+		os.Exit(1)
 	}
 }
 
@@ -131,11 +162,16 @@ func handleFullMode(startedAt time.Time) {
 		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
 		os.Exit(1)
 	}
+	if err := removeIfExists(".factory/gate-dupcode-summary.json"); err != nil {
+		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
+		os.Exit(1)
+	}
 	if err := removeIfExists(".factory/gate-long-summary.json"); err != nil {
 		fmt.Fprintf(os.Stderr, "factory gate: stale artifact cleanup: %v\n", err)
 		os.Exit(1)
 	}
 
+	// 1. FAST LANE
 	fmt.Println("=== FAST LANE ===")
 	fastExitCode := gate.RunGateFast(".")
 	fastFinishedAt := time.Now()
@@ -144,20 +180,36 @@ func handleFullMode(startedAt time.Time) {
 		os.Exit(1)
 	}
 	if fastExitCode != 0 {
-		fmt.Println("\n*** SKIPPING LONG LANE: fast lane failed ***")
-		// Write aggregate with fast=fail, long=skip
+		fmt.Println("\n*** SKIPPING DUPCODE AND LONG LANES: fast lane failed ***")
 		if err := writeAggregateAfterFastFailure(); err != nil {
 			fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
 		}
 		os.Exit(1)
 	}
+
+	// 2. DUPCODE LANE
+	fmt.Println("\n=== DUPCODE LANE ===")
+	dupcodeExitCode := gate.RunGateDupcode(".")
+	if err := writeDupcodeSummary(fastFinishedAt, time.Now(), dupcodeExitCode); err != nil {
+		fmt.Fprintf(os.Stderr, "factory gate: write dupcode summary: %v\n", err)
+		os.Exit(1)
+	}
+	if dupcodeExitCode != 0 {
+		fmt.Println("\n*** SKIPPING LONG LANE: dupcode lane failed ***")
+		if err := writeAggregateAfterDupcodeFailure(); err != nil {
+			fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
+		}
+		os.Exit(1)
+	}
+
+	// 3. LONG LANE
 	fmt.Println("\n=== LONG LANE ===")
 	longExitCode := runTestLongLane()
 	if err := writeAggregateForFullMode(); err != nil {
 		fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
 		os.Exit(1)
 	}
-	if fastExitCode != 0 || longExitCode != 0 {
+	if fastExitCode != 0 || dupcodeExitCode != 0 || longExitCode != 0 {
 		os.Exit(1)
 	}
 	os.Exit(0)
@@ -226,6 +278,7 @@ func validateLongTestBaseline(root string) error {
 	return longtest.ValidateBaseline(baseline)
 }
 
+// runFactoryGate runs a gate function and writes the summary.
 func runFactoryGate(root string, summaryPath string, stderr io.Writer, run func(string) int, now func() time.Time) int {
 	startedAt := now()
 	exitCode := run(root)

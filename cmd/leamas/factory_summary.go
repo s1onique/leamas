@@ -163,7 +163,7 @@ func writeAggregateSummary() error {
 }
 
 // writeAggregateForFullMode writes the aggregate summary after a full mode run.
-// Both lanes must have been executed and validated.
+// All three lanes must have been executed and validated.
 func writeAggregateForFullMode() error {
 	// Read and validate fast summary
 	fastSummary, err := readFastSummary()
@@ -176,6 +176,19 @@ func writeAggregateForFullMode() error {
 	fastStatus := gate.CheckStatusPass
 	if fastSummary.OverallStatus == "fail" {
 		fastStatus = gate.CheckStatusFail
+	}
+
+	// Read and validate dupcode summary
+	dupcodeSummary, err := readDupcodeSummary()
+	if err != nil {
+		return fmt.Errorf("dupcode summary read: %w", err)
+	}
+	if err := validateDupcodeSummary(dupcodeSummary); err != nil {
+		return fmt.Errorf("dupcode summary validation: %w", err)
+	}
+	dupcodeStatus := gate.CheckStatusPass
+	if dupcodeSummary.OverallStatus == "fail" {
+		dupcodeStatus = gate.CheckStatusFail
 	}
 
 	// Read and validate long summary
@@ -193,7 +206,7 @@ func writeAggregateForFullMode() error {
 
 	// Derive overall status from lane statuses
 	overallStatus := "pass"
-	if fastStatus != gate.CheckStatusPass || longStatus != gate.CheckStatusPass {
+	if fastStatus != gate.CheckStatusPass || dupcodeStatus != gate.CheckStatusPass || longStatus != gate.CheckStatusPass {
 		overallStatus = "fail"
 	}
 
@@ -204,6 +217,7 @@ func writeAggregateForFullMode() error {
 		OverallStatus: overallStatus,
 		Checks: []gate.Check{
 			{Name: "fast-lane", Status: fastStatus},
+			{Name: "dupcode-lane", Status: dupcodeStatus},
 			{Name: "long-lane", Status: longStatus},
 		},
 	}
@@ -225,7 +239,64 @@ func writeAggregateAfterFastFailure() error {
 		OverallStatus: "fail",
 		Checks: []gate.Check{
 			{Name: "fast-lane", Status: gate.CheckStatusFail, Evidence: "fast lane failed"},
+			{Name: "dupcode-lane", Status: "skip", Evidence: "not executed due to fast lane failure"},
 			{Name: "long-lane", Status: "skip", Evidence: "not executed due to fast lane failure"},
+		},
+	}
+
+	data, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal aggregate summary: %w", err)
+	}
+	return os.WriteFile(".factory/gate-summary.json", data, 0644)
+}
+
+// writeDupcodeSummary writes the dupcode lane summary to .factory/gate-dupcode-summary.json.
+func writeDupcodeSummary(startedAt, finishedAt time.Time, exitCode int) error {
+	status := gate.CheckStatusPass
+	if exitCode != 0 {
+		status = gate.CheckStatusFail
+	}
+	summary := gate.GateSummary{
+		SchemaVersion: 1,
+		GeneratedAt:   finishedAt.Format(time.RFC3339),
+		Tool:          "leamas factory gate",
+		OverallStatus: string(status),
+		Checks: []gate.Check{
+			{Name: "dupcode-lane", Status: status},
+		},
+	}
+	data, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal dupcode summary: %w", err)
+	}
+	return os.WriteFile(".factory/gate-dupcode-summary.json", data, 0644)
+}
+
+// writeAggregateAfterDupcodeFailure writes the aggregate summary when dupcode lane fails.
+func writeAggregateAfterDupcodeFailure() error {
+	// Read and validate fast summary
+	fastSummary, err := readFastSummary()
+	if err != nil {
+		return fmt.Errorf("fast summary read: %w", err)
+	}
+	if err := validateFastLaneSummary(fastSummary); err != nil {
+		return fmt.Errorf("fast summary validation: %w", err)
+	}
+	fastStatus := gate.CheckStatusPass
+	if fastSummary.OverallStatus == "fail" {
+		fastStatus = gate.CheckStatusFail
+	}
+
+	summary := gate.GateSummary{
+		SchemaVersion: 1,
+		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
+		Tool:          "leamas factory gate",
+		OverallStatus: "fail",
+		Checks: []gate.Check{
+			{Name: "fast-lane", Status: fastStatus},
+			{Name: "dupcode-lane", Status: gate.CheckStatusFail, Evidence: "dupcode lane failed"},
+			{Name: "long-lane", Status: "skip", Evidence: "not executed due to dupcode lane failure"},
 		},
 	}
 
@@ -270,6 +341,46 @@ func readLongSummary() (*testLongSummary, error) {
 		return nil, err
 	}
 	var s testLongSummary
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// ErrMissingDupcodeSummary indicates the dupcode lane summary is missing.
+var ErrMissingDupcodeSummary = errors.New("missing dupcode lane summary")
+
+// ErrInvalidDupcodeStatus indicates the dupcode lane status is not valid.
+var ErrInvalidDupcodeStatus = errors.New("invalid dupcode lane status: must be 'pass' or 'fail'")
+
+// dupcodeLaneSummary represents the summary for the dupcode lane.
+type dupcodeLaneSummary struct {
+	SchemaVersion int    `json:"schema_version"`
+	OverallStatus string `json:"overall_status"`
+	GeneratedAt   string `json:"generated_at"`
+}
+
+// validateDupcodeSummary validates the dupcode lane summary.
+func validateDupcodeSummary(s *dupcodeLaneSummary) error {
+	if s == nil {
+		return ErrMissingDupcodeSummary
+	}
+	if s.SchemaVersion != 1 {
+		return fmt.Errorf("invalid schema_version: got %d, want 1", s.SchemaVersion)
+	}
+	if s.OverallStatus != "pass" && s.OverallStatus != "fail" {
+		return ErrInvalidDupcodeStatus
+	}
+	return nil
+}
+
+// readDupcodeSummary reads the dupcode lane summary.
+func readDupcodeSummary() (*dupcodeLaneSummary, error) {
+	data, err := os.ReadFile(".factory/gate-dupcode-summary.json")
+	if err != nil {
+		return nil, err
+	}
+	var s dupcodeLaneSummary
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}

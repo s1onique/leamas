@@ -12,11 +12,17 @@ test-long: build
 	@echo "Running registered long tests from baseline..."
 	@bin/leamas factory test-long
 
-# gate-fast runs the full quality gate in fast mode using --test-mode=short
-# which skips long-running tests that are registered in .factory/long-tests-baseline.json
+# gate-fast runs the fast verifier lane using --lane=fast
+# This executes all fast-lane verifiers and explicitly skips dupcode verifiers.
 gate-fast: build
-	@echo "Running quality gate (fast mode)..."
-	@./bin/leamas factory gate --test-mode=short
+	@echo "Running quality gate (fast lane)..."
+	@./bin/leamas factory gate --lane=fast
+
+# gate-dupcode runs the dupcode verifier lane using --lane=dupcode
+# This executes only dupcode and dupcode-baseline verifiers.
+gate-dupcode: build
+	@echo "Running quality gate (dupcode lane)..."
+	@./bin/leamas factory gate --lane=dupcode
 
 # gate is the canonical target that runs the full factory gate with all checks.
 # Uses --test-mode=full which runs both fast and long lanes.
