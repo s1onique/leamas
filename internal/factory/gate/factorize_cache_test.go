@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"sort"
 	"testing"
-
-	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
 const canonicalVerifierCount = 15
@@ -189,4 +187,3 @@ func TestAllVerifiers_HaveImplementationID(t *testing.T) {
 		}
 	}
 }
-
