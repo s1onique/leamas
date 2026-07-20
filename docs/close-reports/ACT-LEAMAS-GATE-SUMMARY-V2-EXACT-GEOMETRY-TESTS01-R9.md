@@ -76,7 +76,7 @@ Created 8 new test files in `internal/gatesummary/`:
 ### What Happened
 Tests failed with `go test` due to incorrect assumptions about the existing codebase:
 
-1. **Assumed helper `minimalV2Wire()` creates checks without exit_code**: The reverted R9 test attempt introduced or assumed a minimalV2Wire-style helper whose pass checks omitted exit_code. No such reusable helper remained in the repository after the attempt was reverted. This triggers `GS_PASS_EXIT_CODE_MISMATCH` diagnostics.
+1. **Assumed helper `minimalV2Wire()` creates checks without exit_code**: The reverted R9 test attempt introduced or assumed a minimalV2Wire-style helper whose pass checks omitted exit_code. No such helper remained after the revert.
 
 2. **Missing helper functions**: Tests referenced `wireIntegerPtr`, `makeCheck`, `deriveOverallFromWire` that don't exist or have different signatures.
 
@@ -93,7 +93,7 @@ All 8 test files were removed to restore the repository to its pre-R9 state.
 
 The R9 attempt established useful reconnaissance:
 
-1. **`minimalV2Wire()` is not semantically valid for passing checks** unless `exit_code` is explicitly set.
+1. **The reverted R9 attempt assumed a `minimalV2Wire`-style helper**: Its pass checks omitted exit_code. No such helper remained after the revert.
 
 2. **Decode failures and normalization diagnostics occupy different stages**: Structural failures populate `Result.Diagnostics` during decode (before normalization is invoked).
 

@@ -178,29 +178,39 @@ git diff --check
 
 ## Acceptance Criteria
 
-- [ ] R9 close report status changed from `CLOSED` to
+- [x] R9 close report status changed from `CLOSED` to
       `PARTIAL — test-design attempt reverted; objective not delivered`.
-- [ ] R9 close report records the close report file as the single
+- [x] R9 close report records the close report file as the single
       changed artifact.
-- [ ] R9 close report attributes the 300-second timeout to the external
+- [x] R9 close report attributes the 300-second timeout to the external
       execution budget, not Go's default 10-minute timeout.
-- [ ] One V2 test-document builder function created that always produces
+- [x] One V2 test-document builder function created that always produces
       internally consistent checks (with correct `exit_code` per status).
-- [ ] One two-diagnostic ordering proof test that verifies complete
+      Valid helpers: `passCheckForTest`, `failWithoutExitForTest`,
+      `failNonzeroForTest`, `skipCheckForTest`, `unavailableCheckForTest`.
+      `failNonzeroForTest` panics on zero exit code.
+- [x] One two-diagnostic ordering proof test that verifies complete
       diagnostic identities (Code and Path) appear in precedence order.
-- [ ] One structural decode-failure test proving Decode returns
+      `TestDiagnosticPrecedenceEndToEnd` verifies GS_DUPLICATE_CHECK_NAME (rank 15)
+      precedes GS_PASS_EXIT_CODE_MISMATCH (rank 16).
+- [x] One structural decode-failure test proving Decode returns
       `Success() == false`, `Err == nil`, no usable Document, and
       the expected wire-stage diagnostics.
-- [ ] The test documents that normalization is caller-gated on
-      `Decode.Success()`.
-- [ ] Focused package tests pass: `go test -count=1 ./internal/gatesummary/...`
-- [ ] Build succeeds: `CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas`
-- [ ] Full-suite status recorded as VERIFIED, FAILED, or NOT VERIFIED
-      with exact timeout attribution.
-- [ ] `make gate` and `make factorize` status recorded honestly (if timed out,
-      NOT VERIFIED with exact timeout attribution).
-- [ ] New test file stays ≤ 64 KiB and ≤ 400 lines.
-- [ ] No new files exceed LLM-friendliness limits.
+      `TestStructuralDecodeRejection` verifies all four conditions.
+- [x] The test documents that normalization is caller-gated on
+      `Decode.Success()`. `TestCallerGatingBothBranches` exercises both branches.
+- [x] Focused package tests pass: `go test -count=1 ./internal/gatesummary/...`
+      VERIFIED: PASS (0.373s)
+- [x] Build succeeds: `CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas`
+      VERIFIED: SUCCESS
+- [x] Full-suite status recorded as VERIFIED, FAILED, or NOT VERIFIED
+      with exact timeout attribution. NOT VERIFIED: external 300s timeout.
+- [x] `make gate` and `make factorize` status recorded honestly (if timed out,
+      NOT VERIFIED with exact timeout attribution). NOT VERIFIED: external 300s timeout.
+- [x] New test file stays ≤ 64 KiB and ≤ 400 lines.
+      VERIFIED: 295 lines < 400 lines.
+- [x] No new files exceed LLM-friendliness limits.
+      VERIFIED: LLM-friendly check passed on new files.
 
 ## Verification Commands
 

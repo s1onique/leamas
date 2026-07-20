@@ -2,11 +2,14 @@ package gatesummary
 
 import (
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 )
 
 // checkForTest is the internal builder for all check types.
+// This is a low-level primitive that accepts any status/exitCode.
+// Valid helpers below enforce closed-world constraints.
 func checkForTest(name, status, exitCode string) string {
 	return `{
 		"name": "` + name + `",
@@ -51,9 +54,19 @@ func passCheckForTest(name string) string {
 	return checkForTest(name, "pass", "0")
 }
 
-// failCheckForTest creates a valid fail check with given exit_code.
-func failCheckForTest(name string, exitCode string) string {
-	return checkForTest(name, "fail", exitCode)
+// failWithoutExitForTest creates a valid fail check with exit_code: null
+// (infrastructure failure, no exit code available).
+func failWithoutExitForTest(name string) string {
+	return checkForTest(name, "fail", "null")
+}
+
+// failNonzeroForTest creates a valid fail check with a non-zero exit code.
+// Panics if exitCode is zero.
+func failNonzeroForTest(name string, exitCode int64) string {
+	if exitCode == 0 {
+		panic("failNonzeroForTest requires a non-zero exit code")
+	}
+	return checkForTest(name, "fail", strconv.FormatInt(exitCode, 10))
 }
 
 // skipCheckForTest creates a valid skip check with exit_code: null.
@@ -109,15 +122,15 @@ func consumeForTest(r io.Reader, normalize func(Document) NormalizationResult) b
 // for all status types: pass, fail, skip, unavailable.
 func TestValidV2BuilderAllStatuses(t *testing.T) {
 	tests := []struct {
-		name         string
-		check        string
+		name          string
+		check         string
 		overallStatus string
-		wantDecode   bool
-		wantNormPass bool
+		wantDecode    bool
+		wantNormPass  bool
 	}{
 		{"pass", passCheckForTest("p"), "pass", true, true},
-		{"fail with null exit", failCheckForTest("f", "null"), "fail", true, true},
-		{"fail with nonzero exit", failCheckForTest("f", "1"), "fail", true, true},
+		{"fail without exit (infra failure)", failWithoutExitForTest("f"), "fail", true, true},
+		{"fail with nonzero exit", failNonzeroForTest("f", 1), "fail", true, true},
 		{"skip", skipCheckForTest("s"), "unavailable", true, true},
 		{"unavailable", unavailableCheckForTest("u"), "unavailable", true, true},
 	}

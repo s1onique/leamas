@@ -9,11 +9,14 @@ Corrected R9 closure and established narrow contract reconnaissance for diagnost
 ## Files Changed
 
 ### Implementation
-- `internal/gatesummary/exact_geometry_r9_correction_test.go` (286 lines) - test file with 4 test functions and 7 helper functions
+- `internal/gatesummary/exact_geometry_r9_correction_test.go` (295 lines) - test file with 4 test functions and 9 helper functions
 
 ### Documentation
 - `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9.md` (corrected status and evidence)
 - `docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01.md` (ACT document)
+
+### Close Report
+- `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01.md` (this file)
 
 ## Behavior Changed
 
@@ -45,12 +48,12 @@ git diff --cached --check
 
 ## Honest Results
 
-### Test Functions Added
+### Test Functions Added (4)
 
 1. **TestValidV2BuilderAllStatuses** - Verifies builder creates semantically valid checks for all 4 statuses:
    - pass + exit_code: 0
-   - fail + exit_code: null (infrastructure failure)
-   - fail + exit_code: nonzero
+   - fail without exit + exit_code: null (infrastructure failure)
+   - fail with nonzero exit + exit_code: nonzero
    - skip + exit_code: null
    - unavailable + exit_code: null
 
@@ -69,22 +72,26 @@ git diff --cached --check
    - Valid input: normalization invoked
    - Invalid input: normalization NOT invoked
 
-### Builder Functions Added
+### Builder Functions Added (9)
 
-- `validV2DocumentForTest(checksJSON string) string`
-- `passCheckForTest(name string) string`
-- `failCheckForTest(name string, exitCode string) string`
-- `skipCheckForTest(name string) string`
-- `unavailableCheckForTest(name string) string`
-- `invalidPassCheckForTest(name string, exitCode string) string`
-- `validV2DocumentWithOverall(checksJSON string, overallStatus string) string`
-- `consumeForTest(r io.Reader, normalize func(Document) NormalizationResult) bool`
+1. `checkForTest(name, status, exitCode string) string` - internal low-level primitive
+2. `validV2DocumentForTest(checksJSON string) string`
+3. `passCheckForTest(name string) string`
+4. `failWithoutExitForTest(name string) string`
+5. `failNonzeroForTest(name string, exitCode int64) string`
+6. `skipCheckForTest(name string) string`
+7. `unavailableCheckForTest(name string) string`
+8. `invalidPassCheckForTest(name string, exitCode string) string`
+9. `validV2DocumentWithOverall(checksJSON string, overallStatus string) string`
+10. `consumeForTest(r io.Reader, normalize func(Document) NormalizationResult) bool`
+
+Note: `failNonzeroForTest` panics on zero exit code; `invalidPassCheckForTest` is explicitly named as invalid.
 
 ## Verification
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Focused package tests | VERIFIED | PASS (0.373s) |
+| Focused package tests | VERIFIED | PASS (7 subtests) |
 | Build | VERIFIED | SUCCESS |
 | Patch hygiene | VERIFIED | No trailing whitespace |
 | LLM-friendly (new files) | VERIFIED | PASS |
@@ -101,13 +108,19 @@ git diff --cached --check
 ## Evidence
 
 ```
-$ git log --oneline -1
-7830832 ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01
+$ git log --oneline HEAD~2..HEAD
+81501b6 Close R9-CORRECTION01
+9f6d724 ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01
 
 $ git status
 On branch main
-Your branch is ahead of 'origin/main' by 1 commit.
+Your branch is ahead of 'origin/main' by 3 commits.
 ```
+
+Cumulative three-commit range `HEAD~2..HEAD`:
+1. `7830832` - Implementation and R9 reconciliation
+2. `81501b6` - Close report added
+3. `9f6d724` - Lifecycle closure (status marked CLOSED)
 
 ## Closure
 
@@ -115,4 +128,4 @@ R9-CORRECTION01 = CLOSED (PARTIAL — focused executable proof delivered; reposi
 
 R9 = PARTIAL (corrected by R9-CORRECTION01)
 
-R10 = BLOCKED (waiting for R9-CORRECTION01 closure)
+R10 = BLOCKED — scope ownership must be reconciled with NORMALIZATION01-CORRECTION01 P1
