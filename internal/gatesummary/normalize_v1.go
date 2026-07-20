@@ -1,12 +1,6 @@
 package gatesummary
 
-import (
-	"errors"
-	"strings"
-)
-
-// errInvalidInteger indicates a malformed or empty integer value.
-var errInvalidInteger = errors.New("gatesummary: invalid integer value")
+import "strings"
 
 // projectV1 projects a v1 wire summary into the common normalized Summary.
 // V1 has no scope, parent, execution binding, cleanliness, disposition, or totals.

@@ -25,26 +25,3 @@ func validateCheckNames(checks []Check) []Diagnostic {
 	}
 	return diags
 }
-
-// findDuplicateWireNames checks for duplicate names in a string slice.
-func findDuplicateWireNames(names []string) []Diagnostic {
-	if len(names) < 2 {
-		return nil
-	}
-	seen := make(map[string]struct{}, len(names))
-	var diags []Diagnostic
-	for _, name := range names {
-		if _, exists := seen[name]; exists {
-			diags = append(diags, Diagnostic{
-				Code:     CodeDuplicateCheckName,
-				Path:     "/checks/duplicated",
-				Expected: "unique check name",
-				Observed: name,
-				Message:  "duplicate check name: " + name,
-			})
-		} else {
-			seen[name] = struct{}{}
-		}
-	}
-	return diags
-}

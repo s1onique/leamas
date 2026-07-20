@@ -1,8 +1,13 @@
 package gatesummary
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 )
+
+// errInvalidInteger is returned when a WireInteger contains an invalid value.
+var errInvalidInteger = errors.New("gatesummary: invalid integer value")
 
 // Integer preserves the exact JSON number spelling from the wire document.
 // Unlike WireInteger, this type exposes only immutable, owned accessors
@@ -12,15 +17,20 @@ type Integer struct {
 }
 
 // newIntegerFromWire constructs an Integer from a decoder WireInteger.
-// Returns an error if the wire value cannot be converted.
+// Returns an error if the wire value is empty or not a valid decimal integer.
 func newIntegerFromWire(w WireInteger) (Integer, error) {
-	s := w.String()
-	if s == "" {
-		return Integer{}, nil
+	raw := w.String()
+	if raw == "" {
+		return Integer{}, fmt.Errorf("%w: empty wire integer", errInvalidInteger)
 	}
-	// WireInteger already validated the value during decoding.
-	// Just preserve the exact string representation.
-	return Integer{raw: s}, nil
+
+	// Validate that the entire string is a valid decimal integer.
+	// SetString returns false if the string is not a valid number in the given base.
+	if _, ok := new(big.Int).SetString(raw, 10); !ok {
+		return Integer{}, fmt.Errorf("%w: %q", errInvalidInteger, raw)
+	}
+
+	return Integer{raw: raw}, nil
 }
 
 // String returns the exact JSON number spelling.
