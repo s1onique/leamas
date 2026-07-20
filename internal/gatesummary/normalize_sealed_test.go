@@ -53,6 +53,30 @@ func TestInvalidIntegerNormalization(t *testing.T) {
 			t.Error("newIntegerFromWire: expected error for invalid integer string")
 		}
 	})
+
+	t.Run("newIntegerFromWire non_JSON lexical", func(t *testing.T) {
+		// These forms pass big.Int.SetString but are invalid JSON integer spellings.
+		for _, raw := range []string{"+1", "01", "-01", "00", "-00"} {
+			var w WireInteger
+			_ = w.UnmarshalJSON([]byte(raw))
+			_, err := newIntegerFromWire(w)
+			if err == nil {
+				t.Errorf("newIntegerFromWire(%q): expected error for non-JSON lexical form", raw)
+			}
+		}
+	})
+
+	t.Run("newIntegerFromWire valid JSON", func(t *testing.T) {
+		// Valid JSON integer spellings that must be accepted.
+		for _, raw := range []string{"0", "-0", "1", "-1", "123456789012345678901234567890"} {
+			var w WireInteger
+			_ = w.UnmarshalJSON([]byte(raw))
+			_, err := newIntegerFromWire(w)
+			if err != nil {
+				t.Errorf("newIntegerFromWire(%q): unexpected error: %v", raw, err)
+			}
+		}
+	})
 }
 
 // TestDuplicateNameMultipleOccurrences tests that three identical names produce
@@ -76,9 +100,48 @@ func TestDuplicateNameMultipleOccurrences(t *testing.T) {
 		"worktree_clean_before": true,
 		"worktree_clean_after": true,
 		"checks": [
-			{"name": "duplicate", "scope": "ROOT", "status": "pass", "evidence": "x", "detail": "y", "extras": {"argv": ["x"], "exit_code": 0, "duration_ms": 0, "stdout_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}},
-			{"name": "duplicate", "scope": "ROOT", "status": "pass", "evidence": "x", "detail": "y", "extras": {"argv": ["x"], "exit_code": 0, "duration_ms": 0, "stdout_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}},
-			{"name": "duplicate", "scope": "ROOT", "status": "pass", "evidence": "x", "detail": "y", "extras": {"argv": ["x"], "exit_code": 0, "duration_ms": 0, "stdout_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}}
+			{
+				"name": "duplicate",
+				"scope": "ROOT",
+				"status": "pass",
+				"evidence": "x",
+				"detail": "y",
+				"extras": {
+					"argv": ["x"],
+					"exit_code": 0,
+					"duration_ms": 0,
+					"stdout_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+				}
+			},
+			{
+				"name": "duplicate",
+				"scope": "ROOT",
+				"status": "pass",
+				"evidence": "x",
+				"detail": "y",
+				"extras": {
+					"argv": ["x"],
+					"exit_code": 0,
+					"duration_ms": 0,
+					"stdout_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+				}
+			},
+			{
+				"name": "duplicate",
+				"scope": "ROOT",
+				"status": "pass",
+				"evidence": "x",
+				"detail": "y",
+				"extras": {
+					"argv": ["x"],
+					"exit_code": 0,
+					"duration_ms": 0,
+					"stdout_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+					"stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+				}
+			}
 		]
 	}`
 
@@ -125,12 +188,16 @@ func TestIntegerValidationEdgeCases(t *testing.T) {
 	}{
 		{"empty", "", true},
 		{"zero", "0", false},
+		{"negative_zero", "-0", false},
 		{"positive", "42", false},
 		{"negative", "-42", false},
 		{"large", "123456789012345678901234567890", false},
 		{"float", "3.14", true},
 		{"hex", "0x10", true},
 		{"scientific", "1e10", true},
+		{"leading_plus", "+1", true},
+		{"leading_zero", "01", true},
+		{"negative_leading_zero", "-01", true},
 	}
 
 	for _, tt := range tests {

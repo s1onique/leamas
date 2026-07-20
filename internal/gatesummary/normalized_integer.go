@@ -4,10 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"regexp"
 )
 
 // errInvalidInteger is returned when a WireInteger contains an invalid value.
 var errInvalidInteger = errors.New("gatesummary: invalid integer value")
+
+// jsonIntegerPattern matches valid JSON integer spellings per RFC 8259.
+// Grammar: -?(0|[1-9][0-9]*)
+var jsonIntegerPattern = regexp.MustCompile(`^-?(0|[1-9][0-9]*)$`)
 
 // Integer preserves the exact JSON number spelling from the wire document.
 // Unlike WireInteger, this type exposes only immutable, owned accessors
@@ -17,11 +22,19 @@ type Integer struct {
 }
 
 // newIntegerFromWire constructs an Integer from a decoder WireInteger.
-// Returns an error if the wire value is empty or not a valid decimal integer.
+// Returns an error if the wire value is empty or not a valid JSON integer spelling.
+// Rejects forms like "+1", "01", "-01" which pass big.Int.SetString but
+// are not valid JSON integer tokens per RFC 8259.
 func newIntegerFromWire(w WireInteger) (Integer, error) {
 	raw := w.String()
 	if raw == "" {
 		return Integer{}, fmt.Errorf("%w: empty wire integer", errInvalidInteger)
+	}
+
+	// Reject forms that pass big.Int.SetString but violate JSON integer grammar.
+	// RFC 8259: -?(0|[1-9][0-9]*)
+	if !jsonIntegerPattern.MatchString(raw) {
+		return Integer{}, fmt.Errorf("%w: %q is not a JSON integer", errInvalidInteger, raw)
 	}
 
 	// Validate that the entire string is a valid decimal integer.
