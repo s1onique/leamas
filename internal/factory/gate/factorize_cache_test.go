@@ -210,6 +210,135 @@ func TestValidateVerifier_EmptyName(t *testing.T) {
 	}
 }
 
+// TestValidateVerifier_DuplicateEnvKey verifies validation fails for duplicate env keys.
+func TestValidateVerifier_DuplicateEnvKey(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+			EnvVars:          []string{"GOFLAGS", "GOFLAGS"},
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for duplicate env key")
+	}
+}
+
+// TestValidateVerifier_MalformedEnvKeyWithEquals verifies validation fails for env key with =.
+func TestValidateVerifier_MalformedEnvKeyWithEquals(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+			EnvVars:          []string{"GOFLAGS=value"},
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for malformed env key with =")
+	}
+}
+
+// TestValidateVerifier_MalformedEnvKeyWithWhitespace verifies validation fails for env key with whitespace.
+func TestValidateVerifier_MalformedEnvKeyWithWhitespace(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+			EnvVars:          []string{" GOFLAGS"},
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for env key with whitespace")
+	}
+}
+
+// TestValidateVerifier_MalformedEnvKeyInvalidName verifies validation fails for invalid env key name.
+func TestValidateVerifier_MalformedEnvKeyInvalidName(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+			EnvVars:          []string{"123INVALID"},
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for invalid env key name")
+	}
+}
+
+// TestValidateVerifier_InvalidGoBuildCache verifies validation fails for invalid GoBuildCache.
+func TestValidateVerifier_InvalidGoBuildCache(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+		},
+		Cache: CacheSemantics{
+			GoBuildCache:      "invalid",
+			GoTestResultCache: CacheModeNA,
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for invalid GoBuildCache")
+	}
+}
+
+// TestValidateVerifier_InvalidGoTestResultCache verifies validation fails for invalid GoTestResultCache.
+func TestValidateVerifier_InvalidGoTestResultCache(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+		},
+		Cache: CacheSemantics{
+			GoBuildCache:      CacheNotApplicable,
+			GoTestResultCache: "invalid",
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for invalid GoTestResultCache")
+	}
+}
+
+// TestValidateVerifier_ValidEmptyEnvVars verifies validation passes for empty env vars.
+func TestValidateVerifier_ValidEmptyEnvVars(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+			EnvVars:          []string{},
+		},
+		Cache: CacheSemantics{
+			GoBuildCache:      CacheNotApplicable,
+			GoTestResultCache: CacheModeNA,
+		},
+	}
+	err := ValidateVerifier(v)
+	if err != nil {
+		t.Errorf("expected no error for empty env vars: %v", err)
+	}
+}
+
 // TestValidateVerifier_NilRun verifies validation fails for nil Run.
 func TestValidateVerifier_NilRun(t *testing.T) {
 	v := Verifier{Name: "test", Run: nil}

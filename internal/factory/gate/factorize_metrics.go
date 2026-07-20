@@ -30,6 +30,7 @@ func (e *FingerprintError) Error() string {
 }
 
 // executionFingerprint computes a digest of a verifier's execution definition.
+// It canonicalizes declared environment keys with presence/absence markers.
 func executionFingerprint(name string, exec ExecutionDefinition, env []string) (string, error) {
 	if name == "" {
 		return "", &FingerprintError{Reason: "verifier name is required"}
@@ -48,20 +49,31 @@ func executionFingerprint(name string, exec ExecutionDefinition, env []string) (
 	h.Write([]byte(exec.ImplementationID))
 	h.Write([]byte{0})
 
-	// Bind relevant environment variables
-	var relevant []string
+	// Build a map of present environment values
+	present := make(map[string]string)
 	for _, e := range env {
-		for _, key := range exec.EnvVars {
-			if strings.HasPrefix(e, key+"=") {
-				relevant = append(relevant, e)
-				break
-			}
+		if idx := strings.IndexByte(e, '='); idx >= 0 {
+			present[e[:idx]] = e[idx+1:]
 		}
 	}
-	sort.Strings(relevant)
-	for _, e := range relevant {
-		h.Write([]byte(e))
+
+	// Hash declared environment keys with canonical ordering and presence markers
+	sortedKeys := make([]string, len(exec.EnvVars))
+	copy(sortedKeys, exec.EnvVars)
+	sort.Strings(sortedKeys)
+
+	for _, key := range sortedKeys {
+		h.Write([]byte(key))
 		h.Write([]byte{0})
+		if val, ok := present[key]; ok {
+			h.Write([]byte("present"))
+			h.Write([]byte{0})
+			h.Write([]byte(val))
+			h.Write([]byte{0})
+		} else {
+			h.Write([]byte("absent"))
+			h.Write([]byte{0})
+		}
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil

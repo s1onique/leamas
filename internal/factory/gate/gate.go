@@ -58,11 +58,19 @@ type Verifier struct {
 
 // RunGate runs all verifiers and Go toolchain checks.
 func RunGate(root string) int {
-	failed := false
 	verifiers := AllVerifiers()
+
+	// Fail closed if registry has invalid metadata
+	if err := ValidateVerifiers(verifiers); err != nil {
+		fmt.Fprintf(os.Stderr, "factorize verifier registry: %v\n", err)
+		return 1
+	}
+
 	sort.Slice(verifiers, func(i, j int) bool {
 		return verifiers[i].Name < verifiers[j].Name
 	})
+
+	failed := false
 
 	for _, v := range verifiers {
 		findings := v.Run(root)
@@ -90,9 +98,17 @@ func RunGate(root string) int {
 
 // RunFactorize runs all Factory policy verifiers without toolchain checks.
 func RunFactorize(root string) int {
+	verifiers := AllVerifiers()
+
+	// Fail closed if registry has invalid metadata
+	if err := ValidateVerifiers(verifiers); err != nil {
+		fmt.Fprintf(os.Stderr, "factorize verifier registry: %v\n", err)
+		return 1
+	}
+
 	var mc *MetricsCollection
 	if shouldCollectMetrics() {
 		mc = &MetricsCollection{Path: metricsFilePath()}
 	}
-	return runFactorize(os.Stdout, systemClock{}, root, AllVerifiers(), mc)
+	return runFactorize(os.Stdout, systemClock{}, root, verifiers, mc)
 }
