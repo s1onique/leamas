@@ -1,9 +1,4 @@
 // Package gate provides opt-in factorize metrics collection.
-//
-// This module adds machine-readable per-verifier metrics to the factorize
-// command when LEAMAS_FACTORIZE_METRICS_FILE is set. Metrics are written
-// atomically to avoid partial artifacts. When the environment variable is
-// absent, behaviour is identical to the existing factorize implementation.
 package gate
 
 import (
@@ -22,73 +17,6 @@ import (
 	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
-// MetricsSchema is the schema identifier for factorize metrics.
-const MetricsSchema = "factorize-performance-v1"
-
-// MetricsEnvironment represents the measurement environment.
-type MetricsEnvironment struct {
-	GoVersion           string `json:"go_version"`
-	GoOS                string `json:"goos"`
-	GoArch              string `json:"goarch"`
-	GoMaxProcs          int    `json:"gomaxprocs"`
-	LogicalCPUCount     int    `json:"logical_cpu_count"`
-	OSRelease           string `json:"os_release"`
-	MeasurementHostClass string `json:"measurement_host_class"`
-}
-
-// MetricsRun represents a single factorize run.
-type MetricsRun struct {
-	Scenario      string `json:"scenario"`
-	Sequence      int    `json:"sequence"`
-	StartedAt     string `json:"started_at"`
-	Status        string `json:"status"`
-	ExitCode      int    `json:"exit_code"`
-	DurationNs    int64  `json:"duration_ns"`
-	UserCPUNs     *int64 `json:"user_cpu_ns"`
-	SystemCPUNs   *int64 `json:"system_cpu_ns"`
-	MaxRSSBytes   *int64 `json:"max_rss_bytes"`
-	ResourceScope string `json:"resource_scope"`
-}
-
-// MetricsCheck represents a single verifier check result.
-type MetricsCheck struct {
-	Ordinal            int    `json:"ordinal"`
-	ID                 string `json:"id"`
-	Status             string `json:"status"`
-	ExitCode           int    `json:"exit_code"`
-	DurationNs         int64  `json:"duration_ns"`
-	UserCPUNs          *int64 `json:"user_cpu_ns"`
-	SystemCPUNs        *int64 `json:"system_cpu_ns"`
-	MaxRSSBytes        *int64 `json:"max_rss_bytes"`
-	ResourceScope      string `json:"resource_scope"`
-	CommandFingerprint string `json:"command_fingerprint"`
-	CacheObservation   string `json:"cache_observation"`
-}
-
-// FactorizeMetrics is the top-level metrics document.
-type FactorizeMetrics struct {
-	Schema      string           `json:"schema"`
-	Subject     MetricsSubject   `json:"subject"`
-	Environment MetricsEnvironment `json:"environment"`
-	Run         MetricsRun      `json:"run"`
-	Checks      []MetricsCheck  `json:"checks"`
-}
-
-// MetricsSubject identifies the measurement subject.
-type MetricsSubject struct {
-	HeadOID           string `json:"head_oid"`
-	TreeOID          string `json:"tree_oid"`
-	WorktreeState    string `json:"worktree_state"`
-	SubjectInputDigest string `json:"subject_input_digest"`
-}
-
-// rusageMetrics holds resource usage data.
-type rusageMetrics struct {
-	userCPU   int64
-	systemCPU int64
-	maxRSS    int64
-}
-
 // FingerprintError represents an error in computing a command fingerprint.
 type FingerprintError struct {
 	Reason string
@@ -103,7 +31,6 @@ func (e *FingerprintError) Error() string {
 // Returns an error if the execution definition is incomplete.
 // The fingerprint is invariant under checkout relocation.
 func commandFingerprint(name string, root string, argv []string, env []string, execPath string) (string, error) {
-	// Validate required fields - fail closed for incomplete definitions
 	if name == "" {
 		return "", &FingerprintError{Reason: "verifier name is required"}
 	}
@@ -117,22 +44,19 @@ func commandFingerprint(name string, root string, argv []string, env []string, e
 	h.Write([]byte(name))
 	h.Write([]byte{0})
 
-	// Bind argv - the verifier's logical invocation
 	for _, arg := range argv {
 		h.Write([]byte(arg))
 		h.Write([]byte{0})
 	}
-	h.Write([]byte{0}) // argv terminator
+	h.Write([]byte{0})
 
-	// Bind relevant Go execution environment (sorted for determinism)
-	// These affect Go tool behavior and should be included in fingerprint
 	var relevant []string
 	for _, e := range env {
 		if hasExecEnvPrefix(e) && isExecRelevantEnv(e) {
 			relevant = append(relevant, e)
 		}
 	}
-	sort.Strings(relevant) // deterministic ordering
+	sort.Strings(relevant)
 	for _, e := range relevant {
 		h.Write([]byte(e))
 		h.Write([]byte{0})
@@ -141,16 +65,10 @@ func commandFingerprint(name string, root string, argv []string, env []string, e
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// hasExecEnvPrefix returns true if the env var starts with a known
-// execution-affecting prefix.
+// hasExecEnvPrefix returns true if the env var starts with a known prefix.
 func hasExecEnvPrefix(env string) bool {
 	execPrefixes := []string{
-		"GO",
-		"CGO_",
-		"GOPROXY",
-		"GOSUMDB",
-		"GOPRIVATE",
-		"PATH",
+		"GO", "CGO_", "GOPROXY", "GOSUMDB", "GOPRIVATE", "PATH",
 	}
 	for _, prefix := range execPrefixes {
 		if strings.HasPrefix(env, prefix) {
@@ -161,9 +79,7 @@ func hasExecEnvPrefix(env string) bool {
 }
 
 // isExecRelevantEnv returns true if the env var affects verifier execution.
-// Excludes instrumentation-only and observation metadata.
 func isExecRelevantEnv(env string) bool {
-	// Excluded: instrumentation and observation metadata
 	excluded := map[string]bool{
 		"LEAMAS_FACTORIZE_METRICS_FILE": true,
 		"LEAMAS_FACTORIZE_SCENARIO":    true,
@@ -180,21 +96,20 @@ func isExecRelevantEnv(env string) bool {
 		return false
 	}
 
-	// Include known execution-affecting Go variables
 	execRelevant := map[string]bool{
-		"GOFLAGS":      true,
-		"GOCACHE":      true,
-		"GOENV":        true,
-		"GOTOOLCHAIN":  true,
-		"GOMAXPROCS":   true,
-		"CGO_ENABLED":  true,
-		"GOOS":         true,
-		"GOARCH":       true,
-		"GOPROXY":      true,
-		"GONOSUMDB":    true,
-		"GOSUMDB":      true,
-		"GOPRIVATE":    true,
-		"PATH":         true,
+		"GOFLAGS":     true,
+		"GOCACHE":     true,
+		"GOENV":       true,
+		"GOTOOLCHAIN": true,
+		"GOMAXPROCS":  true,
+		"CGO_ENABLED": true,
+		"GOOS":        true,
+		"GOARCH":      true,
+		"GOPROXY":     true,
+		"GONOSUMDB":   true,
+		"GOSUMDB":     true,
+		"GOPRIVATE":   true,
+		"PATH":        true,
 	}
 
 	return execRelevant[key]
@@ -285,19 +200,6 @@ func writeMetrics(path string, m *FactorizeMetrics) error {
 	return nil
 }
 
-// MetricsCollection holds metrics for a single factorize run.
-type MetricsCollection struct {
-	Checks    []MetricsCheck
-	StartTime time.Time
-	Path      string
-}
-
-// StartRun initializes a new metrics collection for a run.
-func (mc *MetricsCollection) StartRun() {
-	mc.Checks = nil
-	mc.StartTime = time.Now()
-}
-
 // AddCheck records metrics for a single verifier.
 // Returns an error if the command fingerprint cannot be computed.
 func (mc *MetricsCollection) AddCheck(
@@ -312,15 +214,13 @@ func (mc *MetricsCollection) AddCheck(
 	env []string,
 	execPath string,
 ) error {
-	var status string
-	var exitCode int
+	status := "pass"
+	exitCode := 0
 	if len(findings) > 0 {
 		status = "fail"
 		exitCode = 1
-	} else {
-		status = "pass"
-		exitCode = 0
 	}
+
 	var userCPU, systemCPU, maxRSS *int64
 	if rusage.userCPU > 0 {
 		v := rusage.userCPU
