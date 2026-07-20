@@ -199,7 +199,7 @@ func (mc *MetricsCollection) AddCheck(
 		MaxRSSBytes:        maxRSS,
 		ResourceScope:      "verifier",
 		CommandFingerprint: fingerprint,
-		Cache:             verifier.Cache,
+		Cache:              verifier.Cache,
 	})
 	return nil
 }
@@ -233,14 +233,14 @@ func (mc *MetricsCollection) FinalizeRun(
 		Environment: buildEnvironment(),
 		Run: MetricsRun{
 			Scenario:      scenario,
-			Sequence:     sequence,
-			StartedAt:    mc.StartTime.UTC().Format(time.RFC3339),
-			Status:       status,
-			ExitCode:     exitCode,
-			DurationNs:   totalDuration.Nanoseconds(),
-			UserCPUNs:    userCPU,
-			SystemCPUNs:  systemCPU,
-			MaxRSSBytes:  maxRSS,
+			Sequence:      sequence,
+			StartedAt:     mc.StartTime.UTC().Format(time.RFC3339),
+			Status:        status,
+			ExitCode:      exitCode,
+			DurationNs:    totalDuration.Nanoseconds(),
+			UserCPUNs:     userCPU,
+			SystemCPUNs:   systemCPU,
+			MaxRSSBytes:   maxRSS,
 			ResourceScope: "full-run",
 		},
 		Checks: mc.Checks,

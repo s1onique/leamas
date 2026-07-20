@@ -44,8 +44,8 @@ type ExecutionDefinition struct {
 
 // CacheSemantics captures the authoritative cache behavior for a verifier.
 type CacheSemantics struct {
-	GoBuildCache      CacheRelevance
-	GoTestResultCache TestResultCacheMode
+	GoBuildCache CacheRelevance `json:"go_build_cache"`
+	GoTestResultCache TestResultCacheMode `json:"go_test_result_cache"`
 }
 
 // Verifier represents a Factory verifier with its authoritative metadata.

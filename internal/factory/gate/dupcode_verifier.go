@@ -71,7 +71,7 @@ func convertDupcodeCompareResult(result dupcode.CompareResult) []checks.Finding 
 		}
 		findings = append(findings, checks.Finding{
 			Path: firstPath, Kind: "new_duplicate_code",
-			Message: fmt.Sprintf("NEW: %d tokens, %d occurrences: %v", f.TokenCount, len(f.Occurrences), paths),
+			Message:  fmt.Sprintf("NEW: %d tokens, %d occurrences: %v", f.TokenCount, len(f.Occurrences), paths),
 			Severity: checks.SeverityError,
 		})
 	}
@@ -87,7 +87,7 @@ func convertDupcodeCompareResult(result dupcode.CompareResult) []checks.Finding 
 		}
 		findings = append(findings, checks.Finding{
 			Path: firstPath, Kind: "worsened_duplicate_code",
-			Message: fmt.Sprintf("WORSENED: fingerprint has %d new occurrences: %v", len(f.NewOccurrences), newPaths),
+			Message:  fmt.Sprintf("WORSENED: fingerprint has %d new occurrences: %v", len(f.NewOccurrences), newPaths),
 			Severity: checks.SeverityError,
 		})
 	}

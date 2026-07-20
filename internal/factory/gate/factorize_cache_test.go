@@ -2,8 +2,11 @@
 package gate
 
 import (
+	"encoding/json"
 	"sort"
 	"testing"
+
+	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
 const canonicalVerifierCount = 15
@@ -25,29 +28,68 @@ func TestCacheSemantics_AllVerifiersHaveCacheMetadata(t *testing.T) {
 	}
 }
 
-// TestCacheSemantics_DupcodeDisabled verifies dupcode uses disabled test cache.
-func TestCacheSemantics_DupcodeDisabled(t *testing.T) {
+// TestCacheSemantics_DupcodeUsesNACache verifies dupcode verifiers use NA cache semantics.
+func TestCacheSemantics_DupcodeUsesNACache(t *testing.T) {
 	verifiers := AllVerifiers()
 
 	for _, v := range verifiers {
 		if v.Name == "dupcode" || v.Name == "dupcode-baseline" {
-			if v.Cache.GoTestResultCache != CacheModeDisabled {
-				t.Errorf("verifier %q must have test cache disabled, got %s", v.Name, v.Cache.GoTestResultCache)
+			if v.Cache.GoBuildCache != CacheNotApplicable {
+				t.Errorf("verifier %q should have GoBuildCache=not-applicable, got %s", v.Name, v.Cache.GoBuildCache)
+			}
+			if v.Cache.GoTestResultCache != CacheModeNA {
+				t.Errorf("verifier %q should have GoTestResultCache=not-applicable, got %s", v.Name, v.Cache.GoTestResultCache)
 			}
 		}
 	}
 }
 
-// TestCacheSemantics_ChildProcessVerifiers verifies child-process cache behavior.
-func TestCacheSemantics_ChildProcessVerifiers(t *testing.T) {
+// TestCacheSemantics_StaticBinaryUsesBuildCache verifies static-binary uses build cache.
+func TestCacheSemantics_StaticBinaryUsesBuildCache(t *testing.T) {
 	verifiers := AllVerifiers()
 
 	for _, v := range verifiers {
-		if v.Execution.Kind == ExecutionChild {
-			if v.Cache.GoBuildCache == CacheNotApplicable {
-				t.Errorf("child-process verifier %q should have cache relevance, got %s", v.Name, v.Cache.GoBuildCache)
+		if v.Name == "static-binary" {
+			if v.Cache.GoBuildCache != CacheRelevant {
+				t.Errorf("verifier %q should have GoBuildCache=relevant, got %s", v.Name, v.Cache.GoBuildCache)
 			}
 		}
+	}
+}
+
+// TestCacheSemantics_AllInProcess verifies all verifiers are in-process.
+func TestCacheSemantics_AllInProcess(t *testing.T) {
+	verifiers := AllVerifiers()
+
+	for _, v := range verifiers {
+		if v.Execution.Kind != ExecutionInProcess {
+			t.Errorf("verifier %q should be ExecutionInProcess, got %s", v.Name, v.Execution.Kind)
+		}
+	}
+}
+
+// TestCacheSemantics_JsonSerialization verifies JSON serialization uses schema field names.
+func TestCacheSemantics_JsonSerialization(t *testing.T) {
+	cache := CacheSemantics{
+		GoBuildCache:      CacheRelevant,
+		GoTestResultCache: CacheModeDisabled,
+	}
+
+	data, err := json.Marshal(cache)
+	if err != nil {
+		t.Fatalf("failed to marshal CacheSemantics: %v", err)
+	}
+
+	var parsed map[string]string
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+
+	if got, want := parsed["go_build_cache"], "relevant"; got != want {
+		t.Errorf("go_build_cache = %q, want %q", got, want)
+	}
+	if got, want := parsed["go_test_result_cache"], "disabled"; got != want {
+		t.Errorf("go_test_result_cache = %q, want %q", got, want)
 	}
 }
 
@@ -156,5 +198,81 @@ func TestAllVerifiers_HaveValidExecutionKind(t *testing.T) {
 		if v.Execution.Kind != ExecutionInProcess && v.Execution.Kind != ExecutionChild {
 			t.Errorf("verifier %q has invalid execution kind: %q", v.Name, v.Execution.Kind)
 		}
+	}
+}
+
+// TestValidateVerifier_EmptyName verifies validation fails for empty name.
+func TestValidateVerifier_EmptyName(t *testing.T) {
+	v := Verifier{Name: "", Run: func(string) []checks.Finding { return nil }}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for empty name")
+	}
+}
+
+// TestValidateVerifier_NilRun verifies validation fails for nil Run.
+func TestValidateVerifier_NilRun(t *testing.T) {
+	v := Verifier{Name: "test", Run: nil}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for nil Run")
+	}
+}
+
+// TestValidateVerifier_InvalidKind verifies validation fails for invalid kind.
+func TestValidateVerifier_InvalidKind(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             "invalid",
+			ImplementationID: "test",
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for invalid kind")
+	}
+}
+
+// TestValidateVerifier_EmptyImplID verifies validation fails for empty ImplementationID.
+func TestValidateVerifier_EmptyImplID(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "",
+		},
+	}
+	err := ValidateVerifier(v)
+	if err == nil {
+		t.Error("expected error for empty ImplementationID")
+	}
+}
+
+// TestValidateVerifiers_NoDuplicates verifies validation fails for duplicate names.
+func TestValidateVerifiers_NoDuplicates(t *testing.T) {
+	v := Verifier{
+		Name: "test",
+		Run:  func(string) []checks.Finding { return nil },
+		Execution: ExecutionDefinition{
+			Kind:             ExecutionInProcess,
+			ImplementationID: "test",
+		},
+	}
+	verifiers := []Verifier{v, v}
+	err := ValidateVerifiers(verifiers)
+	if err == nil {
+		t.Error("expected error for duplicate names")
+	}
+}
+
+// TestValidateVerifiers_AllCanonical verifies all canonical verifiers pass validation.
+func TestValidateVerifiers_AllCanonical(t *testing.T) {
+	verifiers := AllVerifiers()
+	err := ValidateVerifiers(verifiers)
+	if err != nil {
+		t.Errorf("canonical verifiers should pass validation: %v", err)
 	}
 }

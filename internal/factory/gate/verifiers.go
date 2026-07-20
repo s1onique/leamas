@@ -2,6 +2,8 @@
 package gate
 
 import (
+	"path/filepath"
+
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
 	"github.com/s1onique/leamas/internal/factory/boundary"
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -22,7 +24,7 @@ import (
 func AllVerifiers() []Verifier {
 	return []Verifier{
 		{Name: "agent-context", Run: agentContextVerifier, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/agentcontext.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.agentContextVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "doctrine", Run: doctrine.CheckRepo, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
@@ -37,11 +39,11 @@ func AllVerifiers() []Verifier {
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/boundary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "dupcode-baseline", Run: dupcodeBaselineVerifier, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/dupcode.VerifyBaseline", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheRelevant, GoTestResultCache: CacheModeDisabled}},
+			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.dupcodeBaselineVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "dupcode", Run: dupCodeVerifier, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/dupcode.CheckReport", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheRelevant, GoTestResultCache: CacheModeDisabled}},
+			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.dupCodeVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "exec-gate", Run: execgate.CheckRepo, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/execgate.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
@@ -52,13 +54,13 @@ func AllVerifiers() []Verifier {
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/forbidden.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "git-hooks", Run: gitHooksVerifier, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/githooks.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.gitHooksVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "language", Run: language.CheckRepo, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/language.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "llm-friendly", Run: llmFriendlyVerifier, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/llmfriendly.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.llmFriendlyVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 		{Name: "static-binary", Run: staticbinary.CheckRepo, Execution: ExecutionDefinition{
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/staticbinary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED", "GOCACHE"},
@@ -136,7 +138,7 @@ func coverageVerifier(root string) []checks.Finding {
 	profilePath := ".factory/coverage.out"
 	fullPath := profilePath
 	if root != "." && root != "" {
-		fullPath = root + "/" + profilePath
+		fullPath = filepath.Join(root, profilePath)
 	}
 	if !checks.FileExists(fullPath) {
 		return []checks.Finding{{Path: profilePath, Kind: "missing_coverage_profile", Message: "coverage profile not found. Run 'make coverage' first.", Severity: checks.SeverityError}}
