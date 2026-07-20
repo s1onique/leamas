@@ -105,7 +105,8 @@ child scope behind an open parent.
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02` | CLOSED (PARTIAL — superseded) | Validator proof accepted; reader-contract semantics superseded by CORRECTION03. |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03` | CLOSED (PARTIAL) | Reader contract frozen and committed; `DECODER01` unblocked. |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | CLOSED (PARTIAL — retained unrelated baseline failures) | Strict v1/v2 decoder plus forward P0 fix committed; contract review accepted. |
-| `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01` | IN PROGRESS | Decoder closure landed; semantic normalization may begin. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01` | CLOSED — superseded by CORRECTION01 | Semantic normalization implemented; P0 corrections in progress; see CORRECTION01. Decoder closure landed; semantic normalization may begin. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01` | IN PROGRESS | Addressing review feedback: epic replacement, duplicate paths, error propagation, sealed validation, exported fault, integer validation |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01` | BLOCKED | Digest integration |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CLI01` | PENDING | CLI surface |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONFORMANCE01` | PENDING | Golden + fuzz |
