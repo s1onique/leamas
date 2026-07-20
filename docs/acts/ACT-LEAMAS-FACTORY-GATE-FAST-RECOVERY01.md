@@ -106,4 +106,6 @@ CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 
 ## Notes
 
-The `go test -short ./...` in the toolchain fast mode still takes time. This is a separate concern from the dupcode lane issue - the original task was to eliminate dupcode from the fast developer loop. CI can parallelize `Factory Fast`, `Factory Dupcode`, and `Factory Long` as separate required jobs.
+## Summary
+
+This ACT introduces infrastructure for running gate-fast and gate-dupcode as separate CI jobs.

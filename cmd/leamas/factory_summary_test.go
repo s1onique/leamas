@@ -114,6 +114,37 @@ func TestValidateLongLaneSummary_LengthMismatch(t *testing.T) {
 	}
 }
 
+// writeTestSummaries writes all lane summaries for testing.
+func writeTestSummaries(t *testing.T, dir, fastStatus, dupcodeStatus, longStatus string, longFailed int) {
+	fastPath := filepath.Join(dir, ".factory", "gate-fast-summary.json")
+	os.MkdirAll(filepath.Dir(fastPath), 0755)
+	fastSummary := gate.GateSummary{
+		SchemaVersion: 1,
+		OverallStatus: fastStatus,
+	}
+	data, _ := json.Marshal(fastSummary)
+	os.WriteFile(fastPath, data, 0644)
+
+	dupcodePath := filepath.Join(dir, ".factory", "gate-dupcode-summary.json")
+	dupcodeSummary := gate.GateSummary{
+		SchemaVersion: 1,
+		OverallStatus: dupcodeStatus,
+	}
+	data, _ = json.Marshal(dupcodeSummary)
+	os.WriteFile(dupcodePath, data, 0644)
+
+	longPath := filepath.Join(dir, ".factory", "gate-long-summary.json")
+	longSummary := testLongSummary{
+		SchemaVersion: 1,
+		Total:         2,
+		Passed:        2 - longFailed,
+		Failed:        longFailed,
+		Tests:         []testLongResult{{ID: "LT-001", Passed: longFailed == 0}, {ID: "LT-002", Passed: true}},
+	}
+	data, _ = json.Marshal(longSummary)
+	os.WriteFile(longPath, data, 0644)
+}
+
 func TestWriteAggregateAfterFastFailure(t *testing.T) {
 	dir := t.TempDir()
 	origCwd, _ := os.Getwd()
@@ -151,41 +182,22 @@ func TestWriteAggregateAfterFastFailure(t *testing.T) {
 	if agg.OverallStatus != "fail" {
 		t.Errorf("expected overall_status=fail, got %s", agg.OverallStatus)
 	}
-	// Should have exactly 2 lane checks: fast-lane (fail) and long-lane (skip)
-	if len(agg.Checks) != 2 {
-		t.Errorf("expected 2 checks, got %d", len(agg.Checks))
+	// Should have exactly 3 lane checks: fast-lane (fail), dupcode-lane (skip), long-lane (skip)
+	if len(agg.Checks) != 3 {
+		t.Errorf("expected 3 checks, got %d", len(agg.Checks))
 	}
 	// First check is fast-lane fail
 	if agg.Checks[0].Name != "fast-lane" || agg.Checks[0].Status != gate.CheckStatusFail {
 		t.Errorf("first check should be fast-lane fail")
 	}
-	// Second check is long-lane skip (not fail)
-	if agg.Checks[1].Name != "long-lane" || agg.Checks[1].Status != "skip" {
-		t.Errorf("second check should be long-lane skip, got %s", agg.Checks[1].Status)
+	// Second check is dupcode-lane skip
+	if agg.Checks[1].Name != "dupcode-lane" || agg.Checks[1].Status != "skip" {
+		t.Errorf("second check should be dupcode-lane skip, got %s", agg.Checks[1].Status)
 	}
-}
-
-// writeTestSummaries writes both fast and long summaries for testing.
-func writeTestSummaries(t *testing.T, dir, fastStatus, longStatus string, longFailed int) {
-	fastPath := filepath.Join(dir, ".factory", "gate-fast-summary.json")
-	os.MkdirAll(filepath.Dir(fastPath), 0755)
-	fastSummary := gate.GateSummary{
-		SchemaVersion: 1,
-		OverallStatus: fastStatus,
+	// Third check is long-lane skip (not fail)
+	if agg.Checks[2].Name != "long-lane" || agg.Checks[2].Status != "skip" {
+		t.Errorf("third check should be long-lane skip, got %s", agg.Checks[2].Status)
 	}
-	data, _ := json.Marshal(fastSummary)
-	os.WriteFile(fastPath, data, 0644)
-
-	longPath := filepath.Join(dir, ".factory", "gate-long-summary.json")
-	longSummary := testLongSummary{
-		SchemaVersion: 1,
-		Total:         2,
-		Passed:        2 - longFailed,
-		Failed:        longFailed,
-		Tests:         []testLongResult{{ID: "LT-001", Passed: longFailed == 0}, {ID: "LT-002", Passed: true}},
-	}
-	data, _ = json.Marshal(longSummary)
-	os.WriteFile(longPath, data, 0644)
 }
 
 func TestWriteAggregateForFullMode_BothPass(t *testing.T) {
@@ -194,7 +206,7 @@ func TestWriteAggregateForFullMode_BothPass(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(origCwd)
 
-	writeTestSummaries(t, dir, "pass", "pass", 0)
+	writeTestSummaries(t, dir, "pass", "pass", "pass", 0)
 
 	if err := writeAggregateForFullMode(); err != nil {
 		t.Fatalf("writeAggregateForFullMode: %v", err)
@@ -205,13 +217,13 @@ func TestWriteAggregateForFullMode_BothPass(t *testing.T) {
 	var agg gate.GateSummary
 	json.Unmarshal(data, &agg)
 
-	// Both lanes pass → overall must pass
+	// All lanes pass → overall must pass
 	if agg.OverallStatus != "pass" {
-		t.Errorf("both pass: expected overall_status=pass, got %s", agg.OverallStatus)
+		t.Errorf("all pass: expected overall_status=pass, got %s", agg.OverallStatus)
 	}
-	// Exactly 2 lane checks
-	if len(agg.Checks) != 2 {
-		t.Errorf("expected 2 checks, got %d", len(agg.Checks))
+	// Exactly 3 lane checks
+	if len(agg.Checks) != 3 {
+		t.Errorf("expected 3 checks, got %d", len(agg.Checks))
 	}
 }
 
@@ -221,7 +233,7 @@ func TestWriteAggregateForFullMode_FastFails(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(origCwd)
 
-	writeTestSummaries(t, dir, "fail", "pass", 0)
+	writeTestSummaries(t, dir, "fail", "pass", "pass", 0)
 
 	if err := writeAggregateForFullMode(); err != nil {
 		t.Fatalf("writeAggregateForFullMode: %v", err)
@@ -238,8 +250,40 @@ func TestWriteAggregateForFullMode_FastFails(t *testing.T) {
 	if agg.Checks[0].Status != gate.CheckStatusFail {
 		t.Errorf("fast-lane should be fail")
 	}
-	if agg.Checks[1].Status != gate.CheckStatusPass {
+	if agg.Checks[2].Status != gate.CheckStatusPass {
 		t.Errorf("long-lane should be pass")
+	}
+}
+
+func TestWriteAggregateForFullMode_DupcodeFails(t *testing.T) {
+	dir := t.TempDir()
+	origCwd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origCwd)
+
+	// Write fast pass, dupcode fail, and long pass summaries
+	writeTestSummaries(t, dir, "pass", "fail", "pass", 0)
+
+	if err := writeAggregateForFullMode(); err != nil {
+		t.Fatalf("writeAggregateForFullMode: %v", err)
+	}
+
+	aggPath := filepath.Join(dir, ".factory", "gate-summary.json")
+	data, _ := os.ReadFile(aggPath)
+	var agg gate.GateSummary
+	json.Unmarshal(data, &agg)
+
+	if agg.OverallStatus != "fail" {
+		t.Errorf("dupcode fails: expected overall_status=fail, got %s", agg.OverallStatus)
+	}
+	if agg.Checks[0].Status != gate.CheckStatusPass {
+		t.Errorf("fast-lane should be pass")
+	}
+	if agg.Checks[1].Status != gate.CheckStatusFail {
+		t.Errorf("dupcode-lane should be fail")
+	}
+	if agg.Checks[2].Status != gate.CheckStatusPass {
+		t.Errorf("long-lane should be pass when it runs")
 	}
 }
 
@@ -249,7 +293,7 @@ func TestWriteAggregateForFullMode_LongFails(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(origCwd)
 
-	writeTestSummaries(t, dir, "pass", "fail", 1)
+	writeTestSummaries(t, dir, "pass", "pass", "fail", 1)
 
 	if err := writeAggregateForFullMode(); err != nil {
 		t.Fatalf("writeAggregateForFullMode: %v", err)
@@ -266,8 +310,58 @@ func TestWriteAggregateForFullMode_LongFails(t *testing.T) {
 	if agg.Checks[0].Status != gate.CheckStatusPass {
 		t.Errorf("fast-lane should be pass")
 	}
-	if agg.Checks[1].Status != gate.CheckStatusFail {
+	if agg.Checks[2].Status != gate.CheckStatusFail {
 		t.Errorf("long-lane should be fail")
+	}
+}
+
+func TestWriteAggregateAfterDupcodeFailure(t *testing.T) {
+	dir := t.TempDir()
+	origCwd, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(origCwd)
+
+	// Write fast pass and dupcode fail summaries
+	fastPath := filepath.Join(dir, ".factory", "gate-fast-summary.json")
+	os.MkdirAll(filepath.Dir(fastPath), 0755)
+	fastSummary := gate.GateSummary{
+		SchemaVersion: 1,
+		OverallStatus: "pass",
+	}
+	data, _ := json.Marshal(fastSummary)
+	os.WriteFile(fastPath, data, 0644)
+
+	dupcodePath := filepath.Join(dir, ".factory", "gate-dupcode-summary.json")
+	dupcodeSummary := gate.GateSummary{
+		SchemaVersion: 1,
+		OverallStatus: "fail",
+	}
+	data, _ = json.Marshal(dupcodeSummary)
+	os.WriteFile(dupcodePath, data, 0644)
+
+	if err := writeAggregateAfterDupcodeFailure(); err != nil {
+		t.Fatalf("writeAggregateAfterDupcodeFailure: %v", err)
+	}
+
+	aggPath := filepath.Join(dir, ".factory", "gate-summary.json")
+	data, _ = os.ReadFile(aggPath)
+	var agg gate.GateSummary
+	json.Unmarshal(data, &agg)
+
+	if agg.OverallStatus != "fail" {
+		t.Errorf("expected overall_status=fail, got %s", agg.OverallStatus)
+	}
+	if len(agg.Checks) != 3 {
+		t.Errorf("expected 3 checks, got %d", len(agg.Checks))
+	}
+	if agg.Checks[0].Name != "fast-lane" || agg.Checks[0].Status != gate.CheckStatusPass {
+		t.Errorf("first check should be fast-lane pass")
+	}
+	if agg.Checks[1].Name != "dupcode-lane" || agg.Checks[1].Status != gate.CheckStatusFail {
+		t.Errorf("second check should be dupcode-lane fail")
+	}
+	if agg.Checks[2].Name != "long-lane" || agg.Checks[2].Status != "skip" {
+		t.Errorf("third check should be long-lane skip, got %s", agg.Checks[2].Status)
 	}
 }
 
