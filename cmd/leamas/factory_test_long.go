@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"time"
@@ -99,7 +100,8 @@ func handleFactoryTestLong() {
 		Failed:        failed,
 		Total:         len(results),
 	}
-	summaryPath := ".factory/gate-long-summary.json"
+	// Write summary to the repository root
+	summaryPath := filepath.Join(root, ".factory", "gate-long-summary.json")
 	summaryData, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "test-long: marshal summary: %v\n", err)
@@ -121,12 +123,14 @@ func runTest(root string, tt longtest.TestSpec) (bool, time.Duration, error) {
 	if err != nil {
 		return false, 0, fmt.Errorf("invalid timeout: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// Runner deadline is slightly longer than the test timeout to give Go its own diagnostic window
+	runnerTimeout := timeout + 1*time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), runnerTimeout)
 	defer cancel()
 	pattern := "^" + regexp.QuoteMeta(tt.Test) + "$"
-	args := []string{"test", "-count=1", "-timeout=" + tt.CITimeout, "-run=" + pattern, tt.Package}
+	args := []string{"-count=1", "-run=" + pattern, tt.Package}
 	start := time.Now()
-	result := execution.RunGoTest(ctx, root, args...)
+	result := execution.RunGoTest(ctx, root, timeout, args...)
 	duration := time.Since(start)
 	if ctx.Err() == context.DeadlineExceeded {
 		return false, duration, fmt.Errorf("timeout after %s", tt.CITimeout)

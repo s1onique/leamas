@@ -3,8 +3,10 @@ package execution
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"time"
 )
 
 // RunTestLongResult holds the result of running the test-long lane.
@@ -21,23 +23,18 @@ func RunTestLong(ctx context.Context, binaryPath string) *RunTestLongResult {
 	cmd.Stderr = os.Stderr
 	cmd.Dir = "."
 
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Run()
-	}()
-
-	select {
-	case <-ctx.Done():
-		return &RunTestLongResult{ExitCode: -1, Error: ctx.Err()}
-	case err := <-done:
-		if err == nil {
-			return &RunTestLongResult{ExitCode: 0}
-		}
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return &RunTestLongResult{ExitCode: exitErr.ExitCode(), Error: err}
-		}
-		return &RunTestLongResult{ExitCode: 1, Error: err}
+	// Run synchronously - wait for completion before returning
+	err := cmd.Run()
+	if err == nil {
+		return &RunTestLongResult{ExitCode: 0}
 	}
+	if ctx.Err() != nil {
+		return &RunTestLongResult{ExitCode: -1, Error: ctx.Err()}
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return &RunTestLongResult{ExitCode: exitErr.ExitCode(), Error: err}
+	}
+	return &RunTestLongResult{ExitCode: 1, Error: err}
 }
 
 // BuildResult holds the result of building the leamas binary.
@@ -51,17 +48,12 @@ func BuildLeamas(ctx context.Context, outputPath string) *BuildResult {
 	cmd := exec.CommandContext(ctx, "go", "build", "-o", outputPath, "./cmd/leamas")
 	cmd.Dir = "."
 
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Run()
-	}()
-
-	select {
-	case <-ctx.Done():
+	// Run synchronously - wait for completion before returning
+	err := cmd.Run()
+	if ctx.Err() != nil {
 		return &BuildResult{Error: ctx.Err()}
-	case err := <-done:
-		return &BuildResult{Error: err}
 	}
+	return &BuildResult{Error: err}
 }
 
 // RunGoTestResult holds the result of running a go test.
@@ -71,28 +63,29 @@ type RunGoTestResult struct {
 }
 
 // RunGoTest runs "go test" with the given arguments in the specified directory.
-// This helper encapsulates the exec.Command call to satisfy the forbidden-exec gate.
-func RunGoTest(ctx context.Context, dir string, args ...string) *RunGoTestResult {
-	cmd := exec.CommandContext(ctx, "go", args...)
+// The context timeout (runnerDeadline) is separate from the -timeout flag (goTimeout)
+// to give Go its own diagnostic window.
+func RunGoTest(ctx context.Context, dir string, goTimeout time.Duration, args ...string) *RunGoTestResult {
+	// Build the go test command with -timeout flag
+	// args should be like: ["-count=1", "-run=<pattern>", "<package>"]
+	timeoutArg := fmt.Sprintf("-timeout=%s", goTimeout)
+	testArgs := append([]string{"test", timeoutArg}, args...)
+
+	cmd := exec.CommandContext(ctx, "go", testArgs...)
 	cmd.Dir = dir
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	done := make(chan error, 1)
-	go func() {
-		done <- cmd.Run()
-	}()
-
-	select {
-	case <-ctx.Done():
-		return &RunGoTestResult{ExitCode: -1, Error: ctx.Err()}
-	case err := <-done:
-		if err == nil {
-			return &RunGoTestResult{ExitCode: 0}
-		}
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return &RunGoTestResult{ExitCode: exitErr.ExitCode(), Error: err}
-		}
-		return &RunGoTestResult{ExitCode: 1, Error: err}
+	// Run synchronously - wait for completion before returning
+	err := cmd.Run()
+	if err == nil {
+		return &RunGoTestResult{ExitCode: 0}
 	}
+	if ctx.Err() != nil {
+		return &RunGoTestResult{ExitCode: -1, Error: ctx.Err()}
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return &RunGoTestResult{ExitCode: exitErr.ExitCode(), Error: err}
+	}
+	return &RunGoTestResult{ExitCode: 1, Error: err}
 }

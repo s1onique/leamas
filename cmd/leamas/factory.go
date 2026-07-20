@@ -102,6 +102,10 @@ func handleFactoryGate() {
 }
 
 func handleShortMode(startedAt time.Time) {
+	// Remove stale aggregates from prior runs
+	os.Remove(".factory/gate-summary.json")
+	os.Remove(".factory/gate-long-summary.json")
+
 	fastExitCode := gate.RunGateFast(".")
 	if err := writeFastSummary(startedAt, time.Now(), fastExitCode); err != nil {
 		fmt.Fprintf(os.Stderr, "factory gate: write fast summary: %v\n", err)
@@ -112,6 +116,11 @@ func handleShortMode(startedAt time.Time) {
 }
 
 func handleFullMode(startedAt time.Time) {
+	// Clear all prior lane artifacts before executing
+	os.Remove(".factory/gate-summary.json")
+	os.Remove(".factory/gate-fast-summary.json")
+	os.Remove(".factory/gate-long-summary.json")
+
 	fmt.Println("=== FAST LANE ===")
 	fastExitCode := gate.RunGateFast(".")
 	fastFinishedAt := time.Now()
@@ -121,15 +130,15 @@ func handleFullMode(startedAt time.Time) {
 	}
 	if fastExitCode != 0 {
 		fmt.Println("\n*** SKIPPING LONG LANE: fast lane failed ***")
-		// Write aggregate with only fast lane in failed state
-		if err := writeAggregateSummaryWithStatus("fail", fastExitCode != 0, -1); err != nil {
+		// Write aggregate with fast=fail, long=skip
+		if err := writeAggregateAfterFastFailure(); err != nil {
 			fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
 		}
 		os.Exit(1)
 	}
 	fmt.Println("\n=== LONG LANE ===")
 	longExitCode := runTestLongLane()
-	if err := writeAggregateSummaryWithStatus("pass", false, longExitCode); err != nil {
+	if err := writeAggregateForFullMode(); err != nil {
 		fmt.Fprintf(os.Stderr, "factory gate: write aggregate summary: %v\n", err)
 		os.Exit(1)
 	}
@@ -157,6 +166,8 @@ func runTestLongLane() int {
 }
 
 // computeLongLaneTimeout computes the timeout for the long lane based on baseline entries.
+// The timeout is the sum of all registered test timeouts plus overhead.
+// No cap is applied - the registered budgets are preserved.
 func computeLongLaneTimeout() time.Duration {
 	baseline, err := longtest.LoadBaseline(".")
 	if err != nil {
@@ -174,11 +185,6 @@ func computeLongLaneTimeout() time.Duration {
 	// Add fixed overhead: 5 minutes per test for startup/teardown
 	overhead := 5 * time.Minute * time.Duration(len(baseline.Tests))
 	total += overhead
-	// Cap at 2 hours maximum
-	const maxTimeout = 2 * time.Hour
-	if total > maxTimeout {
-		return maxTimeout
-	}
 	// Minimum 10 minutes
 	const minTimeout = 10 * time.Minute
 	if total < minTimeout {
