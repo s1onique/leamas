@@ -88,11 +88,29 @@ type rusageMetrics struct {
 }
 
 // commandFingerprint computes a digest of a verifier's execution definition.
-func commandFingerprint(name string, root string) string {
+// It binds the verifier ID, executable identity, argv, and selected environment.
+func commandFingerprint(name string, root string, argv []string, env []string, execPath string) string {
 	h := sha256.New()
+	h.Write([]byte("factorize-v1"))
+	h.Write([]byte{0})
 	h.Write([]byte(name))
 	h.Write([]byte{0})
-	h.Write([]byte(root))
+	// Bind executable identity
+	h.Write([]byte(execPath))
+	h.Write([]byte{0})
+	// Bind argv
+	for _, arg := range argv {
+		h.Write([]byte(arg))
+		h.Write([]byte{0})
+	}
+	h.Write([]byte{0}) // argv terminator
+	// Bind selected environment (only LEAMAS_* vars that affect execution)
+	for _, e := range env {
+		if len(e) > 8 && e[:8] == "LEAMAS_" {
+			h.Write([]byte(e))
+			h.Write([]byte{0})
+		}
+	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
@@ -203,6 +221,9 @@ func (mc *MetricsCollection) AddCheck(
 	rusage rusageMetrics,
 	root string,
 	cacheObservation string,
+	argv []string,
+	env []string,
+	execPath string,
 ) {
 	var status string
 	var exitCode int
@@ -236,7 +257,7 @@ func (mc *MetricsCollection) AddCheck(
 		SystemCPUNs:        systemCPU,
 		MaxRSSBytes:        maxRSS,
 		ResourceScope:      "verifier",
-		CommandFingerprint: commandFingerprint(name, root),
+		CommandFingerprint: commandFingerprint(name, root, argv, env, execPath),
 		CacheObservation:   cacheObservation,
 	})
 }

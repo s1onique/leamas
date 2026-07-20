@@ -67,7 +67,10 @@ func runCheck(
 		rusage := collectRusage()
 		// Determine cache observation based on verifier
 		cacheObs := classifyCacheObservation(name, findings)
-		metrics.AddCheck(name, ordinal, findings, elapsed, rusage, root, cacheObs)
+		// Get executable path and environment for fingerprinting
+		execPath, _ := os.Executable()
+		env := os.Environ()
+		metrics.AddCheck(name, ordinal, findings, elapsed, rusage, root, cacheObs, []string{name}, env, execPath)
 	}
 
 	return findings
@@ -75,19 +78,26 @@ func runCheck(
 
 // classifyCacheObservation determines the cache classification for a verifier.
 func classifyCacheObservation(name string, findings []checks.Finding) string {
-	// These verifiers run go test with -count=1, disabling test-result caching
+	// Verifiers that run go test with -count=1 (test-result caching disabled)
 	goTestVerifiers := map[string]bool{
-		"dupcode":         true,
+		"dupcode":          true,
 		"dupcode-baseline": true,
 	}
 	if goTestVerifiers[name] {
-		return "test-result-cache-disabled"
+		return "go_test_result_cache=disabled;go_build_cache=relevant"
 	}
-	// Verifiers that benefit from Go build caching
-	if _, ok := goTestVerifiers[name]; ok {
-		return "go-build-cache-relevant"
+	// Verifiers that benefit from Go build caching (but don't use -count=1)
+	// These typically invoke go build, go vet, or similar
+	goBuildRelevant := map[string]bool{
+		"static-binary":   true,
+		"executable-contract-first": true,
+		"exec-gate":       true,
+		"go-coverage":     true,
 	}
-	return "not-applicable"
+	if goBuildRelevant[name] {
+		return "go_test_result_cache=not-applicable;go_build_cache=relevant"
+	}
+	return "go_test_result_cache=not-applicable;go_build_cache=not-applicable"
 }
 
 // printFailureFindings renders the verbose failure block (one
