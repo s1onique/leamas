@@ -77,4 +77,4 @@
 
 **NEXT: ACT-LEAMAS-FACTORY-FACTORIZE-BOUNDED-PARALLELISM01**
 
-**Justification**: Evidence shows dupcode + dupcode-baseline account for 99.7% of runtime and are independent verifiers. Running them in parallel with a bounded worker pool (2-4 workers) would deliver an immediate ~2x speedup (462s → ~231s) with minimal implementation risk.
+**Justification**: dupcode + dupcode-baseline are 99.7% of runtime and independent. Parallel execution via bounded worker pool delivers ~2x speedup with minimal risk.
