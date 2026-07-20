@@ -54,11 +54,11 @@ func TestInvalidIntegerNormalization(t *testing.T) {
 		}
 	})
 
-	t.Run("newIntegerFromWire non_JSON lexical", func(t *testing.T) {
+	t.Run("newIntegerFromWire non_JSON lexical via wireIntegerForTest", func(t *testing.T) {
 		// These forms pass big.Int.SetString but are invalid JSON integer spellings.
+		// Use wireIntegerForTest to bypass UnmarshalJSON validation.
 		for _, raw := range []string{"+1", "01", "-01", "00", "-00"} {
-			var w WireInteger
-			_ = w.UnmarshalJSON([]byte(raw))
+			w := wireIntegerForTest(raw)
 			_, err := newIntegerFromWire(w)
 			if err == nil {
 				t.Errorf("newIntegerFromWire(%q): expected error for non-JSON lexical form", raw)
@@ -66,14 +66,17 @@ func TestInvalidIntegerNormalization(t *testing.T) {
 		}
 	})
 
-	t.Run("newIntegerFromWire valid JSON", func(t *testing.T) {
+	t.Run("newIntegerFromWire valid JSON via wireIntegerForTest", func(t *testing.T) {
 		// Valid JSON integer spellings that must be accepted.
+		// Verify -0 specifically preserves the exact text "-0".
 		for _, raw := range []string{"0", "-0", "1", "-1", "123456789012345678901234567890"} {
-			var w WireInteger
-			_ = w.UnmarshalJSON([]byte(raw))
-			_, err := newIntegerFromWire(w)
+			w := wireIntegerForTest(raw)
+			i, err := newIntegerFromWire(w)
 			if err != nil {
 				t.Errorf("newIntegerFromWire(%q): unexpected error: %v", raw, err)
+			}
+			if i.String() != raw {
+				t.Errorf("newIntegerFromWire(%q).String() = %q, want %q", raw, i.String(), raw)
 			}
 		}
 	})
