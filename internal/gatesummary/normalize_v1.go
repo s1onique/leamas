@@ -1,11 +1,17 @@
 package gatesummary
 
-import "strings"
+import (
+	"errors"
+	"strings"
+)
+
+// errInvalidInteger indicates a malformed or empty integer value.
+var errInvalidInteger = errors.New("gatesummary: invalid integer value")
 
 // projectV1 projects a v1 wire summary into the common normalized Summary.
 // V1 has no scope, parent, execution binding, cleanliness, disposition, or totals.
 // The producer's overall_status is preserved as authoritative.
-func projectV1(wire V1Summary) Summary {
+func projectV1(wire V1Summary) (Summary, error) {
 	s := Summary{
 		SchemaVersion: Version1,
 		GeneratedAt:   wire.GeneratedAt,
@@ -29,7 +35,10 @@ func projectV1(wire V1Summary) Summary {
 		}
 		// Duration
 		if wc.DurationMs != nil {
-			dur, _ := newIntegerFromWire(*wc.DurationMs)
+			dur, err := newIntegerFromWire(*wc.DurationMs)
+			if err != nil {
+				return Summary{}, err
+			}
 			c.DurationMs = &dur
 		}
 		// Evidence
@@ -40,7 +49,7 @@ func projectV1(wire V1Summary) Summary {
 		s.Checks[i] = c
 	}
 
-	return s
+	return s, nil
 }
 
 // cloneV1Wire creates a deep copy of a v1 wire summary.

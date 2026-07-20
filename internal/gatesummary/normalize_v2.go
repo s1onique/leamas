@@ -3,7 +3,7 @@ package gatesummary
 // projectV2 projects a v2 wire summary into the common normalized Summary.
 // V2 includes all scope, parent, execution, and cleanliness fields.
 // Lifecycle values are normalized from uppercase to lowercase.
-func projectV2(wire V2Summary) Summary {
+func projectV2(wire V2Summary) (Summary, error) {
 	s := Summary{
 		SchemaVersion: Version2,
 		GeneratedAt:   wire.GeneratedAt,
@@ -61,7 +61,10 @@ func projectV2(wire V2Summary) Summary {
 			c.Detail = &d
 		}
 		// Duration
-		dur, _ := newIntegerFromWire(wc.Extras.DurationMs)
+		dur, err := newIntegerFromWire(wc.Extras.DurationMs)
+		if err != nil {
+			return Summary{}, err
+		}
 		c.DurationMs = &dur
 		// Execution
 		exec := CheckExecution{
@@ -76,29 +79,47 @@ func projectV2(wire V2Summary) Summary {
 		}
 		// Exit code
 		if wc.Extras.ExitCode != nil {
-			ec, _ := newIntegerFromWire(*wc.Extras.ExitCode)
+			ec, err := newIntegerFromWire(*wc.Extras.ExitCode)
+			if err != nil {
+				return Summary{}, err
+			}
 			exec.ExitCode = &ec
 		}
 		c.Execution = &exec
 		// Totals
 		if wc.Total != nil {
 			t := TestTotals{}
-			tot, _ := newIntegerFromWire(*wc.Total)
+			tot, err := newIntegerFromWire(*wc.Total)
+			if err != nil {
+				return Summary{}, err
+			}
 			t.Total = tot
 			if wc.PassCount != nil {
-				pc, _ := newIntegerFromWire(*wc.PassCount)
+				pc, err := newIntegerFromWire(*wc.PassCount)
+				if err != nil {
+					return Summary{}, err
+				}
 				t.Pass = pc
 			}
 			if wc.FailCount != nil {
-				fc, _ := newIntegerFromWire(*wc.FailCount)
+				fc, err := newIntegerFromWire(*wc.FailCount)
+				if err != nil {
+					return Summary{}, err
+				}
 				t.Fail = fc
 			}
 			if wc.SkipCount != nil {
-				sc, _ := newIntegerFromWire(*wc.SkipCount)
+				sc, err := newIntegerFromWire(*wc.SkipCount)
+				if err != nil {
+					return Summary{}, err
+				}
 				t.Skip = sc
 			}
 			if wc.UnavailableCount != nil {
-				uc, _ := newIntegerFromWire(*wc.UnavailableCount)
+				uc, err := newIntegerFromWire(*wc.UnavailableCount)
+				if err != nil {
+					return Summary{}, err
+				}
 				t.Unavailable = uc
 			}
 			c.Totals = &t
@@ -106,7 +127,7 @@ func projectV2(wire V2Summary) Summary {
 		s.Checks[i] = c
 	}
 
-	return s
+	return s, nil
 }
 
 // cloneV2Wire creates a deep copy of a v2 wire summary.
