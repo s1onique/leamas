@@ -35,6 +35,7 @@ var ForbiddenCalls = []ForbiddenCall{
 // Only the execution gateway itself and factory infrastructure require process APIs.
 var AllowedFiles = map[string]bool{
 	"internal/execution/executor.go":                       true,
+	"internal/execution/exectest/exectest.go":              true,
 	"internal/execution/adversarial_harness_test.go":       true,
 	"internal/execution/adversarial_harness_executor.go":   true,
 	"internal/factory/gate/gate.go":                        true,
@@ -54,6 +55,12 @@ var AllowedFiles = map[string]bool{
 	"internal/factory/doctrinecompiler/subprocess_test.go": true,
 	"cmd/leamas/runtime_smoke_test.go":                     true,
 	"cmd/leamas/version_cli_test.go":                       true,
+}
+
+// AllowedImports are packages that may only be imported by test files.
+// These packages wrap os/exec and should not be used in production code.
+var AllowedImports = map[string]bool{
+	"github.com/s1onique/leamas/internal/execution/exectest": true,
 }
 
 // CheckRepo scans the repository for forbidden exec patterns.
@@ -116,6 +123,9 @@ func CheckRepo(root string) []checks.Finding {
 func checkFile(relPath, path string) []checks.Finding {
 	var findings []checks.Finding
 
+	// Determine if this is a test file
+	isTestFile := strings.HasSuffix(path, "_test.go")
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		findings = append(findings, checks.Finding{
@@ -155,6 +165,19 @@ func checkFile(relPath, path string) []checks.Finding {
 					Message:  fmt.Sprintf("dot imports are forbidden in this package"),
 					Severity: checks.SeverityError,
 				})
+			}
+
+			// Check for forbidden imports (exectest may only be imported by test files)
+			if node.Path != nil {
+				importPath := strings.Trim(node.Path.Value, `"`)
+				if isRestrictedImport(importPath) && !isTestFile {
+					findings = append(findings, checks.Finding{
+						Path:     relPath,
+						Kind:     "forbidden_import",
+						Message:  fmt.Sprintf("forbidden import: %s may only be imported by _test.go files", importPath),
+						Severity: checks.SeverityError,
+					})
+				}
 			}
 		}
 		return true
@@ -271,6 +294,11 @@ func forbiddenDesc(pkg, fn string) string {
 		return "syscall.ForkExec/Exec must not be called outside internal/execution"
 	}
 	return "forbidden execution call"
+}
+
+// isRestrictedImport returns true if the import path is restricted to test files only.
+func isRestrictedImport(importPath string) bool {
+	return AllowedImports[importPath]
 }
 
 // CheckFile scans a single file for forbidden exec patterns.

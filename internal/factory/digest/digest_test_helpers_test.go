@@ -1,14 +1,15 @@
 // Package digest provides targeted digest generation for Git repositories.
 //
 // Test helpers for integration tests that need to capture both stdout
-// and exit codes from `git`. These wrap `os/exec` directly rather
-// than going through the package's `RunGit` helpers because those
-// helpers drop stdout on non-zero exit.
+// and exit codes from `git`. These wrap os/exec via the exectest
+// package rather than going through the package's RunGit helpers
+// because those helpers drop stdout on non-zero exit.
 package digest
 
 import (
-	"os/exec"
 	"strings"
+
+	"github.com/s1onique/leamas/internal/execution/exectest"
 )
 
 // RunGitForTest runs `git <args>` in `dir`, captures stdout, and
@@ -36,11 +37,14 @@ func RunGitForTest(dir string, args []string) (out string) {
 // command failed to spawn; otherwise the code is whatever `git`
 // returned (0 on success).
 func RunGitWithExitCodeForTest(dir string, args []string) (string, int) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	output, err := cmd.Output()
+	req := exectest.Request{
+		Dir:  dir,
+		Name: "git",
+		Args: args,
+	}
+	output, err := exectest.Output(req)
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		if exitErr, ok := err.(*exectest.ExitError); ok {
 			return string(output), exitErr.ExitCode()
 		}
 		return string(output), -1

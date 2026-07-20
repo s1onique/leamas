@@ -5,7 +5,11 @@ CLOSED — superseded by ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01
 
 ## Motivation
 
-The gate summary decoder implemented a semantic normalization pipeline for v2 documents that was not yet implemented. The DECODER01 ACT established the wire format and decoding contract, but semantic validation and normalization to a canonical internal model was deferred.
+The gate summary decoder required a semantic normalization pipeline for
+v2 documents, but that pipeline had not yet been implemented. The
+DECODER01 ACT established the wire format and decoding contract, but
+semantic validation and normalization to a canonical internal model
+was deferred.
 
 ## Objective
 

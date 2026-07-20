@@ -127,7 +127,7 @@ mode (`dirty` or `range`) based on working tree state. The header reports the
 - **Type**: RFC3339 UTC timestamp
 - **Meaning**: When the digest was generated
 
-## Example Header
+### Example Header
 
 ```
 LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
@@ -137,6 +137,9 @@ LEAMAS_BUILD_TIME: 2026-07-09T10:24:46Z
 DIGEST_MODE: dirty
 DIGEST_CREATED_AT: 2026-09-07T10:50:00Z
 ```
+
+For more header examples and complete digest structure templates,
+see [digest-contract-examples.md](./digest-contract-examples.md).
 
 ## Review Evidence Sections (v2)
 
@@ -319,51 +322,8 @@ See [digest-redaction-policy.md](./digest-redaction-policy.md) for full specific
 
 ## Complete Digest Structure
 
-```
-<CONTRACT HEADER (7 lines)>
-# Targeted digest
-
-Generated at: <timestamp>
-Repo: /path/to/repo
-Mode: <mode>
-...
-
-## CHANGESET_MANIFEST
-...
-
-## CHANGESET_STATS
-...
-
-## REVIEW_MAP
-...
-
-## RISK_SIGNALS
-...
-
-## PATCH_HYGIENE
-...
-
-## EVIDENCE_HASHES
-...
-
-## GATE_SUMMARY
-...
-
-## PUBLIC_SURFACE_DELTA
-...
-
-## DEPENDENCY_DELTA
-...
-
-## Changed files
-...
-
-## Diffs
-...
-
-## Workflow anchors
-...
-```
+For complete digest structure templates and extended examples,
+see [digest-contract-examples.md](./digest-contract-examples.md).
 
 ## Future Extensions
 
@@ -418,3 +378,4 @@ go build -o bin/leamas ./cmd/leamas
 
 - [Digest Documentation](./digest.md)
 - [PATCH_HYGIENE Specification](./digest-patch-hygiene.md)
+- [Digest Contract Examples](./digest-contract-examples.md)

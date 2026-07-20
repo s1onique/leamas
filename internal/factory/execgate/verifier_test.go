@@ -299,3 +299,102 @@ func test() {
 		t.Error("expected to find forbidden exec.LookPath call")
 	}
 }
+
+// TestVerifierAllowsExectestImportFromTestFile verifies that importing
+// exectest from a _test.go file is allowed.
+func TestVerifierAllowsExectestImportFromTestFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "exectest_allowed_test.go")
+
+	content := `package test
+
+import (
+	"github.com/s1onique/leamas/internal/execution/exectest"
+)
+
+func test() {
+	req := exectest.Request{Name: "git", Args: []string{"status"}}
+	exectest.Output(req)
+}
+`
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	findings := CheckFile(tmpFile)
+
+	for _, f := range findings {
+		if f.Kind == "forbidden_import" {
+			t.Errorf("exectest import from _test.go should be allowed, but got finding: %s", f.Message)
+		}
+	}
+}
+
+// TestVerifierRejectsExectestImportFromProductionFile verifies that importing
+// exectest from a non-test file is rejected.
+func TestVerifierRejectsExectestImportFromProductionFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "exectest_rejected.go")
+
+	content := `package production
+
+import (
+	"github.com/s1onique/leamas/internal/execution/exectest"
+)
+
+func RunGit() {
+	req := exectest.Request{Name: "git", Args: []string{"status"}}
+	exectest.Output(req)
+}
+`
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	findings := CheckFile(tmpFile)
+
+	found := false
+	for _, f := range findings {
+		if f.Kind == "forbidden_import" && f.Severity == "error" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected forbidden_import finding for exectest in production code")
+	}
+}
+
+// TestVerifierStillRejectsDirectOSExecOutsideExecution verifies that
+// direct os/exec.Command calls are still forbidden even when exectest is allowed.
+func TestVerifierStillRejectsDirectOSExecOutsideExecution(t *testing.T) {
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "direct_exec_rejected.go")
+
+	content := `package production
+
+import (
+	"os/exec"
+)
+
+func RunGit() {
+	exec.Command("git", "status")
+}
+`
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	findings := CheckFile(tmpFile)
+
+	found := false
+	for _, f := range findings {
+		if f.Kind == "forbidden_exec_call" && f.Severity == "error" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected forbidden_exec_call finding for direct os/exec.Command")
+	}
+}
