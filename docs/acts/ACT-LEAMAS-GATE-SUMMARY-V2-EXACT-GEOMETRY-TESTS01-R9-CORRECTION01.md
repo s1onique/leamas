@@ -208,7 +208,7 @@ git diff --check
 - [x] `make gate` and `make factorize` status recorded honestly (if timed out,
       NOT VERIFIED with exact timeout attribution). NOT VERIFIED: external 300s timeout.
 - [x] New test file stays ≤ 64 KiB and ≤ 400 lines.
-      VERIFIED: 295 lines < 400 lines.
+      VERIFIED: 299 lines < 400 lines.
 - [x] No new files exceed LLM-friendliness limits.
       VERIFIED: LLM-friendly check passed on new files.
 

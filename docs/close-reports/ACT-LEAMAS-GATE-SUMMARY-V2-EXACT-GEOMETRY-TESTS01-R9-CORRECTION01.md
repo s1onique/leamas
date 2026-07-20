@@ -108,22 +108,24 @@ Note: `failNonzeroForTest` panics on zero exit code; `invalidPassCheckForTest` i
 ## Evidence
 
 ```
-$ git log --oneline --reverse 7830832^..7729426
+$ git log --oneline --reverse 7830832^..490a7fe
 7830832 ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01
 81501b6 Close R9-CORRECTION01
 9f6d724 ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01
 7729426 R9-CORRECTION01 final reconciliation
+490a7fe Evidence reconciliation
 
 $ git status
 On branch main
-Your branch is ahead of 'origin/main' by 4 commits.
+Your branch is ahead of 'origin/main' by 5 commits.
 ```
 
-Cumulative range `7830832^..7729426`:
+Cumulative range `7830832^..490a7fe`:
 1. `7830832` - Implementation and R9 reconciliation
 2. `81501b6` - Close report added
 3. `9f6d724` - Lifecycle closure (status marked CLOSED)
 4. `7729426` - Final reconciliation (valid helpers, checked criteria)
+5. `490a7fe` - Evidence reconciliation
 
 ## Closure
 
