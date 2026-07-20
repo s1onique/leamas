@@ -7,23 +7,19 @@ IN PROGRESS
 
 Review of committed NORMALIZATION01 identified several contract defects:
 
-1. **Epic was replaced** rather than updated; authoritative content was lost
-2. **Duplicate-name diagnostic paths** use name instead of index → deduplication hazard
-3. **Projection ignores returned errors** → impossible integer states treated as zero
-4. **Sealed-document validation incomplete** → both pointers populated returns v1
-5. **NormalizeWithFault exported** → should be unexported
-6. **Corpus test is too weak** → doesn't pin complete diagnostic sets
+1. **Epic was replaced** rather than updated; authoritative content was lost → FIXED
+2. **Duplicate-name diagnostic paths** use name instead of index → FIXED
+3. **Projection ignores returned errors** → FIXED
+4. **Sealed-document validation incomplete** → FIXED
+5. **NormalizeWithFault exported** → FIXED
+6. **newIntegerFromWire doesn't return errors** → FIXED
+7. **Stale findDuplicateWireNames helper** → FIXED
 
-## Scope
+## Remaining Scope (P1)
 
-1. Restore authoritative epic
-2. Fix duplicate-name paths: `/checks/<index>/name`
-3. Make projection return and propagate errors
-4. Add sealed-document invariant validation
-5. Unexport NormalizeWithFault
-6. Add literal 41-row corpus matrix
-7. Add missing semantic matrices
-8. Strengthen aliasing tests
+1. Add literal 41-row corpus matrix
+2. Add missing semantic matrices
+3. Strengthen source-document aliasing tests
 
 ## Blocking
 
