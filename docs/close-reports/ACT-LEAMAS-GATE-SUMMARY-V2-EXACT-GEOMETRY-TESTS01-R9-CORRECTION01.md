@@ -9,7 +9,7 @@ Corrected R9 closure and established narrow contract reconnaissance for diagnost
 ## Files Changed
 
 ### Implementation
-- `internal/gatesummary/exact_geometry_r9_correction_test.go` (295 lines) - test file with 4 test functions and 9 helper functions
+- `internal/gatesummary/exact_geometry_r9_correction_test.go` (299 lines) - test file with 4 test functions and 10 helper functions
 
 ### Documentation
 - `docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9.md` (corrected status and evidence)
@@ -72,7 +72,7 @@ git diff --cached --check
    - Valid input: normalization invoked
    - Invalid input: normalization NOT invoked
 
-### Builder Functions Added (9)
+### Builder Functions Added (10)
 
 1. `checkForTest(name, status, exitCode string) string` - internal low-level primitive
 2. `validV2DocumentForTest(checksJSON string) string`
@@ -94,7 +94,7 @@ Note: `failNonzeroForTest` panics on zero exit code; `invalidPassCheckForTest` i
 | Focused package tests | VERIFIED | PASS (7 subtests) |
 | Build | VERIFIED | SUCCESS |
 | Patch hygiene | VERIFIED | No trailing whitespace |
-| LLM-friendly (new files) | VERIFIED | PASS |
+| LLM-friendly (new files) | VERIFIED | Test file: explicitly VERIFIED; docs: line-count and length checks VERIFIED |
 | make factorize | NOT VERIFIED | External 300s timeout |
 | make gate | NOT VERIFIED | External 300s timeout |
 | Full suite | NOT VERIFIED | External 300s timeout |
@@ -108,19 +108,22 @@ Note: `failNonzeroForTest` panics on zero exit code; `invalidPassCheckForTest` i
 ## Evidence
 
 ```
-$ git log --oneline HEAD~2..HEAD
+$ git log --oneline --reverse 7830832^..7729426
+7830832 ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01
 81501b6 Close R9-CORRECTION01
 9f6d724 ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01
+7729426 R9-CORRECTION01 final reconciliation
 
 $ git status
 On branch main
-Your branch is ahead of 'origin/main' by 3 commits.
+Your branch is ahead of 'origin/main' by 4 commits.
 ```
 
-Cumulative three-commit range `HEAD~2..HEAD`:
+Cumulative range `7830832^..7729426`:
 1. `7830832` - Implementation and R9 reconciliation
 2. `81501b6` - Close report added
 3. `9f6d724` - Lifecycle closure (status marked CLOSED)
+4. `7729426` - Final reconciliation (valid helpers, checked criteria)
 
 ## Closure
 
