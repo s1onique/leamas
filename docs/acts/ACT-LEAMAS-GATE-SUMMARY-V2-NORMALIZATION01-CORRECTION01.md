@@ -18,7 +18,7 @@ Review of committed NORMALIZATION01 identified several contract defects:
 
 ## Completed
 
-**P0 Production Fixes (c39fcfa..6689350):**
+**P0 Production Fixes (c39fcfa..c5fc16d):**
 - `validateSealed()` rejects both invalid pointer states
 - `projectV1` and `projectV2` now propagate integer-conversion errors
 - `newIntegerFromWire` rejects empty values and validates complete decimal string with `big.Int.SetString`

@@ -131,6 +131,9 @@ func TestMalformedWireIntegerPublicBoundary(t *testing.T) {
 		if result.Err == nil {
 			t.Error("Normalize: expected non-nil error")
 		}
+		if result.Summary.Valid() {
+			t.Error("Normalize: expected zero summary on operational failure")
+		}
 	})
 
 	t.Run("malformed v2 duration_ms via Normalize", func(t *testing.T) {
@@ -158,6 +161,9 @@ func TestMalformedWireIntegerPublicBoundary(t *testing.T) {
 		}
 		if result.Err == nil {
 			t.Error("Normalize: expected non-nil error")
+		}
+		if result.Summary.Valid() {
+			t.Error("Normalize: expected zero summary on operational failure")
 		}
 	})
 
@@ -188,6 +194,9 @@ func TestMalformedWireIntegerPublicBoundary(t *testing.T) {
 		if result.Err == nil {
 			t.Error("Normalize: expected non-nil error")
 		}
+		if result.Summary.Valid() {
+			t.Error("Normalize: expected zero summary on operational failure")
+		}
 	})
 
 	t.Run("malformed v2 test_total via Normalize", func(t *testing.T) {
@@ -214,6 +223,9 @@ func TestMalformedWireIntegerPublicBoundary(t *testing.T) {
 		}
 		if result.Err == nil {
 			t.Error("Normalize: expected non-nil error")
+		}
+		if result.Summary.Valid() {
+			t.Error("Normalize: expected zero summary on operational failure")
 		}
 	})
 }
