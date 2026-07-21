@@ -24,13 +24,14 @@ import (
 // treats a record with SignalReady=false as proof that the process has not
 // yet reached the required state and must not publish readiness.
 type PIDRecord struct {
-	Role        string `json:"role"` // "parent", "child", "grandchild"
-	Mode        string `json:"mode"` // The mode that created this record
-	PID         int    `json:"pid"`  // Process ID
-	PPID        int    `json:"ppid"` // Parent process ID
-	PGID        int    `json:"pgid"` // Process group ID
-	Start       int64  `json:"start"`
-	SignalReady bool   `json:"signal_ready"` // True iff required signal handlers already installed
+	Role        string         `json:"role"` // "parent", "child", "grandchild"
+	Mode        string         `json:"mode"` // The mode that created this record
+	PID         int            `json:"pid"`  // Process ID
+	PPID        int            `json:"ppid"` // Parent process ID
+	PGID        int            `json:"pgid"` // Process group ID
+	Start       int64          `json:"start"`
+	SignalReady bool           `json:"signal_ready"` // True iff required signal handlers already installed
+	Descriptors *descriptorSet `json:"descriptors,omitempty"`
 }
 
 var (
@@ -98,6 +99,21 @@ func publishReady(role string) {
 // All underlying write failures exit the helper with a non-zero status so
 // the test harness treats a silently truncated manifest as a helper failure.
 func recordPID(role string, mode string, signalReady bool) {
+	recordPIDWithEvidence(role, mode, signalReady, nil)
+}
+
+func recordPIDWithDescriptors(role string, mode string, signalReady bool) descriptorSet {
+	descriptors, err := captureDescriptorSet()
+	if err != nil {
+		failClosed(mode, "capture stdout/stderr descriptors: %v", err)
+	}
+	recordPIDWithEvidence(role, mode, signalReady, &descriptors)
+	return descriptors
+}
+
+func recordPIDWithEvidence(role string, mode string, signalReady bool,
+	descriptors *descriptorSet,
+) {
 	if manifestFile == "" {
 		// Must fail closed if no manifest file
 		fmt.Fprintf(os.Stderr, "ERROR: LEAMAS_EXEC_TEST_PID_FILE not set\n")
@@ -116,6 +132,7 @@ func recordPID(role string, mode string, signalReady bool) {
 		PGID:        pgid,
 		Start:       time.Now().Unix(),
 		SignalReady: signalReady,
+		Descriptors: descriptors,
 	}
 
 	data, err := json.Marshal(record)

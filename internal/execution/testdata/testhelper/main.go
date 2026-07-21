@@ -12,6 +12,7 @@
 //   - hold-stdout-open: Parent that spawns child holding stdout/stderr open
 //   - output-forever: Outputs data forever until killed
 //   - exit-nonzero: Exits with code 42
+//   - identity: Emits the source digest embedded by the test harness
 //
 // The helper is composed of multiple files:
 //
@@ -41,6 +42,10 @@ func main() {
 	mode := os.Args[1]
 
 	switch mode {
+	// Build identity mode.
+	case "identity":
+		runIdentity()
+
 	// Lifecycle and cancellation modes.
 	case "sleep":
 		runSleep(mode, os.Args[2:])

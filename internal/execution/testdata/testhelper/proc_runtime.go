@@ -84,9 +84,17 @@ func spawnChildFailClosed(context, mode string, args ...string) *exec.Cmd {
 // stdout/stderr must continue using spawnChildFailClosed; the explicit
 // choice prevents silent descriptor inheritance regressions.
 func spawnChildWithInheritedOutputFailClosed(context, mode string, args ...string) *exec.Cmd {
-	cmd := spawnChildFailClosed(context, mode, args...)
+	cmd, err := startChild(mode, args...)
+	if err != nil {
+		failClosed(context, "%v", err)
+	}
+	// These assignments must precede Start. Assigning them afterward leaves
+	// the already-started child connected to the null device.
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		failClosed(context, "cmd.Start failed: %v", err)
+	}
 	return cmd
 }
 
