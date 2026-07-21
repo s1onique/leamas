@@ -33,23 +33,14 @@ func TestRunGit_Success(t *testing.T) {
 func TestRunGit_ExitCode(t *testing.T) {
 	ctx := context.Background()
 	result, err := RunGit(ctx, ".", "rev-parse", "nonexistent")
-	// Nonzero exit code may be returned as error
 	if result.ExitCode == 0 {
 		t.Error("expected nonzero exit code for nonexistent ref")
 	}
-	_ = err // err may be present for nonzero exit
+	_ = err
 }
 
 func TestRunGit_DefaultTimeout(t *testing.T) {
-	// context.Background() should get default timeout applied
 	ctx := context.Background()
-
-	// Verify default timeout is applied by checking Deadline()
-	deadlineCtx, ok := ctx.Deadline()
-	if ok {
-		t.Logf("context already has deadline: %v", deadlineCtx)
-	}
-
 	result, err := RunGit(ctx, ".", "rev-parse", "--is-inside-work-tree")
 	if err != nil {
 		t.Fatalf("unexpected error with Background context: %v", err)
@@ -60,7 +51,6 @@ func TestRunGit_DefaultTimeout(t *testing.T) {
 }
 
 func TestRunGit_DeadlineExceeded(t *testing.T) {
-	// Context deadline should interrupt git
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 
@@ -71,24 +61,18 @@ func TestRunGit_DeadlineExceeded(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("expected DeadlineExceeded, got %v", err)
 	}
-	// Exit code should indicate timeout
 	if result.ExitCode != -1 && result.ExitCode != 124 {
 		t.Logf("note: deadline exit code %d may vary", result.ExitCode)
 	}
 }
 
 func TestRunGit_Cancellation(t *testing.T) {
-	// Caller cancellation must interrupt git
 	ctx, cancel := context.WithCancel(context.Background())
-
-	// Start cancellation after a short delay
 	go func() {
 		time.Sleep(50 * time.Millisecond)
 		cancel()
 	}()
-
 	result, err := RunGit(ctx, ".", "rev-list", "--all", "--count")
-	// Either cancelled or fast command completed
 	if err != nil {
 		if !errors.Is(err, context.Canceled) {
 			t.Errorf("expected Canceled, got %v", err)
@@ -98,7 +82,6 @@ func TestRunGit_Cancellation(t *testing.T) {
 }
 
 func TestRunGit_OutputLimit(t *testing.T) {
-	// Large output should be captured up to limit
 	ctx := context.Background()
 	result, err := RunGit(ctx, ".", "log", "--format=%H%n", "-n", "100")
 	if err != nil {
@@ -118,9 +101,8 @@ func TestRunGit_RawOutputPreservesNUL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// NUL-delimited output should have NUL bytes
 	if len(result.Stdout) > 0 && !strings.Contains(string(result.Stdout), "\x00") {
-		t.Log("note: HEAD may be empty or use different format")
+		t.Errorf("expected NUL-delimited output, got: %q", result.Stdout)
 	}
 }
 
@@ -130,7 +112,6 @@ func TestRunGit_StderrCapture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// stderr should be empty on success
 	if len(result.Stderr) > 0 {
 		t.Errorf("unexpected stderr content: %s", result.Stderr)
 	}
@@ -160,8 +141,9 @@ func TestBoundedWriter_ExactlyLimit(t *testing.T) {
 }
 
 func TestBoundedWriter_Overflow(t *testing.T) {
+	called := 0
 	input := strings.Repeat("x", 200)
-	lr := &boundedWriter{w: &strings.Builder{}, rem: 100, onOverflow: func() {}}
+	lr := &boundedWriter{w: &strings.Builder{}, rem: 100, onOverflow: func() { called++ }}
 	n, err := lr.Write([]byte(input))
 	if err == nil {
 		t.Error("expected error on overflow")
@@ -169,23 +151,62 @@ func TestBoundedWriter_Overflow(t *testing.T) {
 	if !errors.Is(err, ErrOutputLimit) {
 		t.Errorf("expected ErrOutputLimit, got %v", err)
 	}
-	// Should return actual bytes written (100)
 	if n != 100 {
 		t.Errorf("expected 100 (bytes actually written), got %d", n)
 	}
-	if !lr.exceeded {
-		t.Error("expected exceeded flag to be set")
+	if called != 1 {
+		t.Errorf("expected overflow callback called once, got %d", called)
 	}
 }
 
-func TestBoundedWriter_AfterDone(t *testing.T) {
-	lr := &boundedWriter{w: &strings.Builder{}, rem: 5, done: true}
-	n, err := lr.Write([]byte("hello"))
+func TestBoundedWriter_AfterOverflow(t *testing.T) {
+	called := 0
+	lr := &boundedWriter{w: &strings.Builder{}, rem: 5, onOverflow: func() { called++ }}
+	// First write of 10 bytes overflows immediately
+	_, err := lr.Write([]byte("0123456789"))
 	if err == nil {
-		t.Error("expected error after done")
+		t.Error("expected error")
 	}
-	if n != 0 {
-		t.Errorf("expected 0, got %d", n)
+	// Second write should also fail and NOT call overflow again
+	_, err = lr.Write([]byte("more"))
+	if err == nil {
+		t.Error("expected error on second write")
+	}
+	if called != 1 {
+		t.Errorf("expected overflow callback called exactly once, got %d", called)
+	}
+}
+
+func TestBoundedWriter_ExactLimitThenOneByte(t *testing.T) {
+	// Regression test for exact-limit split writes bypassing cancellation
+	called := 0
+	lr := &boundedWriter{w: &strings.Builder{}, rem: 10, onOverflow: func() { called++ }}
+
+	// First write: exactly 10 bytes - should succeed
+	n1, err1 := lr.Write([]byte("0123456789"))
+	if err1 != nil {
+		t.Errorf("first write should succeed, got error: %v", err1)
+	}
+	if n1 != 10 {
+		t.Errorf("expected 10, got %d", n1)
+	}
+	if called != 0 {
+		t.Errorf("callback should not fire on exact limit, got %d", called)
+	}
+
+	// Second write: 1 byte - should trigger overflow
+	n2, err2 := lr.Write([]byte("X"))
+	if err2 == nil {
+		t.Error("expected error on overflow after exact limit")
+	}
+	if !errors.Is(err2, ErrOutputLimit) {
+		t.Errorf("expected ErrOutputLimit, got %v", err2)
+	}
+	if n2 != 0 {
+		t.Errorf("expected 0 bytes written, got %d", n2)
+	}
+	if called != 1 {
+		t.Errorf("expected callback to fire exactly once, got %d", called)
 	}
 }
 
@@ -195,7 +216,9 @@ func TestRunGit_BothStreams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	t.Logf("stdout: %d bytes, stderr: %d bytes", len(result.Stdout), len(result.Stderr))
+	if len(result.Stdout) == 0 {
+		t.Error("expected non-empty stdout")
+	}
 }
 
 func TestBoundedWriter_OnOverflowCallback(t *testing.T) {
@@ -212,5 +235,44 @@ func TestBoundedWriter_OnOverflowCallback(t *testing.T) {
 	}
 	if !called {
 		t.Error("expected overflow callback to be called")
+	}
+}
+
+// TestRunGitWithLimits exercises the test seam with deterministic limits.
+func TestRunGitWithLimits_Success(t *testing.T) {
+	ctx := context.Background()
+	result, err := runCommandWithLimits(ctx, "true", ".", 5*time.Second, 1024)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", result.ExitCode)
+	}
+}
+
+func TestRunGitWithLimits_Overflow(t *testing.T) {
+	// Use /bin/sh -c 'yes' to overflow the output limit
+	ctx := context.Background()
+	_, err := runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 100, "-c", "yes | head -c 1000")
+	if err == nil {
+		t.Error("expected ErrOutputLimit")
+	}
+	if !errors.Is(err, ErrOutputLimit) {
+		t.Errorf("expected ErrOutputLimit, got %v", err)
+	}
+}
+
+func TestAtomicBool(t *testing.T) {
+	var ab atomicBool
+	if ab.get() {
+		t.Error("expected initial false")
+	}
+	ab.set(true)
+	if !ab.get() {
+		t.Error("expected true after set")
+	}
+	ab.set(false)
+	if ab.get() {
+		t.Error("expected false after reset")
 	}
 }
