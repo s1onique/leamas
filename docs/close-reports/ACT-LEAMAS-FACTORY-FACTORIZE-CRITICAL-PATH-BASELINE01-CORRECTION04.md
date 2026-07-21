@@ -2,7 +2,13 @@
 
 ## Status
 
-COMPLETED. Fast gate green; readiness-synchronized SIGTERM proof holds.
+COMPLETED through CORRECTION05. Both forward commits were authored
+and the close-report lifecycle now matches the implemented tree.
+
+This ACT was originally closed in narrative form by the CORRECTION05
+ACT, which bound the lifecycle to actual commit identities and
+converged findings F1-F5 that the CORRECTION04 close had flagged as
+outstanding.
 
 ## Intent
 
@@ -21,13 +27,18 @@ behavior remains unchanged.
 
 ## Implementation Commits
 
-The corrections were developed on a branch (not yet committed at the time
-this report was written). The intended commit structure is:
+The corrections were committed as forward commits on `main`:
 
 ```text
-test(execution): synchronize adversarial SIGTERM readiness
-test(execution): fail closed on helper child startup and exit
-docs(acts):  close critical-path CORRECTION04
+0371cfe test(execution): synchronize adversarial SIGTERM readiness
+efe72d3 test(execution): fail closed on helper child startup and exit
+```
+
+The CORRECTION04 ACT's third "docs(acts): close critical-path
+CORRECTION04" commit was folded into the CORRECTION05 commit set
+that contains the matching `docs(close-reports): close
+critical-path CORRECTION05` commit plus the
+`docs(acts): critical-path CORRECTION05` file.
 ```
 
 Forward commits only. Historical CORRECTION03 implementation commits were
