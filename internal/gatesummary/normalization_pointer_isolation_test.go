@@ -97,7 +97,7 @@ func TestNormalizationExitCodeIntegerIndependence(t *testing.T) {
 		}
 	}
 	if idx < 0 {
-		t.Skip("no check with exit code in v2-full fixture")
+		t.Fatal("v2-full fixture has no check with an exit code")
 	}
 
 	firstExit := first.Summary.Checks[idx].Execution.ExitCode
