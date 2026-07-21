@@ -169,30 +169,38 @@ func runCommandWithLimits(
 		}, ErrOutputLimit
 	}
 
-	// Check context state for error classification
-	select {
-	case <-runCtx.Done():
-		if runCtx.Err() == context.DeadlineExceeded {
-			return GitResult{
-				Stdout:   stdout.Bytes(),
-				Stderr:   stderr.Bytes(),
-				ExitCode: exitCode,
-			}, context.DeadlineExceeded
-		}
-		// Cancelled by caller
+	// Successful completion takes precedence over post-Wait context cancellation.
+	// A nil waitErr means the command completed normally even if the caller
+	// cancelled the context after Wait returned.
+	if waitErr == nil {
+		return GitResult{
+			Stdout:   stdout.Bytes(),
+			Stderr:   stderr.Bytes(),
+			ExitCode: 0,
+		}, nil
+	}
+
+	// Now classify error: context errors take precedence over command exit errors
+	if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+		return GitResult{
+			Stdout:   stdout.Bytes(),
+			Stderr:   stderr.Bytes(),
+			ExitCode: exitCode,
+		}, context.DeadlineExceeded
+	}
+	if errors.Is(runCtx.Err(), context.Canceled) {
 		return GitResult{
 			Stdout:   stdout.Bytes(),
 			Stderr:   stderr.Bytes(),
 			ExitCode: exitCode,
 		}, context.Canceled
-	default:
-		// Context not cancelled
-		return GitResult{
-			Stdout:   stdout.Bytes(),
-			Stderr:   stderr.Bytes(),
-			ExitCode: exitCode,
-		}, waitErr
 	}
+
+	return GitResult{
+		Stdout:   stdout.Bytes(),
+		Stderr:   stderr.Bytes(),
+		ExitCode: exitCode,
+	}, waitErr
 }
 
 // atomicBool provides atomic boolean operations without sync/atomic dep.

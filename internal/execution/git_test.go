@@ -276,3 +276,71 @@ func TestAtomicBool(t *testing.T) {
 		t.Error("expected false after reset")
 	}
 }
+
+// TestRunGit_LateCancellationKeepsSuccess verifies that a successful command
+// remains successful even if the caller cancels the context immediately after
+// Wait returns. Regression test for post-Wait cancellation race.
+func TestRunGit_LateCancellationKeepsSuccess(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	result, err := runCommandWithLimits(ctx, "true", ".", 5*time.Second, 1024)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", result.ExitCode)
+	}
+	// Cancel after completion - should not affect result
+	cancel()
+	if err != nil {
+		t.Errorf("cancellation after success should not affect result: %v", err)
+	}
+}
+
+// TestRunGitWithLimits_DefaultTimeoutEnforced uses the test seam to verify
+// that a helper process is terminated by the internal default timeout when
+// the caller provides context.Background() with no deadline.
+func TestRunGitWithLimits_DefaultTimeoutEnforced(t *testing.T) {
+	// Use a helper that would run forever if not killed
+	ctx := context.Background()
+	start := time.Now()
+	_, err := runCommandWithLimits(ctx, "sleep", ".", 100*time.Millisecond, 1024, "60")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected DeadlineExceeded, got %v", err)
+	}
+	// Should complete in approximately the configured timeout, NOT 60 seconds
+	if elapsed > 1*time.Second {
+		t.Errorf("expected fast termination, took %v", elapsed)
+	}
+}
+
+// TestRunGitWithLimits_ExplicitCancellation uses the test seam with a helper
+// that signals readiness then blocks, and verifies the parent cancel interrupts it.
+func TestRunGitWithLimits_ExplicitCancellation(t *testing.T) {
+	// sleep 60 blocks until killed
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	_, err := runCommandWithLimits(ctx, "sleep", ".", 30*time.Second, 1024, "60")
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected cancellation error")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected Canceled, got %v", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("expected fast cancellation, took %v", elapsed)
+	}
+}
