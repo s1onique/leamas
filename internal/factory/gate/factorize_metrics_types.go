@@ -6,13 +6,6 @@ import "time"
 // MetricsSchema is the schema identifier for factorize metrics v3.
 const MetricsSchema = "factorize-performance-v3"
 
-// ResourceSnapshot represents a point-in-time resource observation.
-type ResourceSnapshot struct {
-	UserCPU         time.Duration
-	SystemCPU       time.Duration
-	ProcessMaxRSSKB int64
-}
-
 // HostIdentity captures the measurement host characteristics.
 type HostIdentity struct {
 	GoVersion       string `json:"go_version"`

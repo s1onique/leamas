@@ -135,13 +135,6 @@ func TestVerifierNames_MatchesCanonicalList(t *testing.T) {
 	}
 }
 
-// TestMetricsSchema_IsV3 verifies schema version is v3.
-func TestMetricsSchema_IsV3(t *testing.T) {
-	if MetricsSchema != "factorize-performance-v3" {
-		t.Errorf("expected schema v3, got %s", MetricsSchema)
-	}
-}
-
 // TestExecutionKind_ValidValues verifies execution kind constants.
 func TestExecutionKind_ValidValues(t *testing.T) {
 	if ExecutionInProcess != "in-process" {

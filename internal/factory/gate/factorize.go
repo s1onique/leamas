@@ -1,12 +1,4 @@
 // Package gate provides the factorize runner with wall-clock timings.
-//
-// Timings are deliberately excluded from JSON, digest, fingerprint,
-// and snapshot contracts; they live only in the interactive text
-// progress output of `leamas factory factorize`. The clock is injected
-// so tests can assert exact elapsed-time formatting without sleeping.
-//
-// When LEAMAS_FACTORIZE_METRICS_FILE is set, machine-readable per-verifier
-// metrics are written atomically to the specified path after the run.
 package gate
 
 import (
@@ -37,11 +29,8 @@ func (systemClock) Now() time.Time { return time.Now() }
 //	"name: OK: 0.14s"
 //	"name: FAILED: 0.91s"
 //
-// The duration is always reported, even on failure, so slow failing
-// checks remain visible. The function returns the findings produced
-// by the check so the caller can render detail lines when needed.
-//
-// If metrics is non-nil, resource usage is also collected for the check.
+// Resource usage is sampled before and after the verifier to cover
+// execution. Both samples must succeed or the check fails.
 func runCheck(
 	out io.Writer,
 	clk clock,
@@ -49,7 +38,14 @@ func runCheck(
 	metrics *MetricsCollectionV3,
 	ordinal int,
 	root string,
+	sampler ResourceSampler,
 ) ([]checks.Finding, error) {
+	// Sample before verifier execution
+	before, err := sampler.Sample()
+	if err != nil {
+		return nil, fmt.Errorf("resource sample before %s: %w", verifier.Name, err)
+	}
+
 	started := clk.Now()
 	findings := verifier.Run(root)
 	elapsed := clk.Now().Sub(started)
@@ -61,10 +57,13 @@ func runCheck(
 
 	fmt.Fprintf(out, "  %s: %s: %.2fs\n", verifier.Name, status, elapsed.Seconds())
 
+	// Sample after verifier execution
+	after, err := sampler.Sample()
+	if err != nil {
+		return findings, fmt.Errorf("resource sample after %s: %w", verifier.Name, err)
+	}
+
 	if metrics != nil {
-		sampler := &PlatformSampler{}
-		before, _ := sampler.Sample()
-		after, _ := sampler.Sample()
 		env := os.Environ()
 
 		if err := metrics.AddCheckWithResources(
@@ -100,6 +99,7 @@ func runFactorize(
 	root string,
 	verifiers []Verifier,
 	metrics *MetricsCollectionV3,
+	sampler ResourceSampler,
 ) int {
 	sorted := make([]Verifier, len(verifiers))
 	copy(sorted, verifiers)
@@ -112,7 +112,7 @@ func runFactorize(
 
 	ordinal := 1
 	for _, v := range sorted {
-		findings, err := runCheck(out, clk, v, metrics, ordinal, root)
+		findings, err := runCheck(out, clk, v, metrics, ordinal, root, sampler)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			failed = true

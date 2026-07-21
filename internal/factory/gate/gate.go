@@ -122,6 +122,8 @@ func shouldCollectMetrics() bool {
 }
 
 // RunFactorize runs all Factory policy verifiers without toolchain checks.
+// When LEAMAS_FACTORIZE_METRICS_FILE is set, metrics are collected and published.
+// Metrics collection failures cause factorize to exit non-zero (fail-closed).
 func RunFactorize(root string) int {
 	verifiers := AllVerifiers()
 
@@ -132,27 +134,75 @@ func RunFactorize(root string) int {
 	}
 
 	var mc *MetricsCollectionV3
-	var err error
+	var sampler ResourceSampler
+
+	// Metrics collection is enabled when the destination path is set
 	if shouldCollectMetrics() {
-		mc, err = NewMetricsCollectionV3(metricsFilePath(), metricsScenario(), metricsSequence())
+		var err error
+
+		// Validate scenario is provided
+		scenario := metricsScenario()
+		if scenario == "" {
+			fmt.Fprintf(os.Stderr, "factory metrics: LEAMAS_FACTORIZE_SCENARIO required when LEAMAS_FACTORIZE_METRICS_FILE is set\n")
+			return 1
+		}
+
+		// Validate sequence is provided
+		sequence := metricsSequence()
+		if sequence == "" {
+			fmt.Fprintf(os.Stderr, "factory metrics: LEAMAS_FACTORIZE_SEQUENCE required when LEAMAS_FACTORIZE_METRICS_FILE is set\n")
+			return 1
+		}
+
+		mc, err = NewMetricsCollectionV3(metricsFilePath(), scenario, sequence)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "factory metrics configuration: %v\n", err)
 			return 1
 		}
+
+		// Collect subject identity from the repository
+		identity, err := CollectSubjectIdentity(root)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "factory metrics: subject identity collection: %v\n", err)
+			return 1
+		}
+
+		if err := ValidateSubjectIdentity(identity); err != nil {
+			fmt.Fprintf(os.Stderr, "factory metrics: invalid subject identity: %v\n", err)
+			return 1
+		}
+
 		mc.SetSubjectIdentity(
-			os.Getenv("LEAMAS_FACTORIZE_HEAD_OID"),
-			os.Getenv("LEAMAS_FACTORIZE_TREE_OID"),
-			os.Getenv("LEAMAS_FACTORIZE_WORKTREE_STATE"),
-			os.Getenv("LEAMAS_FACTORIZE_SUBJECT_DIGEST"),
+			identity.HeadOID,
+			identity.TreeOID,
+			identity.WorktreeState,
+			identity.SubjectInputDigest,
 		)
+
+		sampler = NewPlatformSampler()
+	} else {
+		// Use a no-op sampler when metrics are disabled
+		sampler = &noopSampler{}
 	}
-	result := runFactorize(os.Stdout, systemClock{}, root, verifiers, mc)
+
+	result := runFactorize(os.Stdout, systemClock{}, root, verifiers, mc, sampler)
+
+	// Fail-closed: metrics finalization errors cause factorize to fail
 	if mc != nil {
-		if pubErr := mc.Finalize(result != 0); pubErr != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to write metrics: %v\n", pubErr)
+		if err := mc.Finalize(result != 0); err != nil {
+			fmt.Fprintf(os.Stderr, "factory metrics finalization: %v\n", err)
+			return 1
 		}
 	}
+
 	return result
+}
+
+// noopSampler is a sampler that always succeeds with zero values.
+type noopSampler struct{}
+
+func (n *noopSampler) Sample() (ResourceSnapshot, error) {
+	return ResourceSnapshot{}, nil
 }
 
 // RunGateFast runs the gate in fast mode. It executes only fast-lane verifiers

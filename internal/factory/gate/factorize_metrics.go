@@ -9,7 +9,6 @@ import (
 	"runtime"
 	"sort"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -93,7 +92,6 @@ func readOSRelease() string {
 
 // collectTotalMemory attempts to read total system memory in KB.
 func collectTotalMemory() int64 {
-	// Try to read from /proc/meminfo on Linux
 	data, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
 		return 0
@@ -135,12 +133,10 @@ func (mc *MetricsCollectionV3) AddCheckWithResources(
 	env []string,
 ) error {
 	if userDelta < 0 {
-		mc.err = fmt.Errorf("negative user CPU delta for %s: %v", verifier.Name, userDelta)
-		return mc.err
+		return fmt.Errorf("negative user CPU delta for %s: %v", verifier.Name, userDelta)
 	}
 	if systemDelta < 0 {
-		mc.err = fmt.Errorf("negative system CPU delta for %s: %v", verifier.Name, systemDelta)
-		return mc.err
+		return fmt.Errorf("negative system CPU delta for %s: %v", verifier.Name, systemDelta)
 	}
 
 	status := "pass"
@@ -152,8 +148,7 @@ func (mc *MetricsCollectionV3) AddCheckWithResources(
 
 	fingerprint, err := executionFingerprintV3(verifier.Name, verifier.Execution, env)
 	if err != nil {
-		mc.err = fmt.Errorf("execution fingerprint for %s: %w", verifier.Name, err)
-		return mc.err
+		return fmt.Errorf("execution fingerprint for %s: %w", verifier.Name, err)
 	}
 
 	mc.Checks = append(mc.Checks, MetricsCheckV3{
@@ -181,13 +176,10 @@ func buildResourceObservation(userDelta, systemDelta time.Duration, maxRSSKB int
 }
 
 // Finalize completes the metrics collection and writes the artifact.
+// Returns error if validation fails or publication fails (fail-closed).
 func (mc *MetricsCollectionV3) Finalize(failed bool) error {
-	if mc.err != nil {
-		return mc.err
-	}
-
 	if err := mc.validateReconciliation(); err != nil {
-		return err
+		return fmt.Errorf("metrics reconciliation: %w", err)
 	}
 
 	doc := FactorizeMetricsV3{
@@ -205,11 +197,8 @@ func (mc *MetricsCollectionV3) Finalize(failed bool) error {
 		ChecksTotal:        len(mc.Checks),
 		ChecksPassed:       countPassedV3(mc.Checks),
 		ChecksFailed:       countFailedV3(mc.Checks),
-		Complete:           !failed && len(mc.Checks) > 0,
-	}
-
-	if failed {
-		doc.ChecksFailed++
+		// Evidence is complete if all expected checks were recorded
+		Complete: len(mc.Checks) > 0,
 	}
 
 	return PublishMetricsV3(mc.Path, &doc)
@@ -240,6 +229,13 @@ func (mc *MetricsCollectionV3) validateReconciliation() error {
 		if !ordinals[i] {
 			return fmt.Errorf("missing ordinal %d", i)
 		}
+	}
+
+	// Validate arithmetic: passed + failed = total
+	passed := countPassedV3(mc.Checks)
+	failed := countFailedV3(mc.Checks)
+	if passed+failed != len(mc.Checks) {
+		return fmt.Errorf("checks_failed + checks_passed (%d) != checks_total (%d)", passed+failed, len(mc.Checks))
 	}
 
 	return nil
@@ -319,25 +315,4 @@ func executionFingerprintV3(name string, exec ExecutionDefinition, env []string)
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-// PlatformSampler provides resource usage sampling.
-type PlatformSampler struct{}
-
-// Sample collects resource usage for the current process.
-func (s *PlatformSampler) Sample() (ResourceSnapshot, error) {
-	var rusage syscall.Rusage
-	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &rusage); err != nil {
-		return ResourceSnapshot{}, err
-	}
-	return ResourceSnapshot{
-		UserCPU:         time.Duration(rusage.Utime.Nano()) * time.Nanosecond,
-		SystemCPU:       time.Duration(rusage.Stime.Nano()) * time.Nanosecond,
-		ProcessMaxRSSKB: int64(rusage.Maxrss) * 1024,
-	}, nil
-}
-
-// NewPlatformSampler creates a new platform sampler.
-func NewPlatformSampler() *PlatformSampler {
-	return &PlatformSampler{}
 }

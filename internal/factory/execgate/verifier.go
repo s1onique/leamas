@@ -43,6 +43,8 @@ var AllowedFiles = map[string]bool{
 	"internal/factory/gate/gate_failure_output_test.go":    true,
 	"internal/factory/gate/gate_failure_execution_test.go": true,
 	"internal/factory/gate/toolchain.go":                   true,
+	"internal/factory/gate/subject_identity.go":            true,
+	"internal/factory/gate/platform_sampler.go":            true,
 	"internal/factory/digest/git.go":                       true,
 	"internal/factory/digest/digest_auto_test.go":          true,
 	"internal/factory/dupcode/baseline_verify.go":          true,

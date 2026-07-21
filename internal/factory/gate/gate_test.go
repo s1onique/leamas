@@ -131,5 +131,5 @@ func TestRunFactorizeFixtures(t *testing.T) {
 
 // runFactorizeForTest wraps runFactorize with a fake clock for testing.
 func runFactorizeForTest(verifiers []Verifier) int {
-	return runFactorize(&bytes.Buffer{}, systemClock{}, ".", verifiers, nil)
+	return runFactorize(&bytes.Buffer{}, systemClock{}, ".", verifiers, nil, &noopSampler{})
 }
