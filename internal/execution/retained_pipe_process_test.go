@@ -39,6 +39,33 @@ func waitForSinglePath(pattern string, deadline time.Time) (string, error) {
 	return "", fmt.Errorf("deadline exceeded waiting for %q", pattern)
 }
 
+// waitForSyncedEvidence polls the directory for a file whose name carries
+// the supplied prefix. It then re-reads the file until a read returns the
+// same size as the path's current stat; that synchronization eliminates the
+// race where a successful Glob returns the path before the helper's
+// write+close completes. A trailing empty-file read is the canonical
+// symptom of reading while the helper still has the file open and is
+// therefore re-raised as a read error rather than misparsed evidence.
+func waitForSyncedEvidence(dir, prefix string, deadline time.Time) (
+	string, []byte, error,
+) {
+	pattern := filepath.Join(dir, "*"+prefix+"*")
+	for time.Now().Before(deadline) {
+		matches, err := filepath.Glob(pattern)
+		if err == nil && len(matches) == 1 {
+			stat, statErr := os.Stat(matches[0])
+			if statErr == nil && stat.Size() > 0 {
+				contents, readErr := os.ReadFile(matches[0])
+				if readErr == nil && int64(len(contents)) == stat.Size() {
+					return matches[0], contents, nil
+				}
+			}
+		}
+		time.Sleep(readinessPollInterval)
+	}
+	return "", nil, fmt.Errorf("deadline exceeded waiting for %q", pattern)
+}
+
 func waitForProcessAbsent(verifier *processVerifier, pid int,
 	deadline time.Time,
 ) error {

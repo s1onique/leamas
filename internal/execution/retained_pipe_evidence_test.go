@@ -55,15 +55,12 @@ type retainedPipeHandoff struct {
 func waitForRetainedPipeHandoff(t *testing.T, verifier *processVerifier) retainedPipeHandoff {
 	t.Helper()
 	deadline := time.Now().Add(retainedPipeTimeout)
-	readyPath, err := waitForSinglePath(filepath.Join(verifier.ReadyDir(),
-		"*.descriptor-ready.ready"), deadline)
+	readyPath, readyBytes, err := waitForSyncedEvidence(
+		verifier.ReadyDir(), ".descriptor-ready.ready", deadline)
 	if err != nil {
 		t.Fatalf("descriptor readiness: %v", err)
 	}
-	readyBytes, err := os.ReadFile(readyPath)
-	if err != nil {
-		t.Fatalf("read descriptor readiness: %v", err)
-	}
+	_ = readyPath
 	ready, err := parseDescriptorReadyContent(string(readyBytes))
 	if err != nil {
 		t.Fatalf("parse descriptor readiness: %v", err)
@@ -77,14 +74,10 @@ func waitForRetainedPipeHandoff(t *testing.T, verifier *processVerifier) retaine
 		t.Fatalf("invalid retained-pipe topology: %v", err)
 	}
 
-	exitPath, err := waitForSinglePath(filepath.Join(verifier.ReadyDir(),
-		"parent-exit-imminent.*"), deadline)
+	_, exitBytes, err := waitForSyncedEvidence(
+		verifier.ReadyDir(), "parent-exit-imminent.", deadline)
 	if err != nil {
 		t.Fatalf("parent exit evidence: %v", err)
-	}
-	exitBytes, err := os.ReadFile(exitPath)
-	if err != nil {
-		t.Fatalf("read parent exit evidence: %v", err)
 	}
 	exit, err := parseParentExitEvidence(string(exitBytes))
 	if err != nil {
