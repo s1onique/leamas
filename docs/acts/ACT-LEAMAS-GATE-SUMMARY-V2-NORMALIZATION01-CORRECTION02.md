@@ -126,15 +126,24 @@ git merge-base --is-ancestor d994fd1 e5b1cde → NO
 git merge-base --is-ancestor e5b1cde 76ace69 → NO
 ```
 
-**Current authoritative tested state**:
+**Final authoritative tested state**:
 ```
-tested/evidence revision = 76ace692e50e2ad1d13ed658b2e7832839274da0
-tested/evidence tree     = 890bfa86b30de04b7d2dff833af8b87e97094eb2
-vcs.modified             = false
+final tested commit      = 68b6164c416d83fc96be88fe9a4b5b7f71bc3373
+final tested tree        = 24d6a41e10acf0531488ec0383e61b1ef94ce1dd
+vcs.modified            = false
 ```
 
-Note: The earlier `e5b1cde` proof binary is superseded. A new binary must be
-built from `76ace69` for any fresh verification claims.
+**Proof binary**:
+```
+/tmp/leamas-normalization-correction02
+  vcs.revision  = 68b6164c416d83fc96be88fe9a4b5b7f71bc3373
+  vcs.modified  = false
+  vcs.time      = 2026-07-21T15:24:41Z
+  sha256        = 640d39a561359830dfb6e8c09830668d78695bdf5cbb6aece792d9563bb4eb82
+```
+
+Note: The earlier `e5b1cde` proof binary is superseded. The new binary above
+is built from the final tested commit.
 
 **Diff between trees**:
 ```
@@ -269,14 +278,16 @@ ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01
 
 ### Evidence Recorded
 
-| Command | Result | Details |
-|---------|--------|---------|
-| `go test -count=1 ./internal/gatesummary/...` | PASS | 0.405s |
-| `go test -count=20 ./internal/gatesummary/...` | PASS | 8.374s |
-| `go test -race -count=5 ./internal/gatesummary/...` | PASS | 11.766s |
-| `go vet ./internal/gatesummary/...` | PASS | no issues |
-| `make gate-fast` | PASS | all verifiers OK |
-| `make factorize` | PASS | 592.89s (prior run) |
+| Command | started_at_utc | finished_at_utc | elapsed | exit_code | tested_commit | tested_tree |
+|---------|----------------|----------------|---------|-----------|---------------|-------------|
+| `go test -count=1 ./internal/gatesummary/...` | 2026-07-21T15:24:54Z | 2026-07-21T15:24:55Z | 1.9s | 0 | 68b6164c416d | 24d6a41e10acf |
+| `go test -count=20 ./internal/gatesummary/...` | 2026-07-21T15:24:55Z | 2026-07-21T15:25:04Z | 8.8s | 0 | 68b6164c416d | 24d6a41e10acf |
+| `go test -race -count=5 ./internal/gatesummary/...` | 2026-07-21T15:25:04Z | 2026-07-21T15:25:19Z | 14.0s | 0 | 68b6164c416d | 24d6a41e10acf |
+| `go vet ./internal/gatesummary/... ./cmd/leamas/` | 2026-07-21T15:25:19Z | 2026-07-21T15:25:19Z | 0.0s | 0 | 68b6164c416d | 24d6a41e10acf |
+| `git diff --check` | 2026-07-21T15:25:19Z | 2026-07-21T15:25:19Z | 0.0s | 0 | 68b6164c416d | 24d6a41e10acf |
+| `make factorize` | 2026-07-21T15:25:32Z | 2026-07-21T15:34:51Z | 559.4s | 0 | 68b6164c416d | 24d6a41e10acf |
+| `make gate-fast` | 2026-07-21T15:35:00Z | 2026-07-21T15:35:23Z | 23s | 0 | 68b6164c416d | 24d6a41e10acf |
+| `CGO_ENABLED=0 go build -buildvcs=true -trimpath` | 2026-07-21T15:35:24Z | 2026-07-21T15:35:37Z | 13s | 0 | 68b6164c416d | 24d6a41e10acf |
 
 ### Commits in this workstream
 
@@ -289,6 +300,7 @@ ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01
 | `692e673` | Documentation checkpoint |
 | `bebfcbd` | Added P4 focused tests |
 | `38a9c86` | Split tests to stay under LLM-friendly limit |
+| `68b6164` | Change t.Skip to t.Fatal for fail-closed fixture precondition |
 
 ### Remaining in this ACT
 
