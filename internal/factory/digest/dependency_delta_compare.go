@@ -4,6 +4,7 @@ package digest
 
 import (
 	"fmt"
+	"slices"
 )
 
 // compareRequires compares require directives between two go.mod versions.
@@ -81,6 +82,7 @@ func compareReplaces(baseMod, headMod *goModWithToolchain) (added, removed, modi
 }
 
 // compareGoSum returns go.sum entries added and removed.
+// Results are sorted in ascending lexical order for deterministic output.
 func compareGoSum(base, head map[string]string) (added, removed []string) {
 	for key := range head {
 		if _, exists := base[key]; !exists {
@@ -92,5 +94,7 @@ func compareGoSum(base, head map[string]string) (added, removed []string) {
 			removed = append(removed, key)
 		}
 	}
+	slices.Sort(added)
+	slices.Sort(removed)
 	return
 }

@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 )
 
 // SubjectIdentity represents the measured subject's git state.
@@ -52,51 +50,6 @@ func ValidateSubjectIdentity(id *SubjectIdentity) error {
 		return fmt.Errorf("subject digest must be 64 hex chars, got %d", len(id.SubjectInputDigest))
 	}
 	return nil
-}
-
-// classifyWorktreeStateWithGit uses git status to determine worktree cleanliness.
-func classifyWorktreeStateWithGit(root, exactExclude, tempPrefix string) (string, error) {
-	cmd := exec.Command("git", "status", "--porcelain=v1", "-z", "--untracked-files=all")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git status: %w", err)
-	}
-
-	output := strings.TrimRight(string(out), "\x00")
-	if output == "" {
-		return "clean", nil
-	}
-
-	// Check if any remaining entries are not exclusions
-	entries := strings.Split(output, "\x00")
-	for _, entry := range entries {
-		if entry == "" {
-			continue
-		}
-		// Format: XY path (XY is status, path may contain spaces/tabs encoded as \x00)
-		if len(entry) < 3 {
-			continue
-		}
-		parts := strings.SplitN(entry, " ", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		path := parts[1]
-
-		// Skip exclusions
-		if path == exactExclude {
-			continue
-		}
-		if tempPrefix != "" && strings.HasPrefix(path, tempPrefix) {
-			continue
-		}
-
-		// Any non-excluded change means dirty
-		return "dirty", nil
-	}
-
-	return "clean", nil
 }
 
 // inspectWorkingSubjectPath inspects a path for the working subject inventory.

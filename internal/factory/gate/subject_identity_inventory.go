@@ -1,4 +1,4 @@
-// Package gate provides test helpers for subject identity.
+// Package gate provides subject identity collection for metrics.
 package gate
 
 import (
@@ -6,60 +6,48 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 )
 
-// CollectSubjectIdentity computes identity from the repository at root.
-// It produces a content-bound digest over the complete working subject.
-// The metricsDestination, if provided, is excluded from the inventory.
-func CollectSubjectIdentity(root string, metricsDestination string) (*SubjectIdentity, error) {
-	headOID, err := runGit(root, "rev-parse", "HEAD")
+// indexInfo holds git index information for a path.
+type indexInfo struct {
+	exists      bool
+	contentHash string
+	mode        string
+	stage       int
+}
+
+// getIndexEntry returns index information for a specific path.
+func getIndexEntry(root, path string) (*indexInfo, error) {
+	out, err := runGit(root, "ls-files", "--stage", "-z", "--", path)
 	if err != nil {
-		return nil, fmt.Errorf("git rev-parse HEAD: %w", err)
+		return nil, err
 	}
-	headOID = strings.TrimSpace(headOID)
-	if headOID == "" {
-		return nil, fmt.Errorf("HEAD OID is empty")
+	output := strings.TrimRight(out, "\x00")
+	if output == "" {
+		return &indexInfo{exists: false}, nil
 	}
-
-	treeOID, err := runGit(root, "rev-parse", "HEAD^{tree}")
-	if err != nil {
-		return nil, fmt.Errorf("git rev-parse HEAD^{tree}: %w", err)
+	parts := strings.SplitN(output, "\t", 2)
+	if len(parts) < 2 {
+		return &indexInfo{exists: false}, nil
 	}
-	treeOID = strings.TrimSpace(treeOID)
-	if treeOID == "" {
-		return nil, fmt.Errorf("tree OID is empty")
+	header := parts[0]
+	filePath := parts[1]
+	headerParts := strings.Fields(header)
+	if len(headerParts) < 3 {
+		return &indexInfo{exists: false}, nil
 	}
-
-	// Compute exclusions for metrics destination
-	exactExcl, tempPrefix, err := metricsExclusions(root, metricsDestination)
-	if err != nil {
-		return nil, fmt.Errorf("compute metrics exclusions: %w", err)
+	sha := headerParts[1]
+	if sha == "0000000000000000000000000000000000000000" {
+		return &indexInfo{exists: false}, nil
 	}
-
-	// Build complete working subject inventory
-	inventory, err := buildWorkingSubjectInventory(root, exactExcl, tempPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("build working subject inventory: %w", err)
-	}
-
-	// Classify worktree state using git status
-	worktreeState, err := classifyWorktreeStateWithGit(root, exactExcl, tempPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("classify worktree state: %w", err)
-	}
-
-	// Compute content-bound digest
-	digest := computeSubjectDigest(headOID, treeOID, worktreeState, inventory)
-
-	return &SubjectIdentity{
-		HeadOID:            headOID,
-		TreeOID:            treeOID,
-		WorktreeState:      worktreeState,
-		SubjectInputDigest: digest,
+	return &indexInfo{
+		exists:      filePath == path,
+		contentHash: sha,
+		mode:        headerParts[0],
+		stage:       0,
 	}, nil
 }
 
@@ -148,62 +136,6 @@ func buildWorkingSubjectInventory(root, exactExclude, tempPrefix string) (map[st
 	return inventory, nil
 }
 
-func getHEADPaths(root string) ([]string, error) {
-	cmd := exec.Command("git", "ls-tree", "-rz", "--name-only", "HEAD")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	paths := strings.Split(strings.TrimRight(string(out), "\x00"), "\x00")
-	result := make([]string, 0, len(paths))
-	for _, p := range paths {
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result, nil
-}
-
-func getIndexPaths(root string) ([]string, error) {
-	cmd := exec.Command("git", "ls-files", "--stage", "-z")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	entries := strings.Split(strings.TrimRight(string(out), "\x00"), "\x00")
-	result := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry == "" {
-			continue
-		}
-		parts := strings.SplitN(entry, "\t", 2)
-		if len(parts) < 2 {
-			continue
-		}
-		result = append(result, parts[1])
-	}
-	return result, nil
-}
-
-func getNonignoredUntrackedPaths(root string) ([]string, error) {
-	cmd := exec.Command("git", "ls-files", "--others", "--exclude-standard", "-z")
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	paths := strings.Split(strings.TrimRight(string(out), "\x00"), "\x00")
-	result := make([]string, 0, len(paths))
-	for _, p := range paths {
-		if p != "" {
-			result = append(result, p)
-		}
-	}
-	return result, nil
-}
-
 func buildInventoryEntry(root, path string) (*inventoryEntry, error) {
 	fullPath := filepath.Join(root, path)
 	entry := &inventoryEntry{path: path, worktreeExists: false}
@@ -248,46 +180,6 @@ func buildInventoryEntry(root, path string) (*inventoryEntry, error) {
 	}
 
 	return entry, nil
-}
-
-type indexInfo struct {
-	exists      bool
-	contentHash string
-	mode        string
-	stage       int
-}
-
-func getIndexEntry(root, path string) (*indexInfo, error) {
-	cmd := exec.Command("git", "ls-files", "--stage", "-z", "--", path)
-	cmd.Dir = root
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	output := strings.TrimRight(string(out), "\x00")
-	if output == "" {
-		return &indexInfo{exists: false}, nil
-	}
-	parts := strings.SplitN(output, "\t", 2)
-	if len(parts) < 2 {
-		return &indexInfo{exists: false}, nil
-	}
-	header := parts[0]
-	filePath := parts[1]
-	headerParts := strings.Fields(header)
-	if len(headerParts) < 3 {
-		return &indexInfo{exists: false}, nil
-	}
-	sha := headerParts[1]
-	if sha == "0000000000000000000000000000000000000000" {
-		return &indexInfo{exists: false}, nil
-	}
-	return &indexInfo{
-		exists:      filePath == path,
-		contentHash: sha,
-		mode:        headerParts[0],
-		stage:       0,
-	}, nil
 }
 
 func formatMode(m os.FileMode) string {
@@ -368,12 +260,96 @@ func computeSubjectDigest(headOID, treeOID, worktreeState string, inventory map[
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func runGit(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.Output()
+// classifyWorktreeStateWithGit uses git status to determine worktree cleanliness.
+func classifyWorktreeStateWithGit(root, exactExclude, tempPrefix string) (string, error) {
+	out, err := runGit(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("git status: %w", err)
 	}
-	return string(out), nil
+
+	output := strings.TrimRight(out, "\x00")
+	if output == "" {
+		return "clean", nil
+	}
+
+	// Check if any remaining entries are not exclusions
+	entries := strings.Split(output, "\x00")
+	for _, entry := range entries {
+		if entry == "" {
+			continue
+		}
+		// Format: XY path (XY is status, path may contain spaces/tabs encoded as \x00)
+		if len(entry) < 3 {
+			continue
+		}
+		parts := strings.SplitN(entry, " ", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		path := parts[1]
+
+		// Skip exclusions
+		if path == exactExclude {
+			continue
+		}
+		if tempPrefix != "" && strings.HasPrefix(path, tempPrefix) {
+			continue
+		}
+
+		// Any non-excluded change means dirty
+		return "dirty", nil
+	}
+
+	return "clean", nil
+}
+
+// CollectSubjectIdentity computes identity from the repository at root.
+// It produces a content-bound digest over the complete working subject.
+// The metricsDestination, if provided, is excluded from the inventory.
+func CollectSubjectIdentity(root string, metricsDestination string) (*SubjectIdentity, error) {
+	headOID, err := runGit(root, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("git rev-parse HEAD: %w", err)
+	}
+	headOID = strings.TrimSpace(headOID)
+	if headOID == "" {
+		return nil, fmt.Errorf("HEAD OID is empty")
+	}
+
+	treeOID, err := runGit(root, "rev-parse", "HEAD^{tree}")
+	if err != nil {
+		return nil, fmt.Errorf("git rev-parse HEAD^{tree}: %w", err)
+	}
+	treeOID = strings.TrimSpace(treeOID)
+	if treeOID == "" {
+		return nil, fmt.Errorf("tree OID is empty")
+	}
+
+	// Compute exclusions for metrics destination
+	exactExcl, tempPrefix, err := metricsExclusions(root, metricsDestination)
+	if err != nil {
+		return nil, fmt.Errorf("compute metrics exclusions: %w", err)
+	}
+
+	// Build complete working subject inventory
+	inventory, err := buildWorkingSubjectInventory(root, exactExcl, tempPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("build working subject inventory: %w", err)
+	}
+
+	// Classify worktree state using git status
+	worktreeState, err := classifyWorktreeStateWithGit(root, exactExcl, tempPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("classify worktree state: %w", err)
+	}
+
+	// Compute content-bound digest
+	digest := computeSubjectDigest(headOID, treeOID, worktreeState, inventory)
+
+	return &SubjectIdentity{
+		HeadOID:            headOID,
+		TreeOID:            treeOID,
+		WorktreeState:      worktreeState,
+		SubjectInputDigest: digest,
+	}, nil
 }
