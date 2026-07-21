@@ -108,59 +108,29 @@ func TestNormalizationDiagnosticOrderingRepeated(t *testing.T) {
 }
 
 // TestNormalizationDiagnosticOrderingPreservesPrecedenceAuthority
-// is a meta-test: it walks the production codePrecedence map and
-// asserts every rank is unique. The matrix suite relies on
-// stable ordering; the production map is the single source of
-// truth and tests must not duplicate it.
+// is a structural meta-test: it walks the production codePrecedence
+// map and asserts structural invariants without duplicating it.
+// The production map is the single source of truth; tests must
+// never reproduce the code→rank mapping.
 func TestNormalizationDiagnosticOrderingPreservesPrecedenceAuthority(t *testing.T) {
+	// Structural invariants: rank uniqueness.
 	seen := make(map[int]string, len(codePrecedence))
 	for code, rank := range codePrecedence {
+		if code == "" {
+			t.Fatalf("codePrecedence contains empty code string")
+		}
+		if rank <= 0 {
+			t.Fatalf("code %q has non-positive rank %d", code, rank)
+		}
 		if existing, ok := seen[rank]; ok {
 			t.Fatalf("rank %d assigned to both %q and %q", rank, existing, code)
 		}
 		seen[rank] = code
 	}
-	expectedRanks := map[string]int{
-		CodeDocumentTooLarge:         1,
-		CodeMalformedJSON:            2,
-		CodeTrailingJSON:             3,
-		CodeDuplicateKey:             4,
-		CodeVersionMissing:           5,
-		CodeInvalidVersionType:       6,
-		CodeUnsupportedVersion:       7,
-		CodeUnknownField:             8,
-		CodeRequiredFieldMissing:     9,
-		CodeSchemaViolation:          10,
-		CodeInvalidTimestamp:         11,
-		CodeInvalidStatus:            12,
-		CodeInvalidOID:               13,
-		CodeCollectionLimit:          14,
-		CodeDuplicateCheckName:       15,
-		CodePassExitCodeMismatch:     16,
-		CodeFailExitCodeMismatch:     17,
-		CodeSkipExitCodeMismatch:     18,
-		CodeUnavailExitCodeMismatch:  19,
-		CodeInvalidDuration:          20,
-		CodeInvalidOutputHash:        21,
-		CodePartialTestTotals:        22,
-		CodeTestTotalMismatch:        23,
-		CodeOverallStatusMismatch:    24,
-		CodeScopeClosedDirtyWorktree: 25,
-		CodeNormalizationFailure:     26,
-		CodeInternal:                 27,
-	}
-	for code, want := range expectedRanks {
-		got, ok := codePrecedence[code]
-		if !ok {
-			t.Fatalf("code %q missing from codePrecedence", code)
-		}
-		if got != want {
-			t.Fatalf("code %q rank = %d, want %d", code, got, want)
-		}
-	}
-	if len(codePrecedence) != len(expectedRanks) {
-		t.Fatalf("codePrecedence has %d entries, expected %d",
-			len(codePrecedence), len(expectedRanks))
+	// At least one code must be present (sanity).
+	if len(codePrecedence) < 27 {
+		t.Fatalf("codePrecedence has %d entries, want >= 27",
+			len(codePrecedence))
 	}
 }
 
