@@ -11,33 +11,24 @@ Replace the superficially bounded Git runner with a concurrency-safe, fail-close
 ## Implementation Commits
 
 ```
+2bd3825 fix: preserve successful completion and harden process tests
 b0d1b6b fix: exact-limit cancellation, WaitDelay, and adversarial tests
 2df22a4 fix: enforce default timeout and cancel on output overflow
 6165d40 fix: use concurrent stream draining and fail-closed output limits
 ...
 ```
 
-## Implementation Blockers Fixed
+## P0 Fix: Late Cancellation Race
 
-### Blocker 1: Exact-limit split writes bypassed cancellation
-**Before:** `if bw.rem == 0 { bw.done = true }` did not trigger `onOverflow`.
-**After:** `if bw.rem == 0 { bw.overflow = true; bw.onOverflow() }` triggers cancellation on the first byte beyond the exact limit.
+**Before:** A command that completed successfully could be reported as `context.Canceled` if the caller cancelled the context between `cmd.Wait()` returning and the post-Wait context check.
 
-### Blocker 2: Command lacked WaitDelay
-**Before:** `cmd.WaitDelay` was unset, leaving no cleanup bound.
-**After:** `cmd.WaitDelay = DefaultGitWaitDelay` (2 seconds) bounds cleanup latency.
+**After:** The implementation now checks `waitErr == nil` first. If the command completed successfully, the result is returned regardless of any post-completion cancellation. Context errors only classify failures when `waitErr != nil`.
 
-### Race coverage: atomic overflow state
-**Before:** `overflowOccurred` was a non-atomic boolean written from separate stdout/stderr copy goroutines.
-**After:** `atomicBool` with mutex protects concurrent reads/writes. `sync.Once` ensures the overflow callback fires exactly once per stream.
+## New Tests
 
-## Tests Added
-
-- `TestBoundedWriter_ExactLimitThenOneByte` - Regression test for exact-limit-then-overflow
-- `TestBoundedWriter_AfterOverflow` - Verifies callback fires exactly once
-- `TestRunGitWithLimits_Success` - Tests the seam
-- `TestRunGitWithLimits_Overflow` - Deterministic overflow test
-- `TestAtomicBool` - Atomic state tests
+- `TestRunGit_LateCancellationKeepsSuccess` - Regression test for the race
+- `TestRunGitWithLimits_DefaultTimeoutEnforced` - Verifies default timeout is applied
+- `TestRunGitWithLimits_ExplicitCancellation` - Verifies explicit cancellation works
 
 ## Exact Commands Run
 
@@ -47,32 +38,34 @@ make gate-fast
 # Result: PASSED
 ```
 
-### Race Verification
+### Race Verification (20 iterations)
 ```bash
-go test -race ./internal/execution/... -count=1
-# Result: PASSED (no races, no leaked helpers)
+go test -race ./internal/execution/... -count=20
+# Result: PASSED — no data races detected in exercised test paths
 ```
 
 ### Bounded Execution Tests
 ```bash
-go test ./internal/execution/... -run 'TestRunGit|TestBounded|TestAtomicBool' -count=1 -v
-# Result: 19 tests PASS
+go test ./internal/execution/... -count=1 -v
+# Result: 22 tests PASS
 ```
 
 ## Acceptance Criteria Status
 
-- [x] A — Focused execution tests: 19 tests PASS
-- [x] B — Race verification: PASSED
-- [x] C — Default timeout enforced: `ctx.Deadline()` check
-- [x] D — Output overflow cancels process: cancelRun via onOverflow
-- [x] E — Dual-stream deadlock resistance: cmd.Stdout/cmd.Stderr
-- [x] F — Execution policy: exec-gate verifier OK
-- [x] G — Fast lane: make gate-fast PASSED
-- [x] H — WaitDelay cleanup bound: 2 seconds
-- [ ] I — Expensive lane: pending
-- [ ] J — Machine-readable gate evidence: pending
-- [ ] K — Cumulative digest: pending
-- [x] L — Repository hygiene: git diff --check passes
+- [x] A — Focused execution tests: 22 tests PASS
+- [x] B — Race verification: PASSED (20 iterations, no races)
+- [x] C — Default timeout enforced: TestRunGitWithLimits_DefaultTimeoutEnforced
+- [x] D — Output overflow cancels process: TestRunGitWithLimits_Overflow
+- [x] E — Dual-stream deadlock resistance: TestRunGit_BothStreams
+- [x] F — Explicit cancellation: TestRunGitWithLimits_ExplicitCancellation
+- [x] G — Execution policy: exec-gate verifier OK
+- [x] H — Fast lane: make gate-fast PASSED
+- [x] I — Late cancellation preserves success: TestRunGit_LateCancellationKeepsSuccess
+- [x] J — WaitDelay cleanup bound: DefaultGitWaitDelay = 2s
+- [ ] K — Expensive lane: pending
+- [ ] L — Machine-readable gate evidence: pending
+- [ ] M — Cumulative digest: pending
+- [x] N — Repository hygiene: git diff --check passes
 
 ## Remaining Work
 
@@ -88,8 +81,9 @@ go test ./internal/execution/... -run 'TestRunGit|TestBounded|TestAtomicBool' -c
 - [x] Exact-limit cancellation
 - [x] WaitDelay cleanup bound
 - [x] Atomic overflow state
-- [x] 19 adversarial tests including exact-limit regression
+- [x] Post-Wait cancellation preserves success
+- [x] 22 adversarial tests with deterministic helpers
 - [x] Fast lane green
-- [x] Race verification green
+- [x] Race verification green (20 iterations)
 - [ ] Expensive lane pending
 - [ ] Cumulative digest pending
