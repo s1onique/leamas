@@ -1,0 +1,11 @@
+{
+  "terminal.integrated.env.linux": {
+    "LEAMAS_GATE_CALLER": "codium"
+  },
+  "terminal.integrated.env.osx": {
+    "LEAMAS_GATE_CALLER": "codium"
+  },
+  "terminal.integrated.env.windows": {
+    "LEAMAS_GATE_CALLER": "codium"
+  }
+}

@@ -31,11 +31,11 @@ Before changing files, read:
 
 ## Required Verification
 
-Before closing an ACT, run:
+Routine implementation loop:
 
 ```bash
 make factorize
-make gate
+make gate-fast
 ```
 
 When Go code exists or changes, also run:
@@ -45,6 +45,24 @@ go test ./...
 go vet ./...
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 ```
+
+Before closing an ACT (canonical closure):
+
+Outside an editor context, run:
+
+```bash
+make factorize
+make gate
+```
+
+Inside Codium/VS Code/Cline terminal contexts, use the explicit override:
+
+```bash
+make factorize
+LEAMAS_ALLOW_FULL_GATE=1 make gate
+```
+
+The explicit override is required because `make gate` is refused in editor terminal contexts to prevent accidental expensive canonical gate execution during interactive development loops.
 
 ## Verifiers Are Go
 

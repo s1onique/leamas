@@ -30,14 +30,20 @@ Leamas uses Factory discipline. Doctrine lives under `docs/doctrine/`.
 
 ## Verification
 
-Run:
+During ordinary implementation and correction loops, run `make factorize` and `make gate-fast`.
 
-```bash
-make factorize
-make gate
-```
+Do not run `make gate` as a routine local feedback command.
 
-Do not claim success for checks that were skipped, deferred, or not run.
+`make gate` is the canonical full gate and is intentionally refused in
+Codium/VS Code/Cline terminal contexts.
+
+Run the full gate only when the ACT explicitly requires canonical closure
+evidence, using:
+
+    LEAMAS_ALLOW_FULL_GATE=1 make gate
+
+A refusal from `make gate` is not a PASS and must never be reported as
+successful verification.
 
 ## Git Safety
 
