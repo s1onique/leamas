@@ -241,3 +241,51 @@ CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas  # OK
 
 ## Final Status
 **CLOSED — all P0 defects corrected; complete working-subject inventory implemented with metrics destination exclusion and OS-specific samplers.**
+
+---
+
+## P0 Corrections (2026-07-21 - fourth round)
+
+### P0-1: Metrics output exclusion fixed (CORRECTED)
+Previous implementation compared absolute path against relative git paths.
+Now uses `filepath.Rel` to convert both to consistent namespace:
+```go
+rel, err := filepath.Rel(rootAbs, destAbs)
+// then compare relative paths with git inventory
+```
+Excludes exact match and all temp-prefix matches.
+
+### P0-2: Worktree state uses git status (CORRECTED)
+Previous implementation compared SHA-256 of worktree bytes with git index object IDs.
+Now uses `git status --porcelain=v1 -z --untracked-files=all` for authoritative
+cleanliness classification. Correctly handles all edge cases.
+
+### P0-3: Lstat failures propagate (CORRECTED)
+Previous implementation treated all Lstat errors as non-existence.
+Now uses `errors.Is(err, os.ErrNotExist)` to distinguish:
+- `os.ErrNotExist`: file absent, not an error
+- other errors (permission, I/O): returned to caller
+
+### P0-4: Darwin compilation fixed (CORRECTED)
+Removed unused `os` import from `platform_sampler_darwin.go`.
+Cross-compile test passes: `GOOS=darwin GOARCH=arm64 go test -c OK`
+
+### P0-5: Unsupported platform message corrected (CORRECTED)
+Now says `supported: linux, darwin` instead of just `linux`.
+
+### Verification
+```
+go test ./internal/factory/gate/... -count=1  # PASS (0.044s)
+GOOS=darwin GOARCH=arm64 go test -c ./internal/factory/gate  # PASS
+bin/leamas factory verify llm-friendly internal/factory/gate/...  # PASS
+```
+
+### Commit
+`f49bdc4` - fix(gate): finalize working-subject identity semantics
+
+## Final Status
+**CLOSED — all P0 defects corrected; complete working-subject inventory implemented with:
+- correct metrics destination exclusion
+- authoritative git status for worktree classification  
+- proper Lstat error handling
+- OS-specific samplers with Darwin support**
