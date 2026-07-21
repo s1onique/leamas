@@ -46,6 +46,8 @@ var AllowedFiles = map[string]bool{
 	"internal/execution/exectest/exectest.go":                 true,
 	"internal/execution/adversarial_harness_test.go":          true,
 	"internal/execution/adversarial_harness_executor_test.go": true,
+	"internal/execution/adversarial_helper_build_test.go":     true,
+	"internal/execution/retained_pipe_raw_test.go":            true,
 	"internal/factory/gate/gate.go":                           true,
 	"internal/factory/gate/gate_failure_output_test.go":       true,
 	"internal/factory/gate/gate_failure_execution_test.go":    true,

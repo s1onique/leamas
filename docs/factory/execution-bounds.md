@@ -54,7 +54,8 @@ The following codes distinguish failure causes:
 | `execution_deadline_exceeded` | Root deadline expired |
 | `execution_task_depth_exceeded` | Task depth exceeds configured limit |
 | `execution_output_limit_exceeded` | Combined output exceeded the cap |
-| `execution_process_tree_cleanup_failed` | Process tree cleanup failed |
+| `execution_retained_output_pipe` | Direct process exited, but `WaitDelay` closed retained output pipes and output may be incomplete |
+| `execution_process_tree_cleanup_failed` | Bounded process-group cleanup could not prove the group absent |
 | `execution_concurrency_exhausted` | Concurrency limit reached |
 | `execution_start_budget_exhausted` | Total start attempts exhausted |
 | `nested_leamas_execution` | Attempted Leamas within Leamas |
@@ -92,7 +93,9 @@ The output limit applies to the combined size of stdout and stderr:
 
 - Observed bytes count all output, including discarded bytes
 - Retained bytes are stored in memory (limited to the cap)
-- `OutputTruncated` is set immediately when observed output exceeds the cap
+- `OutputTruncated` is set only when the output cap discards observed bytes
+- `OutputIncomplete` is set when `WaitDelay` closes retained output pipes
+- Retained-pipe incompleteness does not imply output-cap truncation
 - Overflow triggers process-tree termination
 - Commands that exceed output limits are never reported as successful
 
@@ -112,6 +115,20 @@ Benign conditions (successful cleanup):
 - `ESRCH` while signalling or probing
 
 `WaitDelay` is set to prevent blocking on inherited I/O descriptors.
+When a direct process exits naturally with status zero but a descendant
+retains an output pipe, the executor:
+
+1. preserves direct `ExitCode == 0`;
+2. marks `OutputIncomplete == true`;
+3. uses the process-group identity saved at command start;
+4. performs the same bounded `SIGTERM`/`SIGKILL` cleanup sequence;
+5. reports `execution_retained_output_pipe` if cleanup proves the group
+   absent; and
+6. reports `execution_process_tree_cleanup_failed` only if bounded cleanup
+   cannot prove absence.
+
+The executor leaves `os/exec` responsible for closing its internal I/O
+pipes; it does not race the standard library with independent pipe closure.
 
 ## Windows Fail-Closed Behavior
 
