@@ -133,20 +133,3 @@ func TestNormalizationDiagnosticOrderingPreservesPrecedenceAuthority(t *testing.
 			len(codePrecedence))
 	}
 }
-
-// TestNormalizationDiagnosticOrderingUsesProductionAuthority
-// ensures the tests never silently rely on a copied precedence
-// table by triggering a real ordering edge case. If a test
-// silently created a local copy with the wrong ranks, this
-// assertion would diverge.
-func TestNormalizationDiagnosticOrderingUsesProductionAuthority(t *testing.T) {
-	precedencePointer := reflect.ValueOf(codePrecedence).Pointer()
-	if precedencePointer == 0 {
-		t.Fatal("codePrecedence map has zero pointer (production map missing)")
-	}
-	if len(codePrecedence) < 27 {
-		t.Fatalf("codePrecedence map has %d entries, want >= 27",
-			len(codePrecedence))
-	}
-	_ = strings.Repeat // keep strings import live
-}
