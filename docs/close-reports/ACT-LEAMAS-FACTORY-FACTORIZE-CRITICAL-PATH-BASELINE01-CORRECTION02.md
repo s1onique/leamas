@@ -13,61 +13,64 @@ Restore the Leamas fast quality gate after the critical-path baseline implementa
 ## Implementation Commits
 
 ```
+d82fd4b fix: add bounded execution tests and preserve raw git output
 750d243 fix: restore execution boundary and make dependency deltas deterministic
+7beb526 docs: add close report for CORRECTION02
 ```
 
 ## Files Changed
 
-### Created
-- `internal/execution/git.go` - Production-level RunGit functions using os/exec
-- `internal/factory/gate/subject_identity.go` - Git command helpers using execution.RunGitSimple
-- `internal/factory/gate/subject_identity_inventory.go` - Inventory building and digest computation
-- `internal/factory/gate/subject_identity_test_helpers_test.go` - Test-only helpers using exectest
+### Created (this session)
+- `internal/execution/git_test.go` - Comprehensive bounded execution tests
 
-### Modified
-- `internal/factory/gate/subject_identity_types.go` - Removed direct exec imports, added inventoryEntry type
-- `internal/factory/digest/dependency_delta_compare.go` - Added slices.Sort() for deterministic output
-- `internal/factory/execgate/verifier.go` - Added `internal/execution/git.go` to AllowedFiles
-
-### Deleted
-- `internal/factory/gate/subject_identity_test_helpers.go` - Replaced by `_test.go` and `_inventory.go`
+### Modified (this session)
+- `internal/execution/git.go` - Added bounded GitOutputLimitReader and RunGit with context deadline/output limits
+- `internal/factory/gate/subject_identity.go` - Updated to use bounded RunGit with raw output preservation
 
 ## Behavior Changed
 
-### Execution Boundary
-- Six direct `os/exec.Command` calls were removed from production files
-- Production code now uses `internal/execution.RunGitSimple()` 
-- Test code uses `internal/execution/exectest`
-- The renamed file `subject_identity_test_helpers.go` → `subject_identity_test_helpers_test.go` is now properly excluded from production builds
+### Execution Boundary - Genuinely Bounded
+- `RunGit` now requires non-nil context and applies:
+  - Context deadline (DefaultGitTimeout = 30s if context has no deadline)
+  - Bounded stdout and stderr (MaxGitOutputBytes = 8 MiB)
+  - Process termination on timeout/cancellation
+  - Exit status preservation
+- `GitOutputLimitReader` enforces output limits without truncation
+- Raw output bytes are preserved (no global newline trimming)
+- NUL-delimited output from `-z` flags is preserved exactly
 
 ### Dependency Delta Determinism
-- `compareGoSum` now sorts added and removed dependencies in ascending lexical order
-- Test `TestCompareGoSum/multiple_additions` now passes consistently across 50+ runs
+- `compareGoSum` sorts added and removed dependencies in ascending lexical order
 
 ## Exact Commands Run
 
-### Fast Gate
+### Fast Gate (Final Tree)
 ```bash
 make gate-fast
-# Result: PASSED (all verifiers green)
+# Result: PASSED
+# Verifiers: all OK including exec-gate, llm-friendly, forbidden-patterns
 ```
 
-### Focused Package Tests
+### Bounded Execution Tests
 ```bash
-go test ./internal/execution/... ./internal/factory/execgate/... ./internal/factory/gate/... ./internal/factory/digest/...
-# Result: All passed
+go test ./internal/execution/... -run 'TestRunGit|TestGitOutput' -count=1
+# Result: PASSED
+# Tests: TestRunGit_NilContext, TestRunGit_Success, TestRunGit_ExitCode,
+#        TestRunGit_DeadlineExceeded, TestRunGit_OutputLimit,
+#        TestRunGit_RawOutputPreservesNUL, TestRunGit_StderrCapture,
+#        TestRunGit_CWD, TestGitOutputLimitReader, TestRunGitSimple_Deprecated
 ```
 
-### CompareGoSum Ordering Test
+### Dependency Determinism Tests
 ```bash
-go test ./internal/factory/digest -run 'TestCompareGoSum/multiple_additions' -count=50
+go test ./internal/factory/digest -run '^TestCompareGoSum$' -count=100
 # Result: PASSED consistently
 ```
 
 ### Expensive Lane
 ```bash
 make gate-dupcode
-# Status: RUNNING (expensive operation, started 09:25, still executing)
+# Result: dupcode: OK (ran against d82fd4b)
 ```
 
 ## Evidence
@@ -75,43 +78,53 @@ make gate-dupcode
 ### Before Fix
 ```
 --- exec-gate FAILED ---
-  internal/factory/gate/subject_identity_test_helpers.go: forbidden_exec_call: forbidden: os/exec.Command
-  internal/factory/gate/subject_identity_test_helpers.go: forbidden_exec_call: forbidden: os/exec.Command
-  internal/factory/gate/subject_identity_test_helpers.go: forbidden_exec_call: forbidden: os/exec.Command
-  internal/factory/gate/subject_identity_test_helpers.go: forbidden_exec_call: forbidden: os/exec.Command
-  internal/factory/gate/subject_identity_test_helpers.go: forbidden_exec_call: forbidden: os/exec.Command
-  internal/factory/gate/subject_identity_types.go: forbidden_exec_call: forbidden: os/exec.Command
+  internal/factory/gate/subject_identity_test_helpers.go: forbidden_exec_call
+  internal/factory/gate/subject_identity_types.go: forbidden_exec_call
 ```
 
+### After Fix (Final Tree)
 ```
-dependency_delta_test.go:169: compareGoSum()[0] = baz v3.0.0, want bar v2.0.0
-dependency_delta_test.go:169: compareGoSum()[1] = bar v2.0.0, want baz v3.0.0
-```
-
-### After Fix
-```
---- exec-gate: OK
---- llm-friendly: OK
+make gate-fast
 *** GATE PASSED ***
 ```
 
-### go list Evidence
-```bash
-go list -json ./internal/factory/gate | grep -E '"TestGoFiles"|"XTestGoFiles"|"GoFiles"'
-# subject_identity_test_helpers_test.go appears in TestGoFiles
+### Bounded Execution Tests
+```
+=== RUN   TestRunGit_NilContext
+--- PASS: TestRunGit_NilContext (0.00s)
+=== RUN   TestRunGit_Success
+--- PASS: TestRunGit_Success (0.00s)
+=== RUN   TestRunGit_ExitCode
+--- PASS: TestRunGit_ExitCode (0.00s)
+...
+PASS
+ok  	github.com/s1onique/leamas/internal/execution	0.032s
 ```
 
-## Skipped or Deferred
+### Patch Hygiene
+```bash
+git diff --check
+# Result: pass (no diagnostics)
+```
 
-- `make gate-dupcode` - Running in background (expensive, started 09:25 UTC)
-  - dupcode verifier already showed OK before running full suite
-  - Will update when complete
+## Acceptance Criteria Met
+
+- [x] A — No contextless Git gateway: RunGit requires non-nil context
+- [x] B — Boundedness tests: All 10 tests pass
+- [x] C — Dependency determinism: 100 iterations pass
+- [x] D — Execution policy: exec-gate verifier OK
+- [x] E — Fast lane: make gate-fast PASSED
+- [x] F — Expensive lane: make gate-dupcode PASSED (dupcode OK)
+- [x] G — Digest rename integrity: N/A for this ACT
+- [x] H — Canonical evidence: git_diff_check=pass, overall_status=pass
+- [x] I — Final repository state: clean
 
 ## Final Status
 
-- [x] Execution boundary restored (exec-gate passes)
-- [x] Test-only file properly classified (subject_identity_test_helpers_test.go)
-- [x] Dependency-delta output deterministic (compareGoSum sorted)
-- [x] Fast lane green (make gate-fast PASSED)
-- [x] Focused package tests pass
-- [ ] Expensive lane - running (make gate-dupcode)
+- [x] Execution boundary restored with genuine bounded execution
+- [x] Test-only file properly classified
+- [x] Dependency-delta output deterministic
+- [x] Fast lane green
+- [x] Expensive lane green (dupcode OK)
+- [x] Patch hygiene passes
+- [x] Closure claims bind to literal machine evidence
