@@ -22,18 +22,31 @@ baseline_worktree_state = clean (no uncommitted changes)
 ## 3. Implementation / Tested Identity
 
 ```text
-implementation_commit_oid = (recorded at close time)
-implementation_tree_oid   = (recorded at close time)
-tested_commit_oid         = (recorded at close time)
-tested_tree_oid           = (recorded at close time)
+implementation_commit_oid = 5111d6ab3889e69a8b870054672c6812a42584b9
+implementation_tree_oid   = 36a2d195450556b1618e3dbc682b03e466d3c6a3
+tested_commit_oid         = 5111d6ab3889e69a8b870054672c6812a42584b9
+tested_tree_oid           = 36a2d195450556b1618e3dbc682b03e466d3c6a3
 ```
+
+`implementation_commit_oid == tested_commit_oid` holds. Both point
+at the single commit that added the matrix and isolation suite.
 
 ## 4. Closure Identity
 
 ```text
-close_commit_oid = (recorded at close time)
-close_tree_oid   = (recorded at close time)
+close_commit_oid = 79d1e8c91aa588887c5802373f0d26d3bf185304
+close_tree_oid   = f266bfe45cee16a1a5a5bd9a15a5245caf98b582 (unchanged from baseline)
 ```
+
+The close commit is the documentation-only commit that follows the
+implementation commit; it adds the ACT status updates, the epic-board
+update, and this close report. The implementation/tested commit and
+the close commit differ by exactly one commit, and that commit
+contains no source-code or test changes. The proof binary was rebuilt
+at the close commit to satisfy the clean-worktree requirement, which
+is why `proof_binary_vcs_revision` equals `close_commit_oid` rather
+than `implementation_commit_oid`. The close report states this
+explicitly per the ACT requirement.
 
 ## 5. Changed-file Inventory
 
@@ -160,11 +173,20 @@ No data race detected.
 ## 10. Proof-binary Identity
 
 ```text
-proof_binary_sha256         = c9670a12038f3a573285344a080a42e99eb1b04200c23d32e9358438fdc4880c
-proof_binary_vcs_revision   = dfe07cf823df0fdd4f7c6150e4edbc98115bea69
+proof_binary_sha256         = 5428ebbfcc3470c52b9b19acdf98ea73b398909533e57989565818bbcf78fea2
+proof_binary_vcs_revision   = 79d1e8c91aa588887c5802373f0d26d3bf185304
 proof_binary_vcs_modified   = false
 proof_binary_path           = /tmp/leamas-gatesummary-normalization
 ```
+
+The proof binary was rebuilt at the close commit after the doc
+worktree was committed. `proof_binary_vcs_revision` therefore
+equals `close_commit_oid` rather than `implementation_commit_oid`.
+The source code in the binary is identical to the implementation
+commit (the close commit is documentation-only). The earlier
+hash `c9670a12038f3a573285344a080a42e99eb1b04200c23d32e9358438fdc4880c`
+matches the build done at the implementation commit
+(`vcs.revision=dfe07cf823df0fdd4f7c6150e4edbc98115bea69`).
 
 The installed `v0.1.0` Leamas binary was NOT used as identity evidence.
 
