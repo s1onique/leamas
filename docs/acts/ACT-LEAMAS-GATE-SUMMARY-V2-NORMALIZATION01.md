@@ -1,7 +1,11 @@
 # ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01
 
 ## Status
-CLOSED — superseded by ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01
+CLOSED — completed through ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01
+
+The remaining P1 scope (corpus matrix, semantic matrices,
+diagnostic-ordering proofs, source isolation, concurrent
+normalization, R10 absorption) was delivered by CORRECTION01.
 
 ## Motivation
 

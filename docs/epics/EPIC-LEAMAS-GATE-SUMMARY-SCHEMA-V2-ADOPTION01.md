@@ -105,9 +105,12 @@ child scope behind an open parent.
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION02` | CLOSED (PARTIAL — superseded) | Validator proof accepted; reader-contract semantics superseded by CORRECTION03. |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONTRACT01-CORRECTION03` | CLOSED (PARTIAL) | Reader contract frozen and committed; `DECODER01` unblocked. |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01` | CLOSED (PARTIAL — retained unrelated baseline failures) | Strict v1/v2 decoder plus forward P0 fix committed; contract review accepted. |
-| `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01` | CLOSED — superseded by CORRECTION01 | Semantic normalization implemented; P0 corrections in progress; see CORRECTION01. Decoder closure landed; semantic normalization may begin. |
-| `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01` | IN PROGRESS | Addressing review feedback: epic replacement, duplicate paths, error propagation, sealed validation, exported fault, integer validation |
-| `ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01` | BLOCKED | Digest integration |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01` | CLOSED — completed through CORRECTION01 | Semantic normalization implemented; P0 corrections and remaining P1 scope delivered by CORRECTION01. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01` | CLOSED | Delivered: 41-row corpus matrix, four semantic matrices, diagnostic-ordering proofs, source isolation, deterministic concurrent normalization, R10 absorption. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9` | PARTIAL — historical reverted attempt | Superseded by R9-CORRECTION01 and the normalization correction. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R9-CORRECTION01` | CLOSED (PARTIAL — reconnaissance delivered) | Decode + normalize entry points, builders, two-diagnostic precedence proof, decode-rejection proof, caller gating. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-EXACT-GEOMETRY-TESTS01-R10` | NOT STARTED — scope absorbed by CORRECTION01 | The R10 matrix suite was implemented by the normalization correction; no separate ACT is opened. |
+| `ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01` | READY | Digest integration; depends only on the accepted normalized model. |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CLI01` | PENDING | CLI surface |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-CONFORMANCE01` | PENDING | Golden + fuzz |
 | `ACT-LEAMAS-GATE-SUMMARY-V2-DOGFOOD01` | PENDING | Self-hosting proof |
