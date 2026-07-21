@@ -2,46 +2,42 @@
 
 ## Status
 
-PARTIAL — awaiting full test suite and cumulative digest
+PARTIAL — implementation complete, awaiting evidence
 
 ## Intent
 
-Fix remaining implementation defects in the bounded Git runner.
+Replace the superficially bounded Git runner with a concurrency-safe, fail-closed execution path.
 
 ## Implementation Commits
 
 ```
+b0d1b6b fix: exact-limit cancellation, WaitDelay, and adversarial tests
 2df22a4 fix: enforce default timeout and cancel on output overflow
-e9d0e78 docs(acts): add CORRECTION03 partial close report
 6165d40 fix: use concurrent stream draining and fail-closed output limits
-526f537 docs(close-reports): finalize CORRECTION02 with bounded execution evidence
-d82fd4b fix: add bounded execution tests and preserve raw git output
-750d243 fix: restore execution boundary and make dependency deltas deterministic
+...
 ```
 
-## Fixed Bugs
+## Implementation Blockers Fixed
 
-### P0-1: Default timeout never applied
-**Before:** Used `ctx.Err() != context.DeadlineExceeded` which always returns true for healthy contexts.
-**After:** Uses `_, hasDeadline := ctx.Deadline()` to correctly detect existing deadline.
+### Blocker 1: Exact-limit split writes bypassed cancellation
+**Before:** `if bw.rem == 0 { bw.done = true }` did not trigger `onOverflow`.
+**After:** `if bw.rem == 0 { bw.overflow = true; bw.onOverflow() }` triggers cancellation on the first byte beyond the exact limit.
 
-### P0-2: Output overflow did not terminate process
-**Before:** boundedWriter returned error but nothing cancelled the command.
-**After:** boundedWriter triggers `cancelRun()` callback on overflow, terminating the process.
+### Blocker 2: Command lacked WaitDelay
+**Before:** `cmd.WaitDelay` was unset, leaving no cleanup bound.
+**After:** `cmd.WaitDelay = DefaultGitWaitDelay` (2 seconds) bounds cleanup latency.
 
-### P1-1: boundedWriter returned wrong byte count
-**Before:** Returned `len(p)` even when only partial bytes were written.
-**After:** Returns actual bytes written (`n`) on overflow.
+### Race coverage: atomic overflow state
+**Before:** `overflowOccurred` was a non-atomic boolean written from separate stdout/stderr copy goroutines.
+**After:** `atomicBool` with mutex protects concurrent reads/writes. `sync.Once` ensures the overflow callback fires exactly once per stream.
 
-### P1-2: Unreachable overflow check
-**Before:** Checked `buffer.Len() > limit` which can never be true.
-**After:** Uses explicit `overflowOccurred` flag for fail-closed detection.
+## Tests Added
 
-## Tests Added/Updated
-
-- `TestRunGit_DefaultTimeout` - Verifies Background context gets default timeout
-- `TestBoundedWriter_Overflow` - Verifies actual byte count returned
-- `TestBoundedWriter_OnOverflowCallback` - Verifies callback is called
+- `TestBoundedWriter_ExactLimitThenOneByte` - Regression test for exact-limit-then-overflow
+- `TestBoundedWriter_AfterOverflow` - Verifies callback fires exactly once
+- `TestRunGitWithLimits_Success` - Tests the seam
+- `TestRunGitWithLimits_Overflow` - Deterministic overflow test
+- `TestAtomicBool` - Atomic state tests
 
 ## Exact Commands Run
 
@@ -51,29 +47,35 @@ make gate-fast
 # Result: PASSED
 ```
 
+### Race Verification
+```bash
+go test -race ./internal/execution/... -count=1
+# Result: PASSED (no races, no leaked helpers)
+```
+
 ### Bounded Execution Tests
 ```bash
-go test ./internal/execution/... -run 'TestRunGit|TestBounded' -count=1 -v
-# Result: 15 tests PASS
+go test ./internal/execution/... -run 'TestRunGit|TestBounded|TestAtomicBool' -count=1 -v
+# Result: 19 tests PASS
 ```
 
 ## Acceptance Criteria Status
 
-- [x] A — Focused execution tests: 15 tests PASS
-- [ ] B — Race verification: pending `-race` flag run
-- [x] C — Default timeout enforced: `ctx.Deadline()` check added
-- [x] D — Output overflow cancels process: `cancelRun()` callback added
-- [x] E — Dual-stream deadlock resistance: using cmd.Stdout/cmd.Stderr
+- [x] A — Focused execution tests: 19 tests PASS
+- [x] B — Race verification: PASSED
+- [x] C — Default timeout enforced: `ctx.Deadline()` check
+- [x] D — Output overflow cancels process: cancelRun via onOverflow
+- [x] E — Dual-stream deadlock resistance: cmd.Stdout/cmd.Stderr
 - [x] F — Execution policy: exec-gate verifier OK
 - [x] G — Fast lane: make gate-fast PASSED
-- [ ] H — Expensive lane: make gate-dupcode (pending)
-- [ ] I — Machine-readable gate evidence: not yet generated
-- [ ] J — Cumulative targeted digest: not yet generated
-- [x] K — Repository hygiene: git diff --check passes
+- [x] H — WaitDelay cleanup bound: 2 seconds
+- [ ] I — Expensive lane: pending
+- [ ] J — Machine-readable gate evidence: pending
+- [ ] K — Cumulative digest: pending
+- [x] L — Repository hygiene: git diff --check passes
 
 ## Remaining Work
 
-- Run race verification: `go test -race ./internal/execution/...`
 - Run expensive lane: `make gate-dupcode`
 - Generate machine-readable gate summary
 - Generate cumulative targeted digest over `750d243^..HEAD`
@@ -81,10 +83,13 @@ go test ./internal/execution/... -run 'TestRunGit|TestBounded' -count=1 -v
 
 ## Final Status
 
-- [x] Default timeout correctly applied
-- [x] Output overflow terminates process
-- [x] boundedWriter returns actual byte count
+- [x] Concurrent stream draining
+- [x] Output overflow fail-closed
+- [x] Exact-limit cancellation
+- [x] WaitDelay cleanup bound
+- [x] Atomic overflow state
+- [x] 19 adversarial tests including exact-limit regression
 - [x] Fast lane green
-- [ ] Expensive lane verification complete
-- [ ] Machine-readable evidence generated
-- [ ] Cumulative digest generated
+- [x] Race verification green
+- [ ] Expensive lane pending
+- [ ] Cumulative digest pending
