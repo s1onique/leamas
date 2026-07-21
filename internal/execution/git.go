@@ -31,8 +31,6 @@ const (
 )
 
 // GitResult represents the result of a bounded git command.
-// All output is captured in bounded buffers. On success, stdout contains
-// the complete output up to the limit. On ErrOutputLimit, output is truncated.
 type GitResult struct {
 	Stdout   []byte
 	Stderr   []byte
@@ -43,7 +41,7 @@ type GitResult struct {
 // It requires a non-nil context and applies:
 //   - context deadline (uses DefaultGitTimeout if context has no deadline)
 //   - bounded stdout and stderr (DefaultOutputLimit)
-//   - fail-closed on output overflow
+//   - fail-closed on output overflow (process is terminated)
 //   - process termination on timeout/cancellation
 //   - explicit exit status preservation
 //
@@ -51,31 +49,56 @@ type GitResult struct {
 //   - context.Canceled: caller cancelled the operation
 //   - context.DeadlineExceeded: deadline expired
 //   - ErrOutputLimit: output exceeded the limit (fail-closed)
-//   - startup/pipe errors: wrapped errors
-//
-// On success, the returned GitResult contains stdout and the exit code.
-// On ErrOutputLimit, partial output may be available in GitResult.
+//   - wrapped errors for startup/pipe failures
 func RunGit(ctx context.Context, dir string, args ...string) (GitResult, error) {
 	if ctx == nil {
 		return GitResult{}, ErrNilContext
 	}
 
-	// Create deadline if context has none
-	hasDeadline := ctx.Err() != context.DeadlineExceeded
-	if !hasDeadline {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultGitTimeout)
-		defer cancel()
+	// Check if context has a deadline; if not, apply default
+	_, hasDeadline := ctx.Deadline()
+
+	// Create run context - will be replaced with timeout version if needed
+	var runCtx context.Context
+	var cancelRun context.CancelFunc
+
+	if hasDeadline {
+		runCtx, cancelRun = context.WithCancel(ctx)
+	} else {
+		runCtx, cancelRun = context.WithTimeout(ctx, DefaultGitTimeout)
 	}
+	defer cancelRun()
 
 	// Create command
-	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd := exec.CommandContext(runCtx, "git", args...)
 	cmd.Dir = dir
 
 	// Use bytes.Buffer for concurrent draining via cmd.Stdout/cmd.Stderr
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &boundedWriter{w: &stdout, rem: int(DefaultOutputLimit)}
-	cmd.Stderr = &boundedWriter{w: &stderr, rem: int(DefaultOutputLimit)}
+
+	// Track overflow state
+	overflowOccurred := false
+
+	// Create bounded writers with overflow cancellation
+	stdoutBW := &boundedWriter{
+		w:   &stdout,
+		rem: int(DefaultOutputLimit),
+		onOverflow: func() {
+			overflowOccurred = true
+			cancelRun()
+		},
+	}
+	stderrBW := &boundedWriter{
+		w:   &stderr,
+		rem: int(DefaultOutputLimit),
+		onOverflow: func() {
+			overflowOccurred = true
+			cancelRun()
+		},
+	}
+
+	cmd.Stdout = stdoutBW
+	cmd.Stderr = stderrBW
 
 	// Start command
 	startErr := cmd.Start()
@@ -83,18 +106,8 @@ func RunGit(ctx context.Context, dir string, args ...string) (GitResult, error) 
 		return GitResult{}, fmt.Errorf("git start: %w", startErr)
 	}
 
-	// Wait with deadline
+	// Wait for command
 	waitErr := cmd.Wait()
-
-	// Check output overflow
-	if stdout.Len() > DefaultOutputLimit || stderr.Len() > DefaultOutputLimit {
-		// Fail-closed: do not return partial output as success
-		return GitResult{
-			Stdout:   stdout.Bytes()[:DefaultOutputLimit],
-			Stderr:   stderr.Bytes()[:min(stderr.Len(), DefaultOutputLimit)],
-			ExitCode: -1,
-		}, ErrOutputLimit
-	}
 
 	// Extract exit code
 	exitCode := 0
@@ -110,50 +123,73 @@ func RunGit(ctx context.Context, dir string, args ...string) (GitResult, error) 
 		}
 	}
 
-	// Return classification errors directly
-	if ctx.Err() == context.Canceled {
+	// Check for overflow first (highest priority fail-closed)
+	if overflowOccurred {
+		return GitResult{
+			Stdout:   stdout.Bytes()[:min(stdout.Len(), int(DefaultOutputLimit))],
+			Stderr:   stderr.Bytes()[:min(stderr.Len(), int(DefaultOutputLimit))],
+			ExitCode: -1,
+		}, ErrOutputLimit
+	}
+
+	// Check context state for error classification
+	select {
+	case <-runCtx.Done():
+		if runCtx.Err() == context.DeadlineExceeded {
+			return GitResult{
+				Stdout:   stdout.Bytes(),
+				Stderr:   stderr.Bytes(),
+				ExitCode: exitCode,
+			}, context.DeadlineExceeded
+		}
+		// Cancelled by caller
 		return GitResult{
 			Stdout:   stdout.Bytes(),
 			Stderr:   stderr.Bytes(),
 			ExitCode: exitCode,
 		}, context.Canceled
-	}
-	if ctx.Err() == context.DeadlineExceeded {
+	default:
+		// Context not cancelled
 		return GitResult{
 			Stdout:   stdout.Bytes(),
 			Stderr:   stderr.Bytes(),
 			ExitCode: exitCode,
-		}, context.DeadlineExceeded
+		}, waitErr
 	}
-
-	return GitResult{
-		Stdout:   stdout.Bytes(),
-		Stderr:   stderr.Bytes(),
-		ExitCode: exitCode,
-	}, waitErr
 }
 
 // boundedWriter wraps a writer and enforces a byte limit.
-// When the limit is exceeded, subsequent writes fail.
+// When the limit is exceeded, it triggers overflow callback and returns error.
 type boundedWriter struct {
-	w    io.Writer
-	rem  int
-	done bool
+	w          io.Writer
+	rem        int
+	done       bool
+	exceeded   bool
+	onOverflow func()
 }
 
 // Write implements io.Writer with byte limit enforcement.
 func (bw *boundedWriter) Write(p []byte) (int, error) {
 	if bw.done {
+		bw.exceeded = true
 		return 0, ErrOutputLimit
 	}
 	if len(p) > bw.rem {
 		// Write partial up to limit
 		n, _ := bw.w.Write(p[:bw.rem])
 		bw.done = true
-		_ = n // n is written count, not consumed count
-		return len(p), ErrOutputLimit
+		bw.exceeded = true
+		// Trigger overflow cancellation
+		if bw.onOverflow != nil {
+			bw.onOverflow()
+		}
+		// Return actual bytes written
+		return n, ErrOutputLimit
 	}
 	n, err := bw.w.Write(p)
 	bw.rem -= n
+	if bw.rem == 0 {
+		bw.done = true
+	}
 	return n, err
 }

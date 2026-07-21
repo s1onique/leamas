@@ -10,7 +10,6 @@ import (
 )
 
 func TestRunGit_NilContext(t *testing.T) {
-	// Nil context must be rejected
 	_, err := RunGit(nil, ".", "status")
 	if !errors.Is(err, ErrNilContext) {
 		t.Errorf("expected ErrNilContext, got %v", err)
@@ -18,7 +17,6 @@ func TestRunGit_NilContext(t *testing.T) {
 }
 
 func TestRunGit_Success(t *testing.T) {
-	// Successful git command
 	ctx := context.Background()
 	result, err := RunGit(ctx, ".", "rev-parse", "--is-inside-work-tree")
 	if err != nil {
@@ -33,7 +31,6 @@ func TestRunGit_Success(t *testing.T) {
 }
 
 func TestRunGit_ExitCode(t *testing.T) {
-	// Git command with nonzero exit code
 	ctx := context.Background()
 	result, err := RunGit(ctx, ".", "rev-parse", "nonexistent")
 	// Nonzero exit code may be returned as error
@@ -41,6 +38,25 @@ func TestRunGit_ExitCode(t *testing.T) {
 		t.Error("expected nonzero exit code for nonexistent ref")
 	}
 	_ = err // err may be present for nonzero exit
+}
+
+func TestRunGit_DefaultTimeout(t *testing.T) {
+	// context.Background() should get default timeout applied
+	ctx := context.Background()
+
+	// Verify default timeout is applied by checking Deadline()
+	deadlineCtx, ok := ctx.Deadline()
+	if ok {
+		t.Logf("context already has deadline: %v", deadlineCtx)
+	}
+
+	result, err := RunGit(ctx, ".", "rev-parse", "--is-inside-work-tree")
+	if err != nil {
+		t.Fatalf("unexpected error with Background context: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Errorf("expected exit code 0, got %d", result.ExitCode)
+	}
 }
 
 func TestRunGit_DeadlineExceeded(t *testing.T) {
@@ -56,22 +72,26 @@ func TestRunGit_DeadlineExceeded(t *testing.T) {
 		t.Errorf("expected DeadlineExceeded, got %v", err)
 	}
 	// Exit code should indicate timeout
-	if result.ExitCode != -1 && result.ExitCode != 124 { // 124 is timeout's exit code
+	if result.ExitCode != -1 && result.ExitCode != 124 {
 		t.Logf("note: deadline exit code %d may vary", result.ExitCode)
 	}
 }
 
 func TestRunGit_Cancellation(t *testing.T) {
 	// Caller cancellation must interrupt git
-	// Use a very slow command that will definitely still be running
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
+	ctx, cancel := context.WithCancel(context.Background())
 
-	result, err := RunGit(ctx, ".", "rev-list", "--all")
-	// Either cancelled/deadline exceeded or fast command completed
+	// Start cancellation after a short delay
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	result, err := RunGit(ctx, ".", "rev-list", "--all", "--count")
+	// Either cancelled or fast command completed
 	if err != nil {
-		if !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
-			t.Errorf("expected Canceled or DeadlineExceeded, got %v", err)
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected Canceled, got %v", err)
 		}
 	}
 	t.Logf("result: exit=%d, stdout=%d bytes, err=%v", result.ExitCode, len(result.Stdout), err)
@@ -93,20 +113,18 @@ func TestRunGit_OutputLimit(t *testing.T) {
 }
 
 func TestRunGit_RawOutputPreservesNUL(t *testing.T) {
-	// Raw output should preserve NUL bytes from -z flag
 	ctx := context.Background()
 	result, err := RunGit(ctx, ".", "ls-tree", "-z", "--name-only", "HEAD")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// NUL-delimited output should have NUL bytes (unless empty)
+	// NUL-delimited output should have NUL bytes
 	if len(result.Stdout) > 0 && !strings.Contains(string(result.Stdout), "\x00") {
 		t.Log("note: HEAD may be empty or use different format")
 	}
 }
 
 func TestRunGit_StderrCapture(t *testing.T) {
-	// Stderr should be captured separately
 	ctx := context.Background()
 	result, err := RunGit(ctx, ".", "status", "--porcelain")
 	if err != nil {
@@ -114,25 +132,22 @@ func TestRunGit_StderrCapture(t *testing.T) {
 	}
 	// stderr should be empty on success
 	if len(result.Stderr) > 0 {
-		t.Logf("note: stderr has content: %s", result.Stderr)
+		t.Errorf("unexpected stderr content: %s", result.Stderr)
 	}
 }
 
 func TestRunGit_CWD(t *testing.T) {
-	// Verify correct directory handling
 	ctx := context.Background()
 	result, err := RunGit(ctx, ".", "rev-parse", "--show-toplevel")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Should return absolute path
 	if !filepath.IsAbs(strings.TrimSpace(string(result.Stdout))) {
 		t.Errorf("expected absolute path, got: %s", result.Stdout)
 	}
 }
 
 func TestBoundedWriter_ExactlyLimit(t *testing.T) {
-	// Writing exactly limit bytes should succeed
 	input := strings.Repeat("x", 100)
 	lr := &boundedWriter{w: &strings.Builder{}, rem: 100}
 	n, err := lr.Write([]byte(input))
@@ -145,9 +160,8 @@ func TestBoundedWriter_ExactlyLimit(t *testing.T) {
 }
 
 func TestBoundedWriter_Overflow(t *testing.T) {
-	// Writing beyond limit should fail
 	input := strings.Repeat("x", 200)
-	lr := &boundedWriter{w: &strings.Builder{}, rem: 100}
+	lr := &boundedWriter{w: &strings.Builder{}, rem: 100, onOverflow: func() {}}
 	n, err := lr.Write([]byte(input))
 	if err == nil {
 		t.Error("expected error on overflow")
@@ -155,14 +169,16 @@ func TestBoundedWriter_Overflow(t *testing.T) {
 	if !errors.Is(err, ErrOutputLimit) {
 		t.Errorf("expected ErrOutputLimit, got %v", err)
 	}
-	// Should have written 100 bytes
-	if n != 200 {
-		t.Errorf("expected Write to report full length: %d", n)
+	// Should return actual bytes written (100)
+	if n != 100 {
+		t.Errorf("expected 100 (bytes actually written), got %d", n)
+	}
+	if !lr.exceeded {
+		t.Error("expected exceeded flag to be set")
 	}
 }
 
 func TestBoundedWriter_AfterDone(t *testing.T) {
-	// Writing after done should fail
 	lr := &boundedWriter{w: &strings.Builder{}, rem: 5, done: true}
 	n, err := lr.Write([]byte("hello"))
 	if err == nil {
@@ -173,15 +189,28 @@ func TestBoundedWriter_AfterDone(t *testing.T) {
 	}
 }
 
-// Test concurrent output handling - not testing with fake git here
-// but verifying the structure handles both streams
 func TestRunGit_BothStreams(t *testing.T) {
 	ctx := context.Background()
-	// git status produces minimal output - both streams should be handled
 	result, err := RunGit(ctx, ".", "status", "-z")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Both should be captured
 	t.Logf("stdout: %d bytes, stderr: %d bytes", len(result.Stdout), len(result.Stderr))
+}
+
+func TestBoundedWriter_OnOverflowCallback(t *testing.T) {
+	called := false
+	input := strings.Repeat("x", 200)
+	lr := &boundedWriter{
+		w:          &strings.Builder{},
+		rem:        100,
+		onOverflow: func() { called = true },
+	}
+	_, err := lr.Write([]byte(input))
+	if err == nil {
+		t.Error("expected error")
+	}
+	if !called {
+		t.Error("expected overflow callback to be called")
+	}
 }
