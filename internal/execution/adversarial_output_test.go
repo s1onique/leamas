@@ -87,6 +87,8 @@ func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 		t.Errorf("process leak detected:\n%v", err)
 	}
 
-	t.Logf("TestAdversarialOutputOverflowWithDescendants: PASSED - elapsed=%v, retained=%d, limit=%d, observed=%d, records=%d",
+	// Rely on Go's normal PASS reporting; do not emit an unconditional
+	// PASSED log line.
+	t.Logf("TestAdversarialOutputOverflowWithDescendants: elapsed=%v retained=%d limit=%d observed=%d records=%d",
 		elapsed, result.OutputBytesRetained, result.OutputLimit, result.OutputBytesObserved, len(records))
 }

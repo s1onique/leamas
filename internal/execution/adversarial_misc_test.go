@@ -68,7 +68,8 @@ func TestAdversarialProcessGroupIsolation(t *testing.T) {
 		t.Errorf("expected deadline/timeout error, got %s", result.Error.Code)
 	}
 
-	t.Logf("TestAdversarialProcessGroupIsolation: PASSED - elapsed %v, records=%d, pgid=%d", elapsed, len(records), pgid)
+	t.Logf("TestAdversarialProcessGroupIsolation: elapsed=%v records=%d pgid=%d",
+		elapsed, len(records), pgid)
 }
 
 // TestAdversarialManifestIsolation tests manifest files don't interfere.

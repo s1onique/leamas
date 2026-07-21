@@ -60,7 +60,8 @@ func TestAdversarialTimeoutDirectSleep(t *testing.T) {
 		t.Errorf("expected deadline/timeout error, got %s", res.Error.Code)
 	}
 
-	t.Logf("TestAdversarialTimeoutDirectSleep: PASSED - elapsed %v, records=%d", elapsed, len(records))
+	t.Logf("TestAdversarialTimeoutDirectSleep: elapsed=%v records=%d",
+		elapsed, len(records))
 }
 
 // TestAdversarialTimeoutChildTree tests that timeout kills parent and child.
@@ -114,7 +115,8 @@ func TestAdversarialTimeoutChildTree(t *testing.T) {
 		t.Errorf("expected deadline/timeout error, got %s", result.Error.Code)
 	}
 
-	t.Logf("TestAdversarialTimeoutChildTree: PASSED - elapsed %v, records=%d", elapsed, len(records))
+	t.Logf("TestAdversarialTimeoutChildTree: elapsed=%v records=%d",
+		elapsed, len(records))
 }
 
 // TestAdversarialTimeoutGrandchildTree tests that timeout kills 3-level tree.
@@ -174,5 +176,6 @@ func TestAdversarialTimeoutGrandchildTree(t *testing.T) {
 		t.Errorf("expected deadline/timeout error, got %s", result.Error.Code)
 	}
 
-	t.Logf("TestAdversarialTimeoutGrandchildTree: PASSED - elapsed %v, records=%d", elapsed, len(records))
+	t.Logf("TestAdversarialTimeoutGrandchildTree: elapsed=%v records=%d",
+		elapsed, len(records))
 }

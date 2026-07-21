@@ -80,7 +80,10 @@ go test ./internal/execution/... -count=1 -v
 
 ## External Blockers
 
-1. **ACT-LEAMAS-FACTORY-DIGEST-V2-RENAME-COPY-RECORD-PARSING01** must complete before cumulative digest generation can produce correct evidence. The rename/copy parser currently corrupts records by inventing a path named `M` and omitting the rename destination.
+1. **ACT-LEAMAS-FACTORY-DIGEST-V2-RENAME-COPY-RECORD-PARSING01** must complete
+   before cumulative digest generation can produce correct evidence.
+   The rename/copy parser currently corrupts records by inventing a path
+   named `M` and omitting the rename destination.
 
 ## Final Status
 

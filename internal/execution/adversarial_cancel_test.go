@@ -69,7 +69,10 @@ func TestAdversarialCallerCancellation(t *testing.T) {
 		t.Errorf("expected CodeExecutionCancelled, got %s", result.Error.Code)
 	}
 
-	t.Logf("TestAdversarialCallerCancellation: PASSED - elapsed %v, records=%d", elapsed, len(records))
+	// Rely on Go's normal PASS reporting; do not emit an unconditional
+	// PASSED log line.
+	t.Logf("TestAdversarialCallerCancellation: elapsed=%v records=%d",
+		elapsed, len(records))
 }
 
 // TestAdversarialNonZeroExitWithChild tests non-zero exit doesn't leak processes.
@@ -124,5 +127,6 @@ func TestAdversarialNonZeroExitWithChild(t *testing.T) {
 		t.Errorf("expected no error for non-zero exit, got %v", result.Error)
 	}
 
-	t.Logf("TestAdversarialNonZeroExitWithChild: PASSED - exit code %d, records=%d", result.ExitCode, len(records))
+	t.Logf("TestAdversarialNonZeroExitWithChild: exit_code=%d records=%d",
+		result.ExitCode, len(records))
 }
