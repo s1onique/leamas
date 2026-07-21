@@ -33,32 +33,38 @@ var ForbiddenCalls = []ForbiddenCall{
 
 // AllowedFiles are specific files where direct exec calls are permitted.
 // Only the execution gateway itself and factory infrastructure require process APIs.
+//
+// The adversarial harness files are test-only. CORRECTION05 renamed
+// adversarial_harness_executor.go to _test.go so it no longer appears
+// in the production binary. The entry here keeps the allow-list bound
+// to the renamed path so the renamed file's exec.Command("go", "build", ...)
+// call is still recognised by the gate as a legitimate test build-step.
 var AllowedFiles = map[string]bool{
-	"internal/execution/executor.go":                       true,
-	"internal/execution/git.go":                            true,
-	"internal/execution/testlong.go":                       true,
-	"internal/execution/exectest/exectest.go":              true,
-	"internal/execution/adversarial_harness_test.go":       true,
-	"internal/execution/adversarial_harness_executor.go":   true,
-	"internal/factory/gate/gate.go":                        true,
-	"internal/factory/gate/gate_failure_output_test.go":    true,
-	"internal/factory/gate/gate_failure_execution_test.go": true,
-	"internal/factory/gate/toolchain.go":                   true,
-	"internal/factory/gate/subject_identity.go":            true,
-	"internal/factory/gate/platform_sampler.go":            true,
-	"internal/factory/digest/git.go":                       true,
-	"internal/factory/digest/digest_auto_test.go":          true,
-	"internal/factory/dupcode/baseline_verify.go":          true,
-	"internal/factory/githooks/check.go":                   true,
-	"internal/factory/githooks/check_test.go":              true,
-	"internal/factory/githooks/hook_functional_test.go":    true,
-	"internal/factory/github/check.go":                     true,
-	"internal/factory/llmfriendly/check.go":                true,
-	"internal/factory/output/outputcontract.go":            true,
-	"internal/factory/staticbinary/check.go":               true,
-	"internal/factory/doctrinecompiler/subprocess_test.go": true,
-	"cmd/leamas/runtime_smoke_test.go":                     true,
-	"cmd/leamas/version_cli_test.go":                       true,
+	"internal/execution/executor.go":                          true,
+	"internal/execution/git.go":                               true,
+	"internal/execution/testlong.go":                          true,
+	"internal/execution/exectest/exectest.go":                 true,
+	"internal/execution/adversarial_harness_test.go":          true,
+	"internal/execution/adversarial_harness_executor_test.go": true,
+	"internal/factory/gate/gate.go":                           true,
+	"internal/factory/gate/gate_failure_output_test.go":       true,
+	"internal/factory/gate/gate_failure_execution_test.go":    true,
+	"internal/factory/gate/toolchain.go":                      true,
+	"internal/factory/gate/subject_identity.go":               true,
+	"internal/factory/gate/platform_sampler.go":               true,
+	"internal/factory/digest/git.go":                          true,
+	"internal/factory/digest/digest_auto_test.go":             true,
+	"internal/factory/dupcode/baseline_verify.go":             true,
+	"internal/factory/githooks/check.go":                      true,
+	"internal/factory/githooks/check_test.go":                 true,
+	"internal/factory/githooks/hook_functional_test.go":       true,
+	"internal/factory/github/check.go":                        true,
+	"internal/factory/llmfriendly/check.go":                   true,
+	"internal/factory/output/outputcontract.go":               true,
+	"internal/factory/staticbinary/check.go":                  true,
+	"internal/factory/doctrinecompiler/subprocess_test.go":    true,
+	"cmd/leamas/runtime_smoke_test.go":                        true,
+	"cmd/leamas/version_cli_test.go":                          true,
 }
 
 // AllowedImports are packages that may only be imported by test files.
