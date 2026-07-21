@@ -15,28 +15,11 @@ import (
 	"time"
 )
 
-// testHelperSource is the source path for the test helper's entry file.
-const testHelperSource = "internal/execution/testdata/testhelper/main.go"
-
-// testHelperBinary is the compiled helper path.
-const testHelperBinary = "internal/execution/testdata/testhelper/main"
-
-// helperSourceFiles lists every file in the testhelper package so the
-// build cache invalidates whenever any of them changes, not just the
-// argv-dispatch entry file.
-var helperSourceFiles = []string{
-	"main.go",
-	"pid_manifest.go",
-	"proc_runtime.go",
-	"modes_sleep.go",
-	"modes_tree.go",
-	"modes_output.go",
-}
-
 var (
 	helperBuildOnce sync.Once
 	helperBuildErr  error
 	helperPath      string
+	helperOutputDir string
 )
 
 // findRepoRoot finds the repository root by looking for go.mod.
@@ -62,7 +45,10 @@ func findRepoRoot() (string, error) {
 	return "", fmt.Errorf("go.mod not found in any parent directory")
 }
 
-// ensureHelperBuilt builds the test helper from source if not already built.
+// ensureHelperBuilt creates one content-addressed helper in a process-local
+// temporary directory. The builder discovers package sources with go list,
+// hashes their names and contents, embeds that digest at link time, and
+// verifies the runtime identity before publishing the path.
 func ensureHelperBuilt() error {
 	helperBuildOnce.Do(func() {
 		repoRoot, err := findRepoRoot()
@@ -70,44 +56,20 @@ func ensureHelperBuilt() error {
 			helperBuildErr = err
 			return
 		}
-
-		sourceDir := filepath.Join(repoRoot, filepath.Dir(testHelperSource))
-		outputPath := filepath.Join(repoRoot, testHelperBinary)
-
-		// Check if already built and source hasn't changed
-		if info, err := os.Stat(outputPath); err == nil {
-			upToDate := true
-			for _, name := range helperSourceFiles {
-				p := filepath.Join(sourceDir, name)
-				if srcInfo, err := os.Stat(p); err != nil || !info.ModTime().After(srcInfo.ModTime()) {
-					upToDate = false
-					break
-				}
-			}
-			if upToDate {
-				helperPath = outputPath
-				return // Already built and up-to-date
-			}
-		}
-
-		// Ensure output directory exists
-		if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-			helperBuildErr = fmt.Errorf("failed to create helper directory: %w", err)
+		outputDir, err := os.MkdirTemp("", "leamas-execution-testhelper-")
+		if err != nil {
+			helperBuildErr = fmt.Errorf("create helper temp directory: %w", err)
 			return
 		}
-
-		// Build the helper. The helper source is split across several
-		// .go files (main.go, pid_manifest.go, proc_runtime.go,
-		// modes_sleep.go, modes_tree.go, modes_output.go) so we build the
-		// whole directory rather than a single source file.
-		cmd := exec.Command("go", "build", "-o", outputPath, ".")
-		cmd.Dir = sourceDir
-		if output, err := cmd.CombinedOutput(); err != nil {
-			helperBuildErr = fmt.Errorf("failed to build test helper: %w, output: %s", err, output)
+		sourceDir := filepath.Join(repoRoot, helperPackagePath)
+		identity, _, err := buildContentAddressedHelper(sourceDir, outputDir)
+		if err != nil {
+			_ = os.RemoveAll(outputDir)
+			helperBuildErr = err
 			return
 		}
-
-		helperPath = outputPath
+		helperOutputDir = outputDir
+		helperPath = identity.Path
 	})
 	return helperBuildErr
 }

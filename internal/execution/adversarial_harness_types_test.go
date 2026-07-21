@@ -35,19 +35,33 @@ var signalReadyForMode = map[string][]string{
 	"sleep-grandchild": {"parent", "child", "grandchild"},
 }
 
+// descriptorIdentity is the Linux fd identity recorded by the retained-pipe
+// fixture. Target comes from /proc/<pid>/fd/<fd>; Dev and Ino come from fstat.
+type descriptorIdentity struct {
+	Target string `json:"target"`
+	Dev    uint64 `json:"dev"`
+	Ino    uint64 `json:"ino"`
+}
+
+type descriptorSet struct {
+	FD1 descriptorIdentity `json:"fd1"`
+	FD2 descriptorIdentity `json:"fd2"`
+}
+
 // PIDRecord represents a recorded process in the manifest.
 //
 // SignalReady is true ONLY when the recording process has already installed
 // every required signal behavior. The test harness requires this flag for
 // the relevant roles and never trusts a record whose flag is false.
 type PIDRecord struct {
-	Role        string `json:"role"`         // "parent", "child", "grandchild"
-	Mode        string `json:"mode"`         // The mode that created this record
-	PID         int    `json:"pid"`          // Process ID
-	PPID        int    `json:"ppid"`         // Parent process ID
-	PGID        int    `json:"pgid"`         // Process group ID
-	Start       int64  `json:"start"`        // Unix timestamp when recorded
-	SignalReady bool   `json:"signal_ready"` // True iff required signal handlers installed
+	Role        string         `json:"role"`         // "parent", "child", "grandchild"
+	Mode        string         `json:"mode"`         // The mode that created this record
+	PID         int            `json:"pid"`          // Process ID
+	PPID        int            `json:"ppid"`         // Parent process ID
+	PGID        int            `json:"pgid"`         // Process group ID
+	Start       int64          `json:"start"`        // Unix timestamp when recorded
+	SignalReady bool           `json:"signal_ready"` // True iff required signal handlers installed
+	Descriptors *descriptorSet `json:"descriptors,omitempty"`
 }
 
 // processVerifier provides deterministic process verification.
