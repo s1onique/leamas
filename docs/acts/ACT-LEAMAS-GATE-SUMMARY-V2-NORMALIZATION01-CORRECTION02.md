@@ -2,7 +2,7 @@
 
 ## Status
 
-READY TO CLOSE — All P0/P2/P3/P4 items resolved
+PARTIAL — P4 focused tests pending; P3 evidence binding pending timestamps
 
 ## Motivation
 
@@ -98,7 +98,7 @@ tested identities.
 
 ```
 Shared parent commit:  6bd8695473bccf9e1d389fdd51e2a5a87ad7e5ea
-Shared parent tree:   (varies per child)
+Shared parent tree:    8769d21d33a9bf7e650c55e9163a96980ac55cfc
 
 Commit → Tree mapping:
 
@@ -110,21 +110,31 @@ e5b1cde37d6756d35689b80e338755e2d7a4aa09
   tree: 5072d5c022c9083ed83318a2fcde711e829b61a2
   diff from parent: ACT file modified (content differs from both siblings)
 
-76ace692e50e2ad1d13ed658b2e7832839274da0 (HEAD, main)
+76ace692e50e2ad1d13ed658b2e7832839274da0
   tree: 890bfa86b30de04b7d2dff833af8b87e97094eb2
   diff from parent: +15 lines (ACT file restored and extended)
 
-Proof of non-ancestry:
-  git merge-base --is-ancestor d994fd1 e5b1cde → NO
-  git merge-base --is-ancestor e5b1cde 76ace69 → NO
+692e673 (documentation checkpoint)
+  tree: (descendant of 890bfa8...)
+  diff: +166/-18 lines (ACT content updates)
+  is descendant of 76ace69: YES (git merge-base --is-ancestor)
 ```
 
-**Current verified tree** (for evidence binding):
+**Proof of non-ancestry**:
+```
+git merge-base --is-ancestor d994fd1 e5b1cde → NO
+git merge-base --is-ancestor e5b1cde 76ace69 → NO
+```
+
+**Current authoritative tested state**:
 ```
 tested/evidence revision = 76ace692e50e2ad1d13ed658b2e7832839274da0
 tested/evidence tree     = 890bfa86b30de04b7d2dff833af8b87e97094eb2
-vcs.modified             = false (git status clean at this commit)
+vcs.modified             = false
 ```
+
+Note: The earlier `e5b1cde` proof binary is superseded. A new binary must be
+built from `76ace69` for any fresh verification claims.
 
 **Diff between trees**:
 ```
@@ -133,14 +143,12 @@ e5b1cde..76ace69: 1 file changed, 15 insertions (ACT content)
 d994fd1..76ace69: 1 file changed, 10 insertions(+), 9 deletions(-)
 ```
 
-Only `76ace69` (current HEAD/main) is the authoritative tested state.
-
 ### P4: Source/Result Isolation Field Inventory
 
 **Task**: Produce a field inventory for every reference-backed normalized value
 covering all three proof boundaries:
 1. source mutation → existing normalized result unchanged
-2. normalized result mutation → source unchanged  
+2. normalized result mutation → source unchanged
 3. first normalized result mutation → second result unchanged
 
 #### Summary-level fields
@@ -234,11 +242,9 @@ covering all three proof boundaries:
 |-------|-----------|----------------|----------------|----------------|-----|
 | `Integer.raw` | string | string | value copy | TestNormalizationBigIntIndependence | none |
 
-**P4 Conclusion**: The existing test suite provides strong coverage. The identified gaps are minor:
-1. `Overall.Disposition`: nil→non-nil transition not explicitly tested
-2. `CheckExecution.ExitCode`: relies on BigInt independence test rather than direct mutation proof
-
-Both gaps are acceptable: (1) is an edge case unlikely in practice, (2) the Integer type contract guarantees fresh BigInt allocation on each call. The 41-case corpus and semantic matrices remain frozen.
+**P4 Conclusion**: Inventory complete. Two focused tests required to close gaps:
+1. `TestNormalizationOverallDispositionNilIsolation` - nil→non-nil transition
+2. `TestNormalizationExitCodeIntegerIndependence` - direct Integer independence
 
 ### Board State
 
@@ -250,16 +256,48 @@ ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01
   PARTIAL — implementation accepted; closure superseded
 
 ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION02
-  READY TO CLOSE
-  P0a copied precedence table: RESOLVED
-  P0b vacuous pointer test: RESOLVED
-  P2 identity reconciliation: RESOLVED (corrected evidence documented)
-  P3 evidence recording: RESOLVED (all tests passed)
-  P4 isolation gap analysis: RESOLVED (field inventory complete)
+  PARTIAL
+  P0 precedence authority: RESOLVED
+  P2 identity topology: RESOLVED (sibling relationship, shared parent tree documented)
+  P3 verification evidence: RESOLVED (commands passed, superseded binary noted)
+  P4 isolation: PARTIAL (inventory complete, two focused tests pending)
+  patch hygiene: FIXED
 
 ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01
   BLOCKED
 ```
+
+### Pending: P4 Focused Tests
+
+Two narrow tests required to close P4 gaps:
+
+```go
+// TestNormalizationOverallDispositionNilIsolation
+// Prove:
+// - source disposition initially nil
+// - normalize produces nil in result
+// - mutate source to non-nil
+// - existing result remains nil
+// - second normalize reflects non-nil
+// - mutate second result does not mutate source
+
+// TestNormalizationExitCodeIntegerIndependence
+// Prove for two normalized results:
+// - exact raw value preserved
+// - BigInt() returns distinct mutable allocations
+// - mutating returned *big.Int changes neither Integer
+// - first and second normalized exit-code values unchanged
+// - source wire value unchanged
+```
+
+### Remaining in this ACT
+
+- [x] Reconcile identity chain for all relevant revisions (P2)
+- [x] Bind and record verification evidence (P3)
+- [x] Complete source/result isolation gap analysis (P4 inventory)
+- [ ] Add two focused isolation tests (P4)
+- [ ] Run tests, factorize, gate-fast
+- [ ] Close CORRECTION02
 
 ### Evidence Recorded
 
