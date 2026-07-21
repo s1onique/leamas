@@ -208,20 +208,25 @@ type readinessObservation struct {
 	ReadySentinelFiles []string
 }
 
-// waitForReadiness polls the manifest and the readiness directory until
-// every role listed in expectedRolesForMode is recorded AND every role
-// listed in signalReadyForMode[mode] is recorded with SignalReady=true AND
-// every required role has a fresh ready sentinel file in readyDir.
+// waitForReadiness polls the manifest until every role listed in
+// expectedRolesForMode is recorded AND every role listed in
+// signalReadyForMode[mode] is recorded with SignalReady=true.
 //
-// The function returns when all three conditions hold, or returns an error
-// describing the last observation if the deadline elapses first.
+// The fsynced manifest record is the SOLE AUTHORITY for role and
+// signal-readiness evidence. The per-PID `<pid>.ready` sentinel files
+// the helper emits via publishReady are DIAGNOSTIC only and are NOT
+// consulted by this function. Stage-specific hand-off sentinels
+// (e.g. `descriptor-ready.wait`, `parent-exit-imminent.<pid>`,
+// `<pid>.output-flood-ready`) are test-specific handoffs whose
+// observability is the responsibility of the calling test; they
+// are also NOT consulted by this function.
 //
-// waitedError is preserved verbatim so a transient parse error is not
-// silently overwritten by a later successful parse.
+// Returns nil when all conditions hold, or an error describing the
+// last observation if the deadline elapses first.
 //
-// The function is deterministic with respect to its inputs and never invokes
-// time.Sleep outside its bounded deadline. Poll interval is
-// readinessPollInterval.
+// The function is deterministic with respect to its inputs and never
+// invokes time.Sleep outside its bounded deadline. The poll interval
+// is readinessPollInterval.
 func (v *processVerifier) waitForReadiness(mode string, deadline time.Time) error {
 	v.t.Helper()
 

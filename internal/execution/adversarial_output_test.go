@@ -116,13 +116,21 @@ func TestAdversarialOutputOverflowWithDescendants(t *testing.T) {
 			readySentinel, err)
 	}
 
-	// Require no ERROR: helper diagnostic in the retained output.
+	// Require no ERROR: helper diagnostic in either stdout or stderr.
 	// The pre-CORRECTION05 waitChildOrFail semantic emitted an
 	// 84-byte "child exited cleanly" line that itself satisfied the
-	// 64-byte cap; that failure must never recur.
+	// 64-byte cap; that failure must never recur. CORRECTION06
+	// widens the check to stderr because the helper's fail-closed
+	// diagnostics are written to stderr.
 	for _, line := range strings.Split(string(result.Stdout), "\n") {
 		if strings.HasPrefix(line, "ERROR:") {
-			t.Errorf("helper ERROR: diagnostic leaked into retained output: %q",
+			t.Errorf("helper ERROR: diagnostic leaked into stdout: %q",
+				line)
+		}
+	}
+	for _, line := range strings.Split(string(result.Stderr), "\n") {
+		if strings.HasPrefix(line, "ERROR:") {
+			t.Errorf("helper ERROR: diagnostic leaked into stderr: %q",
 				line)
 		}
 	}

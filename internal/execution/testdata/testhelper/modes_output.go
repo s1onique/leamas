@@ -120,22 +120,30 @@ func runStdoutHolder() {
 	sleepForever()
 }
 
-// runHeldDescriptor implements the genuine retained-pipe fixture:
+// runHeldDescriptor implements the natural-exit retained-pipe fixture
+// required by ACT-LEAMAS-FACTORY-FACTORIZE-CRITICAL-PATH-BASELINE01-
+// CORRECTION06. The fixture is deliberately self-contained and
+// schedules the natural exit without any test-driven cancel or
+// bounded sleep:
+//
 //  1. parent records itself
 //  2. parent spawns the descriptor-holder child with INHERITED stdout
-//     and stderr
-//  3. parent observes the child's descriptor-ready event
-//  4. parent publishes a parent-exiting sentinel
-//  5. parent sleeps for a bounded grace period so the test can issue
-//     cancellation before the parent exits cleanly
-//  6. parent exits successfully
-//  7. descriptor-holder retains the parent's stdout/stderr for a
-//     long bounded duration
+//     and stderr so the executor-owned pipe reaches the descendant
+//  3. parent blocks on the child's PID-bound descriptor-ready
+//     sentinel, which carries role/pid/pgid metadata
+//  4. parent publishes parent-exit-imminent (NOT parent-exited)
+//     sentinel so the test can sequence the handoff but cannot
+//     mistake the imminent event for actual exit evidence
+//  5. parent exits successfully with status zero via os.Exit(0)
+//  6. descriptor-holder child retains the inherited descriptors for
+//     at least 60 s, far longer than the executor's WaitDelay
+//     (TerminationGrace + PostKillWait = 1 s)
 //
-// The bounded grace period between the parent-exiting sentinel and the
-// parent's actual exit gives the test time to issue cancelCaller so
-// that the executor's post-select termination branch reliably signals
-// the descendant's process group.
+// The fixture MUST NOT sleep before exiting. The CORRECTION05 fixture
+// introduced a 500 ms bounded sleep before os.Exit(0) which made the
+// adjacent cancellation test exercise SIGTERM, not natural-exit
+// WaitDelay. The CORRECTION06 fixture relies only on the natural exit
+// so the executor's WaitDelay cleanup is the observable bound.
 func runHeldDescriptor() {
 	recordPID("parent", "held-descriptor", false)
 
@@ -145,59 +153,85 @@ func runHeldDescriptor() {
 		"held-descriptor", "held-descriptor-child")
 	_ = cmd
 
-	// Block on the child's descriptor-ready sentinel. We deliberately
-	// poll within a bounded deadline so a stuck child cannot hang the
-	// proof. The sentinel file is fsynced by the child before this
-	// loop can return, so the test is observing a real transition.
+	// Block on the child's descriptor-ready sentinel. The poll is
+	// bounded so a stuck child cannot hang the proof; the sentinel
+	// is fsynced by the child before this loop returns so the test
+	// is observing a real transition.
 	readyPath := filepath.Join(readyDir,
 		fmt.Sprintf("descriptor-ready.wait"))
-	waitForFile(readyPath, 5*time.Second)
+	if !waitForFile(readyPath, 10*time.Second) {
+		failClosed("held-descriptor",
+			"descriptor-ready sentinel not observed within 10s")
+	}
 
-	// Publish the parent-exiting sentinel so the test can observe the
-	// handoff between parent exit and Execute return.
-	parentExitPath := filepath.Join(readyDir,
-		fmt.Sprintf("parent-exited.%d", os.Getpid()))
-	f, err := os.Create(parentExitPath)
+	// Publish parent-exit-imminent (not parent-exited). The truthful
+	// meaning is "the parent is about to call os.Exit(0)" — the
+	// test MUST verify actual exit via the OS-backed parent PID
+	// check, not via this sentinel.
+	imminentPath := filepath.Join(readyDir,
+		fmt.Sprintf("parent-exit-imminent.%d", os.Getpid()))
+	f, err := os.Create(imminentPath)
 	if err != nil {
 		failClosed("held-descriptor",
-			"failed to publish parent-exiting sentinel: %v", err)
+			"failed to publish parent-exit-imminent sentinel: %v", err)
 	}
 	if err := f.Sync(); err != nil {
 		_ = f.Close()
 		failClosed("held-descriptor",
-			"failed to sync parent-exiting sentinel: %v", err)
+			"failed to sync parent-exit-imminent sentinel: %v", err)
 	}
 	_ = f.Close()
 
-	// Sleep briefly so the test's cancelCaller reaches the executor
-	// BEFORE the parent actually exits. Without this, the executor's
-	// cmd.Wait() returns before the cancel propagates and the
-	// post-select termination branch is skipped.
-	select {
-	case <-time.After(500 * time.Millisecond):
-		os.Exit(0)
-	}
+	// Exit successfully through the natural code path. The descriptor-
+	// holder child still holds the inherited executor-owned stdout and
+	// stderr pipes; the executor's cmd.Wait must therefore block
+	// until WaitDelay releases the pipe.
+	os.Exit(0)
 }
 
 // runHeldDescriptorChild inherits the parent's stdout/stderr and holds
 // the inherited descriptors open for a bounded duration. It publishes
-// a descriptor-ready.wait sentinel so the parent can sequence the
-// parent-exit handoff.
+// two correlated evidence artifacts:
+//
+//  1. `<child-pid>.descriptor-ready.ready` — the canonical PID-bound
+//     readiness sentinel. The CONTENTS bind role, pid, ppid, and
+//     pgid so the test can cross-check against the manifest. The
+//     filename contains the child pid so the test can match the
+//     record by PID without a process search.
+//  2. `descriptor-ready.wait` — the parent's poll handle. It is a
+//     degenerate form (no pid in name) so the parent can sequence
+//     its exit immediately after child readiness without forcing
+//     a PID-discovery round trip.
+//
+// The child holds the inherited descriptors open by sleeping for
+// at least 60 s, which is two orders of magnitude beyond the
+// executor's WaitDelay (TerminationGrace + PostKillWait = 1 s by
+// default). The executor MUST therefore trigger WaitDelay cleanup,
+// not the request context, not a goroutine exit.
 func runHeldDescriptorChild() {
+	pid := os.Getpid()
+	ppid := os.Getppid()
+	pgid := syscall.Getpgrp()
+
 	recordPID("child", "held-descriptor-child", false)
-	// Signal the parent that descriptors are now inherited and held
-	// open. The file is fsynced before the parent resumes its own
-	// exit sequence.
-	readyPath := filepath.Join(readyDir, "descriptor-ready.wait")
-	f, err := os.Create(readyPath)
+
+	// Step 1: publish the PID-bound descriptor-ready sentinel so the
+	// test can cross-check the contents against the manifest. The
+	// file is fsynced before close so the test observes a true
+	// transition.
+	pidReady := filepath.Join(readyDir,
+		fmt.Sprintf("%d.descriptor-ready.ready", pid))
+	f, err := os.Create(pidReady)
 	if err != nil {
 		failClosed("held-descriptor-child",
-			"failed to publish descriptor-ready sentinel: %v", err)
+			"failed to publish PID-bound descriptor-ready sentinel: %v", err)
 	}
-	if _, err := io.WriteString(f, "ready"); err != nil {
+	pidContent := fmt.Sprintf("role=child\npid=%d\nppid=%d\npgid=%d\n",
+		pid, ppid, pgid)
+	if _, err := io.WriteString(f, pidContent); err != nil {
 		_ = f.Close()
 		failClosed("held-descriptor-child",
-			"failed to write descriptor-ready sentinel: %v", err)
+			"failed to write descriptor-ready contents: %v", err)
 	}
 	if err := f.Sync(); err != nil {
 		_ = f.Close()
@@ -205,9 +239,33 @@ func runHeldDescriptorChild() {
 			"failed to sync descriptor-ready sentinel: %v", err)
 	}
 	_ = f.Close()
-	// Hold the inherited descriptors open by sleeping. The executor's
-	// WaitDelay cleanup path must fire to release them.
-	sleepForever()
+
+	// Step 2: publish the parent-handle sentinel so the parent can
+	// block on it without PID discovery.
+	parentHandle := filepath.Join(readyDir, "descriptor-ready.wait")
+	f2, err := os.Create(parentHandle)
+	if err != nil {
+		failClosed("held-descriptor-child",
+			"failed to publish descriptor-ready.handle: %v", err)
+	}
+	if _, err := io.WriteString(f2, "ready"); err != nil {
+		_ = f2.Close()
+		failClosed("held-descriptor-child",
+			"failed to write descriptor-ready handle contents: %v", err)
+	}
+	if err := f2.Sync(); err != nil {
+		_ = f2.Close()
+		failClosed("held-descriptor-child",
+			"failed to sync descriptor-ready handle: %v", err)
+	}
+	_ = f2.Close()
+
+	// Hold the inherited descriptors open by sleeping in 60-second
+	// chunks. The executor's WaitDelay is bounded at ~1 s so the
+	// child deliberately outlives every natural cleanup path.
+	for {
+		time.Sleep(60 * time.Second)
+	}
 }
 
 // runNegativeOutputProvenFail is the negative control for the descendant
