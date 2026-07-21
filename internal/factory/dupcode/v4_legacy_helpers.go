@@ -2,12 +2,12 @@
 package dupcode
 
 import (
-	"bytes"
 	"fmt"
 	"go/scanner"
 	"go/token"
 	"os"
 	"sort"
+	"strings"
 )
 
 func findCommonWindows(ft1, ft2 fileTokens, cfg Config,
@@ -105,7 +105,10 @@ func tokenizeFile(path string) (fileTokens, error) {
 }
 
 func normalizeFingerprint(tokens []token.Token) string {
-	var buf bytes.Buffer
+	// Pre-allocate with worst-case estimate: 7 bytes per token + separators
+	// "IDENT", "STRING", "NUMBER" are the longest tokens at 6 chars, + 1 separator
+	var buf strings.Builder
+	buf.Grow(len(tokens)*7 + 1)
 	for i, t := range tokens {
 		switch t {
 		case token.IDENT:
@@ -114,6 +117,128 @@ func normalizeFingerprint(tokens []token.Token) string {
 			buf.WriteString("STRING")
 		case token.INT, token.FLOAT, token.IMAG:
 			buf.WriteString("NUMBER")
+		case token.EOF:
+			buf.WriteString("EOF")
+		case token.BREAK:
+			buf.WriteString("BREAK")
+		case token.CASE:
+			buf.WriteString("CASE")
+		case token.CONST:
+			buf.WriteString("CONST")
+		case token.CONTINUE:
+			buf.WriteString("CONTINUE")
+		case token.DEFAULT:
+			buf.WriteString("DEFAULT")
+		case token.DEFER:
+			buf.WriteString("DEFER")
+		case token.ELSE:
+			buf.WriteString("ELSE")
+		case token.FALLTHROUGH:
+			buf.WriteString("FALLTHROUGH")
+		case token.FOR:
+			buf.WriteString("FOR")
+		case token.FUNC:
+			buf.WriteString("FUNC")
+		case token.GO:
+			buf.WriteString("GO")
+		case token.GOTO:
+			buf.WriteString("GOTO")
+		case token.IF:
+			buf.WriteString("IF")
+		case token.IMPORT:
+			buf.WriteString("IMPORT")
+		case token.INTERFACE:
+			buf.WriteString("INTERFACE")
+		case token.MAP:
+			buf.WriteString("MAP")
+		case token.PACKAGE:
+			buf.WriteString("PACKAGE")
+		case token.RANGE:
+			buf.WriteString("RANGE")
+		case token.RETURN:
+			buf.WriteString("RETURN")
+		case token.SELECT:
+			buf.WriteString("SELECT")
+		case token.STRUCT:
+			buf.WriteString("STRUCT")
+		case token.SWITCH:
+			buf.WriteString("SWITCH")
+		case token.TYPE:
+			buf.WriteString("TYPE")
+		case token.VAR:
+			buf.WriteString("VAR")
+		case token.ASSIGN:
+			buf.WriteString("ASSIGN")
+		case token.COLON:
+			buf.WriteString("COLON")
+		case token.COMMA:
+			buf.WriteString("COMMA")
+		case token.DEC:
+			buf.WriteString("DEC")
+		case token.ELLIPSIS:
+			buf.WriteString("ELLIPSIS")
+		case token.INC:
+			buf.WriteString("INC")
+		case token.LAND:
+			buf.WriteString("LAND")
+		case token.LOR:
+			buf.WriteString("LOR")
+		case token.NOT:
+			buf.WriteString("NOT")
+		case token.PERIOD:
+			buf.WriteString("PERIOD")
+		case token.ADD:
+			buf.WriteString("ADD")
+		case token.SUB:
+			buf.WriteString("SUB")
+		case token.MUL:
+			buf.WriteString("MUL")
+		case token.QUO:
+			buf.WriteString("QUO")
+		case token.REM:
+			buf.WriteString("REM")
+		case token.AND:
+			buf.WriteString("AND")
+		case token.OR:
+			buf.WriteString("OR")
+		case token.XOR:
+			buf.WriteString("XOR")
+		case token.SHL:
+			buf.WriteString("SHL")
+		case token.SHR:
+			buf.WriteString("SHR")
+		case token.AND_NOT:
+			buf.WriteString("AND_NOT")
+		case token.LSS:
+			buf.WriteString("LSS")
+		case token.GTR:
+			buf.WriteString("GTR")
+		case token.LEQ:
+			buf.WriteString("LEQ")
+		case token.GEQ:
+			buf.WriteString("GEQ")
+		case token.EQL:
+			buf.WriteString("EQL")
+		case token.NEQ:
+			buf.WriteString("NEQ")
+		case token.RBRACK:
+			buf.WriteString("RBRACK")
+		case token.RPAREN:
+			buf.WriteString("RPAREN")
+		case token.RBRACE:
+			buf.WriteString("RBRACE")
+		case token.LPAREN:
+			buf.WriteString("LPAREN")
+		case token.LBRACK:
+			buf.WriteString("LBRACK")
+		case token.LBRACE:
+			buf.WriteString("LBRACE")
+		case token.SEMICOLON:
+			buf.WriteString("SEMICOLON")
+		case token.DEFINE:
+			buf.WriteString("DEFINE")
+		case token.ARROW:
+			buf.WriteString("ARROW")
 		default:
 			buf.WriteString(t.String())
 		}
