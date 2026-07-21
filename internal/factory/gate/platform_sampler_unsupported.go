@@ -21,6 +21,6 @@ func NewPlatformSampler() ResourceSampler {
 // Sample returns an error on unsupported platforms.
 func (s *PlatformSampler) Sample() (ResourceSnapshot, error) {
 	return ResourceSnapshot{}, fmt.Errorf(
-		"resource sampling not supported on %s/%s; supported: linux",
+		"resource sampling not supported on %s/%s; supported: linux, darwin",
 		runtime.GOOS, runtime.GOARCH)
 }

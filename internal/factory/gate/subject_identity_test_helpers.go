@@ -34,14 +34,23 @@ func CollectSubjectIdentity(root string, metricsDestination string) (*SubjectIde
 		return nil, fmt.Errorf("tree OID is empty")
 	}
 
+	// Compute exclusions for metrics destination
+	exactExcl, tempPrefix, err := metricsExclusions(root, metricsDestination)
+	if err != nil {
+		return nil, fmt.Errorf("compute metrics exclusions: %w", err)
+	}
+
 	// Build complete working subject inventory
-	inventory, err := buildWorkingSubjectInventory(root, metricsDestination)
+	inventory, err := buildWorkingSubjectInventory(root, exactExcl, tempPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("build working subject inventory: %w", err)
 	}
 
-	// Classify worktree state
-	worktreeState := classifyWorktreeState(inventory)
+	// Classify worktree state using git status
+	worktreeState, err := classifyWorktreeStateWithGit(root, exactExcl, tempPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("classify worktree state: %w", err)
+	}
 
 	// Compute content-bound digest
 	digest := computeSubjectDigest(headOID, treeOID, worktreeState, inventory)
@@ -54,8 +63,38 @@ func CollectSubjectIdentity(root string, metricsDestination string) (*SubjectIde
 	}, nil
 }
 
+// metricsExclusions computes repository-relative exclusions for metrics destination.
+func metricsExclusions(root, destination string) (exact string, tempPrefix string, err error) {
+	if destination == "" {
+		return "", "", nil
+	}
+
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return "", "", err
+	}
+
+	destAbs, err := filepath.Abs(destination)
+	if err != nil {
+		return "", "", err
+	}
+
+	rel, err := filepath.Rel(rootAbs, destAbs)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Destination is outside the repository
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "", nil
+	}
+
+	rel = filepath.ToSlash(rel)
+	return rel, rel + ".tmp.", nil
+}
+
 // buildWorkingSubjectInventory constructs a complete inventory of the working subject.
-func buildWorkingSubjectInventory(root string, metricsDestination string) (map[string]*inventoryEntry, error) {
+func buildWorkingSubjectInventory(root, exactExclude, tempPrefix string) (map[string]*inventoryEntry, error) {
 	inventory := make(map[string]*inventoryEntry)
 	allPaths := make(map[string]bool)
 
@@ -86,16 +125,14 @@ func buildWorkingSubjectInventory(root string, metricsDestination string) (map[s
 		allPaths[p] = true
 	}
 
-	// Remove metrics destination
-	if metricsDestination != "" {
-		absMetrics, _ := filepath.Abs(metricsDestination)
-		delete(allPaths, absMetrics)
-		metricsDir := filepath.Dir(absMetrics)
-		metricsBase := filepath.Base(absMetrics)
-		for path := range allPaths {
-			if strings.HasPrefix(filepath.Base(path), metricsBase) && filepath.Dir(path) == metricsDir {
-				delete(allPaths, path)
-			}
+	// Remove exclusions
+	for path := range allPaths {
+		if path == exactExclude {
+			delete(allPaths, path)
+			continue
+		}
+		if tempPrefix != "" && strings.HasPrefix(path, tempPrefix) {
+			delete(allPaths, path)
 		}
 	}
 
@@ -171,9 +208,18 @@ func buildInventoryEntry(root, path string) (*inventoryEntry, error) {
 	fullPath := filepath.Join(root, path)
 	entry := &inventoryEntry{path: path, worktreeExists: false}
 
-	info, err := os.Lstat(fullPath)
-	if err == nil {
-		entry.worktreeExists = true
+	// Use proper error handling for Lstat
+	exists, err := inspectWorkingSubjectPath(fullPath)
+	if err != nil {
+		return nil, err
+	}
+	entry.worktreeExists = exists
+
+	if exists {
+		info, err := os.Lstat(fullPath)
+		if err != nil {
+			return nil, err
+		}
 		entry.worktreeMode = formatMode(info.Mode())
 		if info.Mode()&os.ModeSymlink != 0 {
 			target, err := os.Readlink(fullPath)

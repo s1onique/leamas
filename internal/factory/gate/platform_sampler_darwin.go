@@ -5,7 +5,6 @@
 package gate
 
 import (
-	"os"
 	"syscall"
 	"time"
 )
