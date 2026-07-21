@@ -209,6 +209,36 @@ func (mc *MetricsCollectionV3) validateReconciliation() error {
 		return fmt.Errorf("no checks recorded")
 	}
 
+	// Check expected verifier inventory if set
+	if len(mc.ExpectedVerifierIDs) > 0 {
+		if len(mc.Checks) != len(mc.ExpectedVerifierIDs) {
+			return fmt.Errorf("checks count (%d) != expected verifier count (%d)",
+				len(mc.Checks), len(mc.ExpectedVerifierIDs))
+		}
+
+		expected := make(map[string]bool)
+		for _, id := range mc.ExpectedVerifierIDs {
+			expected[id] = true
+		}
+
+		recorded := make(map[string]bool)
+		for _, c := range mc.Checks {
+			recorded[c.ID] = true
+		}
+
+		for _, id := range mc.ExpectedVerifierIDs {
+			if !recorded[id] {
+				return fmt.Errorf("expected verifier %q not recorded", id)
+			}
+		}
+
+		for _, c := range mc.Checks {
+			if !expected[c.ID] {
+				return fmt.Errorf("unexpected verifier %q in recorded checks", c.ID)
+			}
+		}
+	}
+
 	ordinals := make(map[int]bool)
 	for _, c := range mc.Checks {
 		if ordinals[c.Ordinal] {

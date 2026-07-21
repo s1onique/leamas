@@ -69,6 +69,10 @@ var ValidScenarios = map[string]bool{
 
 // MetricsCollectionV3 holds metrics for a single factorize run.
 type MetricsCollectionV3 struct {
+	// ExpectedVerifierIDs is the canonical set of verifier IDs expected.
+	// Set before running checks; compared at finalization.
+	ExpectedVerifierIDs []string
+
 	Checks    []MetricsCheckV3
 	StartTime time.Time
 	Path      string

@@ -40,31 +40,40 @@ func newFakeClock(t *testing.T, base time.Time, deltas ...time.Duration) *fakeCl
 	return &fakeClock{t: t, times: times}
 }
 
-// fakeSampler is a deterministic sampler for testing.
+// sampleResult holds the result for a single sample call.
+type sampleResult struct {
+	snapshot ResourceSnapshot
+	err      error
+}
+
+// fakeSampler is a deterministic sampler for testing with call-specific behavior.
 type fakeSampler struct {
-	snapshots []ResourceSnapshot
-	next      int
-	err       error
+	results []sampleResult
+	next    int
 }
 
 func newFakeSampler(snapshots ...ResourceSnapshot) *fakeSampler {
-	return &fakeSampler{snapshots: snapshots, next: 0}
+	results := make([]sampleResult, len(snapshots))
+	for i, snap := range snapshots {
+		results[i] = sampleResult{snapshot: snap}
+	}
+	return &fakeSampler{results: results, next: 0}
+}
+
+// setResults sets the complete sequence of results including errors.
+func (f *fakeSampler) setResults(results ...sampleResult) {
+	f.results = results
+	f.next = 0
 }
 
 func (f *fakeSampler) Sample() (ResourceSnapshot, error) {
-	if f.err != nil {
-		return ResourceSnapshot{}, f.err
+	if f.next >= len(f.results) {
+		// Extend with success results if more samples needed
+		f.results = append(f.results, sampleResult{snapshot: ResourceSnapshot{}})
 	}
-	if f.next >= len(f.snapshots) {
-		f.snapshots = append(f.snapshots, ResourceSnapshot{})
-	}
-	s := f.snapshots[f.next]
+	r := f.results[f.next]
 	f.next++
-	return s, nil
-}
-
-func (f *fakeSampler) setError(err error) {
-	f.err = err
+	return r.snapshot, r.err
 }
 
 // testVerifier creates a Verifier for testing.
@@ -149,30 +158,52 @@ func TestRunCheck_FormatsSubSecondDurations(t *testing.T) {
 func TestRunCheck_PreSampleErrorFailsCheck(t *testing.T) {
 	start := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 	clk := newFakeClock(t, start, 0)
-	sampler := newFakeSampler()
-	sampler.setError(assertionError("sampler failed"))
+	sampler := &fakeSampler{}
+	// First sample fails
+	sampler.setResults(
+		sampleResult{err: assertionError("pre-sample failed")},
+		sampleResult{snapshot: ResourceSnapshot{}},
+	)
 
+	executed := false
 	var out bytes.Buffer
-	v := testVerifier("docs", func(string) []checks.Finding { return nil })
+	v := testVerifier("docs", func(string) []checks.Finding {
+		executed = true
+		return nil
+	})
 
 	_, err := runCheck(&out, clk, v, nil, 1, ".", sampler)
 	if err == nil {
 		t.Fatalf("runCheck() expected error from pre-sample failure")
+	}
+	if executed {
+		t.Fatalf("verifier should not execute when pre-sample fails")
 	}
 }
 
 func TestRunCheck_PostSampleErrorFailsCheck(t *testing.T) {
 	start := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 	clk := newFakeClock(t, start, 0)
-	sampler := newFakeSampler(ResourceSnapshot{})
-	sampler.setError(assertionError("sampler failed"))
+	sampler := &fakeSampler{}
+	// First sample succeeds, second fails
+	sampler.setResults(
+		sampleResult{snapshot: ResourceSnapshot{}},
+		sampleResult{err: assertionError("post-sample failed")},
+	)
 
+	executed := false
 	var out bytes.Buffer
-	v := testVerifier("docs", func(string) []checks.Finding { return nil })
+	v := testVerifier("docs", func(string) []checks.Finding {
+		executed = true
+		return nil
+	})
 
 	_, err := runCheck(&out, clk, v, nil, 1, ".", sampler)
 	if err == nil {
 		t.Fatalf("runCheck() expected error from post-sample failure")
+	}
+	if !executed {
+		t.Fatalf("verifier should have executed before post-sample failure")
 	}
 }
 

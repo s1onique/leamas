@@ -179,6 +179,11 @@ func RunFactorize(root string) int {
 			identity.SubjectInputDigest,
 		)
 
+		// Bind expected verifier inventory for reconciliation
+		for _, v := range verifiers {
+			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, v.Name)
+		}
+
 		sampler = NewPlatformSampler()
 	} else {
 		// Use a no-op sampler when metrics are disabled

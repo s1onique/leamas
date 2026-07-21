@@ -216,7 +216,7 @@ func TestFinalize_AcceptsValidCollection(t *testing.T) {
 		Sequence:           1,
 		HeadOID:            "abc123",
 		TreeOID:            "def456",
-		WorktreeState:      "clean",
+		WorktreeState:      "content-bound",
 		SubjectInputDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		RunID:              "test:controlled-warm:1",
 		Host: HostIdentity{
@@ -239,5 +239,96 @@ func TestFinalize_AcceptsValidCollection(t *testing.T) {
 	err = mc.Finalize(false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateReconciliation_RejectsMissingExpectedVerifier(t *testing.T) {
+	mc := &MetricsCollectionV3{
+		ExpectedVerifierIDs: []string{"alpha", "beta", "gamma"},
+		Checks: []MetricsCheckV3{
+			{Ordinal: 1, ID: "alpha", Status: "pass"},
+			{Ordinal: 2, ID: "beta", Status: "pass"},
+			// gamma is missing
+		},
+	}
+	err := mc.validateReconciliation()
+	if err == nil {
+		t.Fatalf("expected error for missing expected verifier")
+	}
+}
+
+func TestValidateReconciliation_RejectsUnexpectedVerifier(t *testing.T) {
+	mc := &MetricsCollectionV3{
+		ExpectedVerifierIDs: []string{"alpha", "beta"},
+		Checks: []MetricsCheckV3{
+			{Ordinal: 1, ID: "alpha", Status: "pass"},
+			{Ordinal: 2, ID: "gamma", Status: "pass"}, // gamma unexpected
+		},
+	}
+	err := mc.validateReconciliation()
+	if err == nil {
+		t.Fatalf("expected error for unexpected verifier")
+	}
+}
+
+func TestValidateReconciliation_AcceptsMatchingExpectedAndRecorded(t *testing.T) {
+	mc := &MetricsCollectionV3{
+		ExpectedVerifierIDs: []string{"alpha", "beta"},
+		Checks: []MetricsCheckV3{
+			{Ordinal: 1, ID: "alpha", Status: "pass"},
+			{Ordinal: 2, ID: "beta", Status: "pass"},
+		},
+	}
+	err := mc.validateReconciliation()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestContentBoundDigest_DifferentContentProducesDifferentDigest(t *testing.T) {
+	head := "abc123"
+	tree := "def456"
+
+	d1 := ComputeSubjectDigestForTest(head, tree, map[string]string{
+		"file.txt": "content-a",
+	})
+	d2 := ComputeSubjectDigestForTest(head, tree, map[string]string{
+		"file.txt": "content-b", // different content
+	})
+
+	if d1 == d2 {
+		t.Fatalf("different content should produce different digest")
+	}
+}
+
+func TestContentBoundDigest_DifferentPathProducesDifferentDigest(t *testing.T) {
+	head := "abc123"
+	tree := "def456"
+
+	d1 := ComputeSubjectDigestForTest(head, tree, map[string]string{
+		"file-a.txt": "same-content",
+	})
+	d2 := ComputeSubjectDigestForTest(head, tree, map[string]string{
+		"file-b.txt": "same-content", // different path
+	})
+
+	if d1 == d2 {
+		t.Fatalf("different paths should produce different digest")
+	}
+}
+
+func TestContentBoundDigest_SameContentSameDigest(t *testing.T) {
+	head := "abc123"
+	tree := "def456"
+
+	d1 := ComputeSubjectDigestForTest(head, tree, map[string]string{
+		"file.txt": "content",
+	})
+	d2 := ComputeSubjectDigestForTest(head, tree, map[string]string{
+		"file.txt": "content",
+	})
+
+	if d1 != d2 {
+		t.Fatalf("same content should produce same digest")
 	}
 }
