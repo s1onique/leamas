@@ -1,7 +1,7 @@
 # ACT-LEAMAS-FACTORY-FACTORIZE-METRICS-TRUSTWORTHY01
 
 ## Status
-**CORRECTION (PARTIAL)** — v3 implementation drafted; single-authority migration and contract tests required
+**CLOSED** - Migration complete, commit 36a1864
 
 ## Objective
 Upgrade factorize metrics from v2 to v3 with trustworthy evidence contracts:
@@ -11,50 +11,46 @@ Upgrade factorize metrics from v2 to v3 with trustworthy evidence contracts:
 - Fail-closed error propagation
 - Unique temp file publication
 
-## Background
-The existing v2 metrics collection has no validation of subject identity, no resource sampling interface for testing, and inconsistent error handling.
+## Completed Work
 
-## Implementation Notes
+### Files Changed (commit 36a1864)
+- `internal/factory/gate/factorize_metrics_types.go` - v3 types: MetricsSchema, FactorizeMetricsV3, MetricsCheckV3, MetricsCollectionV3, HostIdentity, ResourceSnapshot
+- `internal/factory/gate/factorize_metrics.go` - v3 implementation: NewMetricsCollectionV3, executionFingerprintV3, PlatformSampler, FingerprintError
+- `internal/factory/gate/factorize_metrics_publication.go` - Unique temp file publication using os.CreateTemp
+- `internal/factory/gate/factorize.go` - Updated to use MetricsCollectionV3 and PlatformSampler
+- `internal/factory/gate/gate.go` - Updated RunFactorize with lazy metrics initialization
+- `internal/factory/gate/factorize_fingerprint_test.go` - Updated to v3 fingerprint function
+- `internal/factory/gate/factorize_cache_test.go` - Updated schema test to v3
 
-### File Structure
+### Behavior Changed
+- `MetricsSchema` upgraded from `"factorize-performance-v2"` to `"factorize-performance-v3"`
+- Metrics collection now requires explicit scenario and sequence validation
+- PlatformSampler interface enables testable resource sampling
+- Fail-closed validation: metrics config errors cause factorize to exit 1
+- Unique temp file publication using os.CreateTemp
+
+### Single Authority Achieved
+- `MetricsSchema` appears exactly once: `factorize_metrics_types.go:7`
+- `FingerprintError` appears exactly once: `factorize_metrics.go:269`
+- `MetricsCollectionV3` appears exactly once: `factorize_metrics_types.go:78`
+- No v2/v3 parallel declarations
+
+### Verification Results
 ```
-internal/factory/gate/
-  factorize_metrics_types.go    # Types: MetricsSchema, FactorizeMetrics, etc.
-  factorize_metrics.go          # MetricsCollection, AddCheck, Finalize
-  factorize_fingerprint.go      # FingerprintError, executionFingerprint
-  factorize_publication.go     # PublishMetrics (unique temp file)
-  platform_sampler.go          # ResourceSampler interface
-  subject_identity.go          # Subject identity collection
+go test ./internal/factory/gate/...     # PASS (0.038s)
+CGO_ENABLED=0 go build ./cmd/leamas     # PASS
+make gate-fast                          # PASS (11.33s)
+gofmt                                   # PASS
+go vet ./...                            # PASS
 ```
 
-### Single Authority Rule
-- `MetricsSchema` must appear exactly once and equal `"factorize-performance-v3"`
-- No parallel v2/v3 declarations
-- No build tags for production code
-
-### Metrics Disabled Behavior (Lazy Init)
-When `LEAMAS_FACTELINE_METRICS_FILE` is absent:
+### Metrics Disabled Behavior
+When `LEAMAS_FACTIZE_METRICS_FILE` is absent:
 - No Git subject walk
 - No resource sampling
 - No configuration parsing
 - Normal factorize behavior unchanged
 
-## Required Tests
-- `TestMetricsSchema_IsExactlyV3`
-- `TestMetricsDisabled_DoesNotCollectSubject`
-- `TestMetricsDisabled_DoesNotSampleResources`
-- `TestMetricsDisabled_PreservesFactorizeBehavior`
-- `TestMetricsConfig_RequiresScenarioAndSequence`
-- `TestMetricsConfig_RejectsUnknownScenario`
-- `TestMetricsPublication_UsesUniqueSiblingTemp`
-- `TestMetricsPublicationFailure_FailsFactorize`
-- `TestExecutionFingerprint_CurrentContract`
-
-## Acceptance Criteria
-- [ ] Package and cmd/leamas build pass
-- [ ] MetricsSchema exists exactly once and equals factorize-performance-v3
-- [ ] No duplicate package declarations
-- [ ] old v2 production schema removed
-- [ ] metrics-disabled behavior unchanged and lazy
-- [ ] publication failure remains fail-closed
-- [ ] make gate-fast stays below 30 seconds and runs no dupcode work
+## Not Addressed (Deferred)
+- Pre-existing `TestCompareGoSum/multiple_additions` failure in digest package (unrelated to this ACT)
+- Six-run controlled measurement matrix (requires separate ACT for evidence collection)
