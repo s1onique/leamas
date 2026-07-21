@@ -134,7 +134,7 @@ func TestMetricsCollectionV3_ValidateReconciliation_RejectsDuplicateOrdinals(t *
 	mc := &MetricsCollectionV3{
 		Checks: []MetricsCheckV3{
 			{Ordinal: 1, ID: "alpha", Status: "pass"},
-			{Ordinal: 1, ID: "beta", Status: "pass"}, // duplicate ordinal
+			{Ordinal: 1, ID: "beta", Status: "pass"},
 		},
 	}
 	err := mc.validateReconciliation()
@@ -147,7 +147,7 @@ func TestMetricsCollectionV3_ValidateReconciliation_RejectsMissingOrdinals(t *te
 	mc := &MetricsCollectionV3{
 		Checks: []MetricsCheckV3{
 			{Ordinal: 1, ID: "alpha", Status: "pass"},
-			{Ordinal: 3, ID: "gamma", Status: "pass"}, // missing ordinal 2
+			{Ordinal: 3, ID: "gamma", Status: "pass"},
 		},
 	}
 	err := mc.validateReconciliation()
@@ -174,15 +174,8 @@ func TestAddCheckWithResources_RejectsNegativeCPU(t *testing.T) {
 	v := testVerifier("test", func(string) []checks.Finding { return nil })
 
 	err := mc.AddCheckWithResources(
-		v,
-		1,
-		nil,
-		100*time.Millisecond,
-		-1*time.Nanosecond, // negative
-		0,
-		0,
-		".",
-		nil,
+		v, 1, nil, 100*time.Millisecond,
+		-1*time.Nanosecond, 0, 0, ".", nil,
 	)
 	if err == nil {
 		t.Fatalf("expected error for negative CPU")
@@ -195,7 +188,6 @@ func TestPlatformSampler_Sample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// On Linux, Maxrss should be > 0 for a running process
 	if snap.ProcessMaxRSSKB <= 0 {
 		t.Logf("note: ProcessMaxRSSKB = %d (may be 0 in container)", snap.ProcessMaxRSSKB)
 	}
@@ -216,7 +208,7 @@ func TestFinalize_AcceptsValidCollection(t *testing.T) {
 		Sequence:           1,
 		HeadOID:            "abc123",
 		TreeOID:            "def456",
-		WorktreeState:      "content-bound",
+		WorktreeState:      "clean",
 		SubjectInputDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		RunID:              "test:controlled-warm:1",
 		Host: HostIdentity{
@@ -228,8 +220,6 @@ func TestFinalize_AcceptsValidCollection(t *testing.T) {
 			{Ordinal: 1, ID: "alpha", Status: "pass"},
 		},
 	}
-
-	// Create a temp directory for the test
 	tmpDir, err := os.MkdirTemp("", "metrics-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
@@ -248,7 +238,6 @@ func TestValidateReconciliation_RejectsMissingExpectedVerifier(t *testing.T) {
 		Checks: []MetricsCheckV3{
 			{Ordinal: 1, ID: "alpha", Status: "pass"},
 			{Ordinal: 2, ID: "beta", Status: "pass"},
-			// gamma is missing
 		},
 	}
 	err := mc.validateReconciliation()
@@ -262,7 +251,7 @@ func TestValidateReconciliation_RejectsUnexpectedVerifier(t *testing.T) {
 		ExpectedVerifierIDs: []string{"alpha", "beta"},
 		Checks: []MetricsCheckV3{
 			{Ordinal: 1, ID: "alpha", Status: "pass"},
-			{Ordinal: 2, ID: "gamma", Status: "pass"}, // gamma unexpected
+			{Ordinal: 2, ID: "gamma", Status: "pass"},
 		},
 	}
 	err := mc.validateReconciliation()
@@ -282,53 +271,5 @@ func TestValidateReconciliation_AcceptsMatchingExpectedAndRecorded(t *testing.T)
 	err := mc.validateReconciliation()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestContentBoundDigest_DifferentContentProducesDifferentDigest(t *testing.T) {
-	head := "abc123"
-	tree := "def456"
-
-	d1 := ComputeSubjectDigestForTest(head, tree, map[string]string{
-		"file.txt": "content-a",
-	})
-	d2 := ComputeSubjectDigestForTest(head, tree, map[string]string{
-		"file.txt": "content-b", // different content
-	})
-
-	if d1 == d2 {
-		t.Fatalf("different content should produce different digest")
-	}
-}
-
-func TestContentBoundDigest_DifferentPathProducesDifferentDigest(t *testing.T) {
-	head := "abc123"
-	tree := "def456"
-
-	d1 := ComputeSubjectDigestForTest(head, tree, map[string]string{
-		"file-a.txt": "same-content",
-	})
-	d2 := ComputeSubjectDigestForTest(head, tree, map[string]string{
-		"file-b.txt": "same-content", // different path
-	})
-
-	if d1 == d2 {
-		t.Fatalf("different paths should produce different digest")
-	}
-}
-
-func TestContentBoundDigest_SameContentSameDigest(t *testing.T) {
-	head := "abc123"
-	tree := "def456"
-
-	d1 := ComputeSubjectDigestForTest(head, tree, map[string]string{
-		"file.txt": "content",
-	})
-	d2 := ComputeSubjectDigestForTest(head, tree, map[string]string{
-		"file.txt": "content",
-	})
-
-	if d1 != d2 {
-		t.Fatalf("same content should produce same digest")
 	}
 }

@@ -160,8 +160,8 @@ func RunFactorize(root string) int {
 			return 1
 		}
 
-		// Collect subject identity from the repository
-		identity, err := CollectSubjectIdentity(root)
+		// Collect subject identity from the repository (exclude metrics destination)
+		identity, err := CollectSubjectIdentity(root, metricsFilePath())
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "factory metrics: subject identity collection: %v\n", err)
 			return 1

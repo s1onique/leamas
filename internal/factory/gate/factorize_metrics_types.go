@@ -3,6 +3,18 @@ package gate
 
 import "time"
 
+// ResourceSnapshot captures a snapshot of resource usage.
+type ResourceSnapshot struct {
+	UserCPU         time.Duration
+	SystemCPU       time.Duration
+	ProcessMaxRSSKB int64
+}
+
+// ResourceSampler samples system resources.
+type ResourceSampler interface {
+	Sample() (ResourceSnapshot, error)
+}
+
 // MetricsSchema is the schema identifier for factorize metrics v3.
 const MetricsSchema = "factorize-performance-v3"
 
