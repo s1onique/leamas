@@ -15,11 +15,23 @@ import (
 	"time"
 )
 
-// testHelperSource is the source path for the test helper.
+// testHelperSource is the source path for the test helper's entry file.
 const testHelperSource = "internal/execution/testdata/testhelper/main.go"
 
 // testHelperBinary is the compiled helper path.
 const testHelperBinary = "internal/execution/testdata/testhelper/main"
+
+// helperSourceFiles lists every file in the testhelper package so the
+// build cache invalidates whenever any of them changes, not just the
+// argv-dispatch entry file.
+var helperSourceFiles = []string{
+	"main.go",
+	"pid_manifest.go",
+	"proc_runtime.go",
+	"modes_sleep.go",
+	"modes_tree.go",
+	"modes_output.go",
+}
 
 var (
 	helperBuildOnce sync.Once
@@ -59,16 +71,22 @@ func ensureHelperBuilt() error {
 			return
 		}
 
-		sourcePath := filepath.Join(repoRoot, testHelperSource)
+		sourceDir := filepath.Join(repoRoot, filepath.Dir(testHelperSource))
 		outputPath := filepath.Join(repoRoot, testHelperBinary)
 
 		// Check if already built and source hasn't changed
 		if info, err := os.Stat(outputPath); err == nil {
-			if srcInfo, err := os.Stat(sourcePath); err == nil {
-				if info.ModTime().After(srcInfo.ModTime()) {
-					helperPath = outputPath
-					return // Already built and up-to-date
+			upToDate := true
+			for _, name := range helperSourceFiles {
+				p := filepath.Join(sourceDir, name)
+				if srcInfo, err := os.Stat(p); err != nil || !info.ModTime().After(srcInfo.ModTime()) {
+					upToDate = false
+					break
 				}
+			}
+			if upToDate {
+				helperPath = outputPath
+				return // Already built and up-to-date
 			}
 		}
 
@@ -78,9 +96,12 @@ func ensureHelperBuilt() error {
 			return
 		}
 
-		// Build the helper
-		cmd := exec.Command("go", "build", "-o", outputPath, sourcePath)
-		cmd.Dir = repoRoot
+		// Build the helper. The helper source is split across several
+		// .go files (main.go, pid_manifest.go, proc_runtime.go,
+		// modes_sleep.go, modes_tree.go, modes_output.go) so we build the
+		// whole directory rather than a single source file.
+		cmd := exec.Command("go", "build", "-o", outputPath, ".")
+		cmd.Dir = sourceDir
 		if output, err := cmd.CombinedOutput(); err != nil {
 			helperBuildErr = fmt.Errorf("failed to build test helper: %w, output: %s", err, output)
 			return
