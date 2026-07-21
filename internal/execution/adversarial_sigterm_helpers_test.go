@@ -48,11 +48,24 @@ const (
 // with a bounded wait, and forces leaked process cleanup. This is invoked
 // from readiness-failure paths so a stuck goroutine cannot hide a test
 // pass behind a leaked helper process.
+//
+// cancelCallerFirst MUST run before executor.Close(): the caller's
+// cancellation drives the executor's execCtx.Done() select case which
+// in turn fires the post-select termination branch that signals the
+// descendant's process group. Closing the executor or killing
+// recorded processes before the cancel propagates lets the cmd.Wait
+// case win the select race and skip termination.
+//
+// Every cleanup wait remains bounded via a 2-second timer.
 func verifyReadinessCleanup(t *testing.T, executor *Executor,
 	verifier *processVerifier, resultCh <-chan execOutcome,
+	cancelCallerFirst func(),
 ) {
 	t.Helper()
 
+	if cancelCallerFirst != nil {
+		cancelCallerFirst()
+	}
 	// Best-effort: release any semaphore slot the executor still holds.
 	if executor != nil {
 		_ = executor.Close()

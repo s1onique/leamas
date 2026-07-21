@@ -4,9 +4,25 @@ package execution
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 )
+
+// allowedSigtermCodes returns the canonical SIGTERM-escalation result
+// codes accepted by the executor's correct path on this platform. On
+// Linux the canonical path requires CodeExecutionCancelled exactly.
+// Darwin keeps the documented alternative for SIGKILL-after-orphan
+// cases that arise from macOS process-group lifecycle differences.
+func allowedSigtermCodes() map[string]struct{} {
+	codes := map[string]struct{}{
+		CodeExecutionCancelled: {},
+	}
+	if runtime.GOOS == "darwin" {
+		codes[CodeExecutionProcessTreeCleanupFailed] = struct{}{}
+	}
+	return codes
+}
 
 // TestAdversarialIgnoreSIGTERMViaGoHelper proves that an
 // Executor.Execute() call fails with CodeExecutionCancelled after the
@@ -72,7 +88,7 @@ func TestAdversarialIgnoreSIGTERMViaGoHelper(t *testing.T) {
 	readinessDeadline := start.Add(sigtermReadinessWait)
 	if err := verifier.waitForReadiness(mode, readinessDeadline); err != nil {
 		// Drain the goroutine with bounded wait to avoid leaking it.
-		verifyReadinessCleanup(t, executor, verifier, resultCh)
+		verifyReadinessCleanup(t, executor, verifier, resultCh, cancelCaller)
 		t.Fatalf("readiness not reached in %v: %v\n"+
 			"helper observed stderr should explain the failure",
 			sigtermReadinessWait, err)
@@ -82,7 +98,7 @@ func TestAdversarialIgnoreSIGTERMViaGoHelper(t *testing.T) {
 	verifier.requireExpectedRoles(mode)
 	verifier.requireSignalReadyForRoles(mode)
 	if verifier.records == nil {
-		verifyReadinessCleanup(t, executor, verifier, resultCh)
+		verifyReadinessCleanup(t, executor, verifier, resultCh, cancelCaller)
 		t.Fatal("readiness reported but verifier.records is empty")
 	}
 	parentPGID, childPGID := requireSharedPGID(t, verifier)
@@ -119,21 +135,18 @@ func TestAdversarialIgnoreSIGTERMViaGoHelper(t *testing.T) {
 				"  exit=%d elapsed=%v totalElapsed=%v",
 				msg.result.ExitCode, elapsed, totalElapsed)
 		}
-		allowedCodes := map[string]struct{}{
-			CodeExecutionCancelled: {},
-			// CodeExecutionProcessTreeCleanupFailed is accepted on macOS
-			// where SIGKILL escalation is not always deliverable inside the
-			// same cleanup budget. Document the platform behaviour.
-			CodeExecutionProcessTreeCleanupFailed: {},
-		}
+		allowedCodes := allowedSigtermCodes()
 		if _, ok := allowedCodes[msg.result.Error.Code]; !ok {
-			t.Errorf("expected %s or %s, got %s",
-				CodeExecutionCancelled,
-				CodeExecutionProcessTreeCleanupFailed,
-				msg.result.Error.Code)
+			allowed := make([]string, 0, len(allowedCodes))
+			for c := range allowedCodes {
+				allowed = append(allowed, c)
+			}
+			t.Errorf("expected one of %v, got %s on %s",
+				allowed, msg.result.Error.Code, runtime.GOOS)
 		}
 		if msg.result.Error.Code == CodeExecutionProcessTreeCleanupFailed {
-			t.Logf("escalation returned cleanup_failed (macOS platform behaviour)")
+			t.Logf("escalation returned cleanup_failed (%s platform behaviour)",
+				runtime.GOOS)
 		}
 
 		// Step F: prove every recorded PID and PGID is absent.
@@ -158,7 +171,7 @@ func TestAdversarialIgnoreSIGTERMViaGoHelper(t *testing.T) {
 			totalElapsed, elapsed, len(verifier.records), pgids)
 
 	case <-boundTimer.C:
-		verifyReadinessCleanup(t, executor, verifier, resultCh)
+		verifyReadinessCleanup(t, executor, verifier, resultCh, cancelCaller)
 		t.Fatalf("Execute did not return within %v of cancellation",
 			upperBoundFromCancel)
 	}
@@ -208,7 +221,7 @@ func TestAdversarialHeldOutputDescriptor(t *testing.T) {
 
 	readinessDeadline := start.Add(sigtermReadinessWait)
 	if err := verifier.waitForReadiness(mode, readinessDeadline); err != nil {
-		verifyReadinessCleanup(t, executor, verifier, resultCh)
+		verifyReadinessCleanup(t, executor, verifier, resultCh, cancelCaller)
 		t.Fatalf("readiness not reached in %v: %v", sigtermReadinessWait, err)
 	}
 	verifier.requireExpectedRoles(mode)
@@ -232,15 +245,20 @@ func TestAdversarialHeldOutputDescriptor(t *testing.T) {
 		if res == nil || res.Error == nil {
 			t.Fatalf("expected cancellation error, got %+v", res)
 		}
+		// held-stdout-open uses a child that blocks its descriptors
+		// open, so the executor must rely on WaitDelay. On Linux this
+		// surfaces as cleanup-failed because SIGKILL is required to
+		// release the inherited pipe FD; on Darwin the documented
+		// alternative path is also acceptable.
 		allowedCodes := map[string]struct{}{
 			CodeExecutionCancelled:                {},
 			CodeExecutionProcessTreeCleanupFailed: {},
 		}
 		if _, ok := allowedCodes[res.Error.Code]; !ok {
-			t.Errorf("expected %s or %s, got %s",
+			t.Errorf("expected %s or %s, got %s on %s",
 				CodeExecutionCancelled,
 				CodeExecutionProcessTreeCleanupFailed,
-				res.Error.Code)
+				res.Error.Code, runtime.GOOS)
 		}
 		if err := verifier.verifyAllProcessesAbsent(verificationTimeout); err != nil {
 			t.Errorf("process leak detected:\n%v", err)
@@ -253,7 +271,7 @@ func TestAdversarialHeldOutputDescriptor(t *testing.T) {
 			"elapsed=%v triggerToReturn=%v records=%d",
 			totalElapsed, elapsed, len(verifier.records))
 	case <-boundTimer.C:
-		verifyReadinessCleanup(t, executor, verifier, resultCh)
+		verifyReadinessCleanup(t, executor, verifier, resultCh, cancelCaller)
 		t.Fatalf("Execute did not return within %v of cancellation",
 			execBudget+sigtermSlack)
 	}

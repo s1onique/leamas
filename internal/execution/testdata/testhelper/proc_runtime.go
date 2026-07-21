@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 )
 
 // errChildStartup is the sentinel wrapping helpers attach to start errors
@@ -59,7 +60,9 @@ func startChild(mode string, args ...string) (*exec.Cmd, error) {
 // spawnChildFailClosed starts the child and refuses to continue when Start
 // fails. This is the fail-closed variant for every mode whose test contract
 // depends on the child existing. Returns the live cmd on success and never
-// silently swallows a Start error.
+// silently swallows a Start error. The child's Stdout and Stderr remain
+// nil so Go connects them to the null device - this is correct for
+// commands whose output we do not care about.
 func spawnChildFailClosed(context, mode string, args ...string) *exec.Cmd {
 	cmd, err := startChild(mode, args...)
 	if err != nil {
@@ -69,6 +72,84 @@ func spawnChildFailClosed(context, mode string, args ...string) *exec.Cmd {
 		failClosed(context, "cmd.Start failed: %v", err)
 	}
 	return cmd
+}
+
+// spawnChildWithInheritedOutputFailClosed behaves like
+// spawnChildFailClosed but explicitly wires cmd.Stdout and cmd.Stderr to
+// the parent's os.Stdout / os.Stderr so the child inherits the parent's
+// file descriptors. Use this for retained-output modes whose test contract
+// requires the descendant to actually hold the executor-owned pipe.
+//
+// Modes whose semantics do NOT require the child to inherit the executor's
+// stdout/stderr must continue using spawnChildFailClosed; the explicit
+// choice prevents silent descriptor inheritance regressions.
+func spawnChildWithInheritedOutputFailClosed(context, mode string, args ...string) *exec.Cmd {
+	cmd := spawnChildFailClosed(context, mode, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd
+}
+
+// errExpectedFailure is used by the helper-internal "negative control"
+// probe to surface proof that the adversary halts cleanly without an
+// attached child. It is intentionally not exported: it is a private
+// mechanism for the CORRECTION05 test-internal failure path.
+var errExpectedFailure = errors.New("expected failure path reached")
+
+// waitForFile polls until path exists or the deadline elapses. It is
+// used by the retained-pipe fixture so the parent can sequence its
+// exit after the child has published the descriptor-ready event.
+//
+// Returns true when the file is observed, false on deadline expiry.
+func waitForFile(path string, deadline time.Duration) bool {
+	poll := 5 * time.Millisecond
+	end := time.Now().Add(deadline)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		} else if !os.IsNotExist(err) {
+			failClosed("waitForFile",
+				"unexpected stat error for %s: %v", path, err)
+		}
+		if time.Now().After(end) {
+			return false
+		}
+		time.Sleep(poll)
+	}
+}
+
+// waitChildExpectedSuccess waits for the child to exit with status zero
+// and returns normally on success. Any non-zero exit, signal termination,
+// or wait error fails closed with a single-line diagnostic.
+//
+// Use this helper for setup children whose contract is to finish cleanly:
+//   - grandchild-spawner that records itself, spawns the grandchild in
+//     background, and exits so the test can observe the spawned tree.
+//   - spawn-grandchild mode that exits once its tree is recorded.
+//
+// IMPORTANT: this helper emits NO diagnostic on the success path. Earlier
+// versions emitted an 84-byte "child exited cleanly" line that satisfied
+// a 64-byte output cap and produced a false-positive overflow proof.
+func waitChildExpectedSuccess(context string, cmd *exec.Cmd) {
+	err := cmd.Wait()
+	if err == nil {
+		return
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		ws, ok := exitErr.Sys().(syscall.WaitStatus)
+		if ok {
+			if ws.Signaled() {
+				failClosed(context,
+					"expected child was signalled (signal=%d)",
+					ws.Signal())
+			}
+			failClosed(context,
+				"expected child exited with status=%d",
+				exitErr.ExitCode())
+		}
+	}
+	failClosed(context, "expected child wait failed: %v", err)
 }
 
 // waitChildOrFail waits for the child to exit. If the child exited before
@@ -81,6 +162,11 @@ func spawnChildFailClosed(context, mode string, args ...string) *exec.Cmd {
 // alive past the test trigger (e.g. ignore-sigterm). For modes that expect
 // a fast, deterministic child exit (e.g. exit-nonzero-child), the parent
 // should propagate the child's exit status via waitChildAndPropagate.
+//
+// DO NOT use this helper for an intentionally successful setup child.
+// Use waitChildExpectedSuccess instead. Treating a successful exit as a
+// helper failure produced a false-positive output-overflow proof that
+// CORRECTION05 must eliminate.
 func waitChildOrFail(context string, cmd *exec.Cmd) {
 	err := cmd.Wait()
 	if err == nil {

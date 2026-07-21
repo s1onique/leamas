@@ -17,12 +17,14 @@ import (
 
 // runSpawnGrandchild records the parent and forks the grandchild-spawner
 // in the background. This mode is not used by a specific adversarial test
-// but is exercised through expectedRolesForMode.
+// but is exercised through expectedRolesForMode. Uses
+// waitChildExpectedSuccess because the grandchild-spawner is intentionally
+// supposed to finish cleanly so the parent can exit.
 func runSpawnGrandchild() {
 	recordPID("parent", "spawn-grandchild", false)
 	// Spawn child that spawns grandchild and exit immediately.
 	cmd := spawnChildFailClosed("spawn-grandchild", "grandchild-spawner")
-	waitChildOrFail("spawn-grandchild", cmd)
+	waitChildExpectedSuccess("spawn-grandchild", cmd)
 }
 
 // runSleepGrandchild is the parent of a 3-level SIGTERM-immune tree. It

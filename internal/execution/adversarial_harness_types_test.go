@@ -18,9 +18,11 @@ var expectedRolesForMode = map[string][]string{
 	"spawn-grandchild":          {"parent", "child", "grandchild"},
 	"sleep-grandchild":          {"parent", "child", "grandchild"},
 	"hold-stdout-open":          {"parent", "child"},
+	"held-descriptor":           {"parent"},
 	"output-forever":            {"parent"},
 	"output-forever-child":      {"parent", "child"},
 	"output-forever-grandchild": {"parent", "child", "grandchild"},
+	"negative-overflow-fail":    {"parent"},
 	"exit-nonzero":              {"parent"},
 	"exit-nonzero-child":        {"parent", "child"},
 }

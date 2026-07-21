@@ -72,6 +72,12 @@ func main() {
 		runHoldStdoutOpen()
 	case "stdout-holder":
 		runStdoutHolder()
+	case "held-descriptor":
+		runHeldDescriptor()
+	case "held-descriptor-child":
+		runHeldDescriptorChild()
+	case "negative-overflow-fail":
+		runNegativeOutputProvenFail()
 	case "output-forever":
 		runOutputForever()
 	case "output-forever-fast":
