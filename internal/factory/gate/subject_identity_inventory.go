@@ -2,6 +2,7 @@
 package gate
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -20,8 +21,8 @@ type indexInfo struct {
 }
 
 // getIndexEntry returns index information for a specific path.
-func getIndexEntry(root, path string) (*indexInfo, error) {
-	out, err := runGit(root, "ls-files", "--stage", "-z", "--", path)
+func getIndexEntry(ctx context.Context, root, path string) (*indexInfo, error) {
+	out, err := runGit(ctx, root, "ls-files", "--stage", "-z", "--", path)
 	if err != nil {
 		return nil, err
 	}
@@ -82,12 +83,12 @@ func metricsExclusions(root, destination string) (exact string, tempPrefix strin
 }
 
 // buildWorkingSubjectInventory constructs a complete inventory of the working subject.
-func buildWorkingSubjectInventory(root, exactExclude, tempPrefix string) (map[string]*inventoryEntry, error) {
+func buildWorkingSubjectInventory(ctx context.Context, root, exactExclude, tempPrefix string) (map[string]*inventoryEntry, error) {
 	inventory := make(map[string]*inventoryEntry)
 	allPaths := make(map[string]bool)
 
 	// Collect HEAD paths
-	headPaths, err := getHEADPaths(root)
+	headPaths, err := getHEADPaths(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("get HEAD paths: %w", err)
 	}
@@ -96,7 +97,7 @@ func buildWorkingSubjectInventory(root, exactExclude, tempPrefix string) (map[st
 	}
 
 	// Collect index paths
-	indexPaths, err := getIndexPaths(root)
+	indexPaths, err := getIndexPaths(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("get index paths: %w", err)
 	}
@@ -105,7 +106,7 @@ func buildWorkingSubjectInventory(root, exactExclude, tempPrefix string) (map[st
 	}
 
 	// Collect nonignored untracked paths
-	untrackedPaths, err := getNonignoredUntrackedPaths(root)
+	untrackedPaths, err := getNonignoredUntrackedPaths(ctx, root)
 	if err != nil {
 		return nil, fmt.Errorf("get untracked paths: %w", err)
 	}
@@ -126,7 +127,7 @@ func buildWorkingSubjectInventory(root, exactExclude, tempPrefix string) (map[st
 
 	// Build inventory entry for each path
 	for path := range allPaths {
-		entry, err := buildInventoryEntry(root, path)
+		entry, err := buildInventoryEntry(ctx, root, path)
 		if err != nil {
 			return nil, fmt.Errorf("build entry for %s: %w", path, err)
 		}
@@ -136,7 +137,7 @@ func buildWorkingSubjectInventory(root, exactExclude, tempPrefix string) (map[st
 	return inventory, nil
 }
 
-func buildInventoryEntry(root, path string) (*inventoryEntry, error) {
+func buildInventoryEntry(ctx context.Context, root, path string) (*inventoryEntry, error) {
 	fullPath := filepath.Join(root, path)
 	entry := &inventoryEntry{path: path, worktreeExists: false}
 
@@ -168,7 +169,7 @@ func buildInventoryEntry(root, path string) (*inventoryEntry, error) {
 		}
 	}
 
-	indexInfo, err := getIndexEntry(root, path)
+	indexInfo, err := getIndexEntry(ctx, root, path)
 	if err != nil {
 		return nil, err
 	}
@@ -261,8 +262,8 @@ func computeSubjectDigest(headOID, treeOID, worktreeState string, inventory map[
 }
 
 // classifyWorktreeStateWithGit uses git status to determine worktree cleanliness.
-func classifyWorktreeStateWithGit(root, exactExclude, tempPrefix string) (string, error) {
-	out, err := runGit(root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+func classifyWorktreeStateWithGit(ctx context.Context, root, exactExclude, tempPrefix string) (string, error) {
+	out, err := runGit(ctx, root, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	if err != nil {
 		return "", fmt.Errorf("git status: %w", err)
 	}
@@ -306,8 +307,14 @@ func classifyWorktreeStateWithGit(root, exactExclude, tempPrefix string) (string
 // CollectSubjectIdentity computes identity from the repository at root.
 // It produces a content-bound digest over the complete working subject.
 // The metricsDestination, if provided, is excluded from the inventory.
+// This variant uses context.Background() for backward compatibility.
 func CollectSubjectIdentity(root string, metricsDestination string) (*SubjectIdentity, error) {
-	headOID, err := runGit(root, "rev-parse", "HEAD")
+	return CollectSubjectIdentityWithContext(context.Background(), root, metricsDestination)
+}
+
+// CollectSubjectIdentityWithContext computes identity with caller-controlled cancellation.
+func CollectSubjectIdentityWithContext(ctx context.Context, root string, metricsDestination string) (*SubjectIdentity, error) {
+	headOID, err := runGit(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("git rev-parse HEAD: %w", err)
 	}
@@ -316,7 +323,7 @@ func CollectSubjectIdentity(root string, metricsDestination string) (*SubjectIde
 		return nil, fmt.Errorf("HEAD OID is empty")
 	}
 
-	treeOID, err := runGit(root, "rev-parse", "HEAD^{tree}")
+	treeOID, err := runGit(ctx, root, "rev-parse", "HEAD^{tree}")
 	if err != nil {
 		return nil, fmt.Errorf("git rev-parse HEAD^{tree}: %w", err)
 	}
@@ -332,13 +339,13 @@ func CollectSubjectIdentity(root string, metricsDestination string) (*SubjectIde
 	}
 
 	// Build complete working subject inventory
-	inventory, err := buildWorkingSubjectInventory(root, exactExcl, tempPrefix)
+	inventory, err := buildWorkingSubjectInventory(ctx, root, exactExcl, tempPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("build working subject inventory: %w", err)
 	}
 
 	// Classify worktree state using git status
-	worktreeState, err := classifyWorktreeStateWithGit(root, exactExcl, tempPrefix)
+	worktreeState, err := classifyWorktreeStateWithGit(ctx, root, exactExcl, tempPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("classify worktree state: %w", err)
 	}

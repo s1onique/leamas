@@ -2,6 +2,7 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,189 +11,149 @@ import (
 	"time"
 )
 
-// ErrNilContext is returned when a nil context is passed to a bounded function.
-var ErrNilContext = errors.New("nil context not permitted: use context.Background() or provide a cancellable context")
+// Sentinel errors for git operations.
+var (
+	// ErrNilContext is returned when a nil context is passed to RunGit.
+	ErrNilContext = errors.New("nil context not permitted: use context.Background() or provide a cancellable context")
 
-// DefaultGitTimeout is the default timeout for git operations.
-const DefaultGitTimeout = 30 * time.Second
+	// ErrOutputLimit is returned when process output exceeds the configured limit.
+	// This is a fail-closed error - callers cannot treat it as success.
+	ErrOutputLimit = errors.New("process output limit exceeded")
+)
 
-// MaxGitOutputBytes is the maximum output allowed from git commands.
-const MaxGitOutputBytes = 8 * 1024 * 1024 // 8 MiB
+// Default bounds for git operations.
+const (
+	// DefaultGitTimeout is the default deadline for git operations.
+	DefaultGitTimeout = 30 * time.Second
 
-// GitOutputLimitReader wraps a reader and enforces a maximum byte limit.
-type GitOutputLimitReader struct {
-	r    io.Reader
-	rem  int64
-	over bool
-}
-
-// NewGitOutputLimitReader creates a reader that enforces a byte limit.
-func NewGitOutputLimitReader(r io.Reader, maxBytes int64) *GitOutputLimitReader {
-	return &GitOutputLimitReader{r: r, rem: maxBytes}
-}
-
-// Read implements io.Reader with byte limit enforcement.
-func (l *GitOutputLimitReader) Read(p []byte) (int, error) {
-	if l.rem <= 0 {
-		l.over = true
-		return 0, io.EOF
-	}
-	n := len(p)
-	if int64(n) > l.rem {
-		n = int(l.rem)
-	}
-	n, err := l.r.Read(p[:n])
-	l.rem -= int64(n)
-	if l.rem <= 0 {
-		l.over = true
-	}
-	return n, err
-}
-
-// Exceeded returns true if the output limit was exceeded.
-func (l *GitOutputLimitReader) Exceeded() bool {
-	return l.over
-}
+	// DefaultOutputLimit is the maximum output allowed from git commands.
+	DefaultOutputLimit = 8 * 1024 * 1024 // 8 MiB
+)
 
 // GitResult represents the result of a bounded git command.
+// All output is captured in bounded buffers. On success, stdout contains
+// the complete output up to the limit. On ErrOutputLimit, output is truncated.
 type GitResult struct {
-	Stdout     []byte
-	Stderr     []byte
-	ExitCode   int
-	OutputOver bool
-	Error      error
+	Stdout   []byte
+	Stderr   []byte
+	ExitCode int
 }
 
 // RunGit runs a git command with full bounded execution.
-// It requires a non-nil context and applies canonical resource limits:
-// - timeout via context deadline (uses DefaultGitTimeout if context has no deadline)
-// - bounded stdout and stderr (MaxGitOutputBytes)
-// - explicit exit status preservation
-// - process group termination on timeout/cancellation
-func RunGit(ctx context.Context, dir string, args ...string) (*GitResult, error) {
+// It requires a non-nil context and applies:
+//   - context deadline (uses DefaultGitTimeout if context has no deadline)
+//   - bounded stdout and stderr (DefaultOutputLimit)
+//   - fail-closed on output overflow
+//   - process termination on timeout/cancellation
+//   - explicit exit status preservation
+//
+// The returned error directly classifies the failure:
+//   - context.Canceled: caller cancelled the operation
+//   - context.DeadlineExceeded: deadline expired
+//   - ErrOutputLimit: output exceeded the limit (fail-closed)
+//   - startup/pipe errors: wrapped errors
+//
+// On success, the returned GitResult contains stdout and the exit code.
+// On ErrOutputLimit, partial output may be available in GitResult.
+func RunGit(ctx context.Context, dir string, args ...string) (GitResult, error) {
 	if ctx == nil {
-		return nil, ErrNilContext
+		return GitResult{}, ErrNilContext
 	}
 
-	// Compute effective deadline
-	deadline, hasDeadline := ctx.Deadline()
+	// Create deadline if context has none
+	hasDeadline := ctx.Err() != context.DeadlineExceeded
 	if !hasDeadline {
-		// Apply default timeout if context has no deadline
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, DefaultGitTimeout)
 		defer cancel()
-		deadline, _ = ctx.Deadline()
 	}
 
-	// Create command with deadline
+	// Create command
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 
-	// Set WaitDelay for proper cleanup
-	cmd.WaitDelay = 2 * time.Second
-
-	// Create output buffers with limits
-	stdoutPipe, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("create stdout pipe: %w", err)
-	}
-	stderrPipe, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("create stderr pipe: %w", err)
-	}
+	// Use bytes.Buffer for concurrent draining via cmd.Stdout/cmd.Stderr
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &boundedWriter{w: &stdout, rem: int(DefaultOutputLimit)}
+	cmd.Stderr = &boundedWriter{w: &stderr, rem: int(DefaultOutputLimit)}
 
 	// Start command
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start git: %w", err)
+	startErr := cmd.Start()
+	if startErr != nil {
+		return GitResult{}, fmt.Errorf("git start: %w", startErr)
 	}
 
-	// Read stdout with limit
-	stdoutLim := NewGitOutputLimitReader(stdoutPipe, MaxGitOutputBytes)
-	stdout := make([]byte, 0, 4096)
-	buf := make([]byte, 4096)
-	for {
-		n, err := stdoutLim.Read(buf)
-		if n > 0 {
-			stdout = append(stdout, buf[:n]...)
-		}
-		if err != nil {
-			break
-		}
+	// Wait with deadline
+	waitErr := cmd.Wait()
+
+	// Check output overflow
+	if stdout.Len() > DefaultOutputLimit || stderr.Len() > DefaultOutputLimit {
+		// Fail-closed: do not return partial output as success
+		return GitResult{
+			Stdout:   stdout.Bytes()[:DefaultOutputLimit],
+			Stderr:   stderr.Bytes()[:min(stderr.Len(), DefaultOutputLimit)],
+			ExitCode: -1,
+		}, ErrOutputLimit
 	}
 
-	// Read stderr with limit
-	stderrLim := NewGitOutputLimitReader(stderrPipe, MaxGitOutputBytes)
-	stderr := make([]byte, 0, 4096)
-	for {
-		n, err := stderrLim.Read(buf)
-		if n > 0 {
-			stderr = append(stderr, buf[:n]...)
-		}
-		if err != nil {
-			break
-		}
-	}
-
-	// Wait for command with deadline
-	waitErr := make(chan error, 1)
-	go func() {
-		waitErr <- cmd.Wait()
-	}()
-
-	select {
-	case err := <-waitErr:
-		exitCode := 0
-		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				if ws, ok := exitErr.Sys().(interface{ ExitStatus() int }); ok {
-					exitCode = ws.ExitStatus()
-				} else {
-					exitCode = -1
-				}
+	// Extract exit code
+	exitCode := 0
+	if waitErr != nil {
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
+			if ws, ok := exitErr.Sys().(interface{ ExitStatus() int }); ok {
+				exitCode = ws.ExitStatus()
 			} else {
 				exitCode = -1
 			}
+		} else {
+			exitCode = -1
 		}
-		return &GitResult{
-			Stdout:     stdout,
-			Stderr:     stderr,
-			ExitCode:   exitCode,
-			OutputOver: stdoutLim.Exceeded() || stderrLim.Exceeded(),
-			Error:      err,
-		}, nil
-	case <-ctx.Done():
-		// Context expired - kill process tree
-		if cmd.Process != nil {
-			// Try SIGTERM first
-			cmd.Process.Kill()
-			// Drain wait
-			<-waitErr
-		}
-		if ctx.Err() == context.DeadlineExceeded {
-			return &GitResult{
-				Stdout:     stdout,
-				Stderr:     stderr,
-				ExitCode:   -1,
-				OutputOver: stdoutLim.Exceeded() || stderrLim.Exceeded(),
-				Error:      fmt.Errorf("deadline exceeded before %s", deadline.Format(time.RFC3339)),
-			}, nil
-		}
-		return &GitResult{
-			Stdout:     stdout,
-			Stderr:     stderr,
-			ExitCode:   -1,
-			OutputOver: stdoutLim.Exceeded() || stderrLim.Exceeded(),
-			Error:      ctx.Err(),
-		}, nil
 	}
+
+	// Return classification errors directly
+	if ctx.Err() == context.Canceled {
+		return GitResult{
+			Stdout:   stdout.Bytes(),
+			Stderr:   stderr.Bytes(),
+			ExitCode: exitCode,
+		}, context.Canceled
+	}
+	if ctx.Err() == context.DeadlineExceeded {
+		return GitResult{
+			Stdout:   stdout.Bytes(),
+			Stderr:   stderr.Bytes(),
+			ExitCode: exitCode,
+		}, context.DeadlineExceeded
+	}
+
+	return GitResult{
+		Stdout:   stdout.Bytes(),
+		Stderr:   stderr.Bytes(),
+		ExitCode: exitCode,
+	}, waitErr
 }
 
-// RunGitSimple is DEPRECATED. Use RunGit with a proper context.
-// This function exists only for backward compatibility during migration.
-func RunGitSimple(dir string, args ...string) ([]byte, int, error) {
-	result, err := RunGit(context.Background(), dir, args...)
-	if err != nil {
-		return nil, -1, err
+// boundedWriter wraps a writer and enforces a byte limit.
+// When the limit is exceeded, subsequent writes fail.
+type boundedWriter struct {
+	w    io.Writer
+	rem  int
+	done bool
+}
+
+// Write implements io.Writer with byte limit enforcement.
+func (bw *boundedWriter) Write(p []byte) (int, error) {
+	if bw.done {
+		return 0, ErrOutputLimit
 	}
-	return result.Stdout, result.ExitCode, result.Error
+	if len(p) > bw.rem {
+		// Write partial up to limit
+		n, _ := bw.w.Write(p[:bw.rem])
+		bw.done = true
+		_ = n // n is written count, not consumed count
+		return len(p), ErrOutputLimit
+	}
+	n, err := bw.w.Write(p)
+	bw.rem -= n
+	return n, err
 }

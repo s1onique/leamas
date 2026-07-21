@@ -3,60 +3,33 @@ package gate
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/s1onique/leamas/internal/execution"
 )
 
-// runGitWithContext runs a git command using the bounded execution gateway.
-func runGitWithContext(ctx context.Context, dir string, args ...string) (string, error) {
+// runGit runs a git command using the bounded execution gateway.
+// It propagates the caller context for cancellation support.
+func runGit(ctx context.Context, dir string, args ...string) (string, error) {
 	result, err := execution.RunGit(ctx, dir, args...)
 	if err != nil {
 		return "", err
-	}
-	if result.Error != nil {
-		return "", result.Error
-	}
-	return string(result.Stdout), nil
-}
-
-// runGit runs a git command with default timeout.
-func runGit(dir string, args ...string) (string, error) {
-	result, err := execution.RunGit(context.Background(), dir, args...)
-	if err != nil {
-		return "", err
-	}
-	if result.Error != nil {
-		return "", result.Error
 	}
 	return string(result.Stdout), nil
 }
 
 // runGitWithOutput runs a git command and returns raw output bytes.
-func runGitWithOutput(dir string, args ...string) ([]byte, error) {
-	result, err := execution.RunGit(context.Background(), dir, args...)
+func runGitWithOutput(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	result, err := execution.RunGit(ctx, dir, args...)
 	if err != nil {
 		return nil, err
-	}
-	if result.Error != nil {
-		return nil, result.Error
 	}
 	return result.Stdout, nil
 }
 
-// runGitOrBail runs git and wraps errors for the factorize context.
-func runGitOrBail(ctx context.Context, dir string, args ...string) (string, error) {
-	out, err := runGitWithContext(ctx, dir, args...)
-	if err != nil {
-		return "", fmt.Errorf("git %s: %w", args[0], err)
-	}
-	return out, nil
-}
-
 // getHEADPaths returns tracked file paths from HEAD.
-func getHEADPaths(root string) ([]string, error) {
-	out, err := runGitWithOutput(root, "ls-tree", "-rz", "--name-only", "HEAD")
+func getHEADPaths(ctx context.Context, root string) ([]string, error) {
+	out, err := runGitWithOutput(ctx, root, "ls-tree", "-z", "--name-only", "HEAD")
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +45,8 @@ func getHEADPaths(root string) ([]string, error) {
 }
 
 // getIndexPaths returns file paths from the index.
-func getIndexPaths(root string) ([]string, error) {
-	out, err := runGitWithOutput(root, "ls-files", "--stage", "-z")
+func getIndexPaths(ctx context.Context, root string) ([]string, error) {
+	out, err := runGitWithOutput(ctx, root, "ls-files", "--stage", "-z")
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +67,8 @@ func getIndexPaths(root string) ([]string, error) {
 }
 
 // getNonignoredUntrackedPaths returns non-ignored untracked file paths.
-func getNonignoredUntrackedPaths(root string) ([]string, error) {
-	out, err := runGitWithOutput(root, "ls-files", "--others", "--exclude-standard", "-z")
+func getNonignoredUntrackedPaths(ctx context.Context, root string) ([]string, error) {
+	out, err := runGitWithOutput(ctx, root, "ls-files", "--others", "--exclude-standard", "-z")
 	if err != nil {
 		return nil, err
 	}
