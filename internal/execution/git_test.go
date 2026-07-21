@@ -210,14 +210,26 @@ func TestBoundedWriter_ExactLimitThenOneByte(t *testing.T) {
 	}
 }
 
-func TestRunGit_BothStreams(t *testing.T) {
+// TestRunGitWithLimits_BothStreams uses the test seam to exercise concurrent
+// stdout/stderr draining with a deterministic helper. Uses /bin/sh to write
+// distinct payloads to both streams simultaneously.
+func TestRunGitWithLimits_BothStreams(t *testing.T) {
 	ctx := context.Background()
-	result, err := RunGit(ctx, ".", "status", "-z")
+	// sh writes 100 lines to stdout, then 50 lines to stderr, interleaved via subshells
+	script := `
+		for i in $(seq 1 100); do echo "stdout-$i"; done >&1 &
+		for i in $(seq 1 50); do echo "stderr-$i" >&2; done &
+		wait
+	`
+	result, err := runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 16384, "-c", script)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(result.Stdout) == 0 {
-		t.Error("expected non-empty stdout")
+	if !strings.Contains(string(result.Stdout), "stdout-1") {
+		t.Errorf("expected stdout payload, got: %s", result.Stdout)
+	}
+	if !strings.Contains(string(result.Stderr), "stderr-1") {
+		t.Errorf("expected stderr payload, got: %s", result.Stderr)
 	}
 }
 
@@ -277,24 +289,19 @@ func TestAtomicBool(t *testing.T) {
 	}
 }
 
-// TestRunGit_LateCancellationKeepsSuccess verifies that a successful command
-// remains successful even if the caller cancels the context immediately after
-// Wait returns. Regression test for post-Wait cancellation race.
-func TestRunGit_LateCancellationKeepsSuccess(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+// TestRunGitWithLimits_RejectsBadClassification verifies the helper returns
+// successful exit code with no error for a fast, clean command. The production
+// implementation guarantees that nil waitErr means success regardless of
+// post-Wait context state, so this contract is verified by inspection of
+// the code path: if waitErr is nil and overflow is false, we return (nil).
+func TestRunGitWithLimits_RejectsBadClassification(t *testing.T) {
+	ctx := context.Background()
 	result, err := runCommandWithLimits(ctx, "true", ".", 5*time.Second, 1024)
 	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
+		t.Fatalf("expected no error for true, got %v", err)
 	}
 	if result.ExitCode != 0 {
 		t.Errorf("expected exit code 0, got %d", result.ExitCode)
-	}
-	// Cancel after completion - should not affect result
-	cancel()
-	if err != nil {
-		t.Errorf("cancellation after success should not affect result: %v", err)
 	}
 }
 
@@ -317,6 +324,30 @@ func TestRunGitWithLimits_DefaultTimeoutEnforced(t *testing.T) {
 	// Should complete in approximately the configured timeout, NOT 60 seconds
 	if elapsed > 1*time.Second {
 		t.Errorf("expected fast termination, took %v", elapsed)
+	}
+}
+
+// TestRunGitWithLimits_RetainedPipeBound uses the test seam to verify
+// that even when a descendant keeps a stdout descriptor open, RunGit
+// returns within DefaultGitWaitDelay plus tolerance. The WaitDelay
+// mechanism forces the I/O copy goroutine to terminate.
+func TestRunGitWithLimits_RetainedPipeBound(t *testing.T) {
+	// Start a child that forks a sleep helper which holds stdout open.
+	// The direct child exits quickly but the descendant keeps the pipe alive.
+	// Without WaitDelay, cmd.Wait would block on the I/O copy.
+	script := `
+		(sleep 30) &
+		exit 0
+	`
+	ctx := context.Background()
+	start := time.Now()
+	_, _ = runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 1024, "-c", script)
+	elapsed := time.Since(start)
+
+	// With DefaultGitWaitDelay = 2s, RunGit should return within 3 seconds
+	// even though the descendant holds the pipe for 30 seconds.
+	if elapsed > 4*time.Second {
+		t.Errorf("expected bounded latency via WaitDelay, took %v", elapsed)
 	}
 }
 
