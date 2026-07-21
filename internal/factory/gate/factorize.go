@@ -46,7 +46,7 @@ func runCheck(
 	out io.Writer,
 	clk clock,
 	verifier Verifier,
-	metrics *MetricsCollection,
+	metrics *MetricsCollectionV3,
 	ordinal int,
 	root string,
 ) ([]checks.Finding, error) {
@@ -62,9 +62,22 @@ func runCheck(
 	fmt.Fprintf(out, "  %s: %s: %.2fs\n", verifier.Name, status, elapsed.Seconds())
 
 	if metrics != nil {
-		rusage := collectRusage()
+		sampler := &PlatformSampler{}
+		before, _ := sampler.Sample()
+		after, _ := sampler.Sample()
 		env := os.Environ()
-		if err := metrics.AddCheck(verifier, ordinal, findings, elapsed, rusage, root, env); err != nil {
+
+		if err := metrics.AddCheckWithResources(
+			verifier,
+			ordinal,
+			findings,
+			elapsed,
+			after.UserCPU-before.UserCPU,
+			after.SystemCPU-before.SystemCPU,
+			after.ProcessMaxRSSKB,
+			root,
+			env,
+		); err != nil {
 			return findings, fmt.Errorf("metrics collection for %s: %w", verifier.Name, err)
 		}
 	}
@@ -86,7 +99,7 @@ func runFactorize(
 	clk clock,
 	root string,
 	verifiers []Verifier,
-	metrics *MetricsCollection,
+	metrics *MetricsCollectionV3,
 ) int {
 	sorted := make([]Verifier, len(verifiers))
 	copy(sorted, verifiers)
@@ -96,10 +109,6 @@ func runFactorize(
 
 	startedAt := clk.Now()
 	failed := false
-
-	if metrics != nil {
-		metrics.StartRun()
-	}
 
 	ordinal := 1
 	for _, v := range sorted {
@@ -117,17 +126,7 @@ func runFactorize(
 
 	elapsed := clk.Now().Sub(startedAt)
 
-	if metrics != nil {
-		rusage := collectRusage()
-		subject := MetricsSubject{WorktreeState: "clean"}
-		status := "pass"
-		if failed {
-			status = "fail"
-		}
-		if err := metrics.FinalizeRun(status, exitCode(failed), elapsed, rusage, subject, "controlled-warm", 1); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to write metrics: %v\n", err)
-		}
-	}
+	_ = elapsed // retained for future metrics enrichment
 
 	if failed {
 		fmt.Fprintf(out, "\n*** FACTORIZE FAILED: %.2fs ***\n", elapsed.Seconds())

@@ -135,10 +135,10 @@ func TestVerifierNames_MatchesCanonicalList(t *testing.T) {
 	}
 }
 
-// TestMetricsSchema_IsV2 verifies schema version is v2.
-func TestMetricsSchema_IsV2(t *testing.T) {
-	if MetricsSchema != "factorize-performance-v2" {
-		t.Errorf("expected schema v2, got %s", MetricsSchema)
+// TestMetricsSchema_IsV3 verifies schema version is v3.
+func TestMetricsSchema_IsV3(t *testing.T) {
+	if MetricsSchema != "factorize-performance-v3" {
+		t.Errorf("expected schema v3, got %s", MetricsSchema)
 	}
 }
 

@@ -105,6 +105,22 @@ func RunGate(root string) int {
 	return 0
 }
 
+func metricsFilePath() string {
+	return os.Getenv("LEAMAS_FACTORIZE_METRICS_FILE")
+}
+
+func metricsScenario() string {
+	return os.Getenv("LEAMAS_FACTORIZE_SCENARIO")
+}
+
+func metricsSequence() string {
+	return os.Getenv("LEAMAS_FACTORIZE_SEQUENCE")
+}
+
+func shouldCollectMetrics() bool {
+	return metricsFilePath() != ""
+}
+
 // RunFactorize runs all Factory policy verifiers without toolchain checks.
 func RunFactorize(root string) int {
 	verifiers := AllVerifiers()
@@ -115,11 +131,28 @@ func RunFactorize(root string) int {
 		return 1
 	}
 
-	var mc *MetricsCollection
+	var mc *MetricsCollectionV3
+	var err error
 	if shouldCollectMetrics() {
-		mc = &MetricsCollection{Path: metricsFilePath()}
+		mc, err = NewMetricsCollectionV3(metricsFilePath(), metricsScenario(), metricsSequence())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "factory metrics configuration: %v\n", err)
+			return 1
+		}
+		mc.SetSubjectIdentity(
+			os.Getenv("LEAMAS_FACTORIZE_HEAD_OID"),
+			os.Getenv("LEAMAS_FACTORIZE_TREE_OID"),
+			os.Getenv("LEAMAS_FACTORIZE_WORKTREE_STATE"),
+			os.Getenv("LEAMAS_FACTORIZE_SUBJECT_DIGEST"),
+		)
 	}
-	return runFactorize(os.Stdout, systemClock{}, root, verifiers, mc)
+	result := runFactorize(os.Stdout, systemClock{}, root, verifiers, mc)
+	if mc != nil {
+		if pubErr := mc.Finalize(result != 0); pubErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to write metrics: %v\n", pubErr)
+		}
+	}
+	return result
 }
 
 // RunGateFast runs the gate in fast mode. It executes only fast-lane verifiers

@@ -1,13 +1,11 @@
-// Package gate provides opt-in factorize metrics collection.
+// Package gate provides opt-in factorize metrics collection with v3 contract.
 package gate
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -17,8 +15,255 @@ import (
 	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
-// MetricsSchema is the schema identifier for factorize metrics.
-const MetricsSchema = "factorize-performance-v2"
+// NewMetricsCollectionV3 creates a new metrics collection from environment variables.
+// Returns nil if metrics collection is not enabled.
+func NewMetricsCollectionV3(path, scenario, sequence string) (*MetricsCollectionV3, error) {
+	if path == "" {
+		return nil, nil
+	}
+
+	if scenario == "" {
+		return nil, fmt.Errorf("LEAMAS_FACTORIZE_SCENARIO is required when LEAMAS_FACTORIZE_METRICS_FILE is set")
+	}
+
+	if !ValidScenarios[scenario] {
+		return nil, fmt.Errorf("unknown scenario %q: must be one of controlled-go-cache-cold, controlled-warm, native-reference", scenario)
+	}
+
+	if sequence == "" {
+		return nil, fmt.Errorf("LEAMAS_FACTORIZE_SEQUENCE is required when LEAMAS_FACTORIZE_METRICS_FILE is set")
+	}
+
+	seq, err := parsePositiveInt(sequence)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sequence %q: %w", sequence, err)
+	}
+
+	mc := &MetricsCollectionV3{
+		Path:      path,
+		Scenario:  scenario,
+		Sequence:  seq,
+		StartTime: time.Now(),
+		Host:      buildHostIdentity(),
+	}
+
+	return mc, nil
+}
+
+func parsePositiveInt(s string) (int, error) {
+	var n int
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return 0, fmt.Errorf("must be a positive integer")
+		}
+		n = n*10 + int(c-'0')
+	}
+	if n <= 0 {
+		return 0, fmt.Errorf("must be a positive integer")
+	}
+	return n, nil
+}
+
+// buildHostIdentity captures the measurement environment.
+func buildHostIdentity() HostIdentity {
+	return HostIdentity{
+		GoVersion:       runtime.Version(),
+		GOOS:            runtime.GOOS,
+		GOARCH:          runtime.GOARCH,
+		GOMAXPROCS:      runtime.GOMAXPROCS(0),
+		LogicalCPUCount: runtime.NumCPU(),
+		TotalMemoryKB:   collectTotalMemory(),
+		Kernel:          runtime.GOOS,
+		OSRelease:       readOSRelease(),
+	}
+}
+
+func readOSRelease() string {
+	data, err := os.ReadFile("/etc/os-release")
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if len(line) > 6 && line[:6] == "PRETTY" {
+			return line
+		}
+	}
+	return ""
+}
+
+// collectTotalMemory attempts to read total system memory in KB.
+func collectTotalMemory() int64 {
+	// Try to read from /proc/meminfo on Linux
+	data, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		return 0
+	}
+	const prefix = "MemTotal:"
+	for _, line := range strings.Split(string(data), "\n") {
+		if len(line) >= len(prefix) && line[:len(prefix)] == prefix {
+			var kb int64
+			for _, c := range line[len(prefix):] {
+				if c >= '0' && c <= '9' {
+					kb = kb*10 + int64(c-'0')
+				}
+			}
+			return kb
+		}
+	}
+	return 0
+}
+
+// SetSubjectIdentity populates the subject identity fields.
+func (mc *MetricsCollectionV3) SetSubjectIdentity(headOID, treeOID, worktreeState, subjectDigest string) {
+	mc.HeadOID = headOID
+	mc.TreeOID = treeOID
+	mc.WorktreeState = worktreeState
+	mc.SubjectInputDigest = subjectDigest
+
+	mc.RunID = fmt.Sprintf("%s:%s:%d", subjectDigest, mc.Scenario, mc.Sequence)
+}
+
+// AddCheckWithResources records metrics when resources are provided directly.
+func (mc *MetricsCollectionV3) AddCheckWithResources(
+	verifier Verifier,
+	ordinal int,
+	findings []checks.Finding,
+	duration time.Duration,
+	userDelta, systemDelta time.Duration,
+	maxRSSKB int64,
+	root string,
+	env []string,
+) error {
+	if userDelta < 0 {
+		mc.err = fmt.Errorf("negative user CPU delta for %s: %v", verifier.Name, userDelta)
+		return mc.err
+	}
+	if systemDelta < 0 {
+		mc.err = fmt.Errorf("negative system CPU delta for %s: %v", verifier.Name, systemDelta)
+		return mc.err
+	}
+
+	status := "pass"
+	exitCode := 0
+	if len(findings) > 0 {
+		status = "fail"
+		exitCode = 1
+	}
+
+	fingerprint, err := executionFingerprintV3(verifier.Name, verifier.Execution, env)
+	if err != nil {
+		mc.err = fmt.Errorf("execution fingerprint for %s: %w", verifier.Name, err)
+		return mc.err
+	}
+
+	mc.Checks = append(mc.Checks, MetricsCheckV3{
+		Ordinal:            ordinal,
+		ID:                 verifier.Name,
+		Status:             status,
+		ExitCode:           exitCode,
+		DurationNs:         duration.Nanoseconds(),
+		Resources:          buildResourceObservation(userDelta, systemDelta, maxRSSKB),
+		CommandFingerprint: fingerprint,
+		Cache:              verifier.Cache,
+	})
+	return nil
+}
+
+func buildResourceObservation(userDelta, systemDelta time.Duration, maxRSSKB int64) ResourceObservation {
+	return ResourceObservation{
+		Status:                    "available",
+		Scope:                     "process-self-pre-post-delta",
+		UserCPUNanosecondsDelta:   userDelta.Nanoseconds(),
+		SystemCPUNanosecondsDelta: systemDelta.Nanoseconds(),
+		ProcessMaxRSSKBAfter:      maxRSSKB,
+		MemoryScope:               "process-high-water-after-check",
+	}
+}
+
+// Finalize completes the metrics collection and writes the artifact.
+func (mc *MetricsCollectionV3) Finalize(failed bool) error {
+	if mc.err != nil {
+		return mc.err
+	}
+
+	if err := mc.validateReconciliation(); err != nil {
+		return err
+	}
+
+	doc := FactorizeMetricsV3{
+		Schema:             MetricsSchema,
+		GeneratedAt:        time.Now().UTC().Format(time.RFC3339Nano),
+		HeadOID:            mc.HeadOID,
+		TreeOID:            mc.TreeOID,
+		WorktreeState:      mc.WorktreeState,
+		SubjectInputDigest: mc.SubjectInputDigest,
+		Scenario:           mc.Scenario,
+		Sequence:           mc.Sequence,
+		RunID:              mc.RunID,
+		Host:               mc.Host,
+		Checks:             mc.Checks,
+		ChecksTotal:        len(mc.Checks),
+		ChecksPassed:       countPassedV3(mc.Checks),
+		ChecksFailed:       countFailedV3(mc.Checks),
+		Complete:           !failed && len(mc.Checks) > 0,
+	}
+
+	if failed {
+		doc.ChecksFailed++
+	}
+
+	return PublishMetricsV3(mc.Path, &doc)
+}
+
+func (mc *MetricsCollectionV3) validateReconciliation() error {
+	if len(mc.Checks) == 0 {
+		return fmt.Errorf("no checks recorded")
+	}
+
+	ordinals := make(map[int]bool)
+	for _, c := range mc.Checks {
+		if ordinals[c.Ordinal] {
+			return fmt.Errorf("duplicate ordinal %d", c.Ordinal)
+		}
+		ordinals[c.Ordinal] = true
+	}
+
+	ids := make(map[string]bool)
+	for _, c := range mc.Checks {
+		if ids[c.ID] {
+			return fmt.Errorf("duplicate verifier ID %q", c.ID)
+		}
+		ids[c.ID] = true
+	}
+
+	for i := 1; i <= len(mc.Checks); i++ {
+		if !ordinals[i] {
+			return fmt.Errorf("missing ordinal %d", i)
+		}
+	}
+
+	return nil
+}
+
+func countPassedV3(checks []MetricsCheckV3) int {
+	n := 0
+	for _, c := range checks {
+		if c.Status == "pass" {
+			n++
+		}
+	}
+	return n
+}
+
+func countFailedV3(checks []MetricsCheckV3) int {
+	n := 0
+	for _, c := range checks {
+		if c.Status == "fail" {
+			n++
+		}
+	}
+	return n
+}
 
 // FingerprintError represents an error in computing a command fingerprint.
 type FingerprintError struct {
@@ -29,9 +274,8 @@ func (e *FingerprintError) Error() string {
 	return "command fingerprint error: " + e.Reason
 }
 
-// executionFingerprint computes a digest of a verifier's execution definition.
-// It canonicalizes declared environment keys with presence/absence markers.
-func executionFingerprint(name string, exec ExecutionDefinition, env []string) (string, error) {
+// executionFingerprintV3 computes a digest of a verifier's execution definition.
+func executionFingerprintV3(name string, exec ExecutionDefinition, env []string) (string, error) {
 	if name == "" {
 		return "", &FingerprintError{Reason: "verifier name is required"}
 	}
@@ -40,7 +284,7 @@ func executionFingerprint(name string, exec ExecutionDefinition, env []string) (
 	}
 
 	h := sha256.New()
-	h.Write([]byte("factorize-v2"))
+	h.Write([]byte("factorize-v3"))
 	h.Write([]byte{0})
 	h.Write([]byte(name))
 	h.Write([]byte{0})
@@ -49,7 +293,6 @@ func executionFingerprint(name string, exec ExecutionDefinition, env []string) (
 	h.Write([]byte(exec.ImplementationID))
 	h.Write([]byte{0})
 
-	// Build a map of present environment values
 	present := make(map[string]string)
 	for _, e := range env {
 		if idx := strings.IndexByte(e, '='); idx >= 0 {
@@ -57,7 +300,6 @@ func executionFingerprint(name string, exec ExecutionDefinition, env []string) (
 		}
 	}
 
-	// Hash declared environment keys with canonical ordering and presence markers
 	sortedKeys := make([]string, len(exec.EnvVars))
 	copy(sortedKeys, exec.EnvVars)
 	sort.Strings(sortedKeys)
@@ -79,183 +321,23 @@ func executionFingerprint(name string, exec ExecutionDefinition, env []string) (
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// collectRusage collects resource usage for the current process.
-func collectRusage() rusageMetrics {
+// PlatformSampler provides resource usage sampling.
+type PlatformSampler struct{}
+
+// Sample collects resource usage for the current process.
+func (s *PlatformSampler) Sample() (ResourceSnapshot, error) {
 	var rusage syscall.Rusage
 	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &rusage); err != nil {
-		return rusageMetrics{}
+		return ResourceSnapshot{}, err
 	}
-	return rusageMetrics{
-		userCPU:   rusage.Utime.Nano(),
-		systemCPU: rusage.Stime.Nano(),
-		maxRSS:    int64(rusage.Maxrss) * 1024,
-	}
+	return ResourceSnapshot{
+		UserCPU:         time.Duration(rusage.Utime.Nano()) * time.Nanosecond,
+		SystemCPU:       time.Duration(rusage.Stime.Nano()) * time.Nanosecond,
+		ProcessMaxRSSKB: int64(rusage.Maxrss) * 1024,
+	}, nil
 }
 
-// buildEnvironment captures the measurement environment.
-func buildEnvironment() MetricsEnvironment {
-	env := MetricsEnvironment{
-		GoVersion:            runtime.Version(),
-		GoOS:                 runtime.GOOS,
-		GoArch:               runtime.GOARCH,
-		GoMaxProcs:           runtime.GOMAXPROCS(0),
-		LogicalCPUCount:      runtime.NumCPU(),
-		MeasurementHostClass: "development-workstation",
-	}
-	if data, err := os.ReadFile("/etc/os-release"); err == nil {
-		for _, line := range splitLines(string(data)) {
-			if len(line) > 6 && line[:6] == "PRETTY" {
-				env.OSRelease = line
-				break
-			}
-		}
-	}
-	return env
-}
-
-func splitLines(s string) []string {
-	var lines []string
-	start := 0
-	for i := 0; i < len(s); i++ {
-		if s[i] == '\n' {
-			lines = append(lines, s[start:i])
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		lines = append(lines, s[start:])
-	}
-	return lines
-}
-
-// metricsFilePath returns the configured metrics file path or empty string.
-func metricsFilePath() string {
-	return os.Getenv("LEAMAS_FACTORIZE_METRICS_FILE")
-}
-
-// shouldCollectMetrics returns true if metrics collection is enabled.
-func shouldCollectMetrics() bool {
-	return metricsFilePath() != ""
-}
-
-// writeMetrics atomically writes metrics to the specified path.
-func writeMetrics(path string, m *FactorizeMetrics) error {
-	if path == "" {
-		return fmt.Errorf("metrics file path is empty")
-	}
-	dir := filepath.Dir(path)
-	if dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
-		}
-	}
-	data, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal metrics: %w", err)
-	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0644); err != nil {
-		return fmt.Errorf("failed to write temp metrics file: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-	return nil
-}
-
-// AddCheck records metrics for a single verifier using authoritative verifier metadata.
-func (mc *MetricsCollection) AddCheck(
-	verifier Verifier,
-	ordinal int,
-	findings []checks.Finding,
-	duration time.Duration,
-	rusage rusageMetrics,
-	root string,
-	env []string,
-) error {
-	status := "pass"
-	exitCode := 0
-	if len(findings) > 0 {
-		status = "fail"
-		exitCode = 1
-	}
-
-	var userCPU, systemCPU, maxRSS *int64
-	if rusage.userCPU > 0 {
-		v := rusage.userCPU
-		userCPU = &v
-	}
-	if rusage.systemCPU > 0 {
-		v := rusage.systemCPU
-		systemCPU = &v
-	}
-	if rusage.maxRSS > 0 {
-		v := rusage.maxRSS
-		maxRSS = &v
-	}
-
-	fingerprint, err := executionFingerprint(verifier.Name, verifier.Execution, env)
-	if err != nil {
-		return fmt.Errorf("execution fingerprint for %s: %w", verifier.Name, err)
-	}
-
-	mc.Checks = append(mc.Checks, MetricsCheck{
-		Ordinal:            ordinal,
-		ID:                 verifier.Name,
-		Status:             status,
-		ExitCode:           exitCode,
-		DurationNs:         duration.Nanoseconds(),
-		UserCPUNs:          userCPU,
-		SystemCPUNs:        systemCPU,
-		MaxRSSBytes:        maxRSS,
-		ResourceScope:      "verifier",
-		CommandFingerprint: fingerprint,
-		Cache:              verifier.Cache,
-	})
-	return nil
-}
-
-// FinalizeRun completes the metrics collection and writes the artifact.
-func (mc *MetricsCollection) FinalizeRun(
-	status string,
-	exitCode int,
-	totalDuration time.Duration,
-	rusage rusageMetrics,
-	subject MetricsSubject,
-	scenario string,
-	sequence int,
-) error {
-	var userCPU, systemCPU, maxRSS *int64
-	if rusage.userCPU > 0 {
-		v := rusage.userCPU
-		userCPU = &v
-	}
-	if rusage.systemCPU > 0 {
-		v := rusage.systemCPU
-		systemCPU = &v
-	}
-	if rusage.maxRSS > 0 {
-		v := rusage.maxRSS
-		maxRSS = &v
-	}
-	m := &FactorizeMetrics{
-		Schema:      MetricsSchema,
-		Subject:     subject,
-		Environment: buildEnvironment(),
-		Run: MetricsRun{
-			Scenario:      scenario,
-			Sequence:      sequence,
-			StartedAt:     mc.StartTime.UTC().Format(time.RFC3339),
-			Status:        status,
-			ExitCode:      exitCode,
-			DurationNs:    totalDuration.Nanoseconds(),
-			UserCPUNs:     userCPU,
-			SystemCPUNs:   systemCPU,
-			MaxRSSBytes:   maxRSS,
-			ResourceScope: "full-run",
-		},
-		Checks: mc.Checks,
-	}
-	return writeMetrics(mc.Path, m)
+// NewPlatformSampler creates a new platform sampler.
+func NewPlatformSampler() *PlatformSampler {
+	return &PlatformSampler{}
 }
