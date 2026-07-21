@@ -182,3 +182,62 @@ digest: mode=range output=... time=0.22s OK
 
 ## Final Status
 **CLOSED — all P0 defects corrected; content-bound subject identity and exact inventory reconciliation implemented.**
+
+---
+
+## P0 Corrections (2026-07-21 - third round)
+
+### P0-1: Complete working subject inventory (CORRECTED)
+Previous implementation only collected HEAD-tracked files and used index bytes.
+Now uses union of:
+- HEAD paths: `git ls-tree -rz --name-only HEAD`
+- Index paths: `git ls-files --stage -z`
+- Nonignored untracked: `git ls-files --others --exclude-standard -z`
+- NUL-delimited output for robust filename handling
+- Worktree bytes are authoritative (verifier reads worktree)
+- Staged additions, deletions, and modifications all reflected
+
+### P0-2: Metrics destination excluded from inventory (CORRECTED)
+`CollectSubjectIdentity(root, metricsDestination)` now receives the metrics file path.
+Metrics file and its temp siblings are removed from inventory before hashing.
+Prevents self-invalidation of cold/warm measurement series.
+
+### P0-3: Content-read failures propagate errors (CORRECTED)
+Previous implementation silently converted read failures to empty hashes.
+`buildInventoryEntry()` now returns error on read failure.
+Subject digest only published when all reads succeed.
+
+### P0-4: Platform sampler split by OS (CORRECTED)
+- `platform_sampler.go` (linux build tag): ru_maxrss in KiB
+- `platform_sampler_darwin.go` (darwin build tag): ru_maxrss in bytes, converted to KiB
+- `platform_sampler_unsupported.go` (fallback): returns error
+
+### P0-5: Worktree state classification (CORRECTED)
+State now uses `clean`/`dirty` to reflect actual worktree cleanliness.
+`content-bound` now describes the digest method only.
+
+### Files Changed (third round)
+| File | Change |
+|------|--------|
+| `subject_identity_types.go` | Types, validation, classifyWorktreeState (new, 78 LOC) |
+| `subject_identity_test_helpers.go` | Collection logic, inventory building (new, 333 LOC) |
+| `platform_sampler.go` | Linux-specific sampling |
+| `platform_sampler_darwin.go` | Darwin-specific sampling (new, 39 LOC) |
+| `platform_sampler_unsupported.go` | Error for other OS (new, 26 LOC) |
+| `factorize_metrics_types.go` | Added ResourceSampler/ResourceSnapshot types |
+| `factorize_metrics_v3_test.go` | Reduced from 437 to 275 LOC |
+| `factorize_metrics_v3_digest_test.go` | Digest tests (new, 152 LOC) |
+| `gate.go` | Passes metricsDestination to CollectSubjectIdentity |
+
+### Verification
+```
+go test ./internal/factory/gate/... -count=1  # PASS (0.049s)
+bin/leamas factory verify llm-friendly internal/factory/gate/...  # PASS
+CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas  # OK
+```
+
+### Commit
+`4642b3e` - fix(gate): bind metrics to complete working subject
+
+## Final Status
+**CLOSED — all P0 defects corrected; complete working-subject inventory implemented with metrics destination exclusion and OS-specific samplers.**
