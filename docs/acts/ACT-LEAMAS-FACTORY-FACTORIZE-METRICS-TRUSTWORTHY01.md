@@ -286,6 +286,6 @@ bin/leamas factory verify llm-friendly internal/factory/gate/...  # PASS
 ## Final Status
 **CLOSED — all P0 defects corrected; complete working-subject inventory implemented with:
 - correct metrics destination exclusion
-- authoritative git status for worktree classification  
+- authoritative git status for worktree classification
 - proper Lstat error handling
 - OS-specific samplers with Darwin support**
