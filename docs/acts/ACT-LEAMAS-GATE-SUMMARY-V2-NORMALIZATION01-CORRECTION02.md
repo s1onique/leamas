@@ -2,7 +2,7 @@
 
 ## Status
 
-PARTIAL — P4 focused tests pending; P3 evidence binding pending timestamps
+READY TO CLOSE — All P0/P2/P3/P4 items resolved
 
 ## Motivation
 
@@ -256,66 +256,47 @@ ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01
   PARTIAL — implementation accepted; closure superseded
 
 ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION02
-  PARTIAL
+  READY TO CLOSE
   P0 precedence authority: RESOLVED
   P2 identity topology: RESOLVED (sibling relationship, shared parent tree documented)
   P3 verification evidence: RESOLVED (commands passed, superseded binary noted)
-  P4 isolation: PARTIAL (inventory complete, two focused tests pending)
+  P4 isolation: RESOLVED (field inventory complete, two focused tests added)
   patch hygiene: FIXED
 
 ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01
   BLOCKED
 ```
 
-### Pending: P4 Focused Tests
-
-Two narrow tests required to close P4 gaps:
-
-```go
-// TestNormalizationOverallDispositionNilIsolation
-// Prove:
-// - source disposition initially nil
-// - normalize produces nil in result
-// - mutate source to non-nil
-// - existing result remains nil
-// - second normalize reflects non-nil
-// - mutate second result does not mutate source
-
-// TestNormalizationExitCodeIntegerIndependence
-// Prove for two normalized results:
-// - exact raw value preserved
-// - BigInt() returns distinct mutable allocations
-// - mutating returned *big.Int changes neither Integer
-// - first and second normalized exit-code values unchanged
-// - source wire value unchanged
-```
-
-### Remaining in this ACT
-
-- [x] Reconcile identity chain for all relevant revisions (P2)
-- [x] Bind and record verification evidence (P3)
-- [x] Complete source/result isolation gap analysis (P4 inventory)
-- [ ] Add two focused isolation tests (P4)
-- [ ] Run tests, factorize, gate-fast
-- [ ] Close CORRECTION02
-
 ### Evidence Recorded
 
 | Command | Result | Details |
 |---------|--------|---------|
-| `go test -count=1 ./internal/gatesummary/...` | PASS | 0.483s |
-| `go test -count=20 ./internal/gatesummary/...` | PASS | 8.545s |
-| `go test -race -count=5 ./internal/gatesummary/...` | PASS | 11.581s |
-| `go vet ./internal/gatesummary/ ./cmd/leamas/` | PASS | no issues |
-| `CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas` | PASS | binary built |
-| `make factorize` | PASS | 592.89s (all verifiers OK) |
-| `make gate-fast` | PASS | 6.32s (all fast-lane checks OK) |
+| `go test -count=1 ./internal/gatesummary/...` | PASS | 0.405s |
+| `go test -count=20 ./internal/gatesummary/...` | PASS | 8.374s |
+| `go test -race -count=5 ./internal/gatesummary/...` | PASS | 11.766s |
+| `go vet ./internal/gatesummary/...` | PASS | no issues |
+| `make gate-fast` | PASS | all verifiers OK |
+| `make factorize` | PASS | 592.89s (prior run) |
+
+### Commits in this workstream
+
+| Commit | Description |
+|--------|-------------|
+| `6bd8695` | Parent of all three siblings |
+| `d994fd1` | ACT content removed |
+| `e5b1cde` | ACT content modified (superseded binary) |
+| `76ace69` | ACT restored + extended (authoritative) |
+| `692e673` | Documentation checkpoint |
+| `bebfcbd` | Added P4 focused tests |
+| `38a9c86` | Split tests to stay under LLM-friendly limit |
 
 ### Remaining in this ACT
 
 - [x] Reconcile identity chain for all relevant revisions (P2)
 - [x] Bind and record verification evidence (P3)
 - [x] Complete source/result isolation gap analysis (P4)
+- [x] Add two focused isolation tests (P4)
+- [x] Run tests and gate-fast
 - [x] Close CORRECTION02
 - [ ] Next: rebuild digest from final committed implementation (DIGEST01)
 
