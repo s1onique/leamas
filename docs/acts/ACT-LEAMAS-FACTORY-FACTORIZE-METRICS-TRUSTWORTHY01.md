@@ -6,6 +6,7 @@
 ## Commits
 - `36a1864` - fix(gate): complete factorize metrics v3 migration
 - `c6b312e` - fix(gate): bind metrics to execution resources and subject
+- `1c1cbda` - fix(gate): bind factorize metrics to exact subject inputs (P0 corrections)
 
 ## Objective
 Upgrade factorize metrics from v2 to v3 with trustworthy evidence contracts:
@@ -113,3 +114,71 @@ gate_fast_wall=0:11.52
 
 ## Final Status
 **CLOSED — implementation and focused verification complete; complete-range digest refreshed.**
+
+---
+
+## P0 Corrections (2026-07-21 - second round)
+
+### P0-1: Content-bound subject digest (CORRECTED)
+Previous implementation hashed only status labels. Now:
+- `buildSubjectInventory()` iterates all tracked files from HEAD
+- Computes SHA-256 for each file's content (staged or worktree)
+- Nonignored untracked files included with content hashes
+- Deleted tracked files marked with deletion marker
+- Digest changes when: modified bytes change, untracked files change, deleted files occur
+
+### P0-2: Exact inventory reconciliation (CORRECTED)
+Previous implementation only checked ordinals. Now:
+- `MetricsCollectionV3.ExpectedVerifierIDs` captures canonical set
+- `validateReconciliation()` proves len(checks) == len(expected)
+- Every expected verifier recorded exactly once
+- No unexpected verifiers recorded
+- `Complete` field only true after full reconciliation passes
+
+### P0-3: Fixed sampler test defect (CORRECTED)
+Previous test exercised pre-sample path for both cases. Now:
+- `fakeSampler` uses call-specific `sampleResult` struct
+- `TestRunCheck_PostSampleErrorFailsCheck` correctly exercises post-execution sampling failure
+- Verifier execution verified before sampler error assertion
+
+### Additional Tests Added
+```
+TestValidateReconciliation_RejectsMissingExpectedVerifier
+TestValidateReconciliation_RejectsUnexpectedVerifier
+TestValidateReconciliation_AcceptsMatchingExpectedAndRecorded
+TestContentBoundDigest_DifferentContentProducesDifferentDigest
+TestContentBoundDigest_DifferentPathProducesDifferentDigest
+TestContentBoundDigest_SameContentSameDigest
+```
+
+### Verification (second round)
+```
+go test ./internal/factory/gate/... -run 'Test.*Subject|Test.*Reconciliation|Test.*Sample|Test.*Metrics|Test.*ContentBound'
+ok  	github.com/s1onique/leamas/internal/factory/gate	0.014s
+
+CGO_ENABLED=0 go build -trimpath -o /tmp/leamas-metrics-v3 ./cmd/leamas
+static build OK
+
+make gate-fast
+gate_fast_wall=0:13.66
+*** GATE PASSED ***
+```
+
+### Digest Refresh
+```
+bin/leamas factory digest --range 36a1864^..HEAD \
+  --output /tmp/ACT-LEAMAS-FACTORY-FACTORIZE-METRICS-TRUSTWORTHY01-v2.txt
+digest: mode=range output=... time=0.22s OK
+```
+
+### Evidence Properties Now Verified
+- [x] content-bound digest changes with different file contents
+- [x] content-bound digest changes with different untracked paths
+- [x] content-bound digest changes with deleted files
+- [x] missing expected verifier rejected at reconciliation
+- [x] unexpected verifier rejected at reconciliation
+- [x] post-sample failure correctly propagates
+- [x] verifier executes before post-sample error is checked
+
+## Final Status
+**CLOSED — all P0 defects corrected; content-bound subject identity and exact inventory reconciliation implemented.**
