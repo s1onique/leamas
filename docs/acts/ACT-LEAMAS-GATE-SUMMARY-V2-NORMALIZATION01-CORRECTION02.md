@@ -2,7 +2,7 @@
 
 ## Status
 
-READY TO CLOSE — All P0/P2/P3/P4 items resolved
+CLOSED
 
 ## Motivation
 
@@ -265,7 +265,7 @@ ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION01
   PARTIAL — implementation accepted; closure superseded
 
 ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION02
-  READY TO CLOSE
+  CLOSED
   P0 precedence authority: RESOLVED
   P2 identity topology: RESOLVED (sibling relationship, shared parent tree documented)
   P3 verification evidence: RESOLVED (commands passed, superseded binary noted)
@@ -273,7 +273,7 @@ ACT-LEAMAS-GATE-SUMMARY-V2-NORMALIZATION01-CORRECTION02
   patch hygiene: FIXED
 
 ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01
-  BLOCKED
+  READY — NEXT
 ```
 
 ### Evidence Recorded

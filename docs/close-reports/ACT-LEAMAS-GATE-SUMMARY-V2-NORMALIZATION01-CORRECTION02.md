@@ -4,7 +4,10 @@
 
 **Closed by**: Agent
 **Closed at**: 2026-07-21T15:36Z
-**Final commit**: 969b0de1a8d9d3e0e7a8c6f2b4d5e1a3c7f8b9d0
+**Close report commit**: 5409668be114a773454c61ee8f65ca9502a30257
+**Close report tree**: ee915ed527e0e5e3ec1240b4ba48d8e852192319
+**Evidence docs commit**: 969b0de1fc3457695102657f78506630e6623f3e
+**Evidence docs tree**: ae0cde8b16f9da7f9fdef0410128d6c646c5f26a
 
 ## Files Changed
 
