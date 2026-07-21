@@ -129,6 +129,16 @@ func mergeEnvironment(base, overlay []string) []string {
 	return env
 }
 
+// cleanupRetainedOutput uses the process-group identity saved at Start. The
+// injectable capability is test-only mutation coverage for the cleanup
+// boundary; normal executors always use terminateProcessTree.
+func (e *Executor) cleanupRetainedOutput(pid int, req *Request) *ExecutionError {
+	if e.retainedOutputCleanup != nil {
+		return e.retainedOutputCleanup(pid, req)
+	}
+	return e.terminateProcessTree(pid, req)
+}
+
 // terminateProcessTree gracefully terminates the process group.
 func (e *Executor) terminateProcessTree(pid int, req *Request) *ExecutionError {
 	pgm := newProcessGroupManager()

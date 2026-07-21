@@ -16,6 +16,7 @@ const (
 	CodeExecutionStartBudgetExhausted     = "execution_start_budget_exhausted"
 	CodeExecutionTaskDepthExceeded        = "execution_task_depth_exceeded"
 	CodeExecutionOutputLimitExceeded      = "execution_output_limit_exceeded"
+	CodeExecutionRetainedOutputPipe       = "execution_retained_output_pipe"
 	CodeExecutionProcessTreeCleanupFailed = "execution_process_tree_cleanup_failed"
 	CodeExecutionInvalidUnboundedTimeout  = "execution_invalid_unbounded_timeout"
 	CodeExecutionInvalidRequest           = "execution_invalid_request"
@@ -154,6 +155,16 @@ func ErrUnboundedTimeout(timeout string) *ExecutionError {
 	return &ExecutionError{
 		Code:    CodeExecutionInvalidUnboundedTimeout,
 		Message: fmt.Sprintf("timeout exceeds maximum permitted (%s)", timeout),
+	}
+}
+
+// ErrRetainedOutputPipe reports that WaitDelay closed command output pipes
+// after the direct process exited, so captured output may be incomplete.
+func ErrRetainedOutputPipe(cause error) *ExecutionError {
+	return &ExecutionError{
+		Code:    CodeExecutionRetainedOutputPipe,
+		Message: "direct process exited but retained output pipes exceeded WaitDelay",
+		Cause:   cause,
 	}
 }
 

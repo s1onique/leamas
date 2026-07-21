@@ -25,7 +25,8 @@ type Result struct {
 	RunDuration         time.Duration   // Time spent executing (including termination)
 	Stdout              []byte          // Captured stdout (may be truncated)
 	Stderr              []byte          // Captured stderr (may be truncated)
-	OutputTruncated     bool            // True if output was truncated
+	OutputTruncated     bool            // True only when the output cap discarded bytes
+	OutputIncomplete    bool            // True when retained pipes prevented complete capture
 	OutputBytesObserved int64           // Total bytes observed (including discarded)
 	OutputBytesRetained int64           // Total bytes retained
 	OutputLimit         int64           // Configured output limit

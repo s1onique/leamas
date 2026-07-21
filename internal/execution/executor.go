@@ -15,36 +15,16 @@ import (
 
 // Executor provides bounded command execution on Unix.
 type Executor struct {
-	budget        *Budget
-	starts        uint64
-	startsLimit   uint64
-	sem           *contextSemaphore
-	maxTaskDepth  uint16
-	cycleDetector *CycleDetector
-	root          *ExecutionRoot
-	mu            sync.RWMutex
-	generation    uint32
-}
-
-// NewExecutor creates a new bounded executor.
-func NewExecutor(budget *Budget, root *ExecutionRoot) (*Executor, error) {
-	if err := budget.Validate(time.Now()); err != nil {
-		return nil, fmt.Errorf("invalid budget: %w", err)
-	}
-	return &Executor{
-		budget:        budget,
-		startsLimit:   budget.MaxStarts,
-		sem:           newContextSemaphore(budget.MaxConcurrent),
-		maxTaskDepth:  budget.MaxTaskDepth,
-		cycleDetector: NewCycleDetector(),
-		root:          root,
-		generation:    0,
-	}, nil
-}
-
-// Budget returns the executor's budget.
-func (e *Executor) Budget() *Budget {
-	return e.budget
+	budget                *Budget
+	starts                uint64
+	startsLimit           uint64
+	sem                   *contextSemaphore
+	maxTaskDepth          uint16
+	cycleDetector         *CycleDetector
+	root                  *ExecutionRoot
+	mu                    sync.RWMutex
+	generation            uint32
+	retainedOutputCleanup func(int, *Request) *ExecutionError
 }
 
 // Execute runs a bounded command.
@@ -192,8 +172,9 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 		waitCh <- cmd.Wait()
 	}()
 
-	runStart := time.Now()
 	var exitCode int
+	var exitStatusKnown bool
+	var outputIncomplete bool
 	var triggerErr *ExecutionError
 	var cleanupErr *ExecutionError
 
@@ -206,11 +187,12 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 		// Drain the wait channel, capturing any Wait errors
 		select {
 		case wErr := <-waitCh:
-			// Process exited; check for WaitDelay only
-			if errors.Is(wErr, exec.ErrWaitDelay) && cleanupErr == nil {
-				cleanupErr = ErrProcessTreeCleanupFailed(pid, "WaitDelay expired after overflow")
+			// WaitDelay means copied output may be incomplete. Cleanup was
+			// already attempted above, so it is not itself a cleanup failure.
+			if errors.Is(wErr, exec.ErrWaitDelay) {
+				outputIncomplete = true
 			}
-			// Other Wait errors (context.Canceled, etc.) are expected - don't set cleanupErr
+			// Other Wait errors (context.Canceled, etc.) are expected.
 		case <-time.After(e.budget.TerminationGrace):
 			// Timeout draining - escalate to SIGKILL
 			if cleanupErr == nil {
@@ -230,11 +212,12 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 		// Drain the wait channel with timeout
 		select {
 		case wErr := <-waitCh:
-			// Process exited; check for WaitDelay only
-			if errors.Is(wErr, exec.ErrWaitDelay) && cleanupErr == nil {
-				cleanupErr = ErrProcessTreeCleanupFailed(pid, "WaitDelay expired after cancellation")
+			// WaitDelay closes retained output pipes after process cleanup;
+			// it does not prove that process-group cleanup failed.
+			if errors.Is(wErr, exec.ErrWaitDelay) {
+				outputIncomplete = true
 			}
-			// Other Wait errors (context.Canceled, etc.) are expected - don't set cleanupErr
+			// Other Wait errors (context.Canceled, etc.) are expected.
 		case <-time.After(e.budget.TerminationGrace):
 			// Timeout draining - escalate to SIGKILL
 			if cleanupErr == nil {
@@ -253,13 +236,27 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 
 	case err := <-waitCh:
 		// Process completed naturally
-		runDuration := time.Since(runStart)
 		if err != nil {
 			var exitErr *exec.ExitError
 			switch {
 			case errors.Is(err, exec.ErrWaitDelay):
-				// WaitDelay expired - process may still be running
-				cleanupErr = ErrProcessTreeCleanupFailed(pid, "WaitDelay expired")
+				// The direct process has exited, but a descendant retained an
+				// output pipe. Preserve its status and clean the saved group.
+				outputIncomplete = true
+				if cmd.ProcessState != nil {
+					if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok {
+						exitStatusKnown = true
+						if ws.Signaled() {
+							exitCode = -int(ws.Signal())
+						} else {
+							exitCode = ws.ExitStatus()
+						}
+					}
+				}
+				cleanupErr = e.cleanupRetainedOutput(pid, req)
+				if cleanupErr == nil {
+					triggerErr = ErrRetainedOutputPipe(err)
+				}
 			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 				// Context terminated while waiting
 				triggerErr = NewExecutionError(
@@ -298,7 +295,6 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 				}
 			}
 		}
-		_ = runDuration // Silence unused warning
 	}
 
 	// Context invariant: if context terminated, ensure correct triggerErr and process tree is dead.
@@ -319,18 +315,23 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 
 	duration := time.Since(start)
 	rootID := e.rootID()
+	reportedExitCode := -1
+	if exitStatusKnown {
+		reportedExitCode = exitCode
+	}
 
 	// Cleanup failure is highest priority - it means a process may still be running
 	if cleanupErr != nil {
 		cleanupErr.RootExecutionID = rootID
 		cleanupErr.Command = req.CommandLine()
 		return &Result{
-			ExitCode:            -1,
+			ExitCode:            reportedExitCode,
 			Duration:            duration,
 			QueueDuration:       queueDuration,
 			Stdout:              outputBuf.Stdout(),
 			Stderr:              outputBuf.Stderr(),
 			OutputTruncated:     outputBuf.Truncated(),
+			OutputIncomplete:    outputIncomplete,
 			OutputBytesObserved: outputBuf.BytesObserved(),
 			OutputBytesRetained: outputBuf.BytesRetained(),
 			OutputLimit:         outputCap,
@@ -349,12 +350,13 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 		triggerErr.RootExecutionID = rootID
 		triggerErr.Command = req.CommandLine()
 		return &Result{
-			ExitCode:            -1,
+			ExitCode:            reportedExitCode,
 			Duration:            duration,
 			QueueDuration:       queueDuration,
 			Stdout:              outputBuf.Stdout(),
 			Stderr:              outputBuf.Stderr(),
 			OutputTruncated:     outputBuf.Truncated(),
+			OutputIncomplete:    outputIncomplete,
 			OutputBytesObserved: outputBuf.BytesObserved(),
 			OutputBytesRetained: outputBuf.BytesRetained(),
 			OutputLimit:         outputCap,
@@ -369,30 +371,9 @@ func (e *Executor) Execute(ctx context.Context, req *Request) *Result {
 		Stdout:              outputBuf.Stdout(),
 		Stderr:              outputBuf.Stderr(),
 		OutputTruncated:     outputBuf.Truncated(),
+		OutputIncomplete:    outputIncomplete,
 		OutputBytesObserved: outputBuf.BytesObserved(),
 		OutputBytesRetained: outputBuf.BytesRetained(),
 		OutputLimit:         outputCap,
 	}
-}
-
-// ExecuteSimple is a convenience method for simple execution without context.
-func (e *Executor) ExecuteSimple(req *Request) *Result {
-	return e.Execute(context.Background(), req)
-}
-
-// Stats returns current executor statistics.
-func (e *Executor) Stats() (starts, active int64) {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	return int64(e.starts), int64(e.sem.Count())
-}
-
-// Close releases all resources.
-func (e *Executor) Close() error {
-	return nil
-}
-
-// WaitForCompletion waits for all pending executions to complete.
-func (e *Executor) WaitForCompletion(ctx context.Context) error {
-	return nil
 }
