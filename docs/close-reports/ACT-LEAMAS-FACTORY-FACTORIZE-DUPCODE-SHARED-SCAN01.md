@@ -2,8 +2,18 @@
 
 ## Status
 
-**CLOSED** — production-pass, gate-bound, performance-measured, forward
-evidence committed.
+**CLOSED — CORRECTION01** — production-pass, gate-bound, performance-
+measured, forward evidence committed, evidence patch hygiene verified.
+
+This close report consists of two forward-only commits:
+
+1. The original close documented the implementation, gates, performance
+   measurement, and forward digest.
+2. CORRECTION01 added a testable fail-closed replacement helper,
+   replaced the false test-name claims with the real test names,
+   corrected the performance attribution wording, normalised the
+   forward digest to remove trailing whitespace, and reconciled the
+   close identity chain with the published tag.
 
 ## Intent
 
@@ -28,8 +38,8 @@ baseline plus a separate stale-baseline scenario.
 | tested_tree_oid | 3391c32f3d5c92e2801d0f7078b102b562373e80 |
 | evidence_commit_oid | 3ab82c4105367ee2329559345f978fcea69b3913 |
 | evidence_tree_oid | 3391c32f3d5c92e2801d0f7078b102b562373e80 |
-| close_commit_oid | ca0f35de8ed20b5659d441743efdb7cbba6df742 |
-| close_tree_oid | bc85d241b49cda37671b906693396938685c4631 |
+| close_commit_oid | e2552a3e4066ae80975180aa7fdf45c41d4d5324 |
+| close_tree_oid | 2c3ea74339e23f200d5493ac938278b52a5af86e |
 
 The previous `66107fe9...` / `93bbce78...` identities recorded in the
 pre-existing close report were the predecessor of the current
@@ -102,25 +112,32 @@ Test: `TestDupcodeSharedProviderRejectsConfigurationMismatch`
 
 **Result: PASS** — all mismatches correctly rejected.
 
-### 5. Fail-Closed Replacement
+### 5. Fail-Closed Replacement (CORRECTION01)
 
-Test: `TestFactorizeRegistryWiringRejectsPartialReplacement`
+Tests: `TestReplaceDupcodeVerifierRuns_BothReplaced`,
+`TestReplaceDupcodeVerifierRuns_MissingDupcode`,
+`TestReplaceDupcodeVerifierRuns_MissingBaseline`,
+`TestReplaceDupcodeVerifierRuns_MissingBoth`,
+`TestReplaceDupcodeVerifierRuns_EmptyRegistry`
 
-**Result: PASS** — replacement fails closed unless both
-`dupcode` and `dupcode-baseline` verifiers are present.
+**Result: PASS** — `replaceDupcodeVerifierRuns` is the testable unit
+extracted from `factorizeVerifiersWithDupcodeAnalyzer`. The helper
+returns an error and no partial mutation is observable when either
+registry entry is missing.
 
 ### 6. Clean Baseline Scenario
 
-Test: `TestFactorizeRegistryWiringWithEmptyCleanBaseline`
+Test: `TestFactorizeRegistryWiringWithInjectedAnalyzer` (clean-case branch)
 
-**Result: PASS** — valid empty baseline with `nil` findings is accepted.
+**Result: PASS** — a valid empty baseline with `nil` findings is
+accepted; the analyzer returns no findings and `callCount` stays at 1.
 
 ### 7. Stale Baseline Scenario
 
 Test: `TestFactorizeRegistryWiringWithStaleBaseline`
 
 **Result: PASS** — stale baseline (64-char hex fingerprint mismatch) is
-correctly classified.
+correctly classified and produces a `dupcode_baseline_drift` finding.
 
 ## Baseline Artifact Validation Tests
 
@@ -146,14 +163,17 @@ correctly classified.
 | `TestCheckBaselineDriftFromReport_DeterministicOutput` | PASS |
 | `TestCheckBaselineDriftFromReport_RootAwarePath` | PASS |
 
-## Registry Wiring Tests
+## Registry Wiring Tests (CORRECTION01)
 
 | Test | Status |
 |------|--------|
 | `TestFactorizeRegistryWiringWithInjectedAnalyzer` | PASS |
-| `TestFactorizeRegistryWiringRejectsPartialReplacement` | PASS |
-| `TestFactorizeRegistryWiringWithEmptyCleanBaseline` | PASS |
 | `TestFactorizeRegistryWiringWithStaleBaseline` | PASS |
+| `TestReplaceDupcodeVerifierRuns_BothReplaced` | PASS |
+| `TestReplaceDupcodeVerifierRuns_MissingDupcode` | PASS |
+| `TestReplaceDupcodeVerifierRuns_MissingBaseline` | PASS |
+| `TestReplaceDupcodeVerifierRuns_MissingBoth` | PASS |
+| `TestReplaceDupcodeVerifierRuns_EmptyRegistry` | PASS |
 
 ## Gate Verification
 
@@ -183,17 +203,20 @@ Pre-change measurements were taken from
 on `0d61bcb` (commit 0d61bcb, subject `feat(test): add opt-in factorize
 measurement support`).
 
-Attribution limits: the pre-change measurement used a different
-canonical state (the SHARED-SCAN01 baseline is `256a5a0`, the
-project-wide baseline reference is `0d61bcb`). The 230.50s for
-`dupcode-baseline` is reduced to 0.00s because the shared analyzer is
-memoized: the baseline verifier reads the cached analysis from the
-already-completed `dupcode` execution. Reduction in the total
-wall-clock is bounded by the larger of the two pre-change verifier
-durations, which is `max(229.89, 230.50) = 230.50s`. This ACT observes
-`273.20s` of total reduction, exceeding the lower bound by 42.70s,
-which is consistent with the additional verifier cost savings observed
-when the two heavy verifiers no longer compete for cache contention.
+Attribution (CORRECTION01 wording):
+
+* **Observed total reduction:** −273.20s / −59.1% (462.14s → 188.94s).
+* **Directly explained by removed duplicate scan:** approximately
+  230.50s. The `dupcode-baseline` verifier previously ran an
+  independent whole-repository analyzer; post-change it reads the
+  memoized analysis from the `dupcode` execution, so its verifier
+  cost drops to 0.00s.
+* **Remaining observed difference:** 42.70s. Attribution is
+  *unavailable* because the baseline and tested states are not
+  matched: the pre-change measurements were captured on a different
+  canonical state (`0d61bcb` vs the SHARED-SCAN01 baseline `256a5a0`).
+  The 42.70s residual is consistent with reduced cache contention but
+  is not attributed to any specific mechanism by this ACT.
 
 ## Commands Run
 
@@ -284,6 +307,16 @@ final immutable evidence:
 
 ## Annotated Tag
 
-After the forward evidence-correction commit, an annotated tag
-`act/leamas-factory-factorize-dupcode-shared-scan01` will be created
-pointing at the final close commit.
+The annotated tag `act/leamas-factory-factorize-dupcode-shared-scan01`
+is published at:
+
+```text
+tag object = 8c48e87268984aaddde4830fdfb347901ec24b95
+tag target = e2552a3e4066ae80975180aa7fdf45c41d4d5324 (close_commit_oid)
+tag target tree = 2c3ea74339e23f200d5493ac938278b52a5af86e (close_tree_oid)
+```
+
+The tag was published together with the original close; it is NOT
+moved by CORRECTION01. CORRECTION01 publishes a separate annotated
+tag `act/leamas-factory-factorize-dupcode-shared-scan01-correction01`
+pointing at the CORRECTION01 close commit (the new HEAD).

@@ -131,15 +131,29 @@ func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer
 
 	// Derive from AllVerifiers and only replace the Run functions for dupcode verifiers
 	verifiers := AllVerifiers()
+	return replaceDupcodeVerifierRuns(verifiers, sharedDupcodeVerifier, sharedDupcodeBaselineVerifier)
+}
+
+// replaceDupcodeVerifierRuns replaces the Run functions of the dupcode and
+// dupcode-baseline entries in the provided registry. The replacement is
+// fail-closed: if either entry is missing the function returns an error
+// and no partial mutation is observable. The function is pure with respect
+// to its inputs and is therefore the testable unit for the fail-closed
+// registry replacement invariant.
+func replaceDupcodeVerifierRuns(
+	verifiers []Verifier,
+	dupcodeRun func(string) []checks.Finding,
+	baselineRun func(string) []checks.Finding,
+) ([]Verifier, error) {
 	replacedDupcode := false
 	replacedBaseline := false
 	for i := range verifiers {
 		switch verifiers[i].Name {
 		case "dupcode":
-			verifiers[i].Run = sharedDupcodeVerifier
+			verifiers[i].Run = dupcodeRun
 			replacedDupcode = true
 		case "dupcode-baseline":
-			verifiers[i].Run = sharedDupcodeBaselineVerifier
+			verifiers[i].Run = baselineRun
 			replacedBaseline = true
 		}
 	}

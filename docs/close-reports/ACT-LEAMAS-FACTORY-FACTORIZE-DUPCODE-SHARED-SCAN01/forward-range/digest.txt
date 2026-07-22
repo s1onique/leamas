@@ -269,20 +269,20 @@ index e984592..7d0ed40 100644
 --- a/.clinerules/leamas.md
 +++ b/.clinerules/leamas.md
 @@ -30,7 +30,9 @@ Leamas uses Factory discipline. Doctrine lives under `docs/doctrine/`.
- 
+
  ## Verification
- 
+
 -During ordinary implementation and correction loops, run `make factorize` and `make gate-fast`.
 +During ordinary implementation and correction loops, run `CGO_ENABLED=0 make gate-fast`.
 +
 +When changing dupcode-related code, also run `CGO_ENABLED=0 make gate-dupcode`.
- 
+
  Do not run `make gate` as a routine local feedback command.
- 
+
 @@ -45,6 +47,18 @@ evidence, using:
  A refusal from `make gate` is not a PASS and must never be reported as
  successful verification.
- 
+
 +**Temporary Policy (ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01):**
 +
 +```text
@@ -296,7 +296,7 @@ index e984592..7d0ed40 100644
 +Canonical CI or release workflows may continue to invoke `make factorize`.
 +
  ## Git Safety
- 
+
  Do not force-push. Prefer forward corrective commits.
 
 === AGENTS.md ===
@@ -315,18 +315,18 @@ index 206cb73..5b87cc5 100644
 +++ b/AGENTS.md
 @@ -34,8 +34,7 @@ Before changing files, read:
  Routine implementation loop:
- 
+
  ```bash
 -make factorize
 -make gate-fast
 +CGO_ENABLED=0 make gate-fast
  ```
- 
+
  When Go code exists or changes, also run:
 @@ -46,6 +45,15 @@ go vet ./...
  CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
  ```
- 
+
 +When an ACT changes any of the following, also run `make gate-dupcode`:
 +
 +```text
@@ -337,18 +337,18 @@ index 206cb73..5b87cc5 100644
 +```
 +
  Before closing an ACT (canonical closure):
- 
+
  Outside an editor context, run:
 @@ -58,12 +66,23 @@ make gate
  Inside Codium/VS Code/Cline terminal contexts, use the explicit override:
- 
+
  ```bash
 -make factorize
  LEAMAS_ALLOW_FULL_GATE=1 make gate
  ```
- 
+
  The explicit override is required because `make gate` is refused in editor terminal contexts to prevent accidental expensive canonical gate execution during interactive development loops.
- 
+
 +**Temporary Policy (ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01):**
 +
 +```text
@@ -362,7 +362,7 @@ index 206cb73..5b87cc5 100644
 +Canonical CI or release workflows may continue to invoke `make factorize`.
 +
  ## Verifiers Are Go
- 
+
  All verifiers must be implemented in Go. Bash verifier scripts are forbidden.
 
 === docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01.md ===
@@ -550,12 +550,12 @@ index 9d7759e..75c83fc 100644
 +++ b/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01.md
 @@ -123,7 +123,7 @@ CGO_ENABLED=0 go build -buildvcs=true -trimpath -o /tmp/leamas-gate-summary-v2-d
  ## Gate-Fast Results
- 
+
  **CGO_ENABLED=0 make gate-fast**: PASS
 -- All stages: PASS (agent-context, docs, doctrine, doctrine-agent-contracts, domain-boundaries, exec-gate, executable-contract-first, forbidden-patterns, git-hooks, language, llm-friendly, long-test-policy, static-binary, tooling-boundaries)
 +All stages: PASS (agent-context, docs, doctrine, doctrine-agent-contracts, domain-boundaries, exec-gate, executable-contract-first, forbidden-patterns, git-hooks, language, llm-friendly, long-test-policy, static-binary, tooling-boundaries)
  - Go toolchain: PASS (go mod tidy, gofmt, go vet, go test -short, static build)
- 
+
  **Note**: After fixing the long-line issue in `docs/acts/ACT-LEAMAS-FACTORY-DUPCODE-V4-CALL-SITE-OPTIMIZATION01.md` (separate hygiene fix), gates now pass.
 
 === internal/factory/dupcode/baseline.go ===
@@ -575,7 +575,7 @@ index 08f139b..c813b3e 100644
 @@ -99,8 +99,10 @@ func (e *ErrInvalidBaseline) Unwrap() error {
  	return e.Reason
  }
- 
+
 -// LoadBaseline loads a baseline from a JSON file.
 -func LoadBaseline(path string) (Baseline, error) {
 +// decodeBaselineArtifact reads and decodes a baseline JSON file without policy validation.
@@ -588,7 +588,7 @@ index 08f139b..c813b3e 100644
 @@ -111,32 +113,61 @@ func LoadBaseline(path string) (Baseline, error) {
  		return Baseline{}, &ErrInvalidBaseline{fmt.Errorf("parse error: %w", err)}
  	}
- 
+
 +	return baseline, nil
 +}
 +
@@ -601,7 +601,7 @@ index 08f139b..c813b3e 100644
 +			Reason: fmt.Errorf("unsupported schema version: %d", baseline.SchemaVersion),
 +		}
  	}
- 
+
 -	// Validate algorithm version
  	if baseline.AlgorithmVersion == 0 {
 -		return Baseline{}, &ErrInvalidBaseline{
@@ -624,7 +624,7 @@ index 08f139b..c813b3e 100644
 +			),
  		}
  	}
- 
+
 -	// Validate thresholds match policy
  	if baseline.Thresholds.MinLines != PolicyMinLines || baseline.Thresholds.MinTokens != PolicyMinTokens {
 -		return Baseline{}, &ErrInvalidBaseline{
@@ -638,7 +638,7 @@ index 08f139b..c813b3e 100644
 +			),
  		}
  	}
- 
+
 +	return nil
 +}
 +
@@ -657,7 +657,7 @@ index 08f139b..c813b3e 100644
 +
  	return baseline, nil
  }
- 
+
 
 === internal/factory/dupcode/baseline_artifact_validation_content_test.go ===
 
@@ -1400,7 +1400,7 @@ index 34c63c1..db027be 100644
 +++ b/internal/factory/dupcode/baseline_validate.go
 @@ -2,15 +2,27 @@
  package dupcode
- 
+
  import (
 +	"errors"
  	"fmt"
@@ -1412,10 +1412,10 @@ index 34c63c1..db027be 100644
 +
 +	"github.com/s1onique/leamas/internal/factory/checks"
  )
- 
+
  // sha256HexRegex matches valid SHA256 hex strings.
  var sha256HexRegex = regexp.MustCompile(`^[a-f0-9]{64}$`)
- 
+
 +// BaselineArtifactValidation contains the results of baseline artifact validation.
 +type BaselineArtifactValidation struct {
 +	Baseline       Baseline
@@ -1429,7 +1429,7 @@ index 34c63c1..db027be 100644
 @@ -95,6 +107,173 @@ func ValidateBaselinePaths(baseline Baseline) []BaselineValidationFinding {
  	return findings
  }
- 
+
 +// ValidateBaselineArtifact performs static validation of the baseline artifact
 +// without scanning the repository. This is used by the factorize path where
 +// shared analysis is used.
@@ -1616,7 +1616,7 @@ index a646c6c..6d060fa 100644
 --- a/internal/factory/dupcode/baseline_verify.go
 +++ b/internal/factory/dupcode/baseline_verify.go
 @@ -3,7 +3,6 @@ package dupcode
- 
+
  import (
  	"fmt"
 -	"os"
@@ -1625,13 +1625,13 @@ index a646c6c..6d060fa 100644
  	"sort"
 @@ -67,127 +66,36 @@ func NormalizeOccurrencePath(root, p string) string {
  }
- 
+
  // VerifyBaseline verifies the baseline artifact against policy requirements.
 +// This composes ValidateBaselineArtifact for static validation and
 +// CheckBaselineDrift for dynamic drift checking.
  func VerifyBaseline(root string, policy BaselinePolicy) ([]checks.Finding, error) {
  	var result []checks.Finding
- 
+
 -	// Separate FS path (absolute/relative to root) from Git path (always repo-relative)
 +	// Compute root-aware FS path for finding paths
  	baselineFSPath := policy.Path
@@ -1639,7 +1639,7 @@ index a646c6c..6d060fa 100644
  	if root != "" && root != "." {
  		baselineFSPath = filepath.Join(root, policy.Path)
  	}
- 
+
 -	// 1. Check baseline presence
 -	if _, err := os.Stat(baselineFSPath); os.IsNotExist(err) {
 -		result = append(result, checks.Finding{
@@ -1677,7 +1677,7 @@ index a646c6c..6d060fa 100644
 -		return result, nil
 +		return result, err
  	}
- 
+
 -	// 4. Validate schema version
 -	if baseline.SchemaVersion != 1 {
 -		result = append(result, checks.Finding{
@@ -1754,7 +1754,7 @@ index a646c6c..6d060fa 100644
 +	if !validation.UsableForDrift {
 +		return result, nil
  	}
- 
+
 -	// 9. Check for drift
 -	driftFindings := CheckBaselineDrift(root, baseline, policy)
 +	// 2. Dynamic drift check: run scanner and compare against committed baseline
@@ -1768,23 +1768,23 @@ index a646c6c..6d060fa 100644
  			Severity: checks.SeverityError,
 @@ -214,11 +122,14 @@ func CheckBaselineTracked(root, baselinePath string) error {
  }
- 
+
  // CheckBaselineDrift checks if the committed baseline is stale compared to current scanner output.
 +// This is a thin wrapper that runs the scanner and delegates to CheckBaselineDriftFromReport
 +// for the actual drift comparison, ensuring a single drift-comparison authority.
  func CheckBaselineDrift(root string, committedBaseline Baseline, policy BaselinePolicy) []BaselineValidationFinding {
  	var findings []BaselineValidationFinding
- 
+
  	// Run current scanner with policy thresholds
  	cfg := DefaultConfig()
 +	cfg.Root = root
  	cfg.MinLines = policy.MinLines
  	cfg.MinTokens = policy.MinTokens
- 
+
 @@ -233,20 +144,8 @@ func CheckBaselineDrift(root string, committedBaseline Baseline, policy Baseline
  		return findings
  	}
- 
+
 -	// Generate a canonical baseline with deterministic timestamp
 -	deterministicBaseline := GenerateCanonicalBaseline(root, currentReport)
 -
@@ -1802,7 +1802,7 @@ index a646c6c..6d060fa 100644
 +	// Delegate drift comparison to the single authority
 +	return CheckBaselineDriftFromReport(root, committedBaseline, currentReport, policy)
  }
- 
+
  // GenerateCanonicalBaseline creates a baseline with a deterministic timestamp for comparison.
 
 === internal/factory/gate/dupcode_shared_config_test.go ===
@@ -3645,7 +3645,7 @@ index f2131bc..c4361c6 100644
 +		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
 +		return 1
 +	}
- 
+
  	// Fail closed if registry has invalid metadata
  	if err := ValidateVerifiers(verifiers); err != nil {
 
@@ -3665,11 +3665,11 @@ index 67d23e7..10744b3 100644
 +++ b/internal/factory/gate/verifiers.go
 @@ -2,6 +2,7 @@
  package gate
- 
+
  import (
 +	"fmt"
  	"path/filepath"
- 
+
  	"github.com/s1onique/leamas/internal/factory/agentcontext"
 @@ -10,6 +11,7 @@ import (
  	"github.com/s1onique/leamas/internal/factory/coverage"
@@ -3681,7 +3681,7 @@ index 67d23e7..10744b3 100644
  	"github.com/s1onique/leamas/internal/factory/githooks"
 @@ -22,6 +24,9 @@ import (
  )
- 
+
  // AllVerifiers returns all Factory policy verifiers (for factorize).
 +// This function uses independent dupcode verifiers and is used for
 +// direct commands like `leamas factory verify dupcode` and `leamas factory verify dupcode-baseline`.
@@ -3692,7 +3692,7 @@ index 67d23e7..10744b3 100644
 @@ -75,6 +80,81 @@ func AllVerifiers() []Verifier {
  	}
  }
- 
+
 +// FactorizeVerifiersWithDupcodeContext returns all Factory policy verifiers for
 +// a factorize invocation. The dupcode and dupcode-baseline verifiers share a single
 +// analysis context so only one repository scan is performed.
@@ -3774,4 +3774,3 @@ index 67d23e7..10744b3 100644
 
 ## Workflow anchors
 No workflow anchors configured.
-

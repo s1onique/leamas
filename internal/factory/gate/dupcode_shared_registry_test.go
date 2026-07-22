@@ -6,10 +6,128 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
 )
+
+// TestReplaceDupcodeVerifierRuns_BothReplaced verifies that the helper
+// succeeds when both dupcode and dupcode-baseline entries are present in
+// the registry and both Run functions are replaced.
+func TestReplaceDupcodeVerifierRuns_BothReplaced(t *testing.T) {
+	verifiers := AllVerifiers()
+	orig := make([]Verifier, len(verifiers))
+	copy(orig, verifiers)
+
+	dupcodeRun := func(string) []checks.Finding { return nil }
+	baselineRun := func(string) []checks.Finding { return nil }
+
+	out, err := replaceDupcodeVerifierRuns(verifiers, dupcodeRun, baselineRun)
+	if err != nil {
+		t.Fatalf("replaceDupcodeVerifierRuns failed: %v", err)
+	}
+	if len(out) != len(orig) {
+		t.Fatalf("verifier count = %d, want %d", len(out), len(orig))
+	}
+
+	// Both Run functions must be replaced (compare function pointers via string).
+	for _, v := range out {
+		switch v.Name {
+		case "dupcode":
+			if v.Run == nil {
+				t.Fatal("dupcode Run is nil after replacement")
+			}
+		case "dupcode-baseline":
+			if v.Run == nil {
+				t.Fatal("dupcode-baseline Run is nil after replacement")
+			}
+		}
+	}
+}
+
+// TestReplaceDupcodeVerifierRuns_MissingDupcode verifies fail-closed
+// behaviour when the dupcode entry is absent from the registry.
+func TestReplaceDupcodeVerifierRuns_MissingDupcode(t *testing.T) {
+	verifiers := []Verifier{
+		{Name: "dupcode-baseline", Run: func(string) []checks.Finding { return nil }},
+		{Name: "agent-context", Run: func(string) []checks.Finding { return nil }},
+	}
+
+	dupcodeRun := func(string) []checks.Finding { return nil }
+	baselineRun := func(string) []checks.Finding { return nil }
+
+	out, err := replaceDupcodeVerifierRuns(verifiers, dupcodeRun, baselineRun)
+	if err == nil {
+		t.Fatal("expected fail-closed error when dupcode is missing, got nil")
+	}
+	if out != nil {
+		t.Errorf("expected nil registry on failure, got %d entries", len(out))
+	}
+	if !strings.Contains(err.Error(), "dupcode") {
+		t.Errorf("error message %q should mention dupcode", err.Error())
+	}
+}
+
+// TestReplaceDupcodeVerifierRuns_MissingBaseline verifies fail-closed
+// behaviour when the dupcode-baseline entry is absent from the registry.
+func TestReplaceDupcodeVerifierRuns_MissingBaseline(t *testing.T) {
+	verifiers := []Verifier{
+		{Name: "dupcode", Run: func(string) []checks.Finding { return nil }},
+		{Name: "agent-context", Run: func(string) []checks.Finding { return nil }},
+	}
+
+	dupcodeRun := func(string) []checks.Finding { return nil }
+	baselineRun := func(string) []checks.Finding { return nil }
+
+	out, err := replaceDupcodeVerifierRuns(verifiers, dupcodeRun, baselineRun)
+	if err == nil {
+		t.Fatal("expected fail-closed error when dupcode-baseline is missing, got nil")
+	}
+	if out != nil {
+		t.Errorf("expected nil registry on failure, got %d entries", len(out))
+	}
+	if !strings.Contains(err.Error(), "dupcode-baseline") {
+		t.Errorf("error message %q should mention dupcode-baseline", err.Error())
+	}
+}
+
+// TestReplaceDupcodeVerifierRuns_MissingBoth verifies fail-closed
+// behaviour when both entries are absent from the registry.
+func TestReplaceDupcodeVerifierRuns_MissingBoth(t *testing.T) {
+	verifiers := []Verifier{
+		{Name: "agent-context", Run: func(string) []checks.Finding { return nil }},
+	}
+
+	dupcodeRun := func(string) []checks.Finding { return nil }
+	baselineRun := func(string) []checks.Finding { return nil }
+
+	out, err := replaceDupcodeVerifierRuns(verifiers, dupcodeRun, baselineRun)
+	if err == nil {
+		t.Fatal("expected fail-closed error when both entries are missing, got nil")
+	}
+	if out != nil {
+		t.Errorf("expected nil registry on failure, got %d entries", len(out))
+	}
+}
+
+// TestReplaceDupcodeVerifierRuns_EmptyRegistry verifies fail-closed
+// behaviour when the registry is empty.
+func TestReplaceDupcodeVerifierRuns_EmptyRegistry(t *testing.T) {
+	verifiers := []Verifier{}
+
+	dupcodeRun := func(string) []checks.Finding { return nil }
+	baselineRun := func(string) []checks.Finding { return nil }
+
+	out, err := replaceDupcodeVerifierRuns(verifiers, dupcodeRun, baselineRun)
+	if err == nil {
+		t.Fatal("expected fail-closed error on empty registry, got nil")
+	}
+	if out != nil {
+		t.Errorf("expected nil registry on failure, got %d entries", len(out))
+	}
+}
 
 // TestFactorizeRegistryWiringWithInjectedAnalyzer verifies that FactorizeVerifiersWithDupcodeContext
 // properly wires the production registry with an injected analyzer, ensuring:
