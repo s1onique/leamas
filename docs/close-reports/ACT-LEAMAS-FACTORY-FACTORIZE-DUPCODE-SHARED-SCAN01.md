@@ -28,8 +28,8 @@ baseline plus a separate stale-baseline scenario.
 | tested_tree_oid | 3391c32f3d5c92e2801d0f7078b102b562373e80 |
 | evidence_commit_oid | 3ab82c4105367ee2329559345f978fcea69b3913 |
 | evidence_tree_oid | 3391c32f3d5c92e2801d0f7078b102b562373e80 |
-| close_commit_oid | 4365cab9c4c843217fbcee2cbe0edb7071662bd4 |
-| close_tree_oid | b0042bde200ea07be398675f6c04635de24386fe |
+| close_commit_oid | eff6eb6add84ed44cba6969644d24e17d2c314e4 |
+| close_tree_oid | 2be6bc765e566d1a1f9091706735290b36e739f1 |
 
 The previous `66107fe9...` / `93bbce78...` identities recorded in the
 pre-existing close report were the predecessor of the current
