@@ -1,0 +1,29 @@
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=present
+schema_version=2
+generated_at=2026-07-19T08:43:26Z
+scope_id=ACT-LEAMAS-FACTORY-DIGEST-GATE-SUMMARY-V2-CONTRACT01
+scope_status=closed
+scope_disposition=contract ACT is closed
+parent_act=ACT-LEAMAS-FACTORY-GATE-SUMMARY-V2-ADOPTION01
+parent_status=open
+parent_disposition=epic in progress; downstream ACTs pending
+parent_root=false
+overall_status=pass
+overall_disposition=all checks passed in this ACT
+execution_head_oid=4bd2c5646f7a4d9c8e1f0123456789abcdef0123
+execution_tree_oid=984aaf36abc12345def67890abcdef0123456789
+subject_tree_oid=abcdef0123456789abcdef0123456789abcdef01
+worktree_clean_before=true
+worktree_clean_after=true
+checks_total=4
+checks_passed=3
+checks_failed=0
+checks_skipped=1
+checks_unavailable=0
+checks:
+  - name=go_test scope=ROOT status=pass duration_ms=12345 exit_code=0 evidence=go test ./...
+  - name=go_vet scope=ROOT status=pass duration_ms=750 exit_code=0 evidence=go vet ./...
+  - name=make_factorize scope=ROOT status=pass duration_ms=9000 exit_code=0 evidence=make factorize
+  - name=make_gate scope=ROOT status=skip duration_ms=0 exit_code= evidence=make gate

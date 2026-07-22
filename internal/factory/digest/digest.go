@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/version"
 )
 
@@ -216,19 +215,8 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
 	// GATE_SUMMARY section - compute before writing to include in evidence hashes
-	gateSummaryPath := filepath.Join(repoRoot, ".factory", "gate-summary.json")
-	var gateSummarySection string
-	var gateSummaryErr error
-	if gate.GateSummaryExists(gateSummaryPath) {
-		if gs, err := gate.ReadGateSummary(gateSummaryPath); err == nil {
-			gateSummarySection = gate.RenderGateSummary(gs, nil)
-		} else {
-			gateSummaryErr = err
-			gateSummarySection = gate.RenderGateSummary(nil, err)
-		}
-	} else {
-		gateSummarySection = gate.RenderGateSummary(nil, nil)
-	}
+	// Use the shared adapter for all digest modes
+	gateSummarySection := buildGateSummarySection(repoRoot)
 
 	// Compute evidence hashes (includes PUBLIC_SURFACE_DELTA, DEPENDENCY_DELTA, and GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(
@@ -258,8 +246,6 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 
 	// Write Changed files and Diffs sections
 	sb.WriteString(fileEvidenceSection)
-
-	_ = gateSummaryErr // suppress unused warning
 
 	sb.WriteString("\n## Workflow anchors\n")
 

@@ -1,0 +1,27 @@
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=present
+schema_version=2
+generated_at=2026-07-19T08:43:26.649Z
+scope_id=ACT-CLINEMM-FORK-BASELINE01-CORRECTION21-MICROC3
+scope_status=closed
+scope_disposition=µC-3 reader authority closed
+parent_act=ACT-CLINEMM-FORK-BASELINE01-CORRECTION21
+parent_status=open
+parent_disposition=production bundle absent
+parent_root=false
+overall_status=fail
+overall_disposition=child closed; parent open
+execution_head_oid=4bd2c5646f7a4d9c8e1f0123456789abcdef0123
+execution_tree_oid=984aaf36abc12345def67890abcdef0123456789
+subject_tree_oid=fedcba9876543210fedcba9876543210fedcba98
+worktree_clean_before=true
+worktree_clean_after=true
+checks_total=2
+checks_passed=1
+checks_failed=1
+checks_skipped=0
+checks_unavailable=0
+checks:
+  - name=parent_production_bundle scope=ACT-CLINEMM-FORK-BASELINE01-CORRECTION21 status=fail duration_ms=0 exit_code= evidence=parent production bundle
+  - name=strict_typecheck scope=MICROC3 status=pass duration_ms=1287 exit_code=0 evidence=factory/scripts/tsconfig.json

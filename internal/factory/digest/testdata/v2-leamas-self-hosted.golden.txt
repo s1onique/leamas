@@ -1,0 +1,27 @@
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=present
+schema_version=2
+generated_at=2026-07-19T10:00:00Z
+scope_id=ACT-LEAMAS-FACTORY-GATE-SUMMARY-V2-CONTRACT01
+scope_status=closed
+scope_disposition=leamas self-hosted v2 sample for dogfood proof
+parent_act=ACT-LEAMAS-FACTORY-GATE-SUMMARY-V2-ADOPTION01
+parent_status=open
+parent_disposition=epic in progress; CONFORMANCE01 not yet closed
+parent_root=false
+overall_status=pass
+overall_disposition=all self-hosted checks passed
+execution_head_oid=1111111111111111111111111111111111111111
+execution_tree_oid=2222222222222222222222222222222222222222
+subject_tree_oid=3333333333333333333333333333333333333333
+worktree_clean_before=true
+worktree_clean_after=true
+checks_total=2
+checks_passed=2
+checks_failed=0
+checks_skipped=0
+checks_unavailable=0
+checks:
+  - name=llm_friendly_gate scope=ROOT status=pass duration_ms=250 exit_code=0 evidence=leamas factory verify llm-friendly
+  - name=schema_validation scope=ROOT status=pass duration_ms=5 exit_code=0 evidence=embedded Draft 2020-12 schemas

@@ -4,11 +4,9 @@ package digest
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/version"
 )
 
@@ -84,19 +82,8 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 
 	fileEvidenceSection := RenderRangeFileEvidence(repoRoot, files, resolved.Range)
 
-	gateSummaryPath := filepath.Join(repoRoot, ".factory", "gate-summary.json")
-	var gateSummarySection string
-	var gateSummaryErr error
-	if gate.GateSummaryExists(gateSummaryPath) {
-		if gs, err := gate.ReadGateSummary(gateSummaryPath); err == nil {
-			gateSummarySection = gate.RenderGateSummary(gs, nil)
-		} else {
-			gateSummaryErr = err
-			gateSummarySection = gate.RenderGateSummary(nil, err)
-		}
-	} else {
-		gateSummarySection = gate.RenderGateSummary(nil, nil)
-	}
+	// GATE_SUMMARY section - use the shared adapter for all digest modes
+	gateSummarySection := buildGateSummarySection(repoRoot)
 
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection, statsSection, reviewMapSection, riskSignalsSection,
@@ -110,8 +97,6 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	sb.WriteString("\n")
 	sb.WriteString(dependencyDeltaSection)
 	sb.WriteString(fileEvidenceSection)
-
-	_ = gateSummaryErr
 
 	sb.WriteString("\n## Workflow anchors\n")
 
@@ -189,19 +174,8 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
-	gateSummaryPath := filepath.Join(repoRoot, ".factory", "gate-summary.json")
-	var gateSummarySection string
-	var gateSummaryErr error
-	if gate.GateSummaryExists(gateSummaryPath) {
-		if gs, err := gate.ReadGateSummary(gateSummaryPath); err == nil {
-			gateSummarySection = gate.RenderGateSummary(gs, nil)
-		} else {
-			gateSummaryErr = err
-			gateSummarySection = gate.RenderGateSummary(nil, err)
-		}
-	} else {
-		gateSummarySection = gate.RenderGateSummary(nil, nil)
-	}
+	// GATE_SUMMARY section - use the shared adapter for all digest modes
+	gateSummarySection := buildGateSummarySection(repoRoot)
 
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection, statsSection, reviewMapSection, riskSignalsSection,
@@ -215,8 +189,6 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	sb.WriteString("\n")
 	sb.WriteString(dependencyDeltaSection)
 	sb.WriteString(fileEvidenceSection)
-
-	_ = gateSummaryErr
 
 	sb.WriteString("\n## Workflow anchors\n")
 

@@ -1,0 +1,13 @@
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=present
+schema_version=1
+generated_at=2026-07-19T08:43:26Z
+overall_status=pass
+checks_total=1
+checks_passed=1
+checks_failed=0
+checks_skipped=0
+checks_unavailable=0
+checks:
+  - name=gate status=pass evidence=gate

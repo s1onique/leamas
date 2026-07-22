@@ -1,0 +1,26 @@
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=present
+schema_version=2
+generated_at=2026-07-19T08:43:26Z
+scope_id=ACT-DEMO-ROOT
+scope_status=closed
+scope_disposition=minimal root scope example
+parent_act=
+parent_status=closed
+parent_disposition=root scope; no parent
+parent_root=true
+overall_status=pass
+overall_disposition=all checks passed
+execution_head_oid=0123456789abcdef0123456789abcdef01234567
+execution_tree_oid=0123456789abcdef0123456789abcdef01234567
+subject_tree_oid=0123456789abcdef0123456789abcdef01234567
+worktree_clean_before=true
+worktree_clean_after=true
+checks_total=1
+checks_passed=1
+checks_failed=0
+checks_skipped=0
+checks_unavailable=0
+checks:
+  - name=smoke scope=ROOT status=pass duration_ms=42 exit_code=0 evidence=smoke.sh
