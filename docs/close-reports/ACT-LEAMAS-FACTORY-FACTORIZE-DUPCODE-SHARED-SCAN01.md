@@ -2,10 +2,12 @@
 
 ## Status
 
-**CLOSED — CORRECTION01** — production-pass, gate-bound, performance-
-measured, forward evidence committed, evidence patch hygiene verified.
+**CLOSED — CORRECTION02** — production-pass, gate-bound, performance-
+measured, forward evidence committed, evidence patch hygiene verified,
+failure-atomic replacement confirmed.
 
-This close report consists of two forward-only commits:
+This close report consists of two forward-only commits and one
+forward-only correction chain:
 
 1. The original close documented the implementation, gates, performance
    measurement, and forward digest.
@@ -14,6 +16,10 @@ This close report consists of two forward-only commits:
    corrected the performance attribution wording, normalised the
    forward digest to remove trailing whitespace, and reconciled the
    close identity chain with the published tag.
+3. CORRECTION02 made the fail-closed replacement helper
+   failure-atomic (no partial mutation of the caller's input slice)
+   and strengthened the tests with sentinel functions and
+   input-unchanged assertions.
 
 ## Intent
 
@@ -112,18 +118,22 @@ Test: `TestDupcodeSharedProviderRejectsConfigurationMismatch`
 
 **Result: PASS** — all mismatches correctly rejected.
 
-### 5. Fail-Closed Replacement (CORRECTION01)
+### 5. Fail-Closed Replacement (CORRECTION01 + CORRECTION02)
 
 Tests: `TestReplaceDupcodeVerifierRuns_BothReplaced`,
 `TestReplaceDupcodeVerifierRuns_MissingDupcode`,
 `TestReplaceDupcodeVerifierRuns_MissingBaseline`,
 `TestReplaceDupcodeVerifierRuns_MissingBoth`,
-`TestReplaceDupcodeVerifierRuns_EmptyRegistry`
+`TestReplaceDupcodeVerifierRuns_EmptyRegistry`,
+`TestReplaceDupcodeVerifierRuns_InputUnchangedOnSuccess`
 
 **Result: PASS** — `replaceDupcodeVerifierRuns` is the testable unit
-extracted from `factorizeVerifiersWithDupcodeAnalyzer`. The helper
-returns an error and no partial mutation is observable when either
-registry entry is missing.
+extracted from `factorizeVerifiersWithDupcodeAnalyzer`. CORRECTION02
+made the helper failure-atomic: the input slice is copied before
+mutation, and the caller observes neither partial mutation on failure
+nor aliasing on success. Tests use sentinel functions and verify
+the caller's input slice is unchanged on both success and failure
+paths.
 
 ### 6. Clean Baseline Scenario
 
@@ -163,7 +173,7 @@ correctly classified and produces a `dupcode_baseline_drift` finding.
 | `TestCheckBaselineDriftFromReport_DeterministicOutput` | PASS |
 | `TestCheckBaselineDriftFromReport_RootAwarePath` | PASS |
 
-## Registry Wiring Tests (CORRECTION01)
+## Registry Wiring Tests (CORRECTION01 + CORRECTION02)
 
 | Test | Status |
 |------|--------|
@@ -174,6 +184,7 @@ correctly classified and produces a `dupcode_baseline_drift` finding.
 | `TestReplaceDupcodeVerifierRuns_MissingBaseline` | PASS |
 | `TestReplaceDupcodeVerifierRuns_MissingBoth` | PASS |
 | `TestReplaceDupcodeVerifierRuns_EmptyRegistry` | PASS |
+| `TestReplaceDupcodeVerifierRuns_InputUnchangedOnSuccess` | PASS |
 
 ## Gate Verification
 
@@ -318,7 +329,11 @@ tag target = e2552a3e4066ae80975180aa7fdf45c41d4d5324 (close_commit_oid)
 tag target tree = 2c3ea74339e23f200d5493ac938278b52a5af86e (close_tree_oid)
 ```
 
-The tag was published together with the original close; it is NOT
-moved by CORRECTION01. CORRECTION01 publishes a separate annotated
-tag `act/leamas-factory-factorize-dupcode-shared-scan01-correction01`
-pointing at the CORRECTION01 close commit (the new HEAD).
+The original tag is preserved as the canonical close_commit. Two
+forward correction chains publish separate annotated tags without
+moving the original tag:
+
+* `act/leamas-factory-factorize-dupcode-shared-scan01-correction01`
+  points at the CORRECTION01 close commit.
+* `act/leamas-factory-factorize-dupcode-shared-scan01-correction02`
+  points at the CORRECTION02 close commit (the new HEAD).

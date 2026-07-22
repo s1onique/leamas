@@ -136,37 +136,41 @@ func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer
 
 // replaceDupcodeVerifierRuns replaces the Run functions of the dupcode and
 // dupcode-baseline entries in the provided registry. The replacement is
-// fail-closed: if either entry is missing the function returns an error
-// and no partial mutation is observable. The function is pure with respect
-// to its inputs and is therefore the testable unit for the fail-closed
-// registry replacement invariant.
+// failure-atomic: if either entry is missing the function returns an error
+// and the caller's input slice is not mutated. The function is pure with
+// respect to its inputs and is therefore the testable unit for the
+// fail-closed registry replacement invariant.
 func replaceDupcodeVerifierRuns(
 	verifiers []Verifier,
 	dupcodeRun func(string) []checks.Finding,
 	baselineRun func(string) []checks.Finding,
 ) ([]Verifier, error) {
-	replacedDupcode := false
-	replacedBaseline := false
+	dupcodeIndex := -1
+	baselineIndex := -1
+
 	for i := range verifiers {
 		switch verifiers[i].Name {
 		case "dupcode":
-			verifiers[i].Run = dupcodeRun
-			replacedDupcode = true
+			dupcodeIndex = i
 		case "dupcode-baseline":
-			verifiers[i].Run = baselineRun
-			replacedBaseline = true
+			baselineIndex = i
 		}
 	}
 
-	// Fail-closed: both registry entries must be replaced
-	if !replacedDupcode || !replacedBaseline {
+	if dupcodeIndex < 0 || baselineIndex < 0 {
 		return nil, fmt.Errorf(
 			"shared dupcode registry replacement incomplete: dupcode=%t dupcode-baseline=%t",
-			replacedDupcode, replacedBaseline,
+			dupcodeIndex >= 0,
+			baselineIndex >= 0,
 		)
 	}
 
-	return verifiers, nil
+	// Failure-atomic: copy the input slice before mutating so the
+	// caller's input slice is never observable as partially replaced.
+	out := append([]Verifier(nil), verifiers...)
+	out[dupcodeIndex].Run = dupcodeRun
+	out[baselineIndex].Run = baselineRun
+	return out, nil
 }
 
 func llmFriendlyVerifier(root string) []checks.Finding {
