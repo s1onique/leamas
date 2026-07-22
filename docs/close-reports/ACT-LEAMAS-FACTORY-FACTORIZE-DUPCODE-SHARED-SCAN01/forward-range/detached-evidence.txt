@@ -1,0 +1,278 @@
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
+LEAMAS_VERSION: 0.1.0+dev.3ab82c410536.20260722T143144Z
+LEAMAS_COMMIT: 3ab82c4105367ee2329559345f978fcea69b3913
+LEAMAS_BUILD_TIME: 2026-07-22T14:31:44Z
+DIGEST_MODE: range
+DIGEST_CREATED_AT: 2026-07-22T16:37:08Z
+
+# Targeted digest
+
+Generated at: 2026-07-22T16:37:08Z
+Repo: /home/chistyakov/Projects/leamas
+Mode: range
+Range: 462d1ca~1..HEAD
+
+## CHANGESET_MANIFEST
+M  .clinerules/leamas.md
+M  AGENTS.md
+A  docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01.md
+A  docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt
+M  docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01.md
+M  internal/factory/dupcode/baseline.go
+A  internal/factory/dupcode/baseline_artifact_validation_content_test.go
+A  internal/factory/dupcode/baseline_artifact_validation_test.go
+A  internal/factory/dupcode/baseline_drift_report_test.go
+M  internal/factory/dupcode/baseline_validate.go
+M  internal/factory/dupcode/baseline_verify.go
+A  internal/factory/gate/dupcode_shared_config_test.go
+A  internal/factory/gate/dupcode_shared_integration_test.go
+A  internal/factory/gate/dupcode_shared_isolation_test.go
+A  internal/factory/gate/dupcode_shared_provider.go
+A  internal/factory/gate/dupcode_shared_provider_test.go
+A  internal/factory/gate/dupcode_shared_registry_test.go
+A  internal/factory/gate/dupcode_shared_test_helpers_test.go
+A  internal/factory/gate/dupcode_shared_verifiers.go
+M  internal/factory/gate/gate.go
+M  internal/factory/gate/verifiers.go
+
+## CHANGESET_STATS
+files_changed=21
+added_files=13
+modified_files=8
+deleted_files=0
+type_changed_files=0
+renamed_files=0
+copied_files=0
+unmerged_files=0
+unknown_files=0
+broken_pair_files=0
+untracked_files=0
+binary_files=0
+generated_files=0
+test_files=9
+doc_files=5
+source_files=7
+config_files=0
+
+## REVIEW_MAP
+production:
+  - internal/factory/dupcode/baseline.go
+  - internal/factory/dupcode/baseline_validate.go
+  - internal/factory/dupcode/baseline_verify.go
+  - internal/factory/gate/dupcode_shared_provider.go
+  - internal/factory/gate/dupcode_shared_verifiers.go
+  - internal/factory/gate/gate.go
+  - internal/factory/gate/verifiers.go
+tests:
+  - internal/factory/dupcode/baseline_artifact_validation_content_test.go
+  - internal/factory/dupcode/baseline_artifact_validation_test.go
+  - internal/factory/dupcode/baseline_drift_report_test.go
+  - internal/factory/gate/dupcode_shared_config_test.go
+  - internal/factory/gate/dupcode_shared_integration_test.go
+  - internal/factory/gate/dupcode_shared_isolation_test.go
+  - internal/factory/gate/dupcode_shared_provider_test.go
+  - internal/factory/gate/dupcode_shared_registry_test.go
+  - internal/factory/gate/dupcode_shared_test_helpers_test.go
+docs:
+  - .clinerules/leamas.md
+  - AGENTS.md
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01.md
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt
+  - docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01.md
+config:
+  - none
+generated:
+  - none
+binary:
+  - none
+
+## RISK_SIGNALS
+production_without_tests=false
+tests_without_production=false
+docs_without_code=false
+generated_files_changed=false
+config_files_changed=false
+deleted_files_changed=false
+unmerged_files_present=false
+large_file_changed=false
+large_file_threshold_bytes=1048576
+
+## PATCH_HYGIENE
+git_diff_check=fail
+whitespace_errors=20
+conflict_markers=0
+diagnostic_lines=20
+diagnostics:
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:576: space before tab in indent.
+  - + 	return e.Reason
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:585: space before tab in indent.
+  - + 	data, err := os.ReadFile(path)
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:586: space before tab in indent.
+  - + 	if err != nil {
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:587: space before tab in indent.
+  - + 		return Baseline{}, fmt.Errorf("loading baseline: %w", err)
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:589: space before tab in indent.
+  - + 		return Baseline{}, &ErrInvalidBaseline{fmt.Errorf("parse error: %w", err)}
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:590: space before tab in indent.
+  - + 	}
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:598: space before tab in indent.
+  - + 	if baseline.SchemaVersion != 1 {
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:603: space before tab in indent.
+  - + 	}
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:606: space before tab in indent.
+  - + 	if baseline.AlgorithmVersion == 0 {
+  - docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt:613: space before tab in indent.
+  - + 		}
+## EVIDENCE_HASHES
+hash_algorithm=sha256
+hash_scope=normalized_digest_v3_sections
+changeset_manifest_sha256=ee9f91e854ade727113965d210a7d52729e31a77a3b41c7eb89d586c7b5610ef
+changeset_stats_sha256=b5a08cc7b5b6f4aa79ce180e1a12bfc1bf36a1ca69abf14250551809e460c6ab
+review_map_sha256=75f3ad027786b3dac72eb99169556121563d2404454659a937c151d3ebd31540
+risk_signals_sha256=0ee074e1f63d569dc00f6a4a26bb111399109557e87b6e0fb37cd770dad5708e
+patch_hygiene_sha256=94c35399cfa1475ceada7c3be223991a73cf738e2116735bd1ef8428f18a772f
+public_surface_delta_sha256=362d4a5fc5ae71fc2f7068c90a4e044e2238277a7e7a811b73558ae3778dde92
+dependency_delta_sha256=a79a8c9ddb40b378b8cf5f4b6937504f78528ed2fa6f625af76d026111e9009f
+gate_summary_sha256=11fba7d2ec9e74b72c9ffa449ca325f9642dcad6742c3785aa89006b02dd333a
+file_evidence_sha256=0442235d507fbf777ab86f9fd9eebb795a92b9ca5ade89e92ada3f2807c04c9b
+digest_evidence_sha256=0d64f1caa8a31b841f0104d9887018b4bdf2ef3161995975dcc4f8fb6ccafcd7
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=present
+schema_version=1
+generated_at=2026-07-22T15:20:30Z
+overall_status=pass
+checks_total=3
+checks_passed=2
+checks_failed=0
+checks_skipped=1
+checks_unavailable=0
+checks:
+  - name=dupcode-lane status=pass evidence=dupcode + dupcode-baseline OK at 2026-07-22T15:13:38Z; go test -short ./internal/factory/dupcode/... OK
+  - name=fast-lane status=pass evidence=fast lane passed at 2026-07-22T15:20:08Z
+  - name=long-lane status=skip evidence=not executed in editor context; deferred to non-interactive CI
+## PUBLIC_SURFACE_DELTA
+language=go
+source_status=present
+packages_changed=2
+symbols_added=28
+symbols_removed=0
+symbols_modified=0
+cli_commands_changed=0
+
+packages:
+  - internal.factory.dupcode
+  - internal.factory.gate
+
+added:
+  - internal.factory.dupcode.BaselineArtifactValidation(type)
+  - internal.factory.dupcode.BaselineArtifactValidation.Baseline.field(BaselineArtifactValidation)
+  - internal.factory.dupcode.BaselineArtifactValidation.Findings.field(BaselineArtifactValidation)
+  - internal.factory.dupcode.BaselineArtifactValidation.UsableForDrift.field(BaselineArtifactValidation)
+  - internal.factory.dupcode.CheckBaselineDriftFromReport(func)
+  - internal.factory.dupcode.ValidateBaselineArtifact(func)
+  - internal.factory.gate.ConsumedBy.method(DupcodeAnalysisProvider)
+  - internal.factory.gate.DupcodeAnalysis(type)
+  - internal.factory.gate.DupcodeAnalysis.Consumers.field(DupcodeAnalysis)
+  - internal.factory.gate.DupcodeAnalysis.Executions.field(DupcodeAnalysis)
+  - internal.factory.gate.DupcodeAnalysis.Findings.field(DupcodeAnalysis)
+  - internal.factory.gate.DupcodeAnalysis.MinLines.field(DupcodeAnalysis)
+  - internal.factory.gate.DupcodeAnalysis.MinTokens.field(DupcodeAnalysis)
+  - internal.factory.gate.DupcodeAnalysis.Root.field(DupcodeAnalysis)
+  - internal.factory.gate.DupcodeAnalysisContext(type)
+  - internal.factory.gate.DupcodeAnalysisProvider(type)
+  - internal.factory.gate.DupcodeAnalyzer(type)
+  - internal.factory.gate.DupcodeInput(type)
+  - internal.factory.gate.DupcodeInput.Config.field(DupcodeInput)
+  - internal.factory.gate.DupcodeVerifierFactory(type)
+  - internal.factory.gate.Executions.method(DupcodeAnalysisProvider)
+  - internal.factory.gate.FactorizeVerifiersWithDupcodeContext(func)
+  - internal.factory.gate.NewDupcodeAnalysisContext(func)
+  - internal.factory.gate.NewDupcodeAnalysisProvider(func)
+  - internal.factory.gate.NewDupcodeVerifierFactory(func)
+  - internal.factory.gate.Provider.method(DupcodeAnalysisContext)
+  - internal.factory.gate.SharedDupCodeVerifier.method(DupcodeVerifierFactory)
+  - internal.factory.gate.SharedDupcodeBaselineVerifier.method(DupcodeVerifierFactory)
+
+removed:
+  - none
+
+modified:
+  - none
+
+cli_commands:
+  - none
+
+## DEPENDENCY_DELTA
+ecosystem=go
+source_status=absent
+go_mod_changed=false
+go_sum_changed=false
+module_path_changed=false
+go_version_changed=false
+toolchain_changed=false
+requires_added=0
+requires_removed=0
+requires_modified=0
+replaces_added=0
+replaces_removed=0
+replaces_modified=0
+
+module:
+  before=
+  after=
+
+go_version:
+  before=
+  after=
+
+toolchain:
+  before=
+  after=
+
+requires_added:
+  - none
+
+requires_removed:
+  - none
+
+requires_modified:
+  - none
+
+replaces_added:
+  - none
+
+replaces_removed:
+  - none
+
+replaces_modified:
+  - none
+
+go_sum_added:
+  - none
+
+go_sum_removed:
+  - none
+## Changed files
+.clinerules/leamas.md  [modified]
+AGENTS.md  [modified]
+docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01.md  [added]
+docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt  [added]
+docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-DIGEST01.md  [modified]
+internal/factory/dupcode/baseline.go  [modified]
+internal/factory/dupcode/baseline_artifact_validation_content_test.go  [added]
+internal/factory/dupcode/baseline_artifact_validation_test.go  [added]
+internal/factory/dupcode/baseline_drift_report_test.go  [added]
+internal/factory/dupcode/baseline_validate.go  [modified]
+internal/factory/dupcode/baseline_verify.go  [modified]
+internal/factory/gate/dupcode_shared_config_test.go  [added]
+internal/factory/gate/dupcode_shared_integration_test.go  [added]
+internal/factory/gate/dupcode_shared_isolation_test.go  [added]
+internal/factory/gate/dupcode_shared_provider.go  [added]
+internal/factory/gate/dupcode_shared_provider_test.go  [added]
+internal/factory/gate/dupcode_shared_registry_test.go  [added]
+internal/factory/gate/dupcode_shared_test_helpers_test.go  [added]
+internal/factory/gate/dupcode_shared_verifiers.go  [added]
+internal/factory/gate/gate.go  [modified]
+internal/factory/gate/verifiers.go  [modified]
+
