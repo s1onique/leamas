@@ -72,7 +72,10 @@ ab235a68c9400717edfca5176894386a14fa1d3c b06eb216e817135872fec400b421d5fc8afc351
 - Split fingerprint tests into separate file to maintain LLM-friendly line limits
 
 ## Performance Attribution
-**PARTIAL** - After the corrected change, an uncached package run completed in 564 seconds, where an earlier canonical run exceeded the 600-second package deadline. No controlled before/after benchmark was performed, so the contribution of `normalizeFingerprint` cannot be isolated or quantified.
+**PARTIAL** - After the corrected change, an uncached package run completed in
+564 seconds, where an earlier canonical run exceeded the 600-second package
+deadline. No controlled before/after benchmark was performed, so the contribution
+of `normalizeFingerprint` cannot be isolated or quantified.
 
 ## Skipped Checks
 - Full canonical aggregate gate (`LEAMAS_ALLOW_FULL_GATE=1 make gate`) was not run due to terminal timeout constraints
