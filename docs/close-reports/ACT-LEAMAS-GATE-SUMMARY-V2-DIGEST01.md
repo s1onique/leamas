@@ -118,9 +118,22 @@ CGO_ENABLED=0 go build -buildvcs=true -trimpath -o /tmp/leamas-gate-summary-v2-d
 | go test -count=20 | PASS | 80.819s digest, 6.898s gatesummary |
 | go test -race -count=5 | PASS | 23.877s digest, 9.605s gatesummary |
 | go vet | PASS | All packages clean |
-| make factorize | PENDING | Dupcode stage takes ~185s |
-| make gate-fast | NOT RUN | Pending factorize |
+| make factorize | FAIL | 372.49s - unrelated llm-friendly issue |
+| make gate-fast | FAIL | Unrelated llm-friendly issue (pre-existing) |
 | make gate | NOT RUN | Refused in editor context per AGENTS.md |
+
+## Factorize and Gate-Fast Results
+
+**make factorize**: FAILED (372.49s)
+- Cause: `llm-friendly FAILED` on `docs/acts/ACT-LEAMAS-FACTORY-DUPCODE-V4-CALL-SITE-OPTIMIZATION01.md`
+- All other stages: PASS
+
+**make gate-fast**: FAILED
+- Cause: `llm-friendly FAILED` on `docs/acts/ACT-LEAMAS-FACTORY-DUPCODE-V4-CALL-SITE-OPTIMIZATION01.md`
+- All other stages: PASS (go mod tidy, gofmt, go vet, go test -short, static build)
+
+**Non-ownership**: The failing file was last modified in commit `0c11336` (not part of this ACT's changes).
+This ACT did not introduce the failure.
 
 ## Follow-up ACTs
 
