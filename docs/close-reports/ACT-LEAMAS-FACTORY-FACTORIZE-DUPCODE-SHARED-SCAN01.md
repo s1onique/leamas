@@ -295,7 +295,9 @@ measured wall-clock improvement:
   PASS (462.14s → 188.94s; Δ −59.1%)
 
 final immutable evidence:
-  PASS (digest bound to fresh gate-summary at 2026-07-22T15:20:30Z)
+  PASS (detached-evidence.txt is whitespace-clean; digest.txt is the
+  full forensic capture bound to fresh gate-summary at
+  2026-07-22T15:20:30Z)
 ```
 
 ## Follow-up ACTs
