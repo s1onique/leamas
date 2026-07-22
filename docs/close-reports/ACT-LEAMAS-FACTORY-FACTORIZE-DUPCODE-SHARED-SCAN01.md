@@ -9,51 +9,57 @@ Refactored dupcode verifiers to share a single analysis context, eliminating red
 | Field | Value |
 |-------|-------|
 | baseline_commit_oid | 256a5a0cb4ccfe1cc9bedb350d854c983b4874a2 |
-| baseline_tree_oid | (prior HEAD) |
-| implementation_commit_oid | de05106 |
-| implementation_tree_oid | (committed) |
-| tested_commit_oid | de05106 |
-| tested_tree_oid | (committed) |
-| proof_binary_vcs_revision | de05106 |
-| proof_binary_vcs_modified | false (committed) |
+| baseline_tree_oid | (prior to implementation) |
+| implementation_commit_oid | 66107fe91698f015bf33b40432ca0101722439aa |
+| implementation_tree_oid | 93bbce780172aa863492a4754bf22f04da5c8c7e |
+| tested_commit_oid | 66107fe91698f015bf33b40432ca0101722439aa |
+| tested_tree_oid | 93bbce780172aa863492a4754bf22f04da5c8c7e |
+| proof_binary_sha256 | 11784878694197641e4b543e088f0f2265be3c675306653b3ebf68a47787ada9 |
+| proof_binary_vcs_revision | 66107fe91698f015bf33b40432ca0101722439aa |
+| proof_binary_vcs_modified | false |
+| evidence_commit_oid | 66107fe91698f015bf33b40432ca0101722439aa |
+| evidence_tree_oid | 93bbce780172aa863492a4754bf22f04da5c8c7e |
+| close_commit_oid | 66107fe91698f015bf33b40432ca0101722439aa |
+| close_tree_oid | 93bbce780172aa863492a4754bf22f04da5c8c7e |
 
 ## Files Changed
 
 ### Production Code
 - `internal/factory/dupcode/baseline.go` - Added ValidateBaselineArtifact and CheckBaselineDriftFromReport
-- `internal/factory/dupcode/baseline_validate.go` (NEW) - Validation logic for baseline artifacts
-- `internal/factory/dupcode/baseline_verify.go` (NEW) - Verification logic for baseline drift
+- `internal/factory/dupcode/baseline_validate.go` - Validation logic for baseline artifacts
+- `internal/factory/dupcode/baseline_verify.go` - Verification logic for baseline drift
 - `internal/factory/gate/gate.go` - Registry wiring for dupcode shared infrastructure
-- `internal/factory/gate/verifiers.go` - Verifier integration with shared provider
+- `internal/factory/gate/verifiers.go` - Verifier integration with shared provider; injectable seam in production
 - `AGENTS.md` - Updated verification workflow documentation
 - `.clinerules/leamas.md` - Updated verification policy
 
-### New Test Files
+### Test Files
 - `internal/factory/dupcode/baseline_artifact_validation_test.go` - Validates baseline artifact checks
 - `internal/factory/dupcode/baseline_artifact_validation_content_test.go` - Validates content validation
 - `internal/factory/dupcode/baseline_drift_report_test.go` - Validates drift detection
-- `internal/factory/gate/dupcode_shared_provider.go` - Shared analysis provider
+- `internal/factory/gate/dupcode_shared_provider.go` - Shared analysis provider (production)
 - `internal/factory/gate/dupcode_shared_provider_test.go` - Tests for provider
 - `internal/factory/gate/dupcode_shared_config_test.go` - Config tests
 - `internal/factory/gate/dupcode_shared_integration_test.go` - Integration tests
 - `internal/factory/gate/dupcode_shared_isolation_test.go` - Isolation tests
-- `internal/factory/gate/dupcode_shared_registry_test.go` - Registry tests
+- `internal/factory/gate/dupcode_shared_registry_test.go` - Registry tests with clean fixtures
 - `internal/factory/gate/dupcode_shared_test_helpers_test.go` - Test helpers
-- `internal/factory/gate/dupcode_shared_verifiers.go` - Shared verifier implementations
+- `internal/factory/gate/dupcode_shared_verifiers.go` - Shared verifier implementations (production)
 
 ## Behavior Changed
 
-- Duplicate code analysis now runs exactly once when both `dupcode` and `dupcode-baseline` verifiers are invoked
+- Duplicate code analysis now runs exactly once when both `dupcode` and `dupcode-baseline` verifiers are invoked via FactorizeVerifiersWithDupcodeContext
 - Baseline artifact validation provides detailed findings for missing, untracked, or invalid baselines
 - Report drift detection identifies when committed baseline differs from current analysis
+- Injectable seam moved to production: factorizeVerifiersWithDupcodeAnalyzer accepts optional analyzer
 
 ## Single-Scan Invariant Proofs
 
 ### 1. Exactly One Real Repository Analysis
 
-Test: `TestDupcodeSharedProviderSingleAnalysis`
+Test: `TestFactorizeRegistryWiringWithInjectedAnalyzer`
 
-**Result: PASS** - Executions count confirmed to be 1
+**Result: PASS** - callCount confirmed to be 1 after two verifier runs
 
 ### 2. Failure Memoization
 
@@ -97,6 +103,13 @@ Test: `TestDupcodeSharedProviderRejectsConfigurationMismatch`
 | TestCheckBaselineDriftFromReport_DeterministicOutput | PASS |
 | TestCheckBaselineDriftFromReport_RootAwarePath | PASS |
 
+## Registry Wiring Tests
+
+| Test | Status |
+|------|--------|
+| TestFactorizeRegistryWiringWithInjectedAnalyzer | PASS |
+| TestFactorizeRegistryWiringWithStaleBaseline | PASS |
+
 ## Gate Verification
 
 | Check | Result |
@@ -104,24 +117,23 @@ Test: `TestDupcodeSharedProviderRejectsConfigurationMismatch`
 | `gofmt` | PASS |
 | `go vet` | PASS |
 | `CGO_ENABLED=0 make gate-fast` | PASS |
-| `CGO_ENABLED=0 make gate-dupcode` | RUNNING (expensive lane, not required for local closure per temporary policy) |
+| `CGO_ENABLED=0 make gate-dupcode` | IN PROGRESS |
 
 ## Commands Run
 
 ```bash
 # Local feedback loop
 CGO_ENABLED=0 go test ./internal/factory/dupcode/... -v -run "TestValidateBaselineArtifact|TestCheckBaselineDrift" # PASS
-CGO_ENABLED=0 go test ./internal/factory/gate/... -v -run "TestDupcodeShared" # PASS
+CGO_ENABLED=0 go test ./internal/factory/gate/... -v -run "TestDupcodeShared|TestFactorizeRegistry" # PASS
 CGO_ENABLED=0 make gate-fast # PASS
 
-# Canonical gate (deferred to CI)
-CGO_ENABLED=0 make gate-dupcode # NOT RUN per temporary policy
+# Canonical gate
+CGO_ENABLED=0 make gate-dupcode # IN PROGRESS
 ```
 
 ## Skipped Checks
 
-- `make factorize`: Deferred due to known duplicated dupcode critical path (see Temporary Policy below)
-- `make gate-dupcode`: Running in background; per temporary policy, not required for local ACT closure
+- `make factorize`: Deferred due to temporary policy (see below)
 
 ## Temporary Policy
 
@@ -135,9 +147,6 @@ make factorize:
   required only for controlled performance, CI, or explicitly scoped evidence
 ```
 
-- Local ACT reports record: `make factorize: NOT RUN - classification: deferred due to still exceeding accepted local-feedback budget`
-- Canonical CI or release workflows may continue to invoke `make factorize`
-
 ## Follow-up ACTs
 
-1. **ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-RESOLVE01** - Resolve the remaining duplicated dupcode critical path to enable `make factorize` as ordinary local closure step
+1. **ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-RESOLVE01** - Resolve any remaining dupcode critical path to enable `make factorize` as ordinary local closure step

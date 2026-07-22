@@ -92,6 +92,12 @@ func AllVerifiers() []Verifier {
 // `leamas factory verify dupcode`, use AllVerifiers instead which performs
 // independent scans per verifier.
 func FactorizeVerifiersWithDupcodeContext(root string) ([]Verifier, error) {
+	return factorizeVerifiersWithDupcodeAnalyzer(root, nil)
+}
+
+// factorizeVerifiersWithDupcodeAnalyzer is the internal constructor that accepts an optional
+// injected analyzer for testing the production registry wiring.
+func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer) ([]Verifier, error) {
 	// Determine the effective dupcode thresholds from the baseline (if it exists)
 	minLines := dupcode.PolicyMinLines
 	minTokens := dupcode.PolicyMinTokens
@@ -114,7 +120,7 @@ func FactorizeVerifiersWithDupcodeContext(root string) ([]Verifier, error) {
 	cfg.Root = root
 	cfg.MinLines = minLines
 	cfg.MinTokens = minTokens
-	provider := NewDupcodeAnalysisProvider(newDupcodeInput(cfg), nil) // nil uses default dupcode.CheckRepo
+	provider := NewDupcodeAnalysisProvider(newDupcodeInput(cfg), analyzer)
 
 	ctx := NewDupcodeAnalysisContext(provider)
 	factory := NewDupcodeVerifierFactory(ctx)
