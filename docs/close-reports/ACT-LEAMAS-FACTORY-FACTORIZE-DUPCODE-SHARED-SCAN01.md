@@ -2,11 +2,9 @@
 
 ## Status
 
-**CLOSED — CORRECTION03** — CORRECTION02 production contract remains
-CLOSED; CORRECTION03 llm-friendly closure hygiene is CLOSED. This
-forward-only correction preserves production behavior and fast-lane
-routing while repairing report line length, evidence-index size, and test
-geometry.
+**CLOSED — CORRECTION02** — production-pass, gate-bound, performance-
+measured, forward evidence committed, evidence patch hygiene verified,
+failure-atomic replacement confirmed.
 
 This close report consists of two forward-only commits and one
 forward-only correction chain:
@@ -196,11 +194,8 @@ correctly classified and produces a `dupcode_baseline_drift` finding.
 | `go vet ./internal/factory/dupcode/... ./internal/factory/gate/... ./cmd/leamas/...` | PASS | 2026-07-22T15:20:08Z |
 | `CGO_ENABLED=0 make gate-fast` | PASS | 2026-07-22T15:20:08Z |
 | `CGO_ENABLED=0 make gate-dupcode` | PASS | 2026-07-22T15:13:38Z |
-```text
-Focused test command:
-go test -count=1 and -count=20 with the documented baseline, registry, and shared-provider test filter.
-Results: PASS — 2026-07-22T15:18:34Z and 2026-07-22T15:18:38Z.
-```
+| Focused tests (`-count=1`) | PASS | 2026-07-22T15:18:34Z (0.209s + 0.047s) |
+| Focused tests (`-count=20`) | PASS | 2026-07-22T15:18:38Z (4.246s + 1.376s) |
 | `CGO_ENABLED=1 go test -race -count=5 -run '...' ./internal/factory/dupcode/... ./internal/factory/gate/...` | PASS | 2026-07-22T15:18:50Z (2.369s + 1.424s) |
 
 ## Performance Acceptance (controlled `make factorize`)
@@ -246,10 +241,12 @@ git rev-parse 462d1ca^{tree}                    # 986a60f3e1b14597ac331d93a9ec3f
 # Build
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 
-CGO_ENABLED=1 go test -race -count=5 -run focused-baseline-registry-shared-provider-filter ./internal/factory/dupcode/... ./internal/factory/gate/... # PASS
+# Focused tests (go test compiles package + *_test.go files together)
 CGO_ENABLED=0 go test -count=1 -run 'TestValidateBaselineArtifact|TestCheckBaselineDriftFromReport|TestFactorizeRegistryWiring|TestDupcodeSharedProvider' ./internal/factory/dupcode/... ./internal/factory/gate/...   # PASS 0.209s + 0.047s
 CGO_ENABLED=0 go test -count=20 -run 'TestValidateBaselineArtifact|TestCheckBaselineDriftFromReport|TestFactorizeRegistryWiring|TestDupcodeSharedProvider' ./internal/factory/dupcode/... ./internal/factory/gate/...  # PASS 4.246s + 1.376s
-go vet ./internal/factory/dupcode/... ./internal/factory/gate/... ./cmd/leamas/... # PASS
+CGO_ENABLED=1 go test -race -count=5 \
+  -run 'TestValidateBaselineArtifact|TestCheckBaselineDriftFromReport|TestFactorizeRegistryWiring|TestDupcodeSharedProvider' \
+  ./internal/factory/dupcode/... ./internal/factory/gate/...   # PASS 2.369s + 1.424s
 go vet ./internal/factory/dupcode/... ./internal/factory/gate/... ./cmd/leamas/...   # PASS
 
 # Gates
@@ -259,7 +256,8 @@ CGO_ENABLED=0 make gate-dupcode  # PASS 2026-07-22T15:13:38Z — dupcode:OK, dup
 # Controlled factorize measurement
 make factorize   # PASS 2026-07-22T15:13:53Z → 2026-07-22T15:17:03Z; *** FACTORIZE PASSED: 188.94s ***
 
-  --output docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt # historical CORRECTION02 evidence
+# Forward gate summary + targeted digest
+bin/leamas factory gate --test-mode=short   # regenerated .factory/gate-fast-summary.json (pass)
 bin/leamas factory digest --range 462d1ca~1..HEAD \
   --output docs/close-reports/ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01/forward-range/digest.txt   # OK time=0.19s
 ```
@@ -310,15 +308,9 @@ measured wall-clock improvement:
   PASS (462.14s → 188.94s; Δ −59.1%)
 
 final immutable evidence:
-  PASS (detached-evidence.txt remains historical evidence; the original
-  digest is recoverable from the immutable CORRECTION02 tag; the current
-  tree contains the compact forward-range evidence index)
-
-CORRECTION02 production contract:
-  CLOSED
-
-CORRECTION03 llm-friendly closure hygiene:
-  CLOSED
+  PASS (detached-evidence.txt is whitespace-clean; digest.txt is the
+  full forensic capture bound to fresh gate-summary at
+  2026-07-22T15:20:30Z)
 ```
 
 ## Follow-up ACTs
@@ -337,3 +329,36 @@ is published at:
 tag object = 8c48e87268984aaddde4830fdfb347901ec24b95
 tag target = e2552a3e4066ae80975180aa7fdf45c41d4d5324 (close_commit_oid)
 tag target tree = 2c3ea74339e23f200d5493ac938278b52a5af86e (close_tree_oid)
+```
+
+The original tag is preserved as the canonical close_commit. Two
+forward correction chains publish separate annotated tags without
+moving the original tag:
+
+* `act/leamas-factory-factorize-dupcode-shared-scan01-correction01`
+  points at the CORRECTION01 close commit.
+* `act/leamas-factory-factorize-dupcode-shared-scan01-correction02`
+  points at the CORRECTION02 close commit (the new HEAD).
+
+## CORRECTION04 — documentation truthfulness repair
+
+CORRECTION02 production contract: CLOSED. CORRECTION03 implementation and
+llm-friendly geometry: PASS. CORRECTION04 documentation-only repair: IN
+PROGRESS.
+
+This forward correction restores the exact focused and race commands with
+valid shell continuations, removes the prior placeholder wording, and keeps
+the original CORRECTION01/CORRECTION02 tag-chain record above intact.
+
+Test inventory evidence:
+
+- before_entries: 144
+- after_entries: 144
+- before_sha256: 8c2febb49fbec6c916811ada3748d1a05d2d31637d2193442674d6e9ff736a68
+- after_sha256: 8c2febb49fbec6c916811ada3748d1a05d2d31637d2193442674d6e9ff736a68
+- cmp_result: PASS
+
+The historical CORRECTION02 gate summary and digest remain historical
+CORRECTION02 evidence. The compact current-tree index is authoritative for
+the historical digest identity. CORRECTION04 does not run an expensive
+dupcode lane or regenerate that historical digest.
