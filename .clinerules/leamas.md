@@ -30,7 +30,9 @@ Leamas uses Factory discipline. Doctrine lives under `docs/doctrine/`.
 
 ## Verification
 
-During ordinary implementation and correction loops, run `make factorize` and `make gate-fast`.
+During ordinary implementation and correction loops, run `CGO_ENABLED=0 make gate-fast`.
+
+When changing dupcode-related code, also run `CGO_ENABLED=0 make gate-dupcode`.
 
 Do not run `make gate` as a routine local feedback command.
 
@@ -44,6 +46,18 @@ evidence, using:
 
 A refusal from `make gate` is not a PASS and must never be reported as
 successful verification.
+
+**Temporary Policy (ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01):**
+
+```text
+make factorize:
+  NOT REQUIRED for ordinary local ACT closure
+  reason: still exceeds the accepted local-feedback budget
+  shared-scan duplication: resolved by SHARED-SCAN01
+  required only for controlled performance, CI, or explicitly scoped evidence
+```
+
+Canonical CI or release workflows may continue to invoke `make factorize`.
 
 ## Git Safety
 

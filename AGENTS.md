@@ -34,8 +34,7 @@ Before changing files, read:
 Routine implementation loop:
 
 ```bash
-make factorize
-make gate-fast
+CGO_ENABLED=0 make gate-fast
 ```
 
 When Go code exists or changes, also run:
@@ -44,6 +43,15 @@ When Go code exists or changes, also run:
 go test ./...
 go vet ./...
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
+```
+
+When an ACT changes any of the following, also run `make gate-dupcode`:
+
+```text
+internal/factory/dupcode/**
+.factory/dupcode-baseline.json
+dupcode policy or thresholds
+dupcode registration or CLI integration
 ```
 
 Before closing an ACT (canonical closure):
@@ -58,11 +66,22 @@ make gate
 Inside Codium/VS Code/Cline terminal contexts, use the explicit override:
 
 ```bash
-make factorize
 LEAMAS_ALLOW_FULL_GATE=1 make gate
 ```
 
 The explicit override is required because `make gate` is refused in editor terminal contexts to prevent accidental expensive canonical gate execution during interactive development loops.
+
+**Temporary Policy (ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01):**
+
+```text
+make factorize:
+  NOT REQUIRED for ordinary local ACT closure
+  reason: still exceeds the accepted local-feedback budget
+  shared-scan duplication: resolved by SHARED-SCAN01
+  required only for controlled performance, CI, or explicitly scoped evidence
+```
+
+Canonical CI or release workflows may continue to invoke `make factorize`.
 
 ## Verifiers Are Go
 

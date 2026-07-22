@@ -2,6 +2,7 @@
 package gate
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/s1onique/leamas/internal/factory/agentcontext"
@@ -10,6 +11,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/coverage"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
+	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/execgate"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/githooks"
@@ -22,6 +24,9 @@ import (
 )
 
 // AllVerifiers returns all Factory policy verifiers (for factorize).
+// This function uses independent dupcode verifiers and is used for
+// direct commands like `leamas factory verify dupcode` and `leamas factory verify dupcode-baseline`.
+// For factorize, use FactorizeVerifiersWithDupcodeContext instead.
 func AllVerifiers() []Verifier {
 	return []Verifier{
 		{Name: "agent-context", Run: agentContextVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
@@ -73,6 +78,75 @@ func AllVerifiers() []Verifier {
 			Kind: ExecutionInProcess, ImplementationID: "internal/factory/longtestpolicy.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
 	}
+}
+
+// FactorizeVerifiersWithDupcodeContext returns all Factory policy verifiers for
+// a factorize invocation. The dupcode and dupcode-baseline verifiers share a single
+// analysis context so only one repository scan is performed.
+//
+// This function derives from AllVerifiers() and only replaces the Run functions
+// for dupcode and dupcode-baseline. This ensures metadata (name, lane, execution,
+// cache, environment) stays in sync with the canonical registry.
+//
+// This function is used by RunFactorize. For direct commands like
+// `leamas factory verify dupcode`, use AllVerifiers instead which performs
+// independent scans per verifier.
+func FactorizeVerifiersWithDupcodeContext(root string) ([]Verifier, error) {
+	// Determine the effective dupcode thresholds from the baseline (if it exists)
+	minLines := dupcode.PolicyMinLines
+	minTokens := dupcode.PolicyMinTokens
+
+	baselinePath := ".factory/dupcode-baseline.json"
+	if root != "." && root != "" {
+		baselinePath = filepath.Join(root, baselinePath)
+	}
+
+	// Try to load baseline thresholds if baseline exists
+	if checks.FileExists(baselinePath) {
+		if baseline, err := dupcode.LoadBaseline(baselinePath); err == nil {
+			minLines = baseline.Thresholds.MinLines
+			minTokens = baseline.Thresholds.MinTokens
+		}
+	}
+
+	// Create shared analysis context with complete config
+	cfg := dupcode.DefaultConfig()
+	cfg.Root = root
+	cfg.MinLines = minLines
+	cfg.MinTokens = minTokens
+	provider := NewDupcodeAnalysisProvider(newDupcodeInput(cfg), nil) // nil uses default dupcode.CheckRepo
+
+	ctx := NewDupcodeAnalysisContext(provider)
+	factory := NewDupcodeVerifierFactory(ctx)
+
+	// Create shared dupcode verifiers
+	sharedDupcodeVerifier := factory.SharedDupCodeVerifier()
+	sharedDupcodeBaselineVerifier := factory.SharedDupcodeBaselineVerifier()
+
+	// Derive from AllVerifiers and only replace the Run functions for dupcode verifiers
+	verifiers := AllVerifiers()
+	replacedDupcode := false
+	replacedBaseline := false
+	for i := range verifiers {
+		switch verifiers[i].Name {
+		case "dupcode":
+			verifiers[i].Run = sharedDupcodeVerifier
+			replacedDupcode = true
+		case "dupcode-baseline":
+			verifiers[i].Run = sharedDupcodeBaselineVerifier
+			replacedBaseline = true
+		}
+	}
+
+	// Fail-closed: both registry entries must be replaced
+	if !replacedDupcode || !replacedBaseline {
+		return nil, fmt.Errorf(
+			"shared dupcode registry replacement incomplete: dupcode=%t dupcode-baseline=%t",
+			replacedDupcode, replacedBaseline,
+		)
+	}
+
+	return verifiers, nil
 }
 
 func llmFriendlyVerifier(root string) []checks.Finding {

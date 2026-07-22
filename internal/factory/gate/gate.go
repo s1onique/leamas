@@ -124,8 +124,17 @@ func shouldCollectMetrics() bool {
 // RunFactorize runs all Factory policy verifiers without toolchain checks.
 // When LEAMAS_FACTORIZE_METRICS_FILE is set, metrics are collected and published.
 // Metrics collection failures cause factorize to exit non-zero (fail-closed).
+//
+// Factorize uses a shared dupcode analysis context to ensure that both
+// "dupcode" and "dupcode-baseline" verifiers perform only one scan of the
+// repository during a single factorize invocation.
 func RunFactorize(root string) int {
-	verifiers := AllVerifiers()
+	// Build verifiers with shared dupcode context
+	verifiers, err := FactorizeVerifiersWithDupcodeContext(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
+		return 1
+	}
 
 	// Fail closed if registry has invalid metadata
 	if err := ValidateVerifiers(verifiers); err != nil {

@@ -3,7 +3,6 @@ package dupcode
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -67,127 +66,36 @@ func NormalizeOccurrencePath(root, p string) string {
 }
 
 // VerifyBaseline verifies the baseline artifact against policy requirements.
+// This composes ValidateBaselineArtifact for static validation and
+// CheckBaselineDrift for dynamic drift checking.
 func VerifyBaseline(root string, policy BaselinePolicy) ([]checks.Finding, error) {
 	var result []checks.Finding
 
-	// Separate FS path (absolute/relative to root) from Git path (always repo-relative)
+	// Compute root-aware FS path for finding paths
 	baselineFSPath := policy.Path
-	baselineGitPath := policy.Path
 	if root != "" && root != "." {
 		baselineFSPath = filepath.Join(root, policy.Path)
 	}
 
-	// 1. Check baseline presence
-	if _, err := os.Stat(baselineFSPath); os.IsNotExist(err) {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     "missing_dupcode_baseline",
-			Message:  "baseline file not found; run 'make dupcode-baseline' to create",
-			Severity: checks.SeverityError,
-		})
-		return result, nil
-	}
-
-	// 2. Check git tracking using repo-relative path
-	if err := CheckBaselineTracked(root, baselineGitPath); err != nil {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     "untracked_dupcode_baseline",
-			Message:  err.Error(),
-			Severity: checks.SeverityError,
-		})
-		return result, nil
-	}
-
-	// 3. Load baseline
-	baseline, err := LoadBaseline(baselineFSPath)
+	// 1. Static validation: presence, tracking, loading, schema, algorithm, thresholds, paths, fingerprints, ordering
+	validation, err := ValidateBaselineArtifact(root, policy)
+	result = append(result, validation.Findings...)
 	if err != nil {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     "invalid_dupcode_baseline",
-			Message:  fmt.Sprintf("failed to load baseline: %v", err),
-			Severity: checks.SeverityError,
-		})
+		return result, err
+	}
+
+	// Only run drift check if baseline is usable for drift comparison
+	// Terminal failures (missing, untracked, symlink, non-regular, stat error, malformed)
+	// skip the drift check to avoid unnecessary repository scanning.
+	if !validation.UsableForDrift {
 		return result, nil
 	}
 
-	// 4. Validate schema version
-	if baseline.SchemaVersion != 1 {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     "unsupported_schema_version",
-			Message:  fmt.Sprintf("schema version %d not supported; expected 1", baseline.SchemaVersion),
-			Severity: checks.SeverityError,
-		})
-	}
-
-	// 4a. Validate algorithm version
-	if baseline.AlgorithmVersion == 0 {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     "missing_algorithm_version",
-			Message:  "baseline missing algorithm_version field; old format not supported, regenerate with 'make dupcode-baseline'",
-			Severity: checks.SeverityError,
-		})
-	} else if baseline.AlgorithmVersion != AlgorithmVersion {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     "algorithm_version_mismatch",
-			Message:  fmt.Sprintf("baseline algorithm_version %d does not match current %d; regenerate with 'make dupcode-baseline'", baseline.AlgorithmVersion, AlgorithmVersion),
-			Severity: checks.SeverityError,
-		})
-	}
-
-	// 5. Validate threshold policy
-	if baseline.Thresholds.MinLines != policy.MinLines || baseline.Thresholds.MinTokens != policy.MinTokens {
-		result = append(result, checks.Finding{
-			Path: baselineFSPath,
-			Kind: "threshold_policy_mismatch",
-			Message: fmt.Sprintf("baseline thresholds %d/%d do not match policy %d/%d",
-				baseline.Thresholds.MinLines, baseline.Thresholds.MinTokens,
-				policy.MinLines, policy.MinTokens),
-			Severity: checks.SeverityError,
-		})
-	}
-
-	// 6. Validate paths
-	pathFindings := ValidateBaselinePaths(baseline)
-	for _, f := range pathFindings {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     f.Kind,
-			Message:  f.Message,
-			Severity: checks.SeverityError,
-		})
-	}
-
-	// 7. Validate fingerprints
-	fpFindings := ValidateBaselineFingerprints(baseline)
-	for _, f := range fpFindings {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     f.Kind,
-			Message:  f.Message,
-			Severity: checks.SeverityError,
-		})
-	}
-
-	// 8. Validate ordering
-	orderFindings := ValidateBaselineOrdering(baseline)
-	for _, f := range orderFindings {
-		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
-			Kind:     f.Kind,
-			Message:  f.Message,
-			Severity: checks.SeverityError,
-		})
-	}
-
-	// 9. Check for drift
-	driftFindings := CheckBaselineDrift(root, baseline, policy)
+	// 2. Dynamic drift check: run scanner and compare against committed baseline
+	driftFindings := CheckBaselineDrift(root, validation.Baseline, policy)
 	for _, f := range driftFindings {
 		result = append(result, checks.Finding{
-			Path:     baselineFSPath,
+			Path:     baselineFSPath, // Use root-aware path
 			Kind:     f.Kind,
 			Message:  f.Message,
 			Severity: checks.SeverityError,
@@ -214,11 +122,14 @@ func CheckBaselineTracked(root, baselinePath string) error {
 }
 
 // CheckBaselineDrift checks if the committed baseline is stale compared to current scanner output.
+// This is a thin wrapper that runs the scanner and delegates to CheckBaselineDriftFromReport
+// for the actual drift comparison, ensuring a single drift-comparison authority.
 func CheckBaselineDrift(root string, committedBaseline Baseline, policy BaselinePolicy) []BaselineValidationFinding {
 	var findings []BaselineValidationFinding
 
 	// Run current scanner with policy thresholds
 	cfg := DefaultConfig()
+	cfg.Root = root
 	cfg.MinLines = policy.MinLines
 	cfg.MinTokens = policy.MinTokens
 
@@ -233,20 +144,8 @@ func CheckBaselineDrift(root string, committedBaseline Baseline, policy Baseline
 		return findings
 	}
 
-	// Generate a canonical baseline with deterministic timestamp
-	deterministicBaseline := GenerateCanonicalBaseline(root, currentReport)
-
-	// Compare findings (ignoring generated_at)
-	if !baselinesEqual(committedBaseline, deterministicBaseline) {
-		findings = append(findings, BaselineValidationFinding{
-			Path:     policy.Path,
-			Kind:     "dupcode_baseline_drift",
-			Message:  "dupcode baseline is stale; run 'make dupcode-baseline' and review the diff",
-			Severity: "error",
-		})
-	}
-
-	return findings
+	// Delegate drift comparison to the single authority
+	return CheckBaselineDriftFromReport(root, committedBaseline, currentReport, policy)
 }
 
 // GenerateCanonicalBaseline creates a baseline with a deterministic timestamp for comparison.

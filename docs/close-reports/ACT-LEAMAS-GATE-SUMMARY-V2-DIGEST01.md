@@ -123,7 +123,7 @@ CGO_ENABLED=0 go build -buildvcs=true -trimpath -o /tmp/leamas-gate-summary-v2-d
 ## Gate-Fast Results
 
 **CGO_ENABLED=0 make gate-fast**: PASS
-- All stages: PASS (agent-context, docs, doctrine, doctrine-agent-contracts, domain-boundaries, exec-gate, executable-contract-first, forbidden-patterns, git-hooks, language, llm-friendly, long-test-policy, static-binary, tooling-boundaries)
+All stages: PASS (agent-context, docs, doctrine, doctrine-agent-contracts, domain-boundaries, exec-gate, executable-contract-first, forbidden-patterns, git-hooks, language, llm-friendly, long-test-policy, static-binary, tooling-boundaries)
 - Go toolchain: PASS (go mod tidy, gofmt, go vet, go test -short, static build)
 
 **Note**: After fixing the long-line issue in `docs/acts/ACT-LEAMAS-FACTORY-DUPCODE-V4-CALL-SITE-OPTIMIZATION01.md` (separate hygiene fix), gates now pass.

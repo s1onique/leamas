@@ -99,8 +99,10 @@ func (e *ErrInvalidBaseline) Unwrap() error {
 	return e.Reason
 }
 
-// LoadBaseline loads a baseline from a JSON file.
-func LoadBaseline(path string) (Baseline, error) {
+// decodeBaselineArtifact reads and decodes a baseline JSON file without policy validation.
+// This allows callers to perform their own validation and classification of findings.
+// Use LoadBaseline for strict policy enforcement.
+func decodeBaselineArtifact(path string) (Baseline, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Baseline{}, fmt.Errorf("loading baseline: %w", err)
@@ -111,30 +113,59 @@ func LoadBaseline(path string) (Baseline, error) {
 		return Baseline{}, &ErrInvalidBaseline{fmt.Errorf("parse error: %w", err)}
 	}
 
+	return baseline, nil
+}
+
+// validateBaselineCompatibility checks schema, algorithm, and threshold compatibility.
+// Returns nil if compatible, or an error with the exact historical message.
+func validateBaselineCompatibility(baseline Baseline) error {
 	if baseline.SchemaVersion != 1 {
-		return Baseline{}, &ErrInvalidBaseline{fmt.Errorf("unsupported schema version: %d", baseline.SchemaVersion)}
+		return &ErrInvalidBaseline{
+			Reason: fmt.Errorf("unsupported schema version: %d", baseline.SchemaVersion),
+		}
 	}
 
-	// Validate algorithm version
 	if baseline.AlgorithmVersion == 0 {
-		return Baseline{}, &ErrInvalidBaseline{
-			fmt.Errorf("missing algorithm_version: old baseline format not supported; regenerate with 'make dupcode-baseline'"),
-		}
-	}
-	if baseline.AlgorithmVersion != AlgorithmVersion {
-		return Baseline{}, &ErrInvalidBaseline{
-			fmt.Errorf("algorithm_version mismatch: baseline has %d, current detector uses %d; regenerate with 'make dupcode-baseline'",
-				baseline.AlgorithmVersion, AlgorithmVersion),
+		return &ErrInvalidBaseline{
+			Reason: fmt.Errorf(
+				"missing algorithm_version: old baseline format not supported; regenerate with 'make dupcode-baseline'",
+			),
 		}
 	}
 
-	// Validate thresholds match policy
-	if baseline.Thresholds.MinLines != PolicyMinLines || baseline.Thresholds.MinTokens != PolicyMinTokens {
-		return Baseline{}, &ErrInvalidBaseline{
-			fmt.Errorf("threshold mismatch: got %d/%d, expected %d/%d",
-				baseline.Thresholds.MinLines, baseline.Thresholds.MinTokens,
-				PolicyMinLines, PolicyMinTokens),
+	if baseline.AlgorithmVersion != AlgorithmVersion {
+		return &ErrInvalidBaseline{
+			Reason: fmt.Errorf(
+				"algorithm_version mismatch: baseline has %d, current detector uses %d; regenerate with 'make dupcode-baseline'",
+				baseline.AlgorithmVersion, AlgorithmVersion,
+			),
 		}
+	}
+
+	if baseline.Thresholds.MinLines != PolicyMinLines || baseline.Thresholds.MinTokens != PolicyMinTokens {
+		return &ErrInvalidBaseline{
+			Reason: fmt.Errorf(
+				"threshold mismatch: got %d/%d, expected %d/%d",
+				baseline.Thresholds.MinLines, baseline.Thresholds.MinTokens,
+				PolicyMinLines, PolicyMinTokens,
+			),
+		}
+	}
+
+	return nil
+}
+
+// LoadBaseline loads and strictly validates a baseline against policy requirements.
+// This is the canonical baseline loader for operations that require strict validation.
+// For flexible validation with custom findings, use ValidateBaselineArtifact.
+func LoadBaseline(path string) (Baseline, error) {
+	baseline, err := decodeBaselineArtifact(path)
+	if err != nil {
+		return Baseline{}, err
+	}
+
+	if err := validateBaselineCompatibility(baseline); err != nil {
+		return Baseline{}, err
 	}
 
 	return baseline, nil
