@@ -1,0 +1,45 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION02",
+  "protocol_version": "1",
+  "frozen_at": "2026-07-23T14:07:00Z",
+  "planned_verification": {
+    "routine_verification": {
+      "command": "CGO_ENABLED=0 make gate-fast",
+      "description": "Fast lane verification without expensive gates"
+    },
+    "expensive_verification": {
+      "command": "LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize",
+      "description": "Explicit factorize with override in normal terminal context",
+      "requires_override": true,
+      "override_variable": "LEAMAS_ALLOW_FULL_FACTORIZE=1"
+    }
+  },
+  "planned_changes": [
+    {
+      "file": "make/long-tests.mk",
+      "description": "Added factorize-context-guard and factorize-canonical targets"
+    },
+    {
+      "file": "Makefile",
+      "description": "Removed direct factorize target; added phony declarations"
+    },
+    {
+      "file": "AGENTS.md",
+      "description": "Updated routine verification guidance; documented override requirements"
+    },
+    {
+      "file": ".clinerules/leamas.md",
+      "description": "Updated verification guidance; documented explicit override"
+    },
+    {
+      "file": "internal/factory/gate/factorize_context_guard_test.go",
+      "description": "New test file with truth table and routing tests"
+    }
+  ],
+  "test_coverage": {
+    "truth_table_cases": 16,
+    "routing_tests": 3,
+    "public_target_tests": 1
+  },
+  "expected_outcome": "guard passes in normal terminal, refuses in editor context"
+}

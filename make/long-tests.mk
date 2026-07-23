@@ -87,3 +87,65 @@ gate-canonical: build
 gate:
 	@$(MAKE) --no-print-directory gate-context-guard
 	@$(MAKE) --no-print-directory gate-canonical
+
+# factorize-context-guard checks if factorize should run in the current context.
+# Returns 0 to allow, 2 to refuse with diagnostic.
+# Uses sequential $(MAKE) invocation to ensure guard runs BEFORE any factorize work.
+# Guard order: caller validation → override check → fallback detection → refusal.
+# IMPORTANT: Both variables are validated before any allow/refuse logic.
+factorize-context-guard:
+	@case "$${LEAMAS_GATE_CALLER:-}" in \
+	""|cline|codium|vscode|editor) ;; \
+	*) \
+		printf '%s\n' \
+			"factorize: invalid LEAMAS_GATE_CALLER='$${LEAMAS_GATE_CALLER}'" \
+			"factorize: expected cline, codium, vscode, editor, or unset" >&2; \
+		exit 2; \
+		;; \
+	esac && \
+	case "$${LEAMAS_ALLOW_FULL_FACTORIZE:-}" in \
+	""|0|1) ;; \
+	*) \
+		printf '%s\n' \
+			"factorize: invalid LEAMAS_ALLOW_FULL_FACTORIZE='$${LEAMAS_ALLOW_FULL_FACTORIZE}'" \
+			"factorize: expected 0, 1, or an unset variable" >&2; \
+		exit 2; \
+		;; \
+	esac && \
+	case "$${LEAMAS_ALLOW_FULL_FACTORIZE:-}" in \
+	1) exit 0 ;; \
+	esac && \
+	editor_context=0 && \
+	case "$${LEAMAS_GATE_CALLER:-}" in \
+	cline|codium|vscode|editor) editor_context=1 ;; \
+	esac && \
+	case "$${TERM_PROGRAM:-}" in \
+	vscode|vscodium|codium) editor_context=1 ;; \
+	esac && \
+	if [ -n "$${VSCODE_PID:-}" ]; then \
+		editor_context=1; \
+	fi && \
+	if [ "$$editor_context" = 1 ]; then \
+		printf '%s\n' \
+			"factorize: REFUSED in Codium/VS Code/Cline terminal context." \
+			"factorize: use 'make gate-fast' for interactive verification." \
+			"factorize: for deliberate factorize execution, run:" \
+			"factorize:   LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize" >&2; \
+		exit 2; \
+	fi
+
+# factorize-canonical is the internal target that runs the full factorize.
+# It is NOT a prerequisite of factorize; it is invoked only after factorize-context-guard passes.
+factorize-canonical:
+	@echo "Running factory factorize..."
+	@chmod +x scripts/verify_*.sh
+	@go run ./cmd/leamas factory factorize
+
+# factorize is the public entry point that guards against editor-context execution.
+# The guard MUST execute before any factorize work. Sequential $(MAKE) ensures this:
+# 1. factorize-context-guard runs first; if it fails, factorize-canonical never executes.
+# 2. factorize-canonical runs only if the guard passes.
+# 3. Guard failure is non-zero, non-success, and emits no factorize markers.
+factorize:
+	@$(MAKE) --no-print-directory factorize-context-guard
+	@$(MAKE) --no-print-directory factorize-canonical

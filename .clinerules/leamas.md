@@ -34,30 +34,26 @@ During ordinary implementation and correction loops, run `CGO_ENABLED=0 make gat
 
 When changing dupcode-related code, also run `CGO_ENABLED=0 make gate-dupcode`.
 
-Do not run `make gate` as a routine local feedback command.
+**Expensive verification** (canonical gate, factorize) is refused in
+Codium/VS Code/Cline terminal contexts to prevent accidental expensive
+execution during interactive development loops.
 
-`make gate` is the canonical full gate and is intentionally refused in
-Codium/VS Code/Cline terminal contexts.
+Routine instructions must not recommend:
 
-Run the full gate only when the ACT explicitly requires canonical closure
-evidence, using:
+- `make gate`
+- `make factorize`
+- `make gate-dupcode`
+- `go test ./...`
 
-    LEAMAS_ALLOW_FULL_GATE=1 make gate
+unless the task is explicitly in closure or expensive-verification mode.
 
-A refusal from `make gate` is not a PASS and must never be reported as
-successful verification.
+For deliberate expensive verification, use explicit overrides:
 
-**Temporary Policy (ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01):**
+- `LEAMAS_ALLOW_FULL_GATE=1 make gate`
+- `LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize`
 
-```text
-make factorize:
-  NOT REQUIRED for ordinary local ACT closure
-  reason: still exceeds the accepted local-feedback budget
-  shared-scan duplication: resolved by SHARED-SCAN01
-  required only for controlled performance, CI, or explicitly scoped evidence
-```
-
-Canonical CI or release workflows may continue to invoke `make factorize`.
+A refusal from `make gate` or `make factorize` is not a PASS and must
+never be reported as successful verification.
 
 ## Git Safety
 

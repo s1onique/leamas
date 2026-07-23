@@ -54,34 +54,28 @@ dupcode policy or thresholds
 dupcode registration or CLI integration
 ```
 
-Before closing an ACT (canonical closure):
+## Closure Verification
 
-Outside an editor context, run:
-
-```bash
-make factorize
-make gate
-```
-
-Inside Codium/VS Code/Cline terminal contexts, use the explicit override:
+For routine ACT closure, use the fast lane only:
 
 ```bash
-LEAMAS_ALLOW_FULL_GATE=1 make gate
+CGO_ENABLED=0 make gate-fast
 ```
 
-The explicit override is required because `make gate` is refused in editor terminal contexts to prevent accidental expensive canonical gate execution during interactive development loops.
+**Expensive verification** (canonical gate, factorize) requires explicit override
+in editor/Cline contexts:
 
-**Temporary Policy (ACT-LEAMAS-FACTORY-FACTORIZE-DUPCODE-SHARED-SCAN01):**
-
-```text
-make factorize:
-  NOT REQUIRED for ordinary local ACT closure
-  reason: still exceeds the accepted local-feedback budget
-  shared-scan duplication: resolved by SHARED-SCAN01
-  required only for controlled performance, CI, or explicitly scoped evidence
+```bash
+LEAMAS_ALLOW_FULL_GATE=1 make gate        # Full gate
+LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize  # Factorize only
 ```
 
-Canonical CI or release workflows may continue to invoke `make factorize`.
+Both `make gate` and `make factorize` are refused in editor/Cline terminal
+contexts by default to prevent accidental expensive canonical gate execution.
+
+**Routine instructions must not recommend `make gate`, `make factorize`,
+`make gate-dupcode`, or `go test ./...` unless the task is explicitly in
+closure or expensive-verification mode.**
 
 ## Verifiers Are Go
 
