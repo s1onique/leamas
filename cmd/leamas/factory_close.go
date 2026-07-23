@@ -64,11 +64,12 @@ func runFactoryCloseRun(args []string, stdout, stderr io.Writer) int {
 	fs := newCloseFlagSet("factory close run", stderr)
 	var options closure.RunOptions
 	fs.StringVar(&options.PlanPath, "plan", "", "frozen closure plan")
+	fs.StringVar(&options.PlanFreeze, "plan-freeze", "", "pre-subject plan freeze as <commit>:<path>")
 	fs.StringVar(&options.Subject, "subject", "", "subject commit")
 	fs.StringVar(&options.EvidenceDirectory, "evidence-dir", "", "absolute detached evidence directory")
 	fs.StringVar(&options.ManifestOutput, "manifest-out", "", "absolute detached manifest output")
-	if err := parseCloseFlags(fs, args); err != nil || options.PlanPath == "" || options.Subject == "" || options.EvidenceDirectory == "" || options.ManifestOutput == "" {
-		return reportCloseFlagError(stderr, "factory close run", err, "--plan, --subject, --evidence-dir, and --manifest-out are required")
+	if err := parseCloseFlags(fs, args); err != nil || options.PlanPath == "" || options.Subject == "" || options.EvidenceDirectory == "" || options.ManifestOutput == "" || options.PlanFreeze == "" {
+		return reportCloseFlagError(stderr, "factory close run", err, "--plan, --plan-freeze, --subject, --evidence-dir, and --manifest-out are required")
 	}
 	manifest, _, err := closure.RunClosure(context.Background(), options)
 	if err != nil {
