@@ -59,9 +59,9 @@ func passingManifest() Manifest {
 			PlanSHA256:    planSHA,
 			SubjectCommit: fullCommitOID,
 		},
-		Subject:         ManifestSubject{CommitOID: fullCommitOID, TreeOID: fullTreeOID},
-		Runner:          RunnerIdentity{LeamasVersion: "0.1.0", BinarySHA256: strings.Repeat("b", 64), VCSRevision: fullCommitOID, VCSModified: false},
-		Repository:      RepositoryIdentity{Root: ".", Branch: "main", HeadCommitOID: fullCommitOID, HeadTreeOID: fullTreeOID, WorkingTreeCleanBefore: true, WorkingTreeCleanAfter: true},
+		Subject:    ManifestSubject{CommitOID: fullCommitOID, TreeOID: fullTreeOID},
+		Runner:     RunnerIdentity{LeamasVersion: "0.1.0", BinarySHA256: strings.Repeat("b", 64), VCSRevision: fullCommitOID, VCSModified: false},
+		Repository: RepositoryIdentity{Root: ".", Branch: "main", HeadCommitOID: fullCommitOID, HeadTreeOID: fullTreeOID, WorkingTreeCleanBefore: true, WorkingTreeCleanAfter: true},
 		Checks: []CheckResult{
 			passingCheck("focused-count-1", "go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."),
 			passingCheck("focused-count-20", "go", "test", "-count=20", "./internal/factory/closure/...", "./cmd/leamas/..."),

@@ -73,7 +73,6 @@ func runOptionsForTest(t *testing.T, repository, planPath, subject string) RunOp
 	}
 }
 
-
 func passingRunDependencies(subject string, executor commandExecutor) runDependencies {
 	return runDependencies{
 		Git:      realGitClient{},

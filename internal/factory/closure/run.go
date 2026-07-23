@@ -172,7 +172,10 @@ func resolvePlanFreeze(
 		return resolvedFreeze{}, fmt.Errorf("parse executed plan: %w", err)
 	}
 	if frozenPlan.ActID != executedPlan.ActID || frozenPlan.RunnerBinding != executedPlan.RunnerBinding {
-		return resolvedFreeze{}, fmt.Errorf("executed plan metadata does not match frozen plan: executed_act_id=%q frozen_act_id=%q executed_binding=%q frozen_binding=%q", executedPlan.ActID, frozenPlan.ActID, executedPlan.RunnerBinding, frozenPlan.RunnerBinding)
+		return resolvedFreeze{}, fmt.Errorf(
+			"executed plan metadata does not match frozen plan: "+
+				"executed_act_id=%q frozen_act_id=%q executed_binding=%q frozen_binding=%q",
+			executedPlan.ActID, frozenPlan.ActID, executedPlan.RunnerBinding, frozenPlan.RunnerBinding)
 	}
 	if frozenPlan.PolicyProfile != "" && frozenPlan.PolicyProfile != executedPlan.PolicyProfile {
 		return resolvedFreeze{}, fmt.Errorf("executed plan policy profile does not match frozen plan: executed=%q frozen=%q", executedPlan.PolicyProfile, frozenPlan.PolicyProfile)

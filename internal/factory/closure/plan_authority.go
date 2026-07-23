@@ -8,7 +8,7 @@ import (
 
 const (
 	PolicyProfileLeamasActV1  = "leamas-act-v1"
-	PolicyProfileUnsupported = "unsupported"
+	PolicyProfileUnsupported  = "unsupported"
 	RunnerBindingTrustedClean = "trusted_clean"
 	RunnerBindingSubjectExact = "subject_exact"
 )
