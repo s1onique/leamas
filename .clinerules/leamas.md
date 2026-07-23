@@ -62,3 +62,12 @@ Canonical CI or release workflows may continue to invoke `make factorize`.
 ## Git Safety
 
 Do not force-push. Prefer forward corrective commits.
+
+## Closure Protocol v1
+
+New ACTs MUST use Closure Protocol v1 via
+`leamas factory close plan|run|verify|render|tag|status`. The
+authoritative verification record is the compact manifest at
+`docs/closure-manifests/<ACT-ID>.json`. Never embed future closure
+identities or raw evidence in committed documents and never move or
+force-push ACT tags.

@@ -72,6 +72,7 @@ var AllowedFiles = map[string]bool{
 	"cmd/leamas/runtime_smoke_test.go":                        true,
 	"cmd/leamas/version_cli_test.go":                          true,
 	"cmd/leamas/gate_summary_schema_subprocess_test.go":       true,
+	"cmd/leamas/factory_close_subprocess_test.go":             true,
 }
 
 // AllowedImports are packages that may only be imported by test files.

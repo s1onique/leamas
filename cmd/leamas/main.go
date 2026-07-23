@@ -247,6 +247,7 @@ Commands:
   leamas factory factorize    Run factory verifiers only
   leamas factory digest       Generate targeted digest
   leamas factory coverage     Check coverage threshold
+  leamas factory close        Closure Protocol v1
   leamas doctor               Run diagnostics
   leamas cockpit              Local web cockpit
   leamas witness              Witness proxy commands
@@ -261,7 +262,8 @@ func factoryUsageText() string {
   leamas factory gate           Run full quality gate
   leamas factory factorize      Run verifiers only (no toolchain)
   leamas factory digest [flags] Generate targeted digest
-  leamas factory coverage        Check coverage threshold`
+  leamas factory coverage        Check coverage threshold
+  leamas factory close           Run Closure Protocol v1`
 }
 
 func printUsage() {
