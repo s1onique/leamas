@@ -8,20 +8,34 @@ import (
 )
 
 func TestClosureVerifyAndRenderThousandChecksWithinBound(t *testing.T) {
-	plan := canonicalPlan()
-	plan.Checks = make([]PlanCheck, 1000)
-	plan.Artifacts = nil
+	plan := Plan{
+		ContractVersion: ContractVersionV1,
+		ActID:           "ACT-LEAMAS-PERF",
+		Baseline:        Baseline{CommitOID: fullTreeOID, TreeOID: fullCommitOID},
+		Execution:       PlanExecution{Mode: ExecutionSerialFailFast},
+		Checks:          make([]PlanCheck, 1000),
+		Artifacts:       nil,
+		Policy:          PlanPolicy{RequireCleanBefore: boolPtr(true), RequireCleanAfter: boolPtr(true), ForbidTrackedFullDigests: boolPtr(true), RequireDiffCheck: boolPtr(true)},
+	}
+	plan.Freeze = PlanFreeze{CommitOID: fullTreeOID, BlobOID: strings.Repeat("0", 64)}
 	manifest := passingManifest()
-	manifest.Checks = make([]CheckResult, 1000)
+	manifest.ActID = plan.ActID
+	manifest.Subject.CommitOID = plan.Baseline.CommitOID
+	manifest.Subject.TreeOID = plan.Baseline.TreeOID
+	manifest.Repository.HeadCommitOID = plan.Baseline.CommitOID
+	manifest.Repository.HeadTreeOID = plan.Baseline.TreeOID
 	manifest.Artifacts = nil
 	manifest.ExcludedChecks = nil
+	manifest.Checks = make([]CheckResult, 1000)
 	manifest.DetachedEvidence = make([]EvidenceRecord, 0, 2001)
+	manifest.Plan.Path = "docs/closure-plans/ACT-LEAMAS-PERF.json"
+	manifest.Plan.SHA256 = strings.Repeat("a", 64)
 	for index := range 1000 {
 		id := fmt.Sprintf("check-%04d", index)
 		argv := []string{"go", "test", fmt.Sprintf("./case/%04d", index)}
 		plan.Checks[index] = PlanCheck{ID: id, Mode: CheckModeRun, Argv: argv, WorkingDirectory: ".", TimeoutSeconds: 60, Environment: map[string]string{}}
 		manifest.Checks[index] = CheckResult{
-			CheckID: id, SubjectTreeOID: fullTreeOID, Argv: argv, WorkingDirectory: ".", OverriddenEnvironment: []string{},
+			CheckID: id, SubjectTreeOID: plan.Baseline.TreeOID, Argv: argv, WorkingDirectory: ".", OverriddenEnvironment: []string{},
 			StartedAtUTC: "2026-07-23T07:00:00Z", FinishedAtUTC: "2026-07-23T07:00:00.001Z", DurationMS: 1,
 			ExitCode: intPtr(0), Status: CheckStatusPass, StdoutSHA256: strings.Repeat("a", 64), StderrSHA256: strings.Repeat("b", 64), CleanupStatus: CleanupPass,
 		}

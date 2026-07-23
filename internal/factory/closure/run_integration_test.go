@@ -25,12 +25,18 @@ func prepareRunnableRepository(t *testing.T) (string, string, string) {
 	}
 	plan := canonicalPlan()
 	plan.Baseline = Baseline{CommitOID: baseline, TreeOID: baselineTree}
+	plan.PolicyProfile = ""
+	plan.Freeze = PlanFreeze{}
+	plan.RunnerBinding = ""
 	plan.Checks = []PlanCheck{
 		{ID: "first", Mode: CheckModeRun, Argv: []string{"go", "version"}, WorkingDirectory: ".", TimeoutSeconds: 30, Environment: map[string]string{}},
 		{ID: "second", Mode: CheckModeRun, Argv: []string{"go", "env", "GOOS"}, WorkingDirectory: ".", TimeoutSeconds: 30, Environment: map[string]string{}},
 	}
 	plan.Artifacts = []PlanArtifact{}
 	planPath := filepath.Join(repository, "docs", "closure-plans", plan.ActID+".json")
+	if err := computeAndApplyFreezeBlob(&plan); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Dir(planPath), 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -15,8 +15,8 @@ func TestClosureRenderExactGolden(t *testing.T) {
 	for _, exact := range []string{
 		"# ACT-LEAMAS-TEST01 Close Report\n",
 		"## Verdict\n\nPASS\n",
-		"| focused | PASS | 1000ms | 0 |",
-		"- `dupcode` — No dupcode-owned source changed.",
+		"| focused-count-1 | PASS | 1000ms | 0 |",
+		"- `dupcode` — No dupcode-owned source or registration changed.",
 		"Verification state: VERIFIED",
 	} {
 		if !bytes.Contains(report, []byte(exact)) {

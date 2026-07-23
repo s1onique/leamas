@@ -35,6 +35,9 @@ func VerifyManifestAgainstPlan(manifest Manifest, plan Plan) error {
 	if manifest.Verdict != derived {
 		return fmt.Errorf("manifest verdict %q does not match mechanically derived verdict %q", manifest.Verdict, derived)
 	}
+	if err := VerifyRunnerBinding(plan.RunnerBinding, manifest); err != nil {
+		return fmt.Errorf("plan runner_binding rejected: %w", err)
+	}
 	return nil
 }
 

@@ -17,19 +17,72 @@ func canonicalPlanJSON() string {
     "tree_oid": "2222222222222222222222222222222222222222"
   },
   "execution": {"mode": "serial_fail_fast"},
+  "policy_profile": "leamas-act-v1",
+  "freeze": {
+    "commit_oid": "1111111111111111111111111111111111111111",
+    "blob_oid": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
   "checks": [
     {
-      "id": "focused",
+      "id": "focused-count-1",
       "mode": "run",
-      "argv": ["go", "test", "./internal/factory/closure/..."],
+      "argv": ["go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "focused-count-20",
+      "mode": "run",
+      "argv": ["go", "test", "-count=20", "./internal/factory/closure/...", "./cmd/leamas/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "focused-race-5",
+      "mode": "run",
+      "argv": ["go", "test", "-race", "-count=5", "./internal/factory/closure/...", "./cmd/leamas/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "vet",
+      "mode": "run",
+      "argv": ["go", "vet", "./internal/factory/closure/...", "./cmd/leamas/..."],
+      "working_directory": ".",
+      "timeout_seconds": 300,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "build",
+      "mode": "run",
+      "argv": ["go", "build", "-buildvcs=true", "-trimpath", "-o", "/tmp/leamas-closure-protocol-v1-self", "./cmd/leamas"],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": ["make", "gate-fast"],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "diff-check",
+      "mode": "run",
+      "argv": ["git", "diff", "--check"],
       "working_directory": ".",
       "timeout_seconds": 60,
-      "environment": {"CGO_ENABLED": "0"}
+      "environment": {}
     },
     {
       "id": "dupcode",
       "mode": "exclude",
-      "reason": "No dupcode-owned source changed."
+      "reason": "No dupcode-owned source or registration changed."
     }
   ],
   "artifacts": [
@@ -55,7 +108,7 @@ func TestClosurePlanAcceptsCanonicalV1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodePlan() error = %v", err)
 	}
-	if plan.ContractVersion != ContractVersionV1 || len(plan.Checks) != 2 {
+	if plan.ContractVersion != ContractVersionV1 || len(plan.Checks) != 8 {
 		t.Fatalf("decoded plan = %+v", plan)
 	}
 }
@@ -83,7 +136,7 @@ func TestClosurePlanRejectsUnsupportedVersion(t *testing.T) {
 
 func TestClosurePlanRejectsDuplicateCheckID(t *testing.T) {
 	assertPlanDecodeError(t, strings.Replace(canonicalPlanJSON(),
-		`"id": "dupcode"`, `"id": "focused"`, 1), "duplicate check")
+		`"id": "dupcode"`, `"id": "diff-check"`, 1), "duplicate check")
 }
 
 func TestClosurePlanRejectsDuplicateArtifactID(t *testing.T) {
@@ -103,7 +156,7 @@ func TestClosurePlanRejectsDuplicateArtifactID(t *testing.T) {
 
 func TestClosurePlanRejectsShellString(t *testing.T) {
 	raw := strings.Replace(canonicalPlanJSON(),
-		`"argv": ["go", "test", "./internal/factory/closure/..."],`,
+		`"argv": ["go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."],`,
 		`"command": "go test ./internal/factory/closure/...",`, 1)
 	assertPlanDecodeError(t, raw, "unknown field")
 }
@@ -116,8 +169,7 @@ func TestClosurePlanRejectsEscapingWorkingDirectory(t *testing.T) {
 
 func TestClosurePlanRejectsMissingExclusionReason(t *testing.T) {
 	raw := strings.Replace(canonicalPlanJSON(),
-		`,
-      "reason": "No dupcode-owned source changed."`, "", 1)
+		`"reason": "No dupcode-owned source or registration changed."`, `"reason": ""`, 1)
 	assertPlanDecodeError(t, raw, "reason")
 }
 

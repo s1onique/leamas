@@ -74,6 +74,9 @@ func ValidatePlan(plan Plan) error {
 	if !*plan.Policy.RequireCleanBefore || !*plan.Policy.RequireCleanAfter {
 		return fmt.Errorf("closure v1 requires clean worktree before and after")
 	}
+	if err := validatePlanAuthority(plan); err != nil {
+		return err
+	}
 	return nil
 }
 

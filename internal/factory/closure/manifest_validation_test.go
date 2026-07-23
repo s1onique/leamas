@@ -1,6 +1,8 @@
 package closure
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -10,18 +12,50 @@ func boolPtr(value bool) *bool { return &value }
 func intPtr(value int) *int    { return &value }
 
 func canonicalPlan() Plan {
-	return Plan{
+	plan := Plan{
 		ContractVersion: ContractVersionV1,
 		ActID:           "ACT-LEAMAS-TEST01",
 		Baseline:        Baseline{CommitOID: fullCommitOID, TreeOID: fullTreeOID},
 		Execution:       PlanExecution{Mode: ExecutionSerialFailFast},
 		Checks: []PlanCheck{
-			{ID: "focused", Mode: CheckModeRun, Argv: []string{"go", "test", "./..."}, WorkingDirectory: ".", TimeoutSeconds: 60, Environment: map[string]string{}},
-			{ID: "dupcode", Mode: CheckModeExclude, Reason: "No dupcode-owned source changed."},
+			{ID: "focused-count-1", Mode: CheckModeRun, Argv: []string{"go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."}, WorkingDirectory: ".", TimeoutSeconds: 600, Environment: map[string]string{}},
+			{ID: "focused-count-20", Mode: CheckModeRun, Argv: []string{"go", "test", "-count=20", "./internal/factory/closure/...", "./cmd/leamas/..."}, WorkingDirectory: ".", TimeoutSeconds: 600, Environment: map[string]string{}},
+			{ID: "focused-race-5", Mode: CheckModeRun, Argv: []string{"go", "test", "-race", "-count=5", "./internal/factory/closure/...", "./cmd/leamas/..."}, WorkingDirectory: ".", TimeoutSeconds: 600, Environment: map[string]string{}},
+			{ID: "vet", Mode: CheckModeRun, Argv: []string{"go", "vet", "./internal/factory/closure/...", "./cmd/leamas/..."}, WorkingDirectory: ".", TimeoutSeconds: 300, Environment: map[string]string{}},
+			{ID: "build", Mode: CheckModeRun, Argv: []string{"go", "build", "-buildvcs=true", "-trimpath", "-o", "/tmp/leamas-closure-protocol-v1-self", "./cmd/leamas"}, WorkingDirectory: ".", TimeoutSeconds: 600, Environment: map[string]string{}},
+			{ID: "gate-fast", Mode: CheckModeRun, Argv: []string{"make", "gate-fast"}, WorkingDirectory: ".", TimeoutSeconds: 600, Environment: map[string]string{}},
+			{ID: "diff-check", Mode: CheckModeRun, Argv: []string{"git", "diff", "--check"}, WorkingDirectory: ".", TimeoutSeconds: 60, Environment: map[string]string{}},
+			{ID: "dupcode", Mode: CheckModeExclude, Reason: "No dupcode-owned source or registration changed."},
 		},
-		Artifacts: []PlanArtifact{{ID: "summary", Path: ".factory/summary.json", Required: boolPtr(true), MaxBytes: 1024, MediaType: "application/json"}},
-		Policy:    PlanPolicy{RequireCleanBefore: boolPtr(true), RequireCleanAfter: boolPtr(true), ForbidTrackedFullDigests: boolPtr(true), RequireDiffCheck: boolPtr(true)},
+		Artifacts:     []PlanArtifact{{ID: "summary", Path: ".factory/summary.json", Required: boolPtr(true), MaxBytes: 1024, MediaType: "application/json"}},
+		Policy:        PlanPolicy{RequireCleanBefore: boolPtr(true), RequireCleanAfter: boolPtr(true), ForbidTrackedFullDigests: boolPtr(true), RequireDiffCheck: boolPtr(true)},
+		PolicyProfile: PolicyProfileLeamasActV1,
+		Freeze:        PlanFreeze{CommitOID: fullCommitOID, BlobOID: "0000000000000000000000000000000000000000000000000000000000000000"},
+		RunnerBinding: RunnerBindingTrustedClean,
 	}
+	if err := computeAndApplyFreezeBlob(&plan); err != nil {
+		panic(err)
+	}
+	return plan
+}
+
+func passingCheck(id string, argv ...string) CheckResult {
+	return CheckResult{
+		CheckID: id, SubjectTreeOID: fullTreeOID, Argv: argv, WorkingDirectory: ".",
+		OverriddenEnvironment: []string{}, StartedAtUTC: "2026-07-23T07:00:00Z", FinishedAtUTC: "2026-07-23T07:00:01Z",
+		DurationMS: 1000, ExitCode: intPtr(0), Status: CheckStatusPass,
+		StdoutSHA256: strings.Repeat("c", 64), StderrSHA256: strings.Repeat("d", 64), CleanupStatus: CleanupPass,
+	}
+}
+
+func computeAndApplyFreezeBlob(plan *Plan) error {
+	data, err := jsonMarshalPlan(*plan)
+	if err != nil {
+		return err
+	}
+	sum := sha256.Sum256(data)
+	plan.Freeze.BlobOID = hex.EncodeToString(sum[:])
+	return nil
 }
 
 func passingManifest() Manifest {
@@ -32,21 +66,36 @@ func passingManifest() Manifest {
 		Subject:         ManifestSubject{CommitOID: fullCommitOID, TreeOID: fullTreeOID},
 		Runner:          RunnerIdentity{LeamasVersion: "0.1.0", BinarySHA256: strings.Repeat("b", 64), VCSRevision: fullCommitOID, VCSModified: false},
 		Repository:      RepositoryIdentity{Root: ".", Branch: "main", HeadCommitOID: fullCommitOID, HeadTreeOID: fullTreeOID, WorkingTreeCleanBefore: true, WorkingTreeCleanAfter: true},
-		Checks: []CheckResult{{
-			CheckID: "focused", SubjectTreeOID: fullTreeOID, Argv: []string{"go", "test", "./..."}, WorkingDirectory: ".",
-			OverriddenEnvironment: []string{}, StartedAtUTC: "2026-07-23T07:00:00Z", FinishedAtUTC: "2026-07-23T07:00:01Z",
-			DurationMS: 1000, ExitCode: intPtr(0), Status: CheckStatusPass,
-			StdoutSHA256: strings.Repeat("c", 64), StderrSHA256: strings.Repeat("d", 64), CleanupStatus: CleanupPass,
-		}},
+		Checks: []CheckResult{
+			passingCheck("focused-count-1", "go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."),
+			passingCheck("focused-count-20", "go", "test", "-count=20", "./internal/factory/closure/...", "./cmd/leamas/..."),
+			passingCheck("focused-race-5", "go", "test", "-race", "-count=5", "./internal/factory/closure/...", "./cmd/leamas/..."),
+			passingCheck("vet", "go", "vet", "./internal/factory/closure/...", "./cmd/leamas/..."),
+			passingCheck("build", "go", "build", "-buildvcs=true", "-trimpath", "-o", "/tmp/leamas-closure-protocol-v1-self", "./cmd/leamas"),
+			passingCheck("gate-fast", "make", "gate-fast"),
+			passingCheck("diff-check", "git", "diff", "--check"),
+		},
 		Artifacts: []ArtifactResult{{ArtifactID: "summary", Path: ".factory/summary.json", Required: true, MediaType: "application/json", Status: ArtifactStatusPass, SHA256: strings.Repeat("e", 64), ByteCount: 10}},
 		DetachedEvidence: []EvidenceRecord{
-			{LogicalName: "focused.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
-			{LogicalName: "focused.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
+			{LogicalName: "focused-count-1.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
+			{LogicalName: "focused-count-1.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
+			{LogicalName: "focused-count-20.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
+			{LogicalName: "focused-count-20.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
+			{LogicalName: "focused-race-5.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
+			{LogicalName: "focused-race-5.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
+			{LogicalName: "vet.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
+			{LogicalName: "vet.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
+			{LogicalName: "build.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
+			{LogicalName: "build.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
+			{LogicalName: "gate-fast.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
+			{LogicalName: "gate-fast.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
+			{LogicalName: "diff-check.stdout", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("c", 64), Availability: "detached"},
+			{LogicalName: "diff-check.stderr", MediaType: "text/plain; charset=utf-8", SHA256: strings.Repeat("d", 64), Availability: "detached"},
 			{LogicalName: "runner.diagnostics", MediaType: "application/json", SHA256: strings.Repeat("f", 64), Availability: "detached"},
 		},
 		PatchHygiene:   PatchHygiene{Status: CheckStatusPass},
 		ClosurePolicy:  ClosurePolicyResult{TrackedFullDigestStatus: CheckStatusPass},
-		ExcludedChecks: []ExcludedCheck{{CheckID: "dupcode", SubjectTreeOID: fullTreeOID, Reason: "No dupcode-owned source changed."}},
+		ExcludedChecks: []ExcludedCheck{{CheckID: "dupcode", SubjectTreeOID: fullTreeOID, Reason: "No dupcode-owned source or registration changed."}},
 		Verdict:        VerdictPass,
 	}
 }
