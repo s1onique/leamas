@@ -2,34 +2,34 @@
   "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01",
   "plan": {
-    "sha256": "abf89f664dd19b7bf99be85a6b1e0c382526344f21dccbe164fdc7ea6d3deef0",
+    "sha256": "0b2515688b1324ec05726590ae718ee2a480441c7136e26c36b4d8edb1718e5c",
     "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.json"
   },
   "plan_freeze": {
-    "freeze_commit": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
+    "freeze_commit": "b4b43f4a396c3d05174a7eef1d053bee3378e2bf",
     "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.json",
-    "plan_blob_oid": "fdeac50dbb036736663fb5c5239d58644839f398",
-    "plan_sha256": "abf89f664dd19b7bf99be85a6b1e0c382526344f21dccbe164fdc7ea6d3deef0",
-    "subject_commit": "22d21726582febfb43ceb9fb56d49b470fdf83b6"
+    "plan_blob_oid": "e7c827f37cfa97f2cdfc47991a48a830a2ea390b",
+    "plan_sha256": "0b2515688b1324ec05726590ae718ee2a480441c7136e26c36b4d8edb1718e5c",
+    "subject_commit": "b4b43f4a396c3d05174a7eef1d053bee3378e2bf"
   },
   "subject": {
-    "commit_oid": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
-    "tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36"
+    "commit_oid": "b4b43f4a396c3d05174a7eef1d053bee3378e2bf",
+    "tree_oid": "74c047b49170bec8b429e260fee8838a26054940"
   },
   "runner": {
-    "leamas_version": "0.1.0+dev.22d21726582f.20260723T112502Z",
-    "binary_sha256": "085f0f7713685220f21aad20e090a0227a42b91b426047aff27f1b6d2f47642c",
-    "vcs_revision": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
+    "leamas_version": "0.1.0+dev.b4b43f4a396c.20260723T115920Z",
+    "binary_sha256": "6a43e60cd96d1c5d8ec58973c63cd5f78424b3860e13cab3641f3f4e5467c3ca",
+    "vcs_revision": "b4b43f4a396c3d05174a7eef1d053bee3378e2bf",
     "vcs_modified": false
   },
   "repository": {
     "root": ".",
     "remote_url": "git@github.com:s1onique/leamas.git",
     "branch": "main",
-    "head_commit_oid": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
-    "head_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+    "head_commit_oid": "b4b43f4a396c3d05174a7eef1d053bee3378e2bf",
+    "head_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
     "origin_main_commit_oid": "35a49a7ef73b25fba80e591d354d8a9a9bf06d4b",
-    "ahead_by": 1,
+    "ahead_by": 5,
     "behind_by": 0,
     "working_tree_clean_before": true,
     "working_tree_clean_after": true
@@ -37,7 +37,7 @@
   "checks": [
     {
       "check_id": "focused-count-1",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "argv": [
         "go",
         "test",
@@ -49,12 +49,12 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-07-23T11:26:13.407194897Z",
-      "finished_at_utc": "2026-07-23T11:26:27.680565125Z",
-      "duration_ms": 14273,
+      "started_at_utc": "2026-07-23T12:06:45.496270433Z",
+      "finished_at_utc": "2026-07-23T12:06:57.833695464Z",
+      "duration_ms": 12337,
       "exit_code": 0,
       "status": "pass",
-      "stdout_sha256": "33b7748b19b842bf5817c425a8b35181eb6560284a78d882472f74b2fab7990a",
+      "stdout_sha256": "03632921850f20c90f0d9a4c466d50e6638c87ef3aa9ed31f3c29d3733ac34e4",
       "stdout_byte_count": 115,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
@@ -65,7 +65,7 @@
     },
     {
       "check_id": "focused-count-20",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "argv": [
         "go",
         "test",
@@ -77,12 +77,12 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-07-23T11:26:27.683224088Z",
-      "finished_at_utc": "2026-07-23T11:30:11.960934016Z",
-      "duration_ms": 224277,
+      "started_at_utc": "2026-07-23T12:06:57.836727143Z",
+      "finished_at_utc": "2026-07-23T12:10:50.94703436Z",
+      "duration_ms": 233110,
       "exit_code": 0,
       "status": "pass",
-      "stdout_sha256": "87b62ea752ee2399671816a3671c4827d61f41be9832649e55b8f498bdcefe25",
+      "stdout_sha256": "165d76ef63a75b9dee7e7b1f211d749d08939679559be8ebf79e6a6dc61a9542",
       "stdout_byte_count": 117,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
@@ -93,7 +93,7 @@
     },
     {
       "check_id": "focused-race-5",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "argv": [
         "go",
         "test",
@@ -106,23 +106,23 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-07-23T11:30:11.964205464Z",
-      "finished_at_utc": "2026-07-23T11:30:11.974778924Z",
-      "duration_ms": 10,
-      "exit_code": 2,
-      "status": "fail",
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_byte_count": 0,
-      "stderr_sha256": "bcd3567ad97fdf5efa956a2d361fc3af77867bc977f4c224fc26d22ff130f817",
-      "stderr_byte_count": 60,
+      "started_at_utc": "2026-07-23T12:10:50.949193703Z",
+      "finished_at_utc": "2026-07-23T12:11:55.582014054Z",
+      "duration_ms": 64632,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "ea89c3bd5cc0ed06078670f1fea37c9385cd1246a9374515563bb870c3add4b2",
+      "stdout_byte_count": 116,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
       "output_truncated": false,
       "output_incomplete": false,
-      "output_bytes_observed": 60,
+      "output_bytes_observed": 116,
       "cleanup_status": "pass"
     },
     {
       "check_id": "vet",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "argv": [
         "go",
         "vet",
@@ -133,19 +133,23 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "duration_ms": 0,
-      "exit_code": null,
-      "status": "not_run_due_to_prior_failure",
+      "started_at_utc": "2026-07-23T12:11:55.590175282Z",
+      "finished_at_utc": "2026-07-23T12:11:56.04814893Z",
+      "duration_ms": 457,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
       "output_truncated": false,
       "output_incomplete": false,
       "output_bytes_observed": 0,
-      "cleanup_status": "not_required"
+      "cleanup_status": "pass"
     },
     {
       "check_id": "build",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "argv": [
         "go",
         "build",
@@ -159,19 +163,23 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "duration_ms": 0,
-      "exit_code": null,
-      "status": "not_run_due_to_prior_failure",
+      "started_at_utc": "2026-07-23T12:11:56.051896244Z",
+      "finished_at_utc": "2026-07-23T12:11:56.243304033Z",
+      "duration_ms": 191,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
       "output_truncated": false,
       "output_incomplete": false,
       "output_bytes_observed": 0,
-      "cleanup_status": "not_required"
+      "cleanup_status": "pass"
     },
     {
       "check_id": "gate-fast",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "argv": [
         "make",
         "gate-fast"
@@ -180,35 +188,45 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "duration_ms": 0,
-      "exit_code": null,
-      "status": "not_run_due_to_prior_failure",
-      "stdout_byte_count": 0,
+      "started_at_utc": "2026-07-23T12:11:56.246744453Z",
+      "finished_at_utc": "2026-07-23T12:12:19.553276239Z",
+      "duration_ms": 23306,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "c501083a0cbd7b958cfb788ff1794afa6d4b6fd244b244fbf9497a2d95159e2d",
+      "stdout_byte_count": 699,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
       "output_truncated": false,
       "output_incomplete": false,
-      "output_bytes_observed": 0,
-      "cleanup_status": "not_required"
+      "output_bytes_observed": 699,
+      "cleanup_status": "pass"
     },
     {
       "check_id": "diff-check",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "argv": [
         "git",
         "diff",
         "--check"
       ],
       "working_directory": ".",
-      "overridden_environment": [],
-      "duration_ms": 0,
-      "exit_code": null,
-      "status": "not_run_due_to_prior_failure",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-23T12:12:19.555991038Z",
+      "finished_at_utc": "2026-07-23T12:12:19.57280845Z",
+      "duration_ms": 16,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
       "output_truncated": false,
       "output_incomplete": false,
       "output_bytes_observed": 0,
-      "cleanup_status": "not_required"
+      "cleanup_status": "pass"
     }
   ],
   "artifacts": [],
@@ -216,7 +234,7 @@
     {
       "logical_name": "focused-count-1.stdout",
       "media_type": "text/plain; charset=utf-8",
-      "sha256": "33b7748b19b842bf5817c425a8b35181eb6560284a78d882472f74b2fab7990a",
+      "sha256": "03632921850f20c90f0d9a4c466d50e6638c87ef3aa9ed31f3c29d3733ac34e4",
       "byte_count": 115,
       "availability": "detached"
     },
@@ -230,7 +248,7 @@
     {
       "logical_name": "focused-count-20.stdout",
       "media_type": "text/plain; charset=utf-8",
-      "sha256": "87b62ea752ee2399671816a3671c4827d61f41be9832649e55b8f498bdcefe25",
+      "sha256": "165d76ef63a75b9dee7e7b1f211d749d08939679559be8ebf79e6a6dc61a9542",
       "byte_count": 117,
       "availability": "detached"
     },
@@ -244,15 +262,71 @@
     {
       "logical_name": "focused-race-5.stdout",
       "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
+      "sha256": "ea89c3bd5cc0ed06078670f1fea37c9385cd1246a9374515563bb870c3add4b2",
+      "byte_count": 116,
       "availability": "detached"
     },
     {
       "logical_name": "focused-race-5.stderr",
       "media_type": "text/plain; charset=utf-8",
-      "sha256": "bcd3567ad97fdf5efa956a2d361fc3af77867bc977f4c224fc26d22ff130f817",
-      "byte_count": 60,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "vet.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "vet.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "gate-fast.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "c501083a0cbd7b958cfb788ff1794afa6d4b6fd244b244fbf9497a2d95159e2d",
+      "byte_count": 699,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "gate-fast.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
       "availability": "detached"
     },
     {
@@ -274,9 +348,9 @@
   "excluded_checks": [
     {
       "check_id": "dupcode",
-      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+      "subject_tree_oid": "74c047b49170bec8b429e260fee8838a26054940",
       "reason": "No dupcode-owned source or registration changed."
     }
   ],
-  "verdict": "fail"
+  "verdict": "pass"
 }
