@@ -6,24 +6,25 @@ PASS
 
 ## Subject
 
-- Commit: `15de3d2422e3fb3cf24f49c49ece9ead977297f7`
-- Tree: `592b0bd27464e4f236e9abc9cfd39c0cc4c20926`
+- Commit: `d8aafee9d327488cddd68c99729a2d7e7074c562`
+- Tree: `a21d3789bbb344fc80623c9bfa790662d27b960f`
 
 ## Plan
 
 - Path: `docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.json`
-- SHA-256: `d22c5a423d885586ca28cb01f0814a6373d9b598a57fbfd14bfbd7cba14bda2a`
+- SHA-256: `784a01171cc926d445e00b65e917f9cd88ad418b0bb7890ad2a6a316ec073ec7`
 
 ## Checks
 
-Ordered results: 4.
+Ordered results: 5.
 
 | Check | Result | Duration | Exit |
 |---|---|---:|---:|
-| focused-count-1 | PASS | 3422ms | 0 |
-| vet | PASS | 432ms | 0 |
-| build | PASS | 1516ms | 0 |
-| diff-check | PASS | 17ms | 0 |
+| focused-count-1 | PASS | 3173ms | 0 |
+| vet | PASS | 206ms | 0 |
+| build | PASS | 856ms | 0 |
+| gate-fast | PASS | 23305ms | 0 |
+| diff-check | PASS | 10ms | 0 |
 
 ## Artifacts
 
@@ -42,9 +43,9 @@ None.
 
 ## Runner identity
 
-- Leamas version: `0.1.0+dev.5ca47ea9a9f9.20260723T075753Z`
-- Binary SHA-256: `874392af311cc91c53b4cc9ea3d5461080ab89c6d1c7a7da71284d53b7085e07`
-- VCS revision: `5ca47ea9a9f9735f16826b26e9561f00a311f148`
+- Leamas version: `0.1.0+dev.d8aafee9d327.20260723T085914Z`
+- Binary SHA-256: `eb94aef419b3ce83397aa9236d6771c55b3b9991bcbf1db7b0d84699e2235ce4`
+- VCS revision: `d8aafee9d327488cddd68c99729a2d7e7074c562`
 - VCS modified: `false`
 
 ## Lifecycle transition
