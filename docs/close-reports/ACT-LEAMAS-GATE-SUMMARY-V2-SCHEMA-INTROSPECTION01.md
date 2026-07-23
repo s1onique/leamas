@@ -181,8 +181,9 @@ dep  github.com/santhosh-tekuri/jsonschema/v6  v6.0.2
 ```
 
 This was added by ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01 and is
-retained by this ACT. The validator dependency is required because
-the decoder compiles and uses the schemas at runtime.
+retained by this ACT. The schema-introspection ACT added no new
+runtime validator dependency. The existing production decoder
+dependency on jsonschema/v6 remains unchanged.
 
 Correct closure evidence:
 
@@ -192,12 +193,9 @@ validator_runtime_dependency           = true
 schema_introspection_runtime_delta      = none
 ```
 
-The validator dependency is **test-only** in the sense that the
-extra tests added by this ACT (`fixtures_validation_test.go`,
-`fixtures_matrix_test.go`, `registry_test.go`,
-`registry_format_test.go`) consume the schemas through the
-registry. The production binary path is unchanged from the
-pre-ACT state.
+The schema-introspection ACT added no new runtime validator
+dependency. The existing production decoder dependency on
+jsonschema/v6 remains unchanged.
 
 ## Schema hashes
 
@@ -254,19 +252,51 @@ smoke runs from a temporary directory created by `t.TempDir()`.
 
 ## Identity chain
 
+The identity chain is recorded with literal full OIDs (no
+placeholders). The chain is recorded in the order requested by
+the ACT.
+
 ```
-baseline_commit_oid: dff6f847000130f66a8d950da667c4924a818a9f
-baseline_tree_oid:   (see git rev-parse)
+baseline_commit_oid       = dff6f847000130f66a8d950da667c4924a818a9f
+baseline_tree_oid         = b89356a429d5558ccf769cd18a4c3cc61dc8be6f
 
-implementation_commit_oid: 0d9d30561004c2cd66fe516fd55db0988759794b
-implementation_tree_oid:   (see git rev-parse)
+implementation_commit_oid = 0d9d30561004c2cd66fe516fd55db0988759794b
+implementation_tree_oid   = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
 
+tested_commit_oid         = 0d9d30561004c2cd66fe516fd55db0988759794b
+tested_tree_oid           = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
+
+evidence_commit_oid       = bd13513908c784f82ae26e0e9adc787dd2584aff
+evidence_tree_oid         = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
+
+close_commit_oid          = <populated by the correction commit>
+close_tree_oid            = <populated by the correction commit>
+
+tag_object_oid            = f37190a80735ab60ebebb57be24bfd81f51b0c71
+tag_target_oid            = bd13513908c784f82ae26e0e9adc787dd2584aff
+tag_target_tree_oid       = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
+```
+
+The closure tag `act/leamas-gate-summary-v2-schema-introspection01`
+is an annotated tag object (`git cat-file -t` reports `tag`).
+
+## Proof binary
+
+```
 proof_binary_sha256:        2c6c82a455279d23f99393bb33a4cdd47ca522af0d4a0807e8002255505ddee8
 proof_binary_vcs_revision:  0d9d30561004c2cd66fe516fd55db0988759794b
 proof_binary_vcs_modified:  false
+```
 
-v1_schema_file_sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
-v2_schema_file_sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
+The proof binary was built from the tested commit with
+`-buildvcs=true -trimpath`. The `vcs.modified=false` confirms a
+clean working tree at the proof stage.
+
+## Schema hashes
+
+```text
+v1_sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
+v2_sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
 v1_cli_output_sha256:  6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
 v2_cli_output_sha256:  11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
 
@@ -278,6 +308,41 @@ validator_module_version: v6.0.2
 validator_runtime_dependency: true
 validator_added_by_this_act: false
 ```
+
+## Fresh Gate Summary digest
+
+A fresh targeted digest was generated from the clean tested tree
+on 2026-07-23T04:32:25Z covering the range
+`dff6f847000130f66a8d950da667c4924a818a9f..HEAD`. The digest is
+preserved at `build/fresh-gate-summary.txt` and
+`build/fresh-gate-summary-LSATFORINTROSPECTION01.txt`.
+
+The digest header is:
+
+```
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
+LEAMAS_VERSION: 0.1.0
+LEAMAS_COMMIT: unknown
+LEAMAS_BUILD_TIME: unknown
+DIGEST_MODE: range
+DIGEST_CREATED_AT: 2026-07-23T04:32:25Z
+```
+
+The digest sha256 is `786b26408fbb3464fbc3c61d172e31ce13df6fc0bbb16dee03d9339672bbb69e`.
+
+The digest proves the schema-introspection implementation is
+present in the tested tree (commit `0d9d305`) and was merged to
+HEAD. The digest contains the full implementation diff:
+
+```
+A  cmd/leamas/gate_summary.go
+A  cmd/leamas/gate_summary_schema.go
+A  cmd/leamas/gate_summary_schema_failure_test.go
+A  cmd/leamas/gate_summary_schema_subprocess_test.go
+A  cmd/leamas/gate_summary_schema_test.go
+```
+
+plus the embedded schema subpackage and the documentation.
 
 ## Deferred non-goals
 
@@ -328,7 +393,7 @@ semantics.
 
 ```text
 ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01:
-  CLOSED
+  CLOSED (CORRECTION01-evidence-reconciled)
 
 Gate Summary v1 schema:
   SUPPORTED  self-contained in installed binary
