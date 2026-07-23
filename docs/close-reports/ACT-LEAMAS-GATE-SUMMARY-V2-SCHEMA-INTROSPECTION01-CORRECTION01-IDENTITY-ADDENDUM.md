@@ -26,9 +26,13 @@ close_tree_oid            = d50a316ca1d064edf3ef255b49c1643b2da278ec
 correction02_commit_oid   = ccbf85273830a9a2d245005a91608317c10d03a4
 correction02_tree_oid     = 502be40c35ec5f074743f3430c29a6159f0f5d2c
 
-tag_object_oid            = ef8261092ef49133c2f45fa8299e480dc4a7a20a
-tag_target_oid            = 68c1b7b2b6352d348e50db7fe23f3daea9559cea
-tag_target_tree_oid       = d50a316ca1d064edf3ef255b49c1643b2da278ec
+tag_object_oid (CORRECTION01) = ef8261092ef49133c2f45fa8299e480dc4a7a20a
+tag_target_oid (CORRECTION01) = 68c1b7b2b6352d348e50db7fe23f3daea9559cea
+tag_target_tree_oid (CORRECTION01) = d50a316ca1d064edf3ef255b49c1643b2da278ec
+
+correction02_tag_object_oid  = 14a5f060319f7c453110626dd49e6b75e3de32c3
+correction02_tag_target_oid  = fd68af9d1f08ddd0b064a85065f46bf4d7b17885
+correction02_tag_target_tree_oid = a3c2eeb91d6cd761b5900c756284c903cbf98539
 ```
 
 The closure tag `act/leamas-gate-summary-v2-schema-introspection01`
