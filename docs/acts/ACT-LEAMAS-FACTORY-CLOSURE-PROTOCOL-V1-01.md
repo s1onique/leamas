@@ -242,3 +242,52 @@ Not required:
 ```text
 make factorize
 ```
+
+## Final board transition (executed)
+
+```text
+ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01:
+  PUBLISHED
+
+Closure Protocol v1:
+  AVAILABLE
+  SELF-HOSTED
+  SERIAL
+  FAIL-FAST
+
+Legacy report-only closure:
+  DEPRECATED for new Leamas ACTs
+
+Full tracked digests:
+  FORBIDDEN for new closure evidence
+
+Tag-object identities:
+  EXTERNAL EVIDENCE ONLY
+
+ClineMM DOGFOOD01:
+  unaffected
+
+ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-CROSS-REPO-ADOPTION01:
+  READY
+```
+
+## Evidence summary
+
+* Subject commit: `15de3d2422e3fb3cf24f49c49ece9ead977297f7`
+* Closure commit: `38908e93cd0670282b68d702be9c6d581bf74b6a`
+* Closure tree: `58a01036fa98f2ecc35f23e1bd7774d5c0b71a57`
+* Annotated tag: `act/leamas-factory-closure-protocol-v1-01`
+  (peeled commit: `38908e93cd0670282b68d702be9c6d581bf74b6a`,
+  tag object: `358add3ee876aa9b11b5bfb5a158abb2414babfb`)
+* Detached evidence directory:
+  `/tmp/leamas-closure/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01/15de3d2/`
+* Compact manifest:
+  `docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.json`
+* Generated report:
+  `docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.md`
+
+Lifecycle state derived from Git:
+
+* Local: `CLOSED_LOCAL`
+* Remote (after `git push` of branch and tag):
+  `PUBLISHED`
