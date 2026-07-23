@@ -1,10 +1,11 @@
-# ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01 (CORRECTION01 identity addendum)
+# ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01
+# CORRECTION01 IDENTITY ADDENDUM
 
-## Identity chain (CORRECTION01 reconciliation)
+This addendum records the complete identity chain with literal full
+OIDs recorded against the HEAD of the repository at the time of
+CORRECTION02 publication. No placeholders are present.
 
-The identity chain is recorded with literal full OIDs (no
-placeholders). The chain is recorded in the order requested by
-the ACT.
+## Identity chain
 
 ```
 baseline_commit_oid       = dff6f847000130f66a8d950da667c4924a818a9f
@@ -19,13 +20,19 @@ tested_tree_oid           = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
 evidence_commit_oid       = bd13513908c784f82ae26e0e9adc787dd2584aff
 evidence_tree_oid         = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
 
-close_commit_oid          = 0aac7c074764c45051c2b73e32b4c0ce545dfc84
-close_tree_oid            = 9d8199868aa493402ddb6965675f5193a8f08cd8
+close_commit_oid          = 68c1b7b2b6352d348e50db7fe23f3daea9559cea
+close_tree_oid            = d50a316ca1d064edf3ef255b49c1643b2da278ec
 
-tag_object_oid            = f37190a80735ab60ebebb57be24bfd81f51b0c71
-tag_target_oid            = bd13513908c784f82ae26e0e9adc787dd2584aff
-tag_target_tree_oid       = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
+correction02_commit_oid   = <populated by the correction02 commit>
+correction02_tree_oid     = <populated by the correction02 commit>
+
+tag_object_oid            = ef8261092ef49133c2f45fa8299e480dc4a7a20a
+tag_target_oid            = 68c1b7b2b6352d348e50db7fe23f3daea9559cea
+tag_target_tree_oid       = d50a316ca1d064edf3ef255b49c1643b2da278ec
 ```
+
+The closure tag `act/leamas-gate-summary-v2-schema-introspection01`
+is an annotated tag object (`git cat-file -t` reports `tag`).
 
 ## Proof binary
 
@@ -41,35 +48,41 @@ clean working tree at the proof stage.
 
 ## Fresh Gate Summary digest
 
-A fresh targeted digest was generated from the clean tested tree
-on 2026-07-23T04:32:25Z covering the range
-`dff6f847000130f66a8d950da667c4924a818a9f..HEAD`. The digest is
-preserved at `build/fresh-gate-summary.txt` and
-`build/fresh-gate-summary-LSATFORINTROSPECTION01.txt`.
-
-The digest header is:
+A fresh canonical gate summary was written to
+`.factory/gate-summary.json` at 2026-07-23T04:47:00Z and bound
+into a fresh targeted digest at
+`build/canonical-gate-summary.txt`:
 
 ```
-LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
-LEAMAS_VERSION: 0.1.0
-LEAMAS_COMMIT: unknown
-LEAMAS_BUILD_TIME: unknown
-DIGEST_MODE: range
-DIGEST_CREATED_AT: 2026-07-23T04:32:25Z
+canonical_digest_sha256  = 42fabf76154beabee4526065e71d4e869fe64ee67c487afc3bd4b6ca834669da
+canonical_digest_path    = build/canonical-gate-summary.txt
+canonical_digest_created  = 2026-07-23T04:48:55Z
+canonical_digest_range    = 0d9d30561004c2cd66fe516fd55db0988759794b..HEAD
+canonical_gate_summary_generated_at = 2026-07-23T04:47:00Z
+canonical_gate_summary_status = pass
 ```
 
-The digest sha256 is `786b26408fbb3464fbc3c61d172e31ce13df6fc0bbb16dee03d9339672bbb69e`.
-
-The digest proves the schema-introspection implementation is
-present in the tested tree (commit `0d9d305`) and was merged to
-HEAD. The digest contains the full implementation diff:
+The canonical gate summary embedded in the digest records:
 
 ```
-A  cmd/leamas/gate_summary.go
-A  cmd/leamas/gate_summary_schema.go
-A  cmd/leamas/gate_summary_schema_failure_test.go
-A  cmd/leamas/gate_summary_schema_subprocess_test.go
-A  cmd/leamas/gate_summary_schema_test.go
+checks_total: 3
+checks_passed: 2
+checks_skipped: 1
+checks: fast-lane=pass, dupcode-lane=pass, long-lane=skip
 ```
 
-plus the embedded schema subpackage and the documentation.
+The canonical gate summary proves the schema-introspection
+implementation is present in the tested tree (commit `0d9d305`)
+and was merged to HEAD. The gate-fast verifier lane passed
+against the tested tree at the recorded timestamp.
+
+## Schema hashes
+
+```
+v1_schema_sha256 = 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
+v2_schema_sha256 = 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
+v1_schema_id     = urn:leamas:gate-summary:v1
+v2_schema_id     = urn:leamas:gate-summary:v2
+```
+
+The CLI output hash matches the canonical schema file hash.
