@@ -282,7 +282,7 @@ index 9ede26f..f4b173e 100644
 +++ b/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md
 @@ -24,19 +24,26 @@ case-sensitive.
  ## Files changed
- 
+
  ```
 -cmd/leamas/gate_summary.go                       (new, ~50 lines)
 -cmd/leamas/gate_summary_schema.go                 (new, ~190 lines)
@@ -316,17 +316,17 @@ index 9ede26f..f4b173e 100644
  docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md (this file)
 +README.md                                         (modified: schema introspection section)
  ```
- 
+
  ## Schema IDs
 @@ -49,15 +56,55 @@ The schema identifiers are stable URNs:
  The IDs are stable identifiers, not network-fetch requirements.
  The schema-printing path never reads them from outside the binary.
- 
+
 -## Schema hashes
 +### Schema ID migration governance
 +
 +Before this ACT, the production schemas used
- 
+
 -```text
 -v1 sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
 -v2 sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
@@ -334,7 +334,7 @@ index 9ede26f..f4b173e 100644
 +https://leamas.local/schemas/gate-summary-v1.schema.json
 +https://leamas.local/schemas/gate-summary-v2.schema.json
  ```
- 
+
 -Both hashes match between the canonical checked-in files and the
 -CLI output (verified via `cmp --silent`).
 +and the production schema compilation and diagnostic translation
@@ -377,21 +377,21 @@ index 9ede26f..f4b173e 100644
 +* `TestCLIListWriteFailureFailsClosed`
 +* `TestCLIListShortWriteFailsClosed`
 +* `TestCLIShowShortWriteFails`
- 
+
  ## Unknown-field policy
- 
+
 @@ -72,42 +119,47 @@ Both schemas reject canonical structurally-invalid fixtures
  (`v1-unknown-field.json`, `v2-unknown-field.json`, etc.) at the
  JSON-Schema layer.
- 
+
 -## Structural-vs-semantic boundary
 +## Schema-vs-decoder-vs-normalizer matrix
- 
+
 -The schema deliberately accepts the following fixtures that the
 -normalizer rejects:
 +The schema deliberately accepts the following v2 fixtures that the
 +decoder accepts for handoff but the normalizer rejects:
- 
+
 -```text
 -v2-duplicate-check-name.json          (duplicate check name)
 -v2-fail-exit-zero.json                 (overall fail with exit 0)
@@ -411,17 +411,17 @@ index 9ede26f..f4b173e 100644
 +v2-test-total-mismatch.json         (test totals arithmetic mismatch)
 +v2-unavailable-nonnull-exit.json    (unavailable with non-null exit)
  ```
- 
+
  These failures are not JSON-Schema-representable; the normalizer
 -owns them. The fixture matrix is documented in
 -`internal/gatesummary/schema/fixtures_validation_test.go`.
 +owns them.
- 
+
 -The schema also accepts the following fixtures that the pre-schema
 -envelope scanner rejects before the schema is invoked:
 +The schema also accepts the following v2 fixtures that the
 +pre-schema envelope scanner rejects before the schema is invoked:
- 
+
 -```text
 +```
  v2-schema-version-decimal.json   (decimal schema_version)
@@ -430,10 +430,10 @@ index 9ede26f..f4b173e 100644
 +v2-truncated.json                 (malformed JSON; JSON decode fails
 +                                   before validation)
  ```
- 
+
  These rejections happen before the schema stage; the schema cannot
  reject them by definition.
- 
+
 +The matrix completeness test
 +`TestFixtureMatrixCompleteCoverage` enforces that every committed
 +invalid fixture is classified in exactly one closed-set bucket per
@@ -441,23 +441,23 @@ index 9ede26f..f4b173e 100644
 +fixture is missing from all three buckets or overspecified.
 +
  ## Wire contract alignment
- 
+
 -The schema tracks the decoder's accepted wire format. Key alignment
 -rules:
 +The schema follows the decoder's accepted wire format:
- 
+
  * Required fields match decoder `validate` rejects.
  * Optional fields match decoder pointer types.
 @@ -119,140 +171,86 @@ rules:
  * `additionalProperties: false` matches the decoder's
    `DisallowUnknownFields`.
- 
+
 -## Tests run
 +## Validator dependency statement
 +
 +The production binary carries the JSON Schema validator as a
 +runtime dependency:
- 
+
 -```bash
 -go test ./internal/gatesummary/... ./cmd/leamas/ -count=1   # green
 -go test ./internal/gatesummary/... ./cmd/leamas/ -count=20  # green
@@ -470,20 +470,20 @@ index 9ede26f..f4b173e 100644
 +```
 +dep  github.com/santhosh-tekuri/jsonschema/v6  v6.0.2
  ```
- 
+
 -## CLI smoke test
 +This was added by ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01 and is
 +retained by this ACT. The schema-introspection ACT added no new
 +runtime validator dependency. The existing production decoder
 +dependency on jsonschema/v6 remains unchanged.
- 
+
 -```text
 -$ /tmp/leamas-schema-introspection gate-summary schema list
 -VERSION  STATUS     SCHEMA_ID
 -v1       supported  urn:leamas:gate-summary:v1
 -v2       current    urn:leamas:gate-summary:v2
 +Correct closure evidence:
- 
+
 -$ /tmp/leamas-schema-introspection gate-summary schema show v1 > v1.schema.json
 -$ /tmp/leamas-schema-introspection gate-summary schema show v2 > v2.schema.json
 -$ cmp --silent internal/gatesummary/schema/gate-summary-v1.schema.json v1.schema.json
@@ -500,19 +500,19 @@ index 9ede26f..f4b173e 100644
 +validator_runtime_dependency           = true
 +schema_introspection_runtime_delta      = none
  ```
- 
+
 -## Working directory independence
 +The schema-introspection ACT added no new runtime validator
 +dependency. The existing production decoder dependency on
 +jsonschema/v6 remains unchanged.
- 
+
 -The schema bytes are embedded at compile time. The CLI output does
 -not depend on the current working directory, environment, locale,
 -timezone, or network availability.
 -
 -## Identity chain
 +## Schema hashes
- 
+
  ```text
 -baseline_commit_oid: dff6f847000130f66a8d950da667c4924a818a9f
 -baseline_tree_oid:   (see git rev-parse)
@@ -535,7 +535,7 @@ index 9ede26f..f4b173e 100644
 +v1 sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
 +v2 sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
  ```
- 
+
 -Note: `vcs.modified=true` is expected at the proof stage because the
 -ACT is still implementing changes. The proof binary is a fixed
 -working-tree build; the closure tag will be published against a clean
@@ -565,10 +565,10 @@ index 9ede26f..f4b173e 100644
 -These are intentionally deferred to successor ACTs.
 +Both hashes match between the canonical checked-in files and the
 +CLI output (verified via `cmp --silent`).
- 
+
 -## Compatibility statement
 +## Tests run
- 
+
 -```text
 -Gate Summary v1 remains supported.
 +```bash
@@ -579,21 +579,21 @@ index 9ede26f..f4b173e 100644
 +CGO_ENABLED=0 make gate-fast                                  # green
 +gofmt -w ./... && go vet ./...                                 # green
 +```
- 
+
 -Gate Summary v2 is the current wire format.
 +The subprocess tests bind the clean-binary smoke from a temporary
 +directory:
- 
+
 -A schema version is never changed in place. Backward-incompatible
 -wire changes require a new Gate Summary schema version and a new
 -schema ID.
 +```bash
 +go test ./cmd/leamas/ -run "TestSubprocess" -count=1
  ```
- 
+
 -## Semantic disclaimer
 +## CLI smoke test
- 
+
 -```text
 -The JSON Schemas define structural wire compatibility.
 +```bash
@@ -601,7 +601,7 @@ index 9ede26f..f4b173e 100644
 +VERSION  STATUS     SCHEMA_ID
 +v1       supported  urn:leamas:gate-summary:v1
 +v2       current    urn:leamas:gate-summary:v2
- 
+
 -Leamas Decode and Normalize remain the executable authority for
 -lifecycle, diagnostic, aggregate-status, ordering, and cross-field
 -semantics.
@@ -611,11 +611,11 @@ index 9ede26f..f4b173e 100644
 +$ cmp --silent internal/gatesummary/schema/gate-summary-v2.schema.json v2.schema.json
 +$ echo "v1 cmp OK; v2 cmp OK"
  ```
- 
+
 -## Final board transition
 +The CLI output is independent of the working directory,
 +environment, locale, timezone, and network availability.
- 
+
 -```text
 -ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01:
 -  CLOSED
@@ -624,22 +624,22 @@ index 9ede26f..f4b173e 100644
 -  SUPPORTED
 -  self-contained in installed binary
 +## Working directory independence
- 
+
 -Gate Summary v2 schema:
 -  CURRENT
 -  self-contained in installed binary
 +The schema bytes are embedded at compile time. The CLI output
 +does not depend on the current working directory, environment,
 +locale, timezone, or network availability. The process-level
- 
+
 -ClineMM DOGFOOD01:
 -  unaffected; may continue independently
 +## Identity proof and digest
- 
+
 -Leamas v0.2.0:
 -  schema-introspection requirement satisfied
 +Identity chain, proof-binary hashes, and the fresh Gate Summary digest are recorded in the companion addendum file:
- 
+
 -ACT-LEAMAS-GATE-SUMMARY-V2-RELEASE01:
 -  READY only when DOGFOOD01 is also CLOSED
 -```
