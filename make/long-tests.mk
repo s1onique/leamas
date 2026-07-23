@@ -134,18 +134,24 @@ factorize-context-guard:
 		exit 2; \
 	fi
 
-# factorize-canonical is the internal target that runs the full factorize.
-# It is NOT a prerequisite of factorize; it is invoked only after factorize-context-guard passes.
-factorize-canonical:
+# factorize-internal contains the actual factorize work.
+# This target should NOT be called directly; use factorize or factorize-canonical.
+factorize-internal:
 	@echo "Running factory factorize..."
 	@chmod +x scripts/verify_*.sh
 	@go run ./cmd/leamas factory factorize
 
+# factorize-canonical is the canonical factorize entry point.
+# It depends on factorize to apply the guard first.
+# Both LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize and
+# LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize-canonical will work.
+factorize-canonical: factorize
+
 # factorize is the public entry point that guards against editor-context execution.
 # The guard MUST execute before any factorize work. Sequential $(MAKE) ensures this:
-# 1. factorize-context-guard runs first; if it fails, factorize-canonical never executes.
-# 2. factorize-canonical runs only if the guard passes.
+# 1. factorize-context-guard runs first; if it fails, factorize-internal never executes.
+# 2. factorize-internal runs only if the guard passes.
 # 3. Guard failure is non-zero, non-success, and emits no factorize markers.
 factorize:
 	@$(MAKE) --no-print-directory factorize-context-guard
-	@$(MAKE) --no-print-directory factorize-canonical
+	@$(MAKE) --no-print-directory factorize-internal

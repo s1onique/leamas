@@ -1,7 +1,7 @@
 {
   "act_id": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION02",
   "protocol_version": "1",
-  "closed_at": "2026-07-23T14:12:00Z",
+  "closed_at": "2026-07-23T14:35:00Z",
   "subject_commit": "f89f994fc593e0f5b61fd291af24d229fa9197a2",
   "subject_tree": "7c4e48eb6972fa74d863565ea221a9436614e986",
   "files_changed": [
@@ -17,7 +17,9 @@
     "make factorize now refuses in editor/Cline contexts with exit 2",
     "factorize-context-guard runs before any verifier execution",
     "LEAMAS_ALLOW_FULL_FACTORIZE=1 overrides the refusal",
-    "AGENTS.md and .clinerules/leamas.md no longer recommend routine full-gate/factorize"
+    "AGENTS.md and .clinerules/leamas.md no longer recommend routine full-gate/factorize",
+    "factorize-canonical depends on factorize, so guard applies to both entry points",
+    "No unguarded Make target can start factorize work"
   ],
   "verification_commands": [
     {
@@ -28,7 +30,7 @@
     {
       "command": "CGO_ENABLED=0 go test ./internal/factory/gate/... -run 'Factorize|Context'",
       "result": "PASS",
-      "duration": "0.854s"
+      "duration": "218.27s"
     },
     {
       "command": "LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize",
@@ -39,8 +41,14 @@
   "test_results": {
     "truth_table_cases": 16,
     "routing_tests": 3,
-    "public_target_tests": 1,
+    "public_target_tests": 4,
     "all_passed": true
+  },
+  "production_path_tests": {
+    "make_factorize_refuses": "PASS",
+    "make_factorize_canonical_refuses": "PASS",
+    "make_j8_factorize_refuses": "PASS",
+    "make_factorize_canonical_with_override_allows": "PASS"
   },
   "skipped_checks": [],
   "follow_up_acts": [

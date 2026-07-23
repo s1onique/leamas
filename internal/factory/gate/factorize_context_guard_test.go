@@ -43,7 +43,7 @@ func TestFactorizeContextGuardTruthTable(t *testing.T) {
 		{name: "invalid_override_fails_closed", env: map[string]string{"LEAMAS_ALLOW_FULL_FACTORIZE": "yes"}, wantOutcome: exectest.OutcomeExitFailure, wantCode: 2, wantErrorInStderr: true},
 
 		// Override=0 should NOT bypass editor refusal
-		{name: "override_0_allows", env: map[string]string{"LEAMAS_GATE_CALLER": "cline", "LEAMAS_ALLOW_FULL_FACTORIZE": "0"}, wantOutcome: exectest.OutcomeExitFailure, wantCode: 2, wantRefuseInStderr: true},
+		{name: "override_0_does_not_bypass_editor_refusal", env: map[string]string{"LEAMAS_GATE_CALLER": "cline", "LEAMAS_ALLOW_FULL_FACTORIZE": "0"}, wantOutcome: exectest.OutcomeExitFailure, wantCode: 2, wantRefuseInStderr: true},
 
 		// Invalid caller with override should still fail (caller validation happens first)
 		{name: "invalid_caller_with_override_fails_closed", env: map[string]string{"LEAMAS_GATE_CALLER": "typo", "LEAMAS_ALLOW_FULL_FACTORIZE": "1"}, wantOutcome: exectest.OutcomeExitFailure, wantCode: 2, wantErrorInStderr: true},
@@ -234,5 +234,115 @@ func TestFactorizePublicTargetRefusesInEditorContext(t *testing.T) {
 		if strings.Contains(allOutput, forbidden) {
 			t.Fatalf("unexpected factorize marker %q", forbidden)
 		}
+	}
+}
+
+// TestFactorizeCanonicalRefusesInEditorContext verifies factorize-canonical also refuses.
+func TestFactorizeCanonicalRefusesInEditorContext(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	env := buildTestEnv(t, map[string]string{
+		"LEAMAS_GATE_CALLER": "codium",
+	})
+	dir := findRepoRoot(t)
+
+	result := exectest.RunMake(ctx, dir, env, "factorize-canonical")
+
+	if result.Outcome != exectest.OutcomeExitFailure {
+		t.Fatalf("outcome = %v, want exit failure; stdout=%q stderr=%q",
+			result.Outcome,
+			result.Stdout,
+			result.Stderr,
+		)
+	}
+	if result.ExitCode != 2 {
+		t.Fatalf("exit code = %d, want 2", result.ExitCode)
+	}
+
+	stderr := string(result.Stderr)
+	if !strings.Contains(stderr, "REFUSED") {
+		t.Fatalf("missing refusal diagnostic: %q", stderr)
+	}
+
+	// Must not have started factorize work
+	allOutput := string(result.Stdout) + stderr
+	for _, forbidden := range []string{
+		"Running factory factorize",
+		"FACTORIZE PASSED",
+		"FACTORIZE FAILED",
+	} {
+		if strings.Contains(allOutput, forbidden) {
+			t.Fatalf("unexpected factorize marker %q", forbidden)
+		}
+	}
+}
+
+// TestFactorizeParallelRefusesInEditorContext verifies parallel invocation refuses.
+func TestFactorizeParallelRefusesInEditorContext(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	env := buildTestEnv(t, map[string]string{
+		"LEAMAS_GATE_CALLER": "codium",
+	})
+	dir := findRepoRoot(t)
+
+	result := exectest.RunMake(ctx, dir, env, "-j8", "factorize")
+
+	if result.Outcome != exectest.OutcomeExitFailure {
+		t.Fatalf("outcome = %v, want exit failure; stdout=%q stderr=%q",
+			result.Outcome,
+			result.Stdout,
+			result.Stderr,
+		)
+	}
+	if result.ExitCode != 2 {
+		t.Fatalf("exit code = %d, want 2", result.ExitCode)
+	}
+
+	stderr := string(result.Stderr)
+	if !strings.Contains(stderr, "REFUSED") {
+		t.Fatalf("missing refusal diagnostic: %q", stderr)
+	}
+
+	// Must not have started factorize work
+	allOutput := string(result.Stdout) + stderr
+	for _, forbidden := range []string{
+		"Running factory factorize",
+		"FACTORIZE PASSED",
+		"FACTORIZE FAILED",
+	} {
+		if strings.Contains(allOutput, forbidden) {
+			t.Fatalf("unexpected factorize marker %q", forbidden)
+		}
+	}
+}
+
+// TestFactorizeCanonicalWithOverrideAllows verifies factorize-canonical with override allows.
+func TestFactorizeCanonicalWithOverrideAllows(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second) // 5 min for factorize
+	defer cancel()
+
+	env := buildTestEnv(t, map[string]string{
+		"LEAMAS_GATE_CALLER": "codium",
+		"LEAMAS_ALLOW_FULL_FACTORIZE": "1",
+	})
+	dir := findRepoRoot(t)
+
+	result := exectest.RunMake(ctx, dir, env, "factorize-canonical")
+
+	if result.Outcome != exectest.OutcomeSuccess {
+		t.Fatalf("outcome = %v, want success; stdout=%q stderr=%q",
+			result.Outcome,
+			result.Stdout,
+			result.Stderr,
+		)
+	}
+
+	// Should have run factorize
+	if !strings.Contains(string(result.Stdout), "FACTORIZE PASSED") {
+		t.Fatalf("expected FACTORIZE PASSED, got stdout=%q stderr=%q",
+			result.Stdout, result.Stderr)
 	}
 }
