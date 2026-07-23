@@ -48,9 +48,9 @@ tag_object_oid (CORRECTION03) = bd766b44951d3ced637e0211973324baa52927cc
 tag_target_oid (CORRECTION03) = 9f62665376980f5a3d166326e17f8f23839dcc67
 tag_target_tree_oid (CORRECTION03) = fba11740a7948f85003511ce1f11d2525e14385f
 
-tag_object_oid (CORRECTION04) = <populated by the correction04 tag>
-tag_target_oid (CORRECTION04) = 63148e4ba34e89989581cec4a517d0d8eada3fe2
-tag_target_tree_oid (CORRECTION04) = 2a124067e293048a7411dcb15be7623552a3f631
+tag_object_oid (CORRECTION04) = 066f542df924ec2ed6f1e1abe2ba89855045be86
+tag_target_oid (CORRECTION04) = ba25534fdb18e6b14e9a61fc0894db3635d2ce1b
+tag_target_tree_oid (CORRECTION04) = f0c84c9b9c50d8cc077f6f01e7100096f011c165
 ```
 
 ## Proof binary
