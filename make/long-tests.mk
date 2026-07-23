@@ -140,11 +140,6 @@ factorize-context-guard:
 # LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize-canonical will work.
 factorize-canonical: factorize
 
-# FACTORIZE_COMMAND is the test/build override seam.
-# Production: executes the real multi-minute factorize verifier suite.
-# Tests: override with a bounded sentinel (e.g., touch sentinel && echo done).
-FACTORIZE_COMMAND ?= go run ./cmd/leamas factory factorize
-
 # factorize is the public entry point that guards against editor-context execution.
 # The guard MUST execute before any factorize work. Sequential $(MAKE) ensures this:
 # 1. factorize-context-guard runs first; if it fails, the real command never executes.
@@ -154,4 +149,4 @@ factorize:
 	@$(MAKE) --no-print-directory factorize-context-guard
 	@echo "Running factory factorize..."
 	@chmod +x scripts/verify_*.sh
-	@$(FACTORIZE_COMMAND)
+	@go run ./cmd/leamas factory factorize
