@@ -2,8 +2,8 @@
   "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01",
   "baseline": {
-    "commit_oid": "8593da5e7db9f3a4c8d06e08bd0614c0d0c8f131",
-    "tree_oid": "3b832fa770fdba61c7c8395c467e1c447f7c4fb0"
+    "commit_oid": "aedaa99279d4b05ea5a843eae5fbf6f328dc89cc",
+    "tree_oid": "6cda55662a80c22dc89b36ed0af7356adf67e429"
   },
   "execution": {
     "mode": "serial_fail_fast"
