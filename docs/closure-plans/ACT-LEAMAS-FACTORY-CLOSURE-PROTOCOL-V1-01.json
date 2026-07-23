@@ -48,7 +48,7 @@
         "./cmd/leamas/..."
       ],
       "environment": {
-        "CGO_ENABLED": "0"
+        "CGO_ENABLED": "1"
       },
       "id": "focused-race-5",
       "mode": "run",
@@ -107,13 +107,18 @@
         "diff",
         "--check"
       ],
-      "environment": {},
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "diff-check",
       "mode": "run",
       "timeout_seconds": 60,
       "working_directory": "."
     },
     {
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "dupcode",
       "mode": "exclude",
       "reason": "No dupcode-owned source or registration changed."
