@@ -1,0 +1,222 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01",
+  "plan": {
+    "sha256": "d22c5a423d885586ca28cb01f0814a6373d9b598a57fbfd14bfbd7cba14bda2a",
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.json"
+  },
+  "subject": {
+    "commit_oid": "15de3d2422e3fb3cf24f49c49ece9ead977297f7",
+    "tree_oid": "592b0bd27464e4f236e9abc9cfd39c0cc4c20926"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev.5ca47ea9a9f9.20260723T075753Z",
+    "binary_sha256": "874392af311cc91c53b4cc9ea3d5461080ab89c6d1c7a7da71284d53b7085e07",
+    "vcs_revision": "5ca47ea9a9f9735f16826b26e9561f00a311f148",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "15de3d2422e3fb3cf24f49c49ece9ead977297f7",
+    "head_tree_oid": "592b0bd27464e4f236e9abc9cfd39c0cc4c20926",
+    "origin_main_commit_oid": "dff6f847000130f66a8d950da667c4924a818a9f",
+    "ahead_by": 23,
+    "behind_by": 0,
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "checks": [
+    {
+      "check_id": "focused-count-1",
+      "subject_tree_oid": "592b0bd27464e4f236e9abc9cfd39c0cc4c20926",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-23T08:11:00.872600644Z",
+      "finished_at_utc": "2026-07-23T08:11:04.295544555Z",
+      "duration_ms": 3422,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "802a21bc99946eaf667d78137c1e7bc4cc4d213321e71d753565d49afe292dd1",
+      "stdout_byte_count": 64,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 64,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "vet",
+      "subject_tree_oid": "592b0bd27464e4f236e9abc9cfd39c0cc4c20926",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-23T08:11:04.298549101Z",
+      "finished_at_utc": "2026-07-23T08:11:04.731105426Z",
+      "duration_ms": 432,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "build",
+      "subject_tree_oid": "592b0bd27464e4f236e9abc9cfd39c0cc4c20926",
+      "argv": [
+        "go",
+        "build",
+        "-buildvcs=true",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-closure-protocol-v1",
+        "./cmd/leamas"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-23T08:11:04.733315496Z",
+      "finished_at_utc": "2026-07-23T08:11:06.249608095Z",
+      "duration_ms": 1516,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "diff-check",
+      "subject_tree_oid": "592b0bd27464e4f236e9abc9cfd39c0cc4c20926",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [],
+      "started_at_utc": "2026-07-23T08:11:06.252158318Z",
+      "finished_at_utc": "2026-07-23T08:11:06.26982163Z",
+      "duration_ms": 17,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    }
+  ],
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "focused-count-1.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "802a21bc99946eaf667d78137c1e7bc4cc4d213321e71d753565d49afe292dd1",
+      "byte_count": 64,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-count-1.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "vet.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "vet.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "runner.diagnostics",
+      "media_type": "application/json",
+      "sha256": "1d8eef8ad11284cbe95b62009b3ce86bd060132fcddeb65dc9dc89a6a038ebe9",
+      "byte_count": 146,
+      "availability": "detached"
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [
+    {
+      "check_id": "dupcode",
+      "subject_tree_oid": "592b0bd27464e4f236e9abc9cfd39c0cc4c20926",
+      "reason": "No dupcode-owned source or registration changed."
+    }
+  ],
+  "verdict": "pass"
+}
