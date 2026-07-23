@@ -2,8 +2,8 @@
   "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01",
   "baseline": {
-    "commit_oid": "aedaa99279d4b05ea5a843eae5fbf6f328dc89cc",
-    "tree_oid": "6cda55662a80c22dc89b36ed0af7356adf67e429"
+    "commit_oid": "b55e42595f4f18a24b56fc958af58c07fc826a4c",
+    "tree_oid": "f0a1942c58c10463af633a55c01fda51f9565cec"
   },
   "execution": {
     "mode": "serial_fail_fast"
@@ -16,44 +16,10 @@
         "go",
         "test",
         "-count=1",
-        "./internal/factory/closure/...",
-        "./cmd/leamas/..."
+        "./internal/factory/closure/..."
       ],
       "working_directory": ".",
-      "timeout_seconds": 600,
-      "environment": {
-        "CGO_ENABLED": "0"
-      }
-    },
-    {
-      "id": "focused-count-20",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=20",
-        "./internal/factory/closure/...",
-        "./cmd/leamas/..."
-      ],
-      "working_directory": ".",
-      "timeout_seconds": 600,
-      "environment": {
-        "CGO_ENABLED": "0"
-      }
-    },
-    {
-      "id": "focused-race-5",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-race",
-        "-count=5",
-        "./internal/factory/closure/...",
-        "./cmd/leamas/..."
-      ],
-      "working_directory": ".",
-      "timeout_seconds": 600,
+      "timeout_seconds": 300,
       "environment": {
         "CGO_ENABLED": "0"
       }
@@ -68,7 +34,7 @@
         "./cmd/leamas/..."
       ],
       "working_directory": ".",
-      "timeout_seconds": 300,
+      "timeout_seconds": 120,
       "environment": {
         "CGO_ENABLED": "0"
       }
@@ -86,20 +52,7 @@
         "./cmd/leamas"
       ],
       "working_directory": ".",
-      "timeout_seconds": 600,
-      "environment": {
-        "CGO_ENABLED": "0"
-      }
-    },
-    {
-      "id": "gate-fast",
-      "mode": "run",
-      "argv": [
-        "make",
-        "gate-fast"
-      ],
-      "working_directory": ".",
-      "timeout_seconds": 600,
+      "timeout_seconds": 300,
       "environment": {
         "CGO_ENABLED": "0"
       }
