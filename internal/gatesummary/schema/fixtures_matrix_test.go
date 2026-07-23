@@ -55,6 +55,13 @@ func TestFixtureMatrixCompleteCoverage(t *testing.T) {
 				got[s] = true
 			}
 		}
+		// v2-truncated.json is malformed JSON. The schema-stage
+		// validator is not applicable. The envelope rejection is
+		// bound by internal/gatesummary/v2_truncated_envelope_test.go
+		// (TestV2TruncatedEnvelopeRejectsWithCodeMalformedJSON).
+		if version == "2" {
+			got["v2-truncated.json"] = true
+		}
 
 		// Full coverage: every committed invalid fixture must be named
 		// in at least one classification.

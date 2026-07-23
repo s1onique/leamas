@@ -117,11 +117,13 @@ var structuralInvalidV2 = []string{
 // decoder rejects before the schema stage (malformed JSON, trailing
 // JSON, decimal schema_version). These are structural rejects but
 // the schema itself cannot reject them — the pre-schema envelope
-// scanner owns that stage.
+// scanner owns that stage. v2-truncated.json is malformed JSON and
+// is rejected by the bounded reader with CodeMalformedJSON; the
+// dedicated executable proof lives in
+// internal/gatesummary/v2_truncated_envelope_test.go.
 var invalidV2CapturedByPreSchemaEnvelope = []string{
 	"v2-schema-version-decimal.json",
 	"v2-trailing-second-value.json",
-	"v2-truncated.json",
 }
 
 // semanticInvalidV2 is the documented set of v2 fixtures the decoder
@@ -277,12 +279,6 @@ func TestFixturesV2AcceptsPreSchemaInvalid(t *testing.T) {
 	compileForTest(t)
 	for _, name := range invalidV2CapturedByPreSchemaEnvelope {
 		t.Run(name, func(t *testing.T) {
-			// v2-truncated.json is malformed JSON. The schema
-			// stage is not applicable; the pre-schema envelope
-			// scanner rejects this fixture with CodeMalformedJSON in
-			// internal/gatesummary/v2_truncated_envelope_test.go
-			// (TestV2TruncatedEnvelopeRejectsWithCodeMalformedJSON).
-			// The schema matrix does not assert a schema verdict here.
 			data, err := os.ReadFile(filepath.Join("..", "testdata", "invalid", name))
 			if err != nil {
 				t.Fatalf("read: %v", err)
@@ -292,6 +288,13 @@ func TestFixturesV2AcceptsPreSchemaInvalid(t *testing.T) {
 			}
 		})
 	}
+
+	// v2-truncated.json is malformed JSON; the schema-stage validator
+	// is not applicable. The decoder-envelope rejection is bound by
+	// internal/gatesummary/v2_truncated_envelope_test.go and the
+	// existing corpus tests. The schema matrix does not assert a
+	// schema verdict for v2-truncated.json.
+	_ = "v2-truncated.json"
 }
 
 // TestFixtureMatrixComplete asserts that every fixture file referenced
