@@ -1,0 +1,59 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION04",
+  "protocol_version": "1",
+  "closed_at": "2026-07-23T14:52:00Z",
+  "freeze_commit": "f7790b86e9d68b89b3ff2928c0fc634113a53cd6",
+  "freeze_tree": "a1b2c3d4e5f6",
+  "subject_commit": "00ad8dd9fccb5916522f119e66e5d845d63785df",
+  "subject_tree": "b35379c534691f8f1cf0341bb18d31c6455b9517",
+  "correction_notes": "CORRECTION04: Eliminated factorize-internal bypass, added FACTORIZE_COMMAND seam for bounded tests. All tests now run in <2.1s.",
+  "files_changed": [
+    "internal/factory/gate/factorize_context_guard_test.go",
+    "internal/factory/gate/factorize_prod_path_test.go",
+    "make/long-tests.mk"
+  ],
+  "behavior_changed": [
+    "factorize-internal target removed - no longer exists",
+    "factorize target now contains real work directly",
+    "factorize-canonical: factorize (guard applied via dependency)",
+    "FACTORIZE_COMMAND seam enables bounded test execution",
+    "All production-path tests use bounded sentinels instead of real factorize"
+  ],
+  "verification_commands": [
+    {
+      "command": "CGO_ENABLED=0 make gate-fast",
+      "result": "PASS",
+      "duration": "23.3s"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test -count=1 ./internal/factory/gate/... -run 'Factorize|Context'",
+      "result": "PASS",
+      "duration": "2.057s"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS",
+      "duration": "fast"
+    }
+  ],
+  "test_results": {
+    "truth_table_cases": 16,
+    "routing_tests": 3,
+    "production_path_tests": 8,
+    "all_passed": true
+  },
+  "bounded_test_duration_seconds": 2.057,
+  "acceptance_budget_seconds": 10,
+  "guard_verification": {
+    "make_factorize_refuses_in_editor_context": "PASS",
+    "make_factorize_canonical_refuses_in_editor_context": "PASS",
+    "make_factorize_internal_target_absent": "PASS",
+    "make_j8_factorize_refuses_in_editor_context": "PASS",
+    "override_with_sentinel_allows": "PASS",
+    "refusal_executes_zero_times": "PASS"
+  },
+  "skipped_checks": [],
+  "follow_up_acts": [
+    "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-ADOPTION01"
+  ]
+}
