@@ -116,9 +116,6 @@
       "working_directory": "."
     },
     {
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
       "id": "dupcode",
       "mode": "exclude",
       "reason": "No dupcode-owned source or registration changed."
