@@ -57,3 +57,19 @@ make gate
 go test ./...
 go vet ./...
 ```
+
+## Schema introspection
+
+The installed binary is self-describing for the Gate Summary wire format. Use
+
+```bash
+./bin/leamas gate-summary schema list
+./bin/leamas gate-summary schema show v1
+./bin/leamas gate-summary schema show v2
+```
+
+to obtain the exact embedded JSON Schema for v1 and v2 without
+cloning the repository, reading Go source, or accessing the network.
+
+See [docs/contracts/gate-summary-schema-introspection.md](docs/contracts/gate-summary-schema-introspection.md)
+for the full contract.

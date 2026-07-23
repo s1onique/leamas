@@ -49,6 +49,8 @@ func main() {
 		handleCockpit()
 	case "witness":
 		handleWitness()
+	case "gate-summary":
+		os.Exit(runGateSummary(os.Args[2:]))
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 		printUsage()
@@ -241,13 +243,15 @@ Commands:
   leamas --help               Show this help
   leamas version              Show version
   leamas factory verify       Run factory verifiers
-  leamas factory gate        Run quality gate
-  leamas factory factorize   Run factory verifiers only
-  leamas factory digest      Generate targeted digest
-  leamas factory coverage    Check coverage threshold
-  leamas doctor              Run diagnostics
-  leamas cockpit             Local web cockpit
-  leamas witness             Witness proxy commands`
+  leamas factory gate         Run quality gate
+  leamas factory factorize    Run factory verifiers only
+  leamas factory digest       Generate targeted digest
+  leamas factory coverage     Check coverage threshold
+  leamas doctor               Run diagnostics
+  leamas cockpit              Local web cockpit
+  leamas witness              Witness proxy commands
+  leamas gate-summary         Gate Summary wire format introspection
+`
 }
 
 // factoryUsageText returns the factory subcommand usage text.

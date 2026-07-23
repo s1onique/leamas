@@ -71,6 +71,7 @@ var AllowedFiles = map[string]bool{
 	"internal/factory/doctrinecompiler/subprocess_test.go":    true,
 	"cmd/leamas/runtime_smoke_test.go":                        true,
 	"cmd/leamas/version_cli_test.go":                          true,
+	"cmd/leamas/gate_summary_schema_subprocess_test.go":       true,
 }
 
 // AllowedImports are packages that may only be imported by test files.

@@ -1,24 +1,19 @@
 package gatesummary
 
 import (
-	_ "embed"
+	"github.com/s1onique/leamas/internal/gatesummary/schema"
 )
 
-// v1SchemaJSON is the embedded Draft 2020-12 v1 wire schema.
-//
-//go:embed schema/gate-summary-v1.schema.json
-var v1SchemaJSON []byte
+// The schema authority is owned by the internal/gatesummary/schema
+// subpackage. The thin re-export below keeps the existing compile and
+// validation paths stable while routing every read through the
+// canonical subpackage. The IDs are the stable URN identifiers
+// declared in the schema subpackage; they are not network-fetch
+// requirements.
+var (
+	v1SchemaJSON = schema.MustBytes(schema.VersionV1)
+	v2SchemaJSON = schema.MustBytes(schema.VersionV2)
 
-// v2SchemaJSON is the embedded Draft 2020-12 v2 wire schema.
-//
-//go:embed schema/gate-summary-v2.schema.json
-var v2SchemaJSON []byte
-
-// schemaSet is the bundled, embedded Draft 2020-12 schema pair.
-//
-// The $id values are frozen in the schema files; they are the public
-// references that the validator and the schema-error translator use.
-const (
-	v1SchemaID = "https://leamas.local/schemas/gate-summary-v1.schema.json"
-	v2SchemaID = "https://leamas.local/schemas/gate-summary-v2.schema.json"
+	v1SchemaID = schema.SchemaIDV1
+	v2SchemaID = schema.SchemaIDV2
 )

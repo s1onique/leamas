@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://leamas.local/schemas/gate-summary-v1.schema.json",
-  "title": "Gate Summary v1",
-  "description": "Frozen v1 wire contract. Mirrors the public shape of internal/factory/gate/summary.go. No collection or string limits are added by the schema; only the soft MaxEvidenceLength=240 rendering cap is enforced today.",
+  "$id": "urn:leamas:gate-summary:v1",
+  "title": "Leamas Gate Summary v1",
+  "description": "Wire schema for the supported legacy Leamas Gate Summary v1 format.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -13,23 +13,23 @@
   ],
   "properties": {
     "schema_version": {
-      "description": "Integer discriminator. Must equal 1. Lexical form is enforced by the pre-schema envelope scanner.",
+      "description": "Integer discriminator that identifies the v1 wire format. The lexical form is enforced by the pre-schema envelope scanner.",
       "type": "integer",
       "const": 1
     },
     "generated_at": {
-      "description": "RFC 3339 timestamp emitted by the producer.",
+      "description": "RFC 3339 timestamp emitted by the producer at the moment the summary was generated.",
       "type": "string",
       "minLength": 1,
       "format": "date-time"
     },
     "tool": {
-      "description": "Optional producer-identification string.",
+      "description": "Optional producer-identification string naming the tool that emitted the summary.",
       "type": "string",
       "minLength": 1
     },
     "overall_status": {
-      "description": "Aggregate machine-gate status.",
+      "description": "Aggregate gate status reported by the producer; separate from the per-check statuses.",
       "type": "string",
       "enum": [
         "pass",
@@ -39,7 +39,7 @@
       ]
     },
     "checks": {
-      "description": "List of recorded checks. The original reader does not enforce a collection limit at the wire boundary; consumers may add one separately as a consumer-safety guard without changing the wire contract.",
+      "description": "Ordered list of recorded checks. The original v1 reader does not enforce a collection limit at the wire boundary.",
       "type": "array",
       "items": { "$ref": "#/$defs/check" }
     }
@@ -54,10 +54,12 @@
       ],
       "properties": {
         "name": {
+          "description": "Stable identifier for the check as emitted by the producer.",
           "type": "string",
           "minLength": 1
         },
         "status": {
+          "description": "Per-check gate status. Failed, skipped, and unavailable checks are all distinct from passing checks.",
           "type": "string",
           "enum": [
             "pass",
@@ -67,11 +69,11 @@
           ]
         },
         "duration_ms": {
-          "description": "Optional wall-clock duration. The original reader does not enforce a minimum or any wire-level constraint here.",
+          "description": "Optional wall-clock duration in milliseconds. The wire form carries arbitrary-precision integers.",
           "type": "integer"
         },
         "evidence": {
-          "description": "Optional human-readable evidence pointer. The original reader applies a 240-character rendering cap (MaxEvidenceLength) but does not enforce a wire-level string limit.",
+          "description": "Optional human-readable evidence pointer. The v1 reader applies a soft rendering cap; no wire-level string limit is enforced.",
           "type": "string"
         }
       }
