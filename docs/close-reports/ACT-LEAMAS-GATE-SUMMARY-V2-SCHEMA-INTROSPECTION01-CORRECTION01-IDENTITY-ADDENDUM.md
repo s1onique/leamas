@@ -40,7 +40,7 @@ tag_object_oid (CORRECTION01) = ef8261092ef49133c2f45fa8299e480dc4a7a20a
 tag_target_oid (CORRECTION01) = 68c1b7b2b6352d348e50db7fe23f3daea9559cea
 tag_target_tree_oid (CORRECTION01) = d50a316ca1d064edf3ef255b49c1643b2da278ec
 
-tag_object_oid (CORRECTION02) = 14a5f060319f7c453110626dd49e6b75e3de32c3
+tag_object_oid (CORRECTION02) = 1bd8b3d7c18cb91c5b1d9c4efc71fb22d4f1fa06
 tag_target_oid (CORRECTION02) = fd68af9d1f08ddd0b064a85065f46bf4d7b17885
 tag_target_tree_oid (CORRECTION02) = a3c2eeb91d6cd761b5900c756284c903cbf98539
 
@@ -68,19 +68,21 @@ clean working tree at the proof stage.
 ## Canonical digest (CORRECTION04 — whitespace-clean)
 
 ```
-canonical_digest_sha256       = ee22a2980824af7c52c30bfd7bd03fc6f3db9d343557c22a543211ade7f04d23
+canonical_digest_sha256       = 2dacd8a7fa371262b1d993bdb1742ca73e1ae90049a30833bccb84e8fe2b3d6a
 canonical_digest_path         = build/canonical-gate-summary.txt
 canonical_digest_created       = 2026-07-23T04:48:55Z
 canonical_digest_range         = 0d9d30561004c2cd66fe516fd55db0988759794b..HEAD
-canonical_digest_byte_count    = 22933
+canonical_digest_byte_count    = 22932
 ```
 
 The original canonical digest (CORRECTION02) had trailing whitespace
 on lines copied from the close report markdown source. The
 CORRECTION04 revision stripped the trailing whitespace via regex
-replacement. The sha256 changed from
-`42fabf76154beabee4526065e71d4e869fe64ee67c487afc3bd4b6ca834669da` to
-`ee22a2980824af7c52c30bfd7bd03fc6f3db9d343557c22a543211ade7f04d23`.
+replacement. The CORRECTION05 revision stripped the final
+blank line. The sha256 progression:
+- 42fabf76154beabee4526065e71d4e869fe64ee67c487afc3bd4b6ca834669da (CORRECTION02, 22933 bytes)
+- ee22a2980824af7c52c30bfd7bd03fc6f3db9d343557c22a543211ade7f04d23 (CORRECTION04, 22933 bytes)
+- 2dacd8a7fa371262b1d993bdb1742ca73e1ae90049a30833bccb84e8fe2b3d6a (CORRECTION05, 22932 bytes).
 
 ## Schema hashes
 
