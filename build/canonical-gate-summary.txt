@@ -1,0 +1,650 @@
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
+LEAMAS_VERSION: 0.1.0
+LEAMAS_COMMIT: unknown
+LEAMAS_BUILD_TIME: unknown
+DIGEST_MODE: range
+DIGEST_CREATED_AT: 2026-07-23T04:48:55Z
+
+# Targeted digest
+
+Generated at: 2026-07-23T04:48:55Z
+Repo: /home/chistyakov/Projects/leamas
+Mode: range
+Range: 0d9d30561004c2cd66fe516fd55db0988759794b..HEAD
+
+## CHANGESET_MANIFEST
+A  docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md
+M  docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md
+
+## CHANGESET_STATS
+files_changed=2
+added_files=1
+modified_files=1
+deleted_files=0
+type_changed_files=0
+renamed_files=0
+copied_files=0
+unmerged_files=0
+unknown_files=0
+broken_pair_files=0
+untracked_files=0
+binary_files=0
+generated_files=0
+test_files=0
+doc_files=2
+source_files=0
+config_files=0
+
+## REVIEW_MAP
+production:
+  - none
+tests:
+  - none
+docs:
+  - docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md
+  - docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md
+config:
+  - none
+generated:
+  - none
+binary:
+  - none
+
+## RISK_SIGNALS
+production_without_tests=false
+tests_without_production=false
+docs_without_code=true
+generated_files_changed=false
+config_files_changed=false
+deleted_files_changed=false
+unmerged_files_present=false
+large_file_changed=false
+large_file_threshold_bytes=1048576
+
+## PATCH_HYGIENE
+git_diff_check=pass
+whitespace_errors=0
+conflict_markers=0
+diagnostic_lines=0
+## EVIDENCE_HASHES
+hash_algorithm=sha256
+hash_scope=normalized_digest_v3_sections
+changeset_manifest_sha256=901cb83005cf1e8675956acd1162e021fe1383fb9e32284220c9e6a5d777e220
+changeset_stats_sha256=9078f67e0301e37d81a28f06cd7714c05c8df3e928e51c66b05e982414576472
+review_map_sha256=22365bfe06c6a2f8e146a832b0c20cc6867e5aaff85e7d797d4cc42f934047df
+risk_signals_sha256=29d9312d210077ef159c11ed47c3cc3da62b7f82c7f9318a678b1cc826ce392e
+patch_hygiene_sha256=f27875c941202711acb3533af03c7c417c0cf045c2e5a4bf685548a3655b897d
+public_surface_delta_sha256=56d0b627a60e664876f489d463445f7e744e3dae4c1e3fab0fca19070f2253b0
+dependency_delta_sha256=a79a8c9ddb40b378b8cf5f4b6937504f78528ed2fa6f625af76d026111e9009f
+gate_summary_sha256=20a3d7aec6ef7315bdca4788dce9b09fd9f13d873dbe10ade0955440292eba80
+file_evidence_sha256=c6f52427fc9db21101f5373152182e72d01c0aeb4a21f5ae6afd49cd041dd4da
+digest_evidence_sha256=16c668384c48ec4ff85c0207e15fe3be75334f85ba1d814db10548bceec70904
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=present
+schema_version=1
+generated_at=2026-07-23T04:47:00Z
+overall_status=pass
+checks_total=3
+checks_passed=2
+checks_failed=0
+checks_skipped=1
+checks_unavailable=0
+checks:
+  - name=dupcode-lane status=pass evidence=dupcode + dupcode-baseline OK at 2026-07-23T04:47:00Z; gatefast dupcode
+  - name=fast-lane status=pass evidence=fast lane passed at 2026-07-23T04:47:00Z; CGO_ENABLED=0 make gate-fast
+  - name=long-lane status=skip evidence=not executed in editor context; deferred to non-interactive CI
+## PUBLIC_SURFACE_DELTA
+language=go
+source_status=present
+packages_changed=0
+symbols_added=0
+symbols_removed=0
+symbols_modified=0
+cli_commands_changed=0
+
+packages:
+  - none
+
+added:
+  - none
+
+removed:
+  - none
+
+modified:
+  - none
+
+cli_commands:
+  - none
+
+## DEPENDENCY_DELTA
+ecosystem=go
+source_status=absent
+go_mod_changed=false
+go_sum_changed=false
+module_path_changed=false
+go_version_changed=false
+toolchain_changed=false
+requires_added=0
+requires_removed=0
+requires_modified=0
+replaces_added=0
+replaces_removed=0
+replaces_modified=0
+
+module:
+  before=
+  after=
+
+go_version:
+  before=
+  after=
+
+toolchain:
+  before=
+  after=
+
+requires_added:
+  - none
+
+requires_removed:
+  - none
+
+requires_modified:
+  - none
+
+replaces_added:
+  - none
+
+replaces_removed:
+  - none
+
+replaces_modified:
+  - none
+
+go_sum_added:
+  - none
+
+go_sum_removed:
+  - none
+## Changed files
+docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md  [added]
+docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md  [modified]
+
+## Diffs
+
+=== docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md ===
+
+REDACTION_POLICY:
+  class=non_source
+  decision=redact
+  redaction_applied=true
+
+
+Status: added
+
+diff --git a/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md b/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md
+new file mode 100644
+index 0000000..e4a61ed
+--- /dev/null
++++ b/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md
+@@ -0,0 +1,75 @@
++# ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01 (CORRECTION01 identity addendum)
++
++## Identity chain (CORRECTION01 reconciliation)
++
++The identity chain is recorded with literal full OIDs (no
++placeholders). The chain is recorded in the order requested by
++the ACT.
++
++```
++baseline_commit_oid       = dff6f847000130f66a8d950da667c4924a818a9f
++baseline_tree_oid         = b89356a429d5558ccf769cd18a4c3cc61dc8be6f
++
++implementation_commit_oid = 0d9d30561004c2cd66fe516fd55db0988759794b
++implementation_tree_oid   = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
++
++tested_commit_oid         = 0d9d30561004c2cd66fe516fd55db0988759794b
++tested_tree_oid           = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
++
++evidence_commit_oid       = bd13513908c784f82ae26e0e9adc787dd2584aff
++evidence_tree_oid         = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
++
++close_commit_oid          = 0aac7c074764c45051c2b73e32b4c0ce545dfc84
++close_tree_oid            = 9d8199868aa493402ddb6965675f5193a8f08cd8
++
++tag_object_oid            = f37190a80735ab60ebebb57be24bfd81f51b0c71
++tag_target_oid            = bd13513908c784f82ae26e0e9adc787dd2584aff
++tag_target_tree_oid       = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
++```
++
++## Proof binary
++
++```
++proof_binary_sha256:        2c6c82a455279d23f99393bb33a4cdd47ca522af0d4a0807e8002255505ddee8
++proof_binary_vcs_revision:  0d9d30561004c2cd66fe516fd55db0988759794b
++proof_binary_vcs_modified:  false
++```
++
++The proof binary was built from the tested commit with
++`-buildvcs=true -trimpath`. The `vcs.modified=false` confirms a
++clean working tree at the proof stage.
++
++## Fresh Gate Summary digest
++
++A fresh targeted digest was generated from the clean tested tree
++on 2026-07-23T04:32:25Z covering the range
++`dff6f847000130f66a8d950da667c4924a818a9f..HEAD`. The digest is
++preserved at `build/fresh-gate-summary.txt` and
++`build/fresh-gate-summary-LSATFORINTROSPECTION01.txt`.
++
++The digest header is:
++
++```
++LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
++LEAMAS_VERSION: 0.1.0
++LEAMAS_COMMIT: unknown
++LEAMAS_BUILD_TIME: unknown
++DIGEST_MODE: range
++DIGEST_CREATED_AT: 2026-07-23T04:32:25Z
++```
++
++The digest sha256 is `786b26408fbb3464fbc3c61d172e31ce13df6fc0bbb16dee03d9339672bbb69e`.
++
++The digest proves the schema-introspection implementation is
++present in the tested tree (commit `0d9d305`) and was merged to
++HEAD. The digest contains the full implementation diff:
++
++```
++A  cmd/leamas/gate_summary.go
++A  cmd/leamas/gate_summary_schema.go
++A  cmd/leamas/gate_summary_schema_failure_test.go
++A  cmd/leamas/gate_summary_schema_subprocess_test.go
++A  cmd/leamas/gate_summary_schema_test.go
++```
++
++plus the embedded schema subpackage and the documentation.
+
+=== docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md ===
+
+REDACTION_POLICY:
+  class=non_source
+  decision=redact
+  redaction_applied=true
+
+
+Status: modified
+
+diff --git a/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md b/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md
+index 9ede26f..f4b173e 100644
+--- a/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md
++++ b/docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md
+@@ -24,19 +24,26 @@ case-sensitive.
+ ## Files changed
+ 
+ ```
+-cmd/leamas/gate_summary.go                       (new, ~50 lines)
+-cmd/leamas/gate_summary_schema.go                 (new, ~190 lines)
+-cmd/leamas/gate_summary_schema_test.go            (new, ~390 lines)
+-cmd/leamas/main.go                               (modified, dispatch hook)
+-internal/gatesummary/schema_embed.go             (modified, thin re-export)
+-internal/gatesummary/schema/embedded.go           (new, subpackage embed)
+-internal/gatesummary/schema/registry.go           (new, subpackage API)
+-internal/gatesummary/schema/registry_test.go      (new, ~390 lines)
+-internal/gatesummary/schema/fixtures_validation_test.go (new, ~270 lines)
+-internal/gatesummary/schema/gate-summary-v1.schema.json (updated, URN id)
+-internal/gatesummary/schema/gate-summary-v2.schema.json (updated, URN id)
++cmd/leamas/gate_summary.go                        (new, ~50 lines)
++cmd/leamas/gate_summary_schema.go                  (new, ~190 lines)
++cmd/leamas/gate_summary_schema_test.go             (new, ~340 lines)
++cmd/leamas/gate_summary_schema_failure_test.go     (new, ~80 lines)
++cmd/leamas/gate_summary_schema_subprocess_test.go  (new, ~170 lines)
++cmd/leamas/main.go                                (modified, dispatch hook)
++internal/gatesummary/schema_embed.go              (modified, thin re-export)
++internal/gatesummary/schema/embedded.go            (new, subpackage embed)
++internal/gatesummary/schema/registry.go            (new, subpackage API)
++internal/gatesummary/schema/registry_test.go       (new, ~220 lines)
++internal/gatesummary/schema/registry_format_test.go (new, ~245 lines)
++internal/gatesummary/schema/fixtures_validation_test.go (new, ~370 lines)
++internal/gatesummary/schema/fixtures_matrix_test.go (new, ~70 lines)
++internal/gatesummary/schema/gate-summary-v1.schema.json (updated: URN id)
++internal/gatesummary/schema/gate-summary-v2.schema.json (updated: URN id)
++internal/factory/execgate/verifier.go             (allowlist: subprocess test)
+ docs/contracts/gate-summary-schema-introspection.md (new, ~230 lines)
++docs/acts/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md (new)
+ docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01.md (this file)
++README.md                                         (modified: schema introspection section)
+ ```
+ 
+ ## Schema IDs
+@@ -49,15 +56,55 @@ The schema identifiers are stable URNs:
+ The IDs are stable identifiers, not network-fetch requirements.
+ The schema-printing path never reads them from outside the binary.
+ 
+-## Schema hashes
++### Schema ID migration governance
++
++Before this ACT, the production schemas used
+ 
+-```text
+-v1 sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
+-v2 sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
++```
++https://leamas.local/schemas/gate-summary-v1.schema.json
++https://leamas.local/schemas/gate-summary-v2.schema.json
+ ```
+ 
+-Both hashes match between the canonical checked-in files and the
+-CLI output (verified via `cmp --silent`).
++and the production schema compilation and diagnostic translation
++in `internal/gatesummary/schema_compile.go` were bound to those IDs.
++
++This ACT changes the public IDs to URNs. Because v0.2.0 is not yet
++publicly released, the migration is acceptable. The migration is
++documented:
++
++```
++old internal IDs:  superseded before the first public v2 release
++new public IDs:    urn:leamas:gate-summary:v1
++                   urn:leamas:gate-summary:v2
++decoder diagnostic codes and instance paths: unchanged
++```
++
++The existing decoder contract tests continue to exercise the
++normalization pipeline. The change is purely a rename of the public
++schema-id strings; the decoder's diagnostic code set, ordering, and
++message paths are unchanged. The migration is captured in the
++commit that closes this ACT.
++
++## Write-failure contract
++
++Each command renders its payload into a local buffer first, then
++writes the complete bytes through the checked `schema.WriteExact`
++helper. A short write (destination accepts a prefix and returns a
++non-nil error) is detected and propagated as a non-zero exit code.
++A failing destination MAY observe a prefix of the bytes before
++reporting failure; the contract does not promise atomic output to
++hostile destinations.
++
++The supporting tests are:
++
++* `TestRegistryWriteRejectsShortWrite`
++* `TestRegistryWriteExactPropagatesWriterError`
++* `TestRegistryWriteExactEmitsCompletePayload`
++* `TestRegistryWritePropagatesShortWrite`
++* `TestRegistryWritePropagatesWriterError`
++* `TestCLIListWriteFailureFailsClosed`
++* `TestCLIListShortWriteFailsClosed`
++* `TestCLIShowShortWriteFails`
+ 
+ ## Unknown-field policy
+ 
+@@ -72,42 +119,47 @@ Both schemas reject canonical structurally-invalid fixtures
+ (`v1-unknown-field.json`, `v2-unknown-field.json`, etc.) at the
+ JSON-Schema layer.
+ 
+-## Structural-vs-semantic boundary
++## Schema-vs-decoder-vs-normalizer matrix
+ 
+-The schema deliberately accepts the following fixtures that the
+-normalizer rejects:
++The schema deliberately accepts the following v2 fixtures that the
++decoder accepts for handoff but the normalizer rejects:
+ 
+-```text
+-v2-duplicate-check-name.json          (duplicate check name)
+-v2-fail-exit-zero.json                 (overall fail with exit 0)
+-v2-overall-mismatch.json               (overall disagrees with checks)
+-v2-pass-nonzero-exit.json              (overall pass with exit 1)
+-v2-scope-closed-dirty-after.json       (scope closed with dirty worktree)
+-v2-skip-nonnull-exit.json              (skip with non-null exit)
+-v2-test-total-mismatch.json            (test totals arithmetic mismatch)
+-v2-unavailable-nonnull-exit.json       (unavailable with non-null exit)
++```
++v2-duplicate-check-name.json       (duplicate check name)
++v2-fail-exit-zero.json              (overall fail with exit 0)
++v2-overall-mismatch.json            (overall disagrees with checks)
++v2-pass-nonzero-exit.json           (overall pass with exit 1)
++v2-scope-closed-dirty-after.json    (scope closed with dirty worktree)
++v2-skip-nonnull-exit.json           (skip with non-null exit)
++v2-test-total-mismatch.json         (test totals arithmetic mismatch)
++v2-unavailable-nonnull-exit.json    (unavailable with non-null exit)
+ ```
+ 
+ These failures are not JSON-Schema-representable; the normalizer
+-owns them. The fixture matrix is documented in
+-`internal/gatesummary/schema/fixtures_validation_test.go`.
++owns them.
+ 
+-The schema also accepts the following fixtures that the pre-schema
+-envelope scanner rejects before the schema is invoked:
++The schema also accepts the following v2 fixtures that the
++pre-schema envelope scanner rejects before the schema is invoked:
+ 
+-```text
++```
+ v2-schema-version-decimal.json   (decimal schema_version)
+ v2-trailing-second-value.json    (trailing second JSON value)
+-v2-truncated.json                 (malformed JSON)
++v2-truncated.json                 (malformed JSON; JSON decode fails
++                                   before validation)
+ ```
+ 
+ These rejections happen before the schema stage; the schema cannot
+ reject them by definition.
+ 
++The matrix completeness test
++`TestFixtureMatrixCompleteCoverage` enforces that every committed
++invalid fixture is classified in exactly one closed-set bucket per
++version (structural, semantic, or pre-schema). The test fails if a
++fixture is missing from all three buckets or overspecified.
++
+ ## Wire contract alignment
+ 
+-The schema tracks the decoder's accepted wire format. Key alignment
+-rules:
++The schema follows the decoder's accepted wire format:
+ 
+ * Required fields match decoder `validate` rejects.
+ * Optional fields match decoder pointer types.
+@@ -119,140 +171,86 @@ rules:
+ * `additionalProperties: false` matches the decoder's
+   `DisallowUnknownFields`.
+ 
+-## Tests run
++## Validator dependency statement
++
++The production binary carries the JSON Schema validator as a
++runtime dependency:
+ 
+-```bash
+-go test ./internal/gatesummary/... ./cmd/leamas/ -count=1   # green
+-go test ./internal/gatesummary/... ./cmd/leamas/ -count=20  # green
+-go test ./internal/gatesummary/... ./cmd/leamas/ -count=5 -race  # green
+-go vet ./internal/gatesummary/... ./cmd/leamas/...             # green
+-CGO_ENABLED=0 make gate-fast                                  # green
+-gofmt -w ./... && go vet ./...                                 # green
+-sha256sum internal/gatesummary/schema/gate-summary-v{1,2}.schema.json /tmp/leamas-schema-introspection.show.{v1,v2}
+-                                                             # exact match
++```
++dep  github.com/santhosh-tekuri/jsonschema/v6  v6.0.2
+ ```
+ 
+-## CLI smoke test
++This was added by ACT-LEAMAS-GATE-SUMMARY-V2-DECODER01 and is
++retained by this ACT. The schema-introspection ACT added no new
++runtime validator dependency. The existing production decoder
++dependency on jsonschema/v6 remains unchanged.
+ 
+-```text
+-$ /tmp/leamas-schema-introspection gate-summary schema list
+-VERSION  STATUS     SCHEMA_ID
+-v1       supported  urn:leamas:gate-summary:v1
+-v2       current    urn:leamas:gate-summary:v2
++Correct closure evidence:
+ 
+-$ /tmp/leamas-schema-introspection gate-summary schema show v1 > v1.schema.json
+-$ /tmp/leamas-schema-introspection gate-summary schema show v2 > v2.schema.json
+-$ cmp --silent internal/gatesummary/schema/gate-summary-v1.schema.json v1.schema.json
+-$ cmp --silent internal/gatesummary/schema/gate-summary-v2.schema.json v2.schema.json
+-$ echo "v1 cmp OK; v2 cmp OK"
+ ```
+-
+-The CLI output is independent of the working directory:
+-
+-```text
+-$ cd /tmp && /tmp/leamas-schema-introspection gate-summary schema show v1 > v1.schema.json
+-$ cmp --silent internal/gatesummary/schema/gate-summary-v1.schema.json v1.schema.json
++validator_dependency_added_by_this_act = false
++validator_runtime_dependency           = true
++schema_introspection_runtime_delta      = none
+ ```
+ 
+-## Working directory independence
++The schema-introspection ACT added no new runtime validator
++dependency. The existing production decoder dependency on
++jsonschema/v6 remains unchanged.
+ 
+-The schema bytes are embedded at compile time. The CLI output does
+-not depend on the current working directory, environment, locale,
+-timezone, or network availability.
+-
+-## Identity chain
++## Schema hashes
+ 
+ ```text
+-baseline_commit_oid: dff6f847000130f66a8d950da667c4924a818a9f
+-baseline_tree_oid:   (see git rev-parse)
+-
+-proof_binary_sha256: (see below)
+-proof_binary_vcs_revision: dff6f847000130f66a8d950da667c4924a818a9f
+-proof_binary_vcs_modified: true (working tree dirty at proof build)
+-
+-v1_schema_file_sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
+-v2_schema_file_sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
+-v1_cli_output_sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
+-v2_cli_output_sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
+-
+-json_schema_dialect: Draft 2020-12
+-v1_schema_id: urn:leamas:gate-summary:v1
+-v2_schema_id: urn:leamas:gate-summary:v2
+-validator_module: github.com/santhosh-tekuri/jsonschema/v6
+-validator_module_version: v6.0.2
+-validator_runtime_dependency: false
++v1 sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
++v2 sha256: 11ebfbf643020cec564f5c6b3f2d66d4055e9c0417d609313352211a9b69292c
+ ```
+ 
+-Note: `vcs.modified=true` is expected at the proof stage because the
+-ACT is still implementing changes. The proof binary is a fixed
+-working-tree build; the closure tag will be published against a clean
+-tree.
+-
+-## Deferred non-goals
+-
+-The ACT explicitly excludes:
+-
+-* `leamas gate-summary validate`
+-* `leamas gate-summary normalize`
+-* `leamas gate-summary inspect`
+-* `leamas gate-summary explain`
+-* Schema generation from Go reflection
+-* Schema download
+-* Schema update check
+-* Mutable aliases (`latest`, `current`, `stable`, `default`)
+-* YAML or OpenAPI output
+-* TypeScript generation
+-* Editor plugins
+-* Hosted schema registry
+-* ClineMM changes
+-* InDeep Targeted Digest v3 changes
+-* Gate Summary v3
+-* Public `v0.2.0` release publication
+-
+-These are intentionally deferred to successor ACTs.
++Both hashes match between the canonical checked-in files and the
++CLI output (verified via `cmp --silent`).
+ 
+-## Compatibility statement
++## Tests run
+ 
+-```text
+-Gate Summary v1 remains supported.
++```bash
++go test ./internal/gatesummary/... ./cmd/leamas/ -count=1   # green
++go test ./internal/gatesummary/... ./cmd/leamas/ -count=20  # green
++go test ./internal/gatesummary/... ./cmd/leamas/ -count=1 -race  # green
++go vet ./internal/gatesummary/... ./cmd/leamas/...             # green
++CGO_ENABLED=0 make gate-fast                                  # green
++gofmt -w ./... && go vet ./...                                 # green
++```
+ 
+-Gate Summary v2 is the current wire format.
++The subprocess tests bind the clean-binary smoke from a temporary
++directory:
+ 
+-A schema version is never changed in place. Backward-incompatible
+-wire changes require a new Gate Summary schema version and a new
+-schema ID.
++```bash
++go test ./cmd/leamas/ -run "TestSubprocess" -count=1
+ ```
+ 
+-## Semantic disclaimer
++## CLI smoke test
+ 
+-```text
+-The JSON Schemas define structural wire compatibility.
++```bash
++$ leamas gate-summary schema list
++VERSION  STATUS     SCHEMA_ID
++v1       supported  urn:leamas:gate-summary:v1
++v2       current    urn:leamas:gate-summary:v2
+ 
+-Leamas Decode and Normalize remain the executable authority for
+-lifecycle, diagnostic, aggregate-status, ordering, and cross-field
+-semantics.
++$ leamas gate-summary schema show v1 > v1.schema.json
++$ leamas gate-summary schema show v2 > v2.schema.json
++$ cmp --silent internal/gatesummary/schema/gate-summary-v1.schema.json v1.schema.json
++$ cmp --silent internal/gatesummary/schema/gate-summary-v2.schema.json v2.schema.json
++$ echo "v1 cmp OK; v2 cmp OK"
+ ```
+ 
+-## Final board transition
++The CLI output is independent of the working directory,
++environment, locale, timezone, and network availability.
+ 
+-```text
+-ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01:
+-  CLOSED
+-
+-Gate Summary v1 schema:
+-  SUPPORTED
+-  self-contained in installed binary
++## Working directory independence
+ 
+-Gate Summary v2 schema:
+-  CURRENT
+-  self-contained in installed binary
++The schema bytes are embedded at compile time. The CLI output
++does not depend on the current working directory, environment,
++locale, timezone, or network availability. The process-level
+ 
+-ClineMM DOGFOOD01:
+-  unaffected; may continue independently
++## Identity proof and digest
+ 
+-Leamas v0.2.0:
+-  schema-introspection requirement satisfied
++Identity chain, proof-binary hashes, and the fresh Gate Summary digest are recorded in the companion addendum file:
+ 
+-ACT-LEAMAS-GATE-SUMMARY-V2-RELEASE01:
+-  READY only when DOGFOOD01 is also CLOSED
+-```
++`docs/close-reports/ACT-LEAMAS-GATE-SUMMARY-V2-SCHEMA-INTROSPECTION01-CORRECTION01-IDENTITY-ADDENDUM.md`
+
+## Workflow anchors
+No workflow anchors configured.
+
