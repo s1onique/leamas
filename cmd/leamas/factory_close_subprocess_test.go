@@ -11,7 +11,7 @@ import (
 
 func TestClosureCLIEndToEndSubprocess(t *testing.T) {
 	binary := buildLeamasForTest(t)
-	repository, planPath, subject := prepareClosureCLIRepository(t)
+	repository, planPath, freeze, subject := prepareClosureCLIRepository(t)
 	detached := t.TempDir()
 	manifestOutput := filepath.Join(detached, "manifest.json")
 	evidenceDirectory := filepath.Join(detached, "evidence")
@@ -22,7 +22,7 @@ func TestClosureCLIEndToEndSubprocess(t *testing.T) {
 	stdout, stderr, runErr := runClosureSubprocess(binary, repository,
 		"factory", "close", "run",
 		"--plan", planPath,
-		"--plan-freeze", subject+":docs/closure-plans/ACT-LEAMAS-CLI-SUBPROCESS01.json",
+		"--plan-freeze", freeze+":docs/closure-plans/ACT-LEAMAS-CLI-SUBPROCESS01.json",
 		"--subject", subject,
 		"--evidence-dir", evidenceDirectory,
 		"--manifest-out", manifestOutput)
@@ -96,7 +96,7 @@ func TestClosureCLIMissingSubcommand(t *testing.T) {
 	}
 }
 
-func prepareClosureCLIRepository(t *testing.T) (string, string, string) {
+func prepareClosureCLIRepository(t *testing.T) (string, string, string, string) {
 	t.Helper()
 	repository := t.TempDir()
 	gitForClosureTest(t, repository, "init", "-b", "main")
@@ -141,9 +141,11 @@ func prepareClosureCLIRepository(t *testing.T) (string, string, string) {
 		t.Fatal(err)
 	}
 	gitForClosureTest(t, repository, "add", "docs/closure-plans")
-	gitForClosureTest(t, repository, "commit", "-m", "subject with frozen plan")
+	gitForClosureTest(t, repository, "commit", "-m", "freeze plan")
+	freeze := gitForClosureTest(t, repository, "rev-parse", "HEAD")
+	gitForClosureTest(t, repository, "commit", "--allow-empty", "-m", "subject commit")
 	subject := gitForClosureTest(t, repository, "rev-parse", "HEAD")
-	return repository, planPath, subject
+	return repository, planPath, freeze, subject
 }
 
 func gitForClosureTest(t *testing.T, directory string, args ...string) string {

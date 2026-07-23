@@ -21,9 +21,17 @@ type closureFixture struct {
 
 func prepareClosureFixture(t *testing.T) closureFixture {
 	t.Helper()
-	repository, planPath, subject := prepareRunnableRepository(t)
-	executor := &recordingExecutor{results: []*execution.Result{successExecution("one", ""), successExecution("two", "")}}
-	options := runOptionsForTest(t, repository, planPath, subject)
+	repo, freezeArg, subject, planPath := prepareFreezeAndSubject(t)
+	executor := &recordingExecutor{results: []*execution.Result{successExecution("one", "")}}
+	detached := t.TempDir()
+	options := RunOptions{
+		PlanPath:            planPath,
+		Subject:             subject,
+		EvidenceDirectory:   filepath.Join(detached, "evidence"),
+		ManifestOutput:      filepath.Join(detached, "manifest.json"),
+		RepositoryDirectory: repo,
+		PlanFreeze:          freezeArg,
+	}
 	manifest, manifestBytes, err := runClosureWithDependencies(context.Background(), options, passingRunDependencies(subject, executor))
 	if err != nil {
 		t.Fatal(err)
@@ -36,8 +44,8 @@ func prepareClosureFixture(t *testing.T) closureFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifestPath := filepath.Join(repository, "docs", "closure-manifests", manifest.ActID+".json")
-	reportPath := filepath.Join(repository, "docs", "close-reports", manifest.ActID+".md")
+	manifestPath := filepath.Join(repo, "docs", "closure-manifests", manifest.ActID+".json")
+	reportPath := filepath.Join(repo, "docs", "close-reports", manifest.ActID+".md")
 	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -51,15 +59,15 @@ func prepareClosureFixture(t *testing.T) closureFixture {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "docs/closure-manifests", "docs/close-reports"}, {"commit", "-m", "close act"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), realGitClient{}, repo, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	closureCommit, err := runGitValue(context.Background(), realGitClient{}, repository, "rev-parse", "HEAD")
+	closureCommit, err := runGitValue(context.Background(), realGitClient{}, repo, "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
-	return closureFixture{repository: repository, manifestPath: manifestPath, reportPath: reportPath, closureCommit: closureCommit, tag: "act/leamas-test01"}
+	return closureFixture{repository: repo, manifestPath: manifestPath, reportPath: reportPath, closureCommit: closureCommit, tag: "act/leamas-test01"}
 }
 
 func (f closureFixture) options() TagOptions {

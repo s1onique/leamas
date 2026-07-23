@@ -144,6 +144,9 @@ func resolvePlanFreeze(
 	if !oidPattern.MatchString(commit) || strings.HasPrefix(commit, "-") {
 		return resolvedFreeze{}, fmt.Errorf("--plan-freeze: invalid commit OID %q", commit)
 	}
+	if commit == subjectCommit {
+		return resolvedFreeze{}, fmt.Errorf("freeze commit %s must differ from subject commit %s", commit, subjectCommit)
+	}
 	ancestorResult := git.Run(ctx, repositoryRoot, "merge-base", "--is-ancestor", commit, subjectCommit)
 	if ancestorResult.Err != nil || ancestorResult.ExitCode != 0 {
 		return resolvedFreeze{}, fmt.Errorf("freeze commit %s is not an ancestor of subject %s", commit, subjectCommit)
