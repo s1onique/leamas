@@ -1,70 +1,117 @@
 {
-  "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01",
+  "artifacts": [],
   "baseline": {
-    "commit_oid": "0000000000000000000000000000000000000000",
-    "tree_oid": "0000000000000000000000000000000000000000"
+    "commit_oid": "5ba1d88f9be6cba0044a68a95105dd9d7c325077",
+    "tree_oid": "04753e39b52088a00e3ffb4c21adaf3021c9bbff"
   },
-  "execution": {
-    "mode": "serial_fail_fast"
-  },
-  "policy_profile": "leamas-act-v1",
   "checks": [
     {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "focused-count-1",
       "mode": "run",
-      "argv": ["go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."],
-      "working_directory": ".",
       "timeout_seconds": 600,
-      "environment": {"CGO_ENABLED": "0"}
+      "working_directory": "."
     },
     {
+      "argv": [
+        "go",
+        "test",
+        "-count=20",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "focused-count-20",
       "mode": "run",
-      "argv": ["go", "test", "-count=20", "./internal/factory/closure/...", "./cmd/leamas/..."],
-      "working_directory": ".",
       "timeout_seconds": 600,
-      "environment": {"CGO_ENABLED": "0"}
+      "working_directory": "."
     },
     {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "focused-race-5",
       "mode": "run",
-      "argv": ["go", "test", "-race", "-count=5", "./internal/factory/closure/...", "./cmd/leamas/..."],
-      "working_directory": ".",
       "timeout_seconds": 600,
-      "environment": {"CGO_ENABLED": "0"}
+      "working_directory": "."
     },
     {
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "vet",
       "mode": "run",
-      "argv": ["go", "vet", "./internal/factory/closure/...", "./cmd/leamas/..."],
-      "working_directory": ".",
       "timeout_seconds": 300,
-      "environment": {"CGO_ENABLED": "0"}
+      "working_directory": "."
     },
     {
+      "argv": [
+        "go",
+        "build",
+        "-buildvcs=true",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-closure-protocol-v1-self",
+        "./cmd/leamas"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "build",
       "mode": "run",
-      "argv": ["go", "build", "-buildvcs=true", "-trimpath", "-o", "/tmp/leamas-closure-protocol-v1-self", "./cmd/leamas"],
-      "working_directory": ".",
       "timeout_seconds": 600,
-      "environment": {"CGO_ENABLED": "0"}
+      "working_directory": "."
     },
     {
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
       "id": "gate-fast",
       "mode": "run",
-      "argv": ["make", "gate-fast"],
-      "working_directory": ".",
       "timeout_seconds": 600,
-      "environment": {"CGO_ENABLED": "0"}
+      "working_directory": "."
     },
     {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {},
       "id": "diff-check",
       "mode": "run",
-      "argv": ["git", "diff", "--check"],
-      "working_directory": ".",
       "timeout_seconds": 60,
-      "environment": {}
+      "working_directory": "."
     },
     {
       "id": "dupcode",
@@ -72,11 +119,15 @@
       "reason": "No dupcode-owned source or registration changed."
     }
   ],
-  "artifacts": [],
+  "contract_version": 1,
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
   "policy": {
-    "require_clean_before": true,
-    "require_clean_after": true,
     "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
     "require_diff_check": true
-  }
+  },
+  "policy_profile": "leamas-act-v1"
 }
