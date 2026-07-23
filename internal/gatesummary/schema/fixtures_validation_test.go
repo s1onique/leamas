@@ -277,18 +277,12 @@ func TestFixturesV2AcceptsPreSchemaInvalid(t *testing.T) {
 	compileForTest(t)
 	for _, name := range invalidV2CapturedByPreSchemaEnvelope {
 		t.Run(name, func(t *testing.T) {
-			// v2-truncated.json is malformed JSON. The JSON decoder
-			// fails before the schema validator is invoked, so the
-			// schema outcome is not-applicable. The pre-schema envelope
-			// scanner rejects this fixture with CodeMalformedJSON per
-			// the existing corpus tests in internal/gatesummary
-			// (corpus_test.go asserts v2-truncated.json surfaces
-			// CodeMalformedJSON). The schema package cannot directly
-			// import the parent package, so the binding is documented
-			// here and verified by the parent package's corpus tests.
-			if name == "v2-truncated.json" {
-				t.Skip("v2-truncated.json is malformed JSON; pre-schema envelope rejects with CodeMalformedJSON (see internal/gatesummary/corpus_test.go)")
-			}
+			// v2-truncated.json is malformed JSON. The schema
+			// stage is not applicable; the pre-schema envelope
+			// scanner rejects this fixture with CodeMalformedJSON in
+			// internal/gatesummary/v2_truncated_envelope_test.go
+			// (TestV2TruncatedEnvelopeRejectsWithCodeMalformedJSON).
+			// The schema matrix does not assert a schema verdict here.
 			data, err := os.ReadFile(filepath.Join("..", "testdata", "invalid", name))
 			if err != nil {
 				t.Fatalf("read: %v", err)
@@ -379,4 +373,3 @@ func validateBytes(sch *jsonschema.Schema, data []byte) error {
 
 // TestFixtureMatrixComplete asserts that every invalid fixture is
 // classified in exactly one closed-set bucket. The fixture corpus
-
