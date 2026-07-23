@@ -6,30 +6,30 @@
     "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.json"
   },
   "plan_freeze": {
-    "freeze_commit": "5ba1d88f9be6cba0044a68a95105dd9d7c325077",
+    "freeze_commit": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
     "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.json",
-    "plan_blob_oid": "c7bc997d76c82cbfa28b4533880e3dc5b3c5bc31",
-    "plan_sha256": "daed8a5136d775ecb35b92c7684ec88079cafc5837acf8b37b41d3c540089b44",
-    "subject_commit": "5124b01c29f891a81247b65a3d726e205a426fd5"
+    "plan_blob_oid": "fdeac50dbb036736663fb5c5239d58644839f398",
+    "plan_sha256": "abf89f664dd19b7bf99be85a6b1e0c382526344f21dccbe164fdc7ea6d3deef0",
+    "subject_commit": "22d21726582febfb43ceb9fb56d49b470fdf83b6"
   },
   "subject": {
-    "commit_oid": "5124b01c29f891a81247b65a3d726e205a426fd5",
-    "tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26"
+    "commit_oid": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
+    "tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36"
   },
   "runner": {
-    "leamas_version": "0.1.0+dev.5124b01c29f8.20260723T095458Z",
-    "binary_sha256": "48701761ebdae9c64182128492c5c37ca6c38163e425e19dde69b917d0ff0ac9",
-    "vcs_revision": "5124b01c29f891a81247b65a3d726e205a426fd5",
+    "leamas_version": "0.1.0+dev.22d21726582f.20260723T112502Z",
+    "binary_sha256": "085f0f7713685220f21aad20e090a0227a42b91b426047aff27f1b6d2f47642c",
+    "vcs_revision": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
     "vcs_modified": false
   },
   "repository": {
     "root": ".",
     "remote_url": "git@github.com:s1onique/leamas.git",
     "branch": "main",
-    "head_commit_oid": "5124b01c29f891a81247b65a3d726e205a426fd5",
-    "head_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
-    "origin_main_commit_oid": "570fc81a86ae793f4000efb0ff6f00169b89667d",
-    "ahead_by": 5,
+    "head_commit_oid": "22d21726582febfb43ceb9fb56d49b470fdf83b6",
+    "head_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
+    "origin_main_commit_oid": "35a49a7ef73b25fba80e591d354d8a9a9bf06d4b",
+    "ahead_by": 1,
     "behind_by": 0,
     "working_tree_clean_before": true,
     "working_tree_clean_after": true
@@ -37,7 +37,7 @@
   "checks": [
     {
       "check_id": "focused-count-1",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "argv": [
         "go",
         "test",
@@ -49,23 +49,23 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-07-23T09:54:59.87179771Z",
-      "finished_at_utc": "2026-07-23T09:55:13.743003235Z",
-      "duration_ms": 13871,
-      "exit_code": 1,
-      "status": "fail",
-      "stdout_sha256": "299f80b56cd1a78c9caa9c8043351f2000dc6427111807031cb4707042c63e93",
-      "stdout_byte_count": 22258,
+      "started_at_utc": "2026-07-23T11:26:13.407194897Z",
+      "finished_at_utc": "2026-07-23T11:26:27.680565125Z",
+      "duration_ms": 14273,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "33b7748b19b842bf5817c425a8b35181eb6560284a78d882472f74b2fab7990a",
+      "stdout_byte_count": 115,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
       "output_truncated": false,
       "output_incomplete": false,
-      "output_bytes_observed": 22258,
+      "output_bytes_observed": 115,
       "cleanup_status": "pass"
     },
     {
       "check_id": "focused-count-20",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "argv": [
         "go",
         "test",
@@ -77,19 +77,23 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "duration_ms": 0,
-      "exit_code": null,
-      "status": "not_run_due_to_prior_failure",
-      "stdout_byte_count": 0,
+      "started_at_utc": "2026-07-23T11:26:27.683224088Z",
+      "finished_at_utc": "2026-07-23T11:30:11.960934016Z",
+      "duration_ms": 224277,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "87b62ea752ee2399671816a3671c4827d61f41be9832649e55b8f498bdcefe25",
+      "stdout_byte_count": 117,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
       "output_truncated": false,
       "output_incomplete": false,
-      "output_bytes_observed": 0,
-      "cleanup_status": "not_required"
+      "output_bytes_observed": 117,
+      "cleanup_status": "pass"
     },
     {
       "check_id": "focused-race-5",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "argv": [
         "go",
         "test",
@@ -102,19 +106,23 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "duration_ms": 0,
-      "exit_code": null,
-      "status": "not_run_due_to_prior_failure",
+      "started_at_utc": "2026-07-23T11:30:11.964205464Z",
+      "finished_at_utc": "2026-07-23T11:30:11.974778924Z",
+      "duration_ms": 10,
+      "exit_code": 2,
+      "status": "fail",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stdout_byte_count": 0,
-      "stderr_byte_count": 0,
+      "stderr_sha256": "bcd3567ad97fdf5efa956a2d361fc3af77867bc977f4c224fc26d22ff130f817",
+      "stderr_byte_count": 60,
       "output_truncated": false,
       "output_incomplete": false,
-      "output_bytes_observed": 0,
-      "cleanup_status": "not_required"
+      "output_bytes_observed": 60,
+      "cleanup_status": "pass"
     },
     {
       "check_id": "vet",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "argv": [
         "go",
         "vet",
@@ -137,7 +145,7 @@
     },
     {
       "check_id": "build",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "argv": [
         "go",
         "build",
@@ -163,7 +171,7 @@
     },
     {
       "check_id": "gate-fast",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "argv": [
         "make",
         "gate-fast"
@@ -184,7 +192,7 @@
     },
     {
       "check_id": "diff-check",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "argv": [
         "git",
         "diff",
@@ -208,8 +216,8 @@
     {
       "logical_name": "focused-count-1.stdout",
       "media_type": "text/plain; charset=utf-8",
-      "sha256": "299f80b56cd1a78c9caa9c8043351f2000dc6427111807031cb4707042c63e93",
-      "byte_count": 22258,
+      "sha256": "33b7748b19b842bf5817c425a8b35181eb6560284a78d882472f74b2fab7990a",
+      "byte_count": 115,
       "availability": "detached"
     },
     {
@@ -217,6 +225,34 @@
       "media_type": "text/plain; charset=utf-8",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-count-20.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "87b62ea752ee2399671816a3671c4827d61f41be9832649e55b8f498bdcefe25",
+      "byte_count": 117,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-count-20.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-race-5.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-race-5.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "bcd3567ad97fdf5efa956a2d361fc3af77867bc977f4c224fc26d22ff130f817",
+      "byte_count": 60,
       "availability": "detached"
     },
     {
@@ -238,7 +274,7 @@
   "excluded_checks": [
     {
       "check_id": "dupcode",
-      "subject_tree_oid": "45296e9fb54eb1bf6bd92decdee40b1cd7a36e26",
+      "subject_tree_oid": "5f76d0162804a417d4f95795dd4ae0af5380db36",
       "reason": "No dupcode-owned source or registration changed."
     }
   ],

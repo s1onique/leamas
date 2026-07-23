@@ -6,8 +6,8 @@ FAIL
 
 ## Subject
 
-- Commit: `5124b01c29f891a81247b65a3d726e205a426fd5`
-- Tree: `45296e9fb54eb1bf6bd92decdee40b1cd7a36e26`
+- Commit: `22d21726582febfb43ceb9fb56d49b470fdf83b6`
+- Tree: `5f76d0162804a417d4f95795dd4ae0af5380db36`
 
 ## Plan
 
@@ -20,9 +20,9 @@ Ordered results: 7.
 
 | Check | Result | Duration | Exit |
 |---|---|---:|---:|
-| focused-count-1 | FAIL | 13871ms | 1 |
-| focused-count-20 | NOT_RUN_DUE_TO_PRIOR_FAILURE | 0ms | — |
-| focused-race-5 | NOT_RUN_DUE_TO_PRIOR_FAILURE | 0ms | — |
+| focused-count-1 | PASS | 14273ms | 0 |
+| focused-count-20 | PASS | 224277ms | 0 |
+| focused-race-5 | FAIL | 10ms | 2 |
 | vet | NOT_RUN_DUE_TO_PRIOR_FAILURE | 0ms | — |
 | build | NOT_RUN_DUE_TO_PRIOR_FAILURE | 0ms | — |
 | gate-fast | NOT_RUN_DUE_TO_PRIOR_FAILURE | 0ms | — |
@@ -45,9 +45,9 @@ None.
 
 ## Runner identity
 
-- Leamas version: `0.1.0+dev.5124b01c29f8.20260723T095458Z`
-- Binary SHA-256: `48701761ebdae9c64182128492c5c37ca6c38163e425e19dde69b917d0ff0ac9`
-- VCS revision: `5124b01c29f891a81247b65a3d726e205a426fd5`
+- Leamas version: `0.1.0+dev.22d21726582f.20260723T112502Z`
+- Binary SHA-256: `085f0f7713685220f21aad20e090a0227a42b91b426047aff27f1b6d2f47642c`
+- VCS revision: `22d21726582febfb43ceb9fb56d49b470fdf83b6`
 - VCS modified: `false`
 
 ## Lifecycle transition
