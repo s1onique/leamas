@@ -8,17 +8,10 @@ import (
 
 const (
 	PolicyProfileLeamasActV1  = "leamas-act-v1"
-	PolicyProfileIndeepActV1  = "indeep-act-v1"
-	PolicyProfileCircusActV1  = "circus-act-v1"
-	PolicyProfileClinemmActV1 = "clinemm-act-v1"
+	PolicyProfileUnsupported = "unsupported"
 	RunnerBindingTrustedClean = "trusted_clean"
 	RunnerBindingSubjectExact = "subject_exact"
 )
-
-type PlanFreeze struct {
-	CommitOID string `json:"commit_oid"`
-	BlobOID   string `json:"blob_oid"`
-}
 
 type RequiredCheck struct {
 	ID   string   `json:"id"`
@@ -28,40 +21,30 @@ type RequiredCheck struct {
 type policyProfile struct {
 	Name           string
 	RequiredChecks []RequiredCheck
+	Enabled        bool
 }
 
 var policyProfiles = map[string]policyProfile{
 	PolicyProfileLeamasActV1: {
-		Name: PolicyProfileLeamasActV1,
+		Name:    PolicyProfileLeamasActV1,
+		Enabled: true,
 		RequiredChecks: []RequiredCheck{
-			{ID: "focused-count-1", Argv: []string{"go", "test", "-count=1", "./internal/factory/closure/..."}},
-			{ID: "vet", Argv: []string{"go", "vet", "./internal/factory/closure/..."}},
+			{ID: "focused-count-1", Argv: []string{"go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."}},
+			{ID: "focused-count-20", Argv: []string{"go", "test", "-count=20", "./internal/factory/closure/...", "./cmd/leamas/..."}},
+			{ID: "focused-race-5", Argv: []string{"go", "test", "-race", "-count=5", "./internal/factory/closure/...", "./cmd/leamas/..."}},
+			{ID: "vet", Argv: []string{"go", "vet", "./internal/factory/closure/...", "./cmd/leamas/..."}},
 			{ID: "build", Argv: []string{"go", "build", "-buildvcs=true", "-trimpath", "-o", "/tmp/leamas-closure-protocol-v1-self", "./cmd/leamas"}},
 			{ID: "gate-fast", Argv: []string{"make", "gate-fast"}},
 			{ID: "diff-check", Argv: []string{"git", "diff", "--check"}},
 		},
 	},
-	PolicyProfileIndeepActV1: {
-		Name: PolicyProfileIndeepActV1,
-		RequiredChecks: []RequiredCheck{
-			{ID: "focused-count-1", Argv: []string{"go", "test", "-count=1", "./..."}},
-			{ID: "diff-check", Argv: []string{"git", "diff", "--check"}},
-		},
+	PolicyProfileUnsupported: {
+		Name:    PolicyProfileUnsupported,
+		Enabled: false,
 	},
-	PolicyProfileCircusActV1: {
-		Name: PolicyProfileCircusActV1,
-		RequiredChecks: []RequiredCheck{
-			{ID: "focused-count-1", Argv: []string{"go", "test", "-count=1", "./..."}},
-			{ID: "diff-check", Argv: []string{"git", "diff", "--check"}},
-		},
-	},
-	PolicyProfileClinemmActV1: {
-		Name: PolicyProfileClinemmActV1,
-		RequiredChecks: []RequiredCheck{
-			{ID: "focused-count-1", Argv: []string{"go", "test", "-count=1", "./..."}},
-			{ID: "diff-check", Argv: []string{"git", "diff", "--check"}},
-		},
-	},
+	"indeep-act-v1":  {Name: "indeep-act-v1", Enabled: false},
+	"circus-act-v1":  {Name: "circus-act-v1", Enabled: false},
+	"clinemm-act-v1": {Name: "clinemm-act-v1", Enabled: false},
 }
 
 func jsonMarshalPlan(plan Plan) ([]byte, error) {
@@ -76,11 +59,8 @@ func validatePlanAuthority(plan Plan) error {
 	if !ok {
 		return fmt.Errorf("policy_profile %q is unknown", plan.PolicyProfile)
 	}
-	if err := validateOID("freeze.commit_oid", plan.Freeze.CommitOID); err != nil {
-		return fmt.Errorf("freeze.commit_oid is missing or invalid: %w", err)
-	}
-	if err := validateSHA256("freeze.blob_oid", plan.Freeze.BlobOID); err != nil {
-		return fmt.Errorf("freeze.blob_oid is missing or invalid: %w", err)
+	if !profile.Enabled {
+		return fmt.Errorf("policy_profile %q is not yet implemented for this repository", plan.PolicyProfile)
 	}
 	for _, required := range profile.RequiredChecks {
 		if !planHasCheck(plan, required) {
@@ -104,62 +84,15 @@ func planHasCheck(plan Plan, required RequiredCheck) bool {
 }
 
 func argvSatisfies(actual []string, required []string) bool {
-	if len(actual) < len(required) {
+	if len(actual) != len(required) {
 		return false
 	}
 	for index, want := range required {
-		if argvArgMatches(actual[index], want) {
-			continue
+		if actual[index] != want {
+			return false
 		}
-		if argvPathSlot(actual[index], want) {
-			continue
-		}
-		if argvTestPath(actual[index], want) {
-			continue
-		}
-		return false
 	}
 	return true
-}
-
-func argvArgMatches(actual, required string) bool {
-	if actual == required {
-		return true
-	}
-	if strings.HasPrefix(required, "./") && strings.HasSuffix(actual, required) {
-		return true
-	}
-	return false
-}
-
-var pathPrefixes = []string{"/tmp/leamas-closure-protocol-v1", "/tmp/leamas-closure-correction01", "/tmp/leamas-closure-self"}
-
-func argvPathSlot(actual, required string) bool {
-	if !strings.HasPrefix(required, "/") {
-		return false
-	}
-	if !strings.HasPrefix(actual, "/") {
-		return false
-	}
-	if !strings.HasSuffix(actual, "/cmd/leamas") {
-		return false
-	}
-	for _, prefix := range pathPrefixes {
-		if strings.HasPrefix(actual, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func argvTestPath(actual, required string) bool {
-	if !strings.HasPrefix(required, "./") {
-		return false
-	}
-	if !strings.HasPrefix(actual, "./") {
-		return false
-	}
-	return strings.HasSuffix(actual, required)
 }
 
 func VerifyRunnerBinding(binding string, manifest Manifest) error {
@@ -177,4 +110,23 @@ func VerifyRunnerBinding(binding string, manifest Manifest) error {
 	default:
 		return fmt.Errorf("unknown runner_binding %q", binding)
 	}
+}
+
+func isSupportedProfile(name string) bool {
+	profile, ok := policyProfiles[name]
+	return ok && profile.Enabled
+}
+
+func supportedProfiles() []string {
+	out := make([]string, 0, len(policyProfiles))
+	for name, profile := range policyProfiles {
+		if profile.Enabled {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func _placeholderUseStrings() {
+	_ = strings.HasPrefix
 }

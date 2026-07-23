@@ -30,11 +30,7 @@ func canonicalPlan() Plan {
 		Artifacts:     []PlanArtifact{{ID: "summary", Path: ".factory/summary.json", Required: boolPtr(true), MaxBytes: 1024, MediaType: "application/json"}},
 		Policy:        PlanPolicy{RequireCleanBefore: boolPtr(true), RequireCleanAfter: boolPtr(true), ForbidTrackedFullDigests: boolPtr(true), RequireDiffCheck: boolPtr(true)},
 		PolicyProfile: PolicyProfileLeamasActV1,
-		Freeze:        PlanFreeze{CommitOID: fullCommitOID, BlobOID: "0000000000000000000000000000000000000000000000000000000000000000"},
 		RunnerBinding: RunnerBindingTrustedClean,
-	}
-	if err := computeAndApplyFreezeBlob(&plan); err != nil {
-		panic(err)
 	}
 	return plan
 }
@@ -48,21 +44,21 @@ func passingCheck(id string, argv ...string) CheckResult {
 	}
 }
 
-func computeAndApplyFreezeBlob(plan *Plan) error {
-	data, err := jsonMarshalPlan(*plan)
-	if err != nil {
-		return err
-	}
-	sum := sha256.Sum256(data)
-	plan.Freeze.BlobOID = hex.EncodeToString(sum[:])
-	return nil
-}
-
 func passingManifest() Manifest {
+	plan := canonicalPlan()
+	sum := sha256.Sum256([]byte("placeholder"))
+	planSHA := hex.EncodeToString(sum[:])
 	return Manifest{
 		ContractVersion: ContractVersionV1,
-		ActID:           "ACT-LEAMAS-TEST01",
-		Plan:            ManifestPlanRef{SHA256: strings.Repeat("a", 64), Path: "docs/closure-plans/ACT-LEAMAS-TEST01.json"},
+		ActID:           plan.ActID,
+		Plan:            ManifestPlanRef{SHA256: planSHA, Path: "docs/closure-plans/ACT-LEAMAS-TEST01.json"},
+		PlanFreeze: ManifestPlanFreeze{
+			FreezeCommit:  fullCommitOID,
+			PlanPath:      "closure-plans/ACT-LEAMAS-TEST01.json",
+			PlanBlobOID:   fullCommitOID,
+			PlanSHA256:    planSHA,
+			SubjectCommit: fullCommitOID,
+		},
 		Subject:         ManifestSubject{CommitOID: fullCommitOID, TreeOID: fullTreeOID},
 		Runner:          RunnerIdentity{LeamasVersion: "0.1.0", BinarySHA256: strings.Repeat("b", 64), VCSRevision: fullCommitOID, VCSModified: false},
 		Repository:      RepositoryIdentity{Root: ".", Branch: "main", HeadCommitOID: fullCommitOID, HeadTreeOID: fullTreeOID, WorkingTreeCleanBefore: true, WorkingTreeCleanAfter: true},

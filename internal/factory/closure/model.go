@@ -33,7 +33,6 @@ type Plan struct {
 	Artifacts       []PlanArtifact `json:"artifacts"`
 	Policy          PlanPolicy     `json:"policy"`
 	PolicyProfile   string         `json:"policy_profile,omitempty"`
-	Freeze          PlanFreeze     `json:"freeze"`
 	RunnerBinding   string         `json:"runner_binding,omitempty"`
 }
 
@@ -71,14 +70,11 @@ type PlanPolicy struct {
 	RequireDiffCheck         *bool `json:"require_diff_check"`
 }
 
-// PlanFreeze is redeclared via plan_authority.go to centralize authority
-// checks; this stub documents the expected JSON shape.
-type _planFreezeMarker struct{}
-
 type Manifest struct {
 	ContractVersion  int                 `json:"contract_version"`
 	ActID            string              `json:"act_id"`
 	Plan             ManifestPlanRef     `json:"plan"`
+	PlanFreeze       ManifestPlanFreeze  `json:"plan_freeze"`
 	Subject          ManifestSubject     `json:"subject"`
 	Runner           RunnerIdentity      `json:"runner"`
 	Repository       RepositoryIdentity  `json:"repository"`
@@ -91,9 +87,18 @@ type Manifest struct {
 	Verdict          string              `json:"verdict"`
 }
 
+type ManifestPlanFreeze struct {
+	FreezeCommit  string `json:"freeze_commit"`
+	PlanPath      string `json:"plan_path"`
+	PlanBlobOID   string `json:"plan_blob_oid"`
+	PlanSHA256    string `json:"plan_sha256"`
+	SubjectCommit string `json:"subject_commit"`
+}
+
 type ManifestPlanRef struct {
 	SHA256 string `json:"sha256"`
 	Path   string `json:"path"`
+	Bytes  string `json:"bytes,omitempty"`
 }
 
 type ManifestSubject struct {

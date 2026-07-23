@@ -2,15 +2,19 @@ package closure
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 type RunOptions struct {
 	PlanPath            string
+	PlanFreeze          string
 	Subject             string
 	EvidenceDirectory   string
 	ManifestOutput      string
@@ -29,6 +33,14 @@ type detachedDiagnostics struct {
 	ActID               string `json:"act_id"`
 	PatchHygieneOutput  string `json:"patch_hygiene_output"`
 	ClosurePolicyOutput string `json:"closure_policy_output"`
+}
+
+type resolvedFreeze struct {
+	FreezeCommit  string
+	PlanPath      string
+	PlanBlobOID   string
+	PlanSHA256    string
+	SubjectCommit string
 }
 
 func RunClosure(ctx context.Context, options RunOptions) (Manifest, []byte, error) {
@@ -69,6 +81,10 @@ func runClosureWithDependencies(ctx context.Context, options RunOptions, depende
 	if err := requireDetachedOutput(snapshot.RepositoryRoot, options.ManifestOutput); err != nil {
 		return Manifest{}, nil, err
 	}
+	resolved, err := resolvePlanFreeze(ctx, dependencies.Git, options.PlanFreeze, snapshot.RepositoryRoot, planPath, planBytes, snapshot.SubjectCommitOID)
+	if err != nil {
+		return Manifest{}, nil, err
+	}
 	runner, err := dependencies.Runner.Identity()
 	if err != nil {
 		return Manifest{}, nil, err
@@ -95,7 +111,7 @@ func runClosureWithDependencies(ctx context.Context, options RunOptions, depende
 		return Manifest{}, nil, err
 	}
 	evidence = append(evidence, diagnosticRecord)
-	manifest := assembleManifest(plan, planBytes, planPath, snapshot, runner, checks, artifacts, evidence, patchHygiene, closurePolicy, cleanAfter)
+	manifest := assembleManifest(plan, planBytes, planPath, resolved, snapshot, runner, checks, artifacts, evidence, patchHygiene, closurePolicy, cleanAfter)
 	verdict, err := DeriveVerdict(manifest, plan)
 	if err != nil {
 		return Manifest{}, nil, err
@@ -111,10 +127,88 @@ func runClosureWithDependencies(ctx context.Context, options RunOptions, depende
 	return manifest, data, nil
 }
 
+func resolvePlanFreeze(
+	ctx context.Context,
+	git gitClient,
+	freezeArg, repositoryRoot, planPath string,
+	planBytes []byte,
+	subjectCommit string,
+) (resolvedFreeze, error) {
+	if freezeArg == "" {
+		return resolvedFreeze{}, fmt.Errorf("--plan-freeze is required (format <commit>:<path>)")
+	}
+	commit, pathInRepo, err := splitFreezeArgument(freezeArg)
+	if err != nil {
+		return resolvedFreeze{}, fmt.Errorf("--plan-freeze: %w", err)
+	}
+	if !oidPattern.MatchString(commit) || strings.HasPrefix(commit, "-") {
+		return resolvedFreeze{}, fmt.Errorf("--plan-freeze: invalid commit OID %q", commit)
+	}
+	ancestorResult := git.Run(ctx, repositoryRoot, "merge-base", "--is-ancestor", commit, subjectCommit)
+	if ancestorResult.Err != nil || ancestorResult.ExitCode != 0 {
+		return resolvedFreeze{}, fmt.Errorf("freeze commit %s is not an ancestor of subject %s", commit, subjectCommit)
+	}
+	canonicalPlan := relativePlanPath(planPath)
+	if pathInRepo != canonicalPlan {
+		return resolvedFreeze{}, fmt.Errorf("freeze plan path %q does not match executed plan path %q", pathInRepo, canonicalPlan)
+	}
+	blobResult := git.Run(ctx, repositoryRoot, "cat-file", "blob", commit+":"+canonicalPlan)
+	if blobResult.Err != nil || blobResult.ExitCode != 0 {
+		return resolvedFreeze{}, fmt.Errorf("read frozen plan blob %s:%s: %s", commit, canonicalPlan, sanitizeDiagnostic(string(blobResult.Stderr)))
+	}
+	frozenBytes := blobResult.Stdout
+	sum := sha256.Sum256(frozenBytes)
+	freezeSHA := hex.EncodeToString(sum[:])
+	frozenBlobOID, err := runGitValue(ctx, git, repositoryRoot, "rev-parse", "--verify", "--end-of-options", commit+":"+canonicalPlan)
+	if err != nil {
+		return resolvedFreeze{}, fmt.Errorf("resolve frozen plan blob oid: %w", err)
+	}
+	executionSum := sha256.Sum256(planBytes)
+	executionSHA := hex.EncodeToString(executionSum[:])
+	if executionSHA != freezeSHA {
+		return resolvedFreeze{}, fmt.Errorf("executed plan bytes do not match frozen bytes: execution=%s freeze=%s", executionSHA, freezeSHA)
+	}
+	return resolvedFreeze{
+		FreezeCommit:  commit,
+		PlanPath:      canonicalPlan,
+		PlanBlobOID:   frozenBlobOID,
+		PlanSHA256:    freezeSHA,
+		SubjectCommit: subjectCommit,
+	}, nil
+}
+
+func splitFreezeArgument(value string) (commit, path string, err error) {
+	for index := 0; index < len(value); index++ {
+		if value[index] == ':' {
+			return value[:index], value[index+1:], nil
+		}
+	}
+	return "", "", fmt.Errorf("missing <commit>:<path> separator")
+}
+
+func relativePlanPath(planPath string) string {
+	if strings.HasPrefix(planPath, "docs/") {
+		return planPath
+	}
+	for index := 0; index < len(planPath); index++ {
+		if planPath[index] == '/' {
+			return planPath[index+1:]
+		}
+	}
+	return planPath
+}
+
+
+func _useStrings() {
+	_ = strings.HasPrefix
+}
+
+
 func assembleManifest(
 	plan Plan,
 	planBytes []byte,
 	planPath string,
+	resolved resolvedFreeze,
 	snapshot subjectSnapshot,
 	runner RunnerIdentity,
 	checks []CheckResult,
@@ -128,8 +222,15 @@ func assembleManifest(
 		ContractVersion: ContractVersionV1,
 		ActID:           plan.ActID,
 		Plan:            ManifestPlanRef{SHA256: SHA256Hex(planBytes), Path: planPath},
-		Subject:         ManifestSubject{CommitOID: snapshot.SubjectCommitOID, TreeOID: snapshot.SubjectTreeOID},
-		Runner:          runner,
+		PlanFreeze: ManifestPlanFreeze{
+			FreezeCommit:  resolved.FreezeCommit,
+			PlanPath:      resolved.PlanPath,
+			PlanBlobOID:   resolved.PlanBlobOID,
+			PlanSHA256:    resolved.PlanSHA256,
+			SubjectCommit: resolved.SubjectCommit,
+		},
+		Subject: ManifestSubject{CommitOID: snapshot.SubjectCommitOID, TreeOID: snapshot.SubjectTreeOID},
+		Runner:  runner,
 		Repository: RepositoryIdentity{
 			Root: ".", RemoteURL: snapshot.RemoteURL, Branch: snapshot.Branch,
 			HeadCommitOID: snapshot.HeadCommitOID, HeadTreeOID: snapshot.HeadTreeOID,

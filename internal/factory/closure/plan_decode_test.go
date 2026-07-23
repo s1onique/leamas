@@ -18,10 +18,6 @@ func canonicalPlanJSON() string {
   },
   "execution": {"mode": "serial_fail_fast"},
   "policy_profile": "leamas-act-v1",
-  "freeze": {
-    "commit_oid": "1111111111111111111111111111111111111111",
-    "blob_oid": "0000000000000000000000000000000000000000000000000000000000000000"
-  },
   "checks": [
     {
       "id": "focused-count-1",

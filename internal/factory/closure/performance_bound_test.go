@@ -17,9 +17,9 @@ func TestClosureVerifyAndRenderThousandChecksWithinBound(t *testing.T) {
 		Artifacts:       nil,
 		Policy:          PlanPolicy{RequireCleanBefore: boolPtr(true), RequireCleanAfter: boolPtr(true), ForbidTrackedFullDigests: boolPtr(true), RequireDiffCheck: boolPtr(true)},
 	}
-	plan.Freeze = PlanFreeze{CommitOID: fullTreeOID, BlobOID: strings.Repeat("0", 64)}
 	manifest := passingManifest()
 	manifest.ActID = plan.ActID
+	manifest.Plan.Path = "docs/closure-plans/ACT-LEAMAS-PERF.json"
 	manifest.Subject.CommitOID = plan.Baseline.CommitOID
 	manifest.Subject.TreeOID = plan.Baseline.TreeOID
 	manifest.Repository.HeadCommitOID = plan.Baseline.CommitOID
@@ -28,8 +28,6 @@ func TestClosureVerifyAndRenderThousandChecksWithinBound(t *testing.T) {
 	manifest.ExcludedChecks = nil
 	manifest.Checks = make([]CheckResult, 1000)
 	manifest.DetachedEvidence = make([]EvidenceRecord, 0, 2001)
-	manifest.Plan.Path = "docs/closure-plans/ACT-LEAMAS-PERF.json"
-	manifest.Plan.SHA256 = strings.Repeat("a", 64)
 	for index := range 1000 {
 		id := fmt.Sprintf("check-%04d", index)
 		argv := []string{"go", "test", fmt.Sprintf("./case/%04d", index)}

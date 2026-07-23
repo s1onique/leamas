@@ -26,7 +26,6 @@ func prepareRunnableRepository(t *testing.T) (string, string, string) {
 	plan := canonicalPlan()
 	plan.Baseline = Baseline{CommitOID: baseline, TreeOID: baselineTree}
 	plan.PolicyProfile = ""
-	plan.Freeze = PlanFreeze{}
 	plan.RunnerBinding = ""
 	plan.Checks = []PlanCheck{
 		{ID: "first", Mode: CheckModeRun, Argv: []string{"go", "version"}, WorkingDirectory: ".", TimeoutSeconds: 30, Environment: map[string]string{}},
@@ -34,9 +33,6 @@ func prepareRunnableRepository(t *testing.T) (string, string, string) {
 	}
 	plan.Artifacts = []PlanArtifact{}
 	planPath := filepath.Join(repository, "docs", "closure-plans", plan.ActID+".json")
-	if err := computeAndApplyFreezeBlob(&plan); err != nil {
-		t.Fatal(err)
-	}
 	if err := os.MkdirAll(filepath.Dir(planPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -63,14 +59,20 @@ func prepareRunnableRepository(t *testing.T) (string, string, string) {
 func runOptionsForTest(t *testing.T, repository, planPath, subject string) RunOptions {
 	t.Helper()
 	detached := t.TempDir()
+	relative, err := filepath.Rel(repository, planPath)
+	if err != nil {
+		relative = planPath
+	}
 	return RunOptions{
 		PlanPath:            planPath,
 		Subject:             subject,
 		EvidenceDirectory:   filepath.Join(detached, "evidence"),
 		ManifestOutput:      filepath.Join(detached, "manifest.json"),
 		RepositoryDirectory: repository,
+		PlanFreeze:          subject + ":" + relative,
 	}
 }
+
 
 func passingRunDependencies(subject string, executor commandExecutor) runDependencies {
 	return runDependencies{
@@ -117,3 +119,5 @@ func (d *dirtyingExecutor) Execute(_ context.Context, _ *execution.Request) *exe
 	}
 	return successExecution("", "")
 }
+
+var _ = strings.HasPrefix

@@ -8,74 +8,107 @@ import (
 )
 
 const fullCommitOIDForAuthority = "1111111111111111111111111111111111111111"
-const fullTreeOIDForAuthority = "2222222222222222222222222222222222222222"
 
-func canonicalPlanWithProfile(profile string, freezeCommit, freezeBlob string) Plan {
+func TestClosurePlanAuthorityRejectsUnknownProfile(t *testing.T) {
 	plan := canonicalPlan()
-	plan.PolicyProfile = profile
-	plan.Freeze = PlanFreeze{CommitOID: freezeCommit, BlobOID: freezeBlob}
-	return plan
-}
-
-func frozenPlanBytes(t *testing.T) []byte {
-	t.Helper()
-	plan := canonicalPlan()
-	plan.Freeze = PlanFreeze{CommitOID: fullCommitOIDForAuthority, BlobOID: ""}
-	plan.Freeze.BlobOID = ""
-	if err := computeAndApplyFreezeBlob(&plan); err != nil {
-		t.Fatal(err)
-	}
-	data, err := jsonMarshalPlan(plan)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return data
-}
-
-func TestClosurePlanFreezeBlobsBindAcross(t *testing.T) {
-	bytes := frozenPlanBytes(t)
-	blobHash := sha256.Sum256(bytes)
-	blob := hex.EncodeToString(blobHash[:])
-	plan := canonicalPlanWithProfile("leamas-act-v1", fullCommitOIDForAuthority, blob)
-	plan.Freeze.BlobOID = blob
-	if err := ValidatePlan(plan); err != nil {
-		t.Fatalf("ValidatePlan() error = %v", err)
-	}
-}
-
-func TestClosurePlanFreezeRejectsMissingBlobBinding(t *testing.T) {
-	plan := canonicalPlanWithProfile("leamas-act-v1", fullCommitOIDForAuthority, "")
-	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "blob_oid") {
+	plan.PolicyProfile = "mystery-profile"
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "unknown") {
 		t.Fatalf("error = %v", err)
 	}
 }
 
-func TestClosurePlanFreezeRejectsMissingCommitBinding(t *testing.T) {
-	bytes := frozenPlanBytes(t)
-	blobHash := sha256.Sum256(bytes)
-	blob := hex.EncodeToString(blobHash[:])
-	plan := canonicalPlanWithProfile("leamas-act-v1", "", blob)
-	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "freeze.commit_oid") {
+func TestClosurePlanAuthorityRejectsDisabledProfile(t *testing.T) {
+	plan := canonicalPlan()
+	plan.PolicyProfile = "indeep-act-v1"
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "not yet implemented") {
 		t.Fatalf("error = %v", err)
 	}
 }
 
-func TestClosurePolicyProfileEnforcesRequiredChecks(t *testing.T) {
-	bytes := frozenPlanBytes(t)
-	blobHash := sha256.Sum256(bytes)
-	blob := hex.EncodeToString(blobHash[:])
+func TestClosurePlanAuthorityEnforcesAllLeamasChecks(t *testing.T) {
 	plan := canonicalPlan()
 	plan.Checks = plan.Checks[:1]
-	plan.Freeze = PlanFreeze{CommitOID: fullCommitOIDForAuthority, BlobOID: blob}
-	plan.PolicyProfile = "leamas-act-v1"
 	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy profile") {
 		t.Fatalf("error = %v", err)
 	}
 }
 
-func TestClosureUnknownPolicyProfileIsRejected(t *testing.T) {
-	plan := canonicalPlanWithProfile("mystery-profile", fullCommitOIDForAuthority, strings.Repeat("a", 64))
-	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy_profile") {
+func TestClosurePlanAuthorityRejectsTrailingArgvMutation(t *testing.T) {
+	plan := canonicalPlan()
+	for index := range plan.Checks {
+		if plan.Checks[index].ID == "focused-count-1" {
+			plan.Checks[index].Argv = append([]string(nil), plan.Checks[index].Argv...)
+			plan.Checks[index].Argv = append(plan.Checks[index].Argv, "-run", "^$")
+		}
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy profile") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestClosurePlanAuthorityRejectsShortMutation(t *testing.T) {
+	plan := canonicalPlan()
+	for index := range plan.Checks {
+		if plan.Checks[index].ID == "focused-count-1" {
+			plan.Checks[index].Argv = []string{"go", "test", "-count=1", "-short", "./internal/factory/closure/...", "./cmd/leamas/..."}
+		}
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy profile") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestClosurePlanAuthorityRejectsExtraPackageMutation(t *testing.T) {
+	plan := canonicalPlan()
+	for index := range plan.Checks {
+		if plan.Checks[index].ID == "focused-count-1" {
+			plan.Checks[index].Argv = []string{"go", "test", "-count=1", "./internal/factory/closure/..."}
+		}
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy profile") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestClosurePlanAuthorityRejectsGateFastTargetMutation(t *testing.T) {
+	plan := canonicalPlan()
+	for index := range plan.Checks {
+		if plan.Checks[index].ID == "gate-fast" {
+			plan.Checks[index].Argv = []string{"make", "test"}
+		}
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy profile") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestClosurePlanAuthorityRejectsCountZero(t *testing.T) {
+	plan := canonicalPlan()
+	for index := range plan.Checks {
+		if plan.Checks[index].ID == "focused-count-1" {
+			plan.Checks[index].Argv = []string{"go", "test", "-count=0", "./internal/factory/closure/...", "./cmd/leamas/..."}
+		}
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy profile") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestClosurePlanAuthorityRejectsDryRun(t *testing.T) {
+	plan := canonicalPlan()
+	for index := range plan.Checks {
+		if plan.Checks[index].ID == "build" {
+			plan.Checks[index].Argv = []string{"go", "build", "-buildvcs=true", "-dry-run", "-trimpath", "-o", "/tmp/leamas-closure-protocol-v1-self", "./cmd/leamas"}
+		}
+	}
+	if err := ValidatePlan(plan); err == nil || !strings.Contains(err.Error(), "policy profile") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestClosurePlanAuthorityAcceptsExactPlan(t *testing.T) {
+	plan := canonicalPlan()
+	if err := ValidatePlan(plan); err != nil {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -103,3 +136,7 @@ func TestClosureTrustedCleanRunnerBindingAlwaysAccepts(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+var _ = sha256.New
+var _ = hex.EncodeToString
+var _ = fullCommitOIDForAuthority
