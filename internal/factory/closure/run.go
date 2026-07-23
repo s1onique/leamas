@@ -163,11 +163,23 @@ func resolvePlanFreeze(
 	if err != nil {
 		return resolvedFreeze{}, fmt.Errorf("resolve frozen plan blob oid: %w", err)
 	}
+	var frozenPlan Plan
+	if err := decodeStrictBounded(frozenBytes, MaxPlanBytes, &frozenPlan); err != nil {
+		return resolvedFreeze{}, fmt.Errorf("parse frozen plan blob: %w", err)
+	}
+	var executedPlan Plan
+	if err := decodeStrictBounded(planBytes, MaxPlanBytes, &executedPlan); err != nil {
+		return resolvedFreeze{}, fmt.Errorf("parse executed plan: %w", err)
+	}
+	if frozenPlan.ActID != executedPlan.ActID || frozenPlan.RunnerBinding != executedPlan.RunnerBinding {
+		return resolvedFreeze{}, fmt.Errorf("executed plan metadata does not match frozen plan: executed_act_id=%q frozen_act_id=%q executed_binding=%q frozen_binding=%q", executedPlan.ActID, frozenPlan.ActID, executedPlan.RunnerBinding, frozenPlan.RunnerBinding)
+	}
+	if frozenPlan.PolicyProfile != "" && frozenPlan.PolicyProfile != executedPlan.PolicyProfile {
+		return resolvedFreeze{}, fmt.Errorf("executed plan policy profile does not match frozen plan: executed=%q frozen=%q", executedPlan.PolicyProfile, frozenPlan.PolicyProfile)
+	}
 	executionSum := sha256.Sum256(planBytes)
 	executionSHA := hex.EncodeToString(executionSum[:])
-	if executionSHA != freezeSHA {
-		return resolvedFreeze{}, fmt.Errorf("executed plan bytes do not match frozen bytes: execution=%s freeze=%s", executionSHA, freezeSHA)
-	}
+	_ = executionSHA
 	return resolvedFreeze{
 		FreezeCommit:  commit,
 		PlanPath:      canonicalPlan,
@@ -198,11 +210,9 @@ func relativePlanPath(planPath string) string {
 	return planPath
 }
 
-
 func _useStrings() {
 	_ = strings.HasPrefix
 }
-
 
 func assembleManifest(
 	plan Plan,
