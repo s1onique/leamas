@@ -179,7 +179,9 @@ func resolvePlanFreeze(
 	}
 	executionSum := sha256.Sum256(planBytes)
 	executionSHA := hex.EncodeToString(executionSum[:])
-	_ = executionSHA
+	if freezeSHA != executionSHA {
+		return resolvedFreeze{}, fmt.Errorf("frozen plan bytes do not match executed plan bytes: frozen=%s executed=%s", freezeSHA, executionSHA)
+	}
 	return resolvedFreeze{
 		FreezeCommit:  commit,
 		PlanPath:      canonicalPlan,

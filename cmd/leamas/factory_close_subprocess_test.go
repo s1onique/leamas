@@ -22,6 +22,7 @@ func TestClosureCLIEndToEndSubprocess(t *testing.T) {
 	stdout, stderr, runErr := runClosureSubprocess(binary, repository,
 		"factory", "close", "run",
 		"--plan", planPath,
+		"--plan-freeze", subject + ":docs/closure-plans/ACT-LEAMAS-CLI-SUBPROCESS01.json",
 		"--subject", subject,
 		"--evidence-dir", evidenceDirectory,
 		"--manifest-out", manifestOutput)
