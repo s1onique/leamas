@@ -1,9 +1,12 @@
 {
   "act_id": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION02",
   "protocol_version": "1",
-  "closed_at": "2026-07-23T14:35:00Z",
-  "subject_commit": "f89f994fc593e0f5b61fd291af24d229fa9197a2",
-  "subject_tree": "7c4e48eb6972fa74d863565ea221a9436614e986",
+  "closed_at": "2026-07-23T14:36:00Z",
+  "freeze_commit": "f89f994fc593e0f5b61fd291af24d229fa9197a2",
+  "freeze_tree": "7c4e48eb6972fa74d863565ea221a9436614e986",
+  "subject_commit": "8efb5706429c40e06018d9e7e7385a7fbf6c2d34",
+  "subject_tree": "0fd9916f02181edfa2f3d0cfa615fa1f55b43833",
+  "correction_notes": "CORRECTION03: Fixed guard bypass - factorize-canonical now depends on factorize to apply guard. Added production-path tests for factorize-canonical and parallel invocation.",
   "files_changed": [
     ".clinerules/leamas.md",
     "AGENTS.md",

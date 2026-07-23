@@ -4,6 +4,8 @@
 
 Extended the editor-context refusal guard from `make gate` to `make factorize`, preventing accidental execution of expensive factorize verification in Codium/VS Code/Cline-driven terminal sessions.
 
+**CORRECTION03**: Fixed guard bypass - `factorize-canonical` now depends on `factorize` to apply the guard. Added production-path tests for all entry points.
+
 ## Files Changed
 
 | File | Change |
