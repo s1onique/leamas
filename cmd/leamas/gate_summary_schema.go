@@ -86,8 +86,10 @@ func (c *gateSummarySchemaCLI) Run(args []string) int {
 
 // runList prints the supported-version table to stdout. The full
 // table is rendered into a local buffer first, then written through
-// the checked schema.WriteExact helper so a failing destination
-// cannot leave a partial table on the wire.
+// the checked schema.WriteExact helper so prefix-write failures are
+// detected. The contract does not promise atomic output to hostile
+// destinations: a failing writer may observe a prefix before reporting
+// failure.
 func (c *gateSummarySchemaCLI) runList() int {
 	// Column width and padding lock the wire-format output. The header
 	// uses the same column widths as the data rows so downstream

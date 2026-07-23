@@ -7,9 +7,10 @@ import (
 	"testing"
 )
 
-// shortWriter accepts a prefix of the slice and returns 0 bytes and
-// io.ErrShortWrite. It is used to verify that the runList and runShow
-// paths fail closed when the destination reports a partial write.
+// shortWriter accepts a prefix of the slice and returns 1 byte plus
+// io.ErrShortWrite. It is used to verify that the checked write
+// helper detects partial-success from a destination that returns
+// non-zero bytes and a non-nil error from the same Write call.
 type shortWriter struct {
 	err error
 }
