@@ -23,8 +23,8 @@ evidence_tree_oid         = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
 close_commit_oid          = 68c1b7b2b6352d348e50db7fe23f3daea9559cea
 close_tree_oid            = d50a316ca1d064edf3ef255b49c1643b2da278ec
 
-correction02_commit_oid   = <populated by the correction02 commit>
-correction02_tree_oid     = <populated by the correction02 commit>
+correction02_commit_oid   = ccbf85273830a9a2d245005a91608317c10d03a4
+correction02_tree_oid     = 502be40c35ec5f074743f3430c29a6159f0f5d2c
 
 tag_object_oid            = ef8261092ef49133c2f45fa8299e480dc4a7a20a
 tag_target_oid            = 68c1b7b2b6352d348e50db7fe23f3daea9559cea
