@@ -1,0 +1,61 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION02",
+  "protocol_version": "1",
+  "closed_at": "2026-07-23T14:12:00Z",
+  "subject_commit": "f89f994fc593e0f5b61fd291af24d229fa9197a2",
+  "subject_tree": "7c4e48eb6972fa74d863565ea221a9436614e986",
+  "files_changed": [
+    ".clinerules/leamas.md",
+    "AGENTS.md",
+    "Makefile",
+    "docs/acts/ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION02.md",
+    "docs/closure-plans/ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION02.json",
+    "internal/factory/gate/factorize_context_guard_test.go",
+    "make/long-tests.mk"
+  ],
+  "behavior_changed": [
+    "make factorize now refuses in editor/Cline contexts with exit 2",
+    "factorize-context-guard runs before any verifier execution",
+    "LEAMAS_ALLOW_FULL_FACTORIZE=1 overrides the refusal",
+    "AGENTS.md and .clinerules/leamas.md no longer recommend routine full-gate/factorize"
+  ],
+  "verification_commands": [
+    {
+      "command": "CGO_ENABLED=0 make gate-fast",
+      "result": "PASS",
+      "duration": "fast"
+    },
+    {
+      "command": "CGO_ENABLED=0 go test ./internal/factory/gate/... -run 'Factorize|Context'",
+      "result": "PASS",
+      "duration": "0.854s"
+    },
+    {
+      "command": "LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize",
+      "result": "PASS",
+      "duration": "229.68s"
+    }
+  ],
+  "test_results": {
+    "truth_table_cases": 16,
+    "routing_tests": 3,
+    "public_target_tests": 1,
+    "all_passed": true
+  },
+  "skipped_checks": [],
+  "follow_up_acts": [
+    "CLOSURE-PROTOCOL-V1-ADOPTION01",
+    "GATE-FAST-LONG-EXECUTION-BOUNDARY-CORRECTION01",
+    "GATE-SUMMARY-V2-DIGEST01 correction/closure",
+    "GATE-SUMMARY-V2-DOGFOOD01",
+    "FACTORIZE-BOUNDED-PARALLELISM01"
+  ],
+  "successor_order": [
+    "GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION02",
+    "CLOSURE-PROTOCOL-V1-ADOPTION01",
+    "GATE-FAST-LONG-EXECUTION-BOUNDARY-CORRECTION01",
+    "GATE-SUMMARY-V2-DIGEST01 correction/closure",
+    "GATE-SUMMARY-V2-DOGFOOD01",
+    "FACTORIZE-BOUNDED-PARALLELISM01"
+  ]
+}
