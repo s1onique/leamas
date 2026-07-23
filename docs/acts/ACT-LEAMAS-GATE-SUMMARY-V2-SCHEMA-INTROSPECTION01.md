@@ -166,10 +166,8 @@ timezone, or network availability.
 baseline_commit_oid: dff6f847000130f66a8d950da667c4924a818a9f
 baseline_tree_oid:   b89356a429d5558ccf769cd18a4c3cc61dc8be6f
 
-proof_binary_sha256: (see below)
-proof_binary_vcs_revision: 0d9d30561004c2cd66fe516fd55db0988759794b
-proof_binary_vcs_modified: false
 proof_binary_sha256:        2c6c82a455279d23f99393bb33a4cdd47ca522af0d4a0807e8002255505ddee8
+proof_binary_vcs_revision: 0d9d30561004c2cd66fe516fd55db0988759794b
 proof_binary_vcs_modified: false (working tree clean at proof build)
 
 v1_schema_file_sha256: 6069570bbc2b79011ab43c34ecce7f9181a814d5f47ca9174daadaff4ee06e81
@@ -186,11 +184,6 @@ validator_runtime_dependency: true
 validator_dependency_added_by_this_act: false
 schema_introspection_runtime_delta:      none
 ```
-
-Note: `vcs.modified=true` is expected at the proof stage because the
-ACT is still implementing changes. The proof binary is a fixed
-working-tree build; the closure tag will be published against a clean
-tree.
 
 ## Deferred non-goals
 
