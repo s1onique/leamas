@@ -269,8 +269,8 @@ tested_tree_oid           = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
 evidence_commit_oid       = bd13513908c784f82ae26e0e9adc787dd2584aff
 evidence_tree_oid         = 7e40b24b05b16946334fff9bc82fc97a0d4e2aae
 
-close_commit_oid          = fb7989433d2e10433a95755a87aa3f6891a2d517
-close_tree_oid            = 851e4ce8b57c2f4344eb6db3c02e6447faf4e8e7
+close_commit_oid          = 5017e12b52e286e3b68fa47d75432217498e44cd
+close_tree_oid            = b458550392e3c679c97a19f35595c7fd49b4489f
 
 tag_object_oid            = f37190a80735ab60ebebb57be24bfd81f51b0c71
 tag_target_oid            = bd13513908c784f82ae26e0e9adc787dd2584aff
