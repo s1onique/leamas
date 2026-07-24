@@ -191,53 +191,6 @@ func PublishArtifactSet(options PublicationOptions) error {
 	return nil
 }
 
-// RecoverInterruptedPublication restores the pre-publication state described
-// by a marker. It is safe to call before every new publication attempt.
-func RecoverInterruptedPublication(destination string) error {
-	if runtime.GOOS != "linux" {
-		return ErrUnsupportedPublicationPlatform
-	}
-	return recoverInterruptedPublication(destination)
-}
-
-const (
-	publicationNone publicationState = iota
-	publicationPartial
-	publicationComplete
-)
-
-type publicationState int
-
-func inspectExistingPublication(destination string, paths []string, files map[string][]byte) (publicationState, error) {
-	existing := 0
-	identical := 0
-	missing := 0
-	for _, path := range paths {
-		data, err := os.ReadFile(filepath.Join(destination, filepath.FromSlash(path)))
-		if errors.Is(err, os.ErrNotExist) {
-			missing++
-			continue
-		}
-		if err != nil {
-			return publicationNone, fmt.Errorf("inspect existing publication %s: %w", path, err)
-		}
-		existing++
-		if string(data) == string(files[path]) {
-			identical++
-		}
-	}
-	if existing == 0 && missing == 0 {
-		return publicationNone, nil
-	}
-	if existing == len(paths) && identical == len(paths) && missing == 0 {
-		return publicationComplete, nil
-	}
-	if existing == 0 {
-		return publicationNone, nil
-	}
-	return publicationNone, fmt.Errorf("existing publication is partial or conflicting; refusing mixed canonical set")
-}
-
 func validatePublicationPath(value string) error {
 	if value == "" || filepath.IsAbs(value) || strings.ContainsRune(value, 0) {
 		return fmt.Errorf("publication path %q is not relative", value)
@@ -333,73 +286,6 @@ func writePublicationMarker(destination string, marker publicationMarker) error 
 	data = append(data, '\n')
 	path := filepath.Join(destination, publicationMarkerName)
 	return os.WriteFile(path, data, 0o600)
-}
-
-func recoverInterruptedPublication(destination string) error {
-	path := filepath.Join(destination, publicationMarkerName)
-	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("read publication recovery marker: %w", err)
-	}
-	var marker publicationMarker
-	if err := json.Unmarshal(data, &marker); err != nil {
-		return fmt.Errorf("decode publication recovery marker: %w", err)
-	}
-	if marker.State == "complete" {
-		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return err
-		}
-		if marker.StageDir != "" {
-			_ = os.RemoveAll(marker.StageDir)
-		}
-		return nil
-	}
-	for index := len(marker.Entries) - 1; index >= 0; index-- {
-		entry := marker.Entries[index]
-		if entry.Published {
-			_ = os.Remove(filepath.Join(destination, filepath.FromSlash(entry.Path)))
-		}
-	}
-	if marker.StageDir != "" {
-		if err := os.RemoveAll(marker.StageDir); err != nil {
-			return fmt.Errorf("remove interrupted staging directory: %w", err)
-		}
-	}
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("remove publication recovery marker: %w", err)
-	}
-	return nil
-}
-
-func rollbackPublication(destination string, marker publicationMarker, cause error) error {
-	rollbackErr := recoverInterruptedMarker(destination, marker)
-	if rollbackErr != nil {
-		return fmt.Errorf("%w; rollback incomplete: %v", cause, rollbackErr)
-	}
-	return cause
-}
-
-func recoverInterruptedMarker(destination string, marker publicationMarker) error {
-	for index := len(marker.Entries) - 1; index >= 0; index-- {
-		entry := marker.Entries[index]
-		if entry.Published {
-			if err := os.Remove(filepath.Join(destination, filepath.FromSlash(entry.Path))); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-		}
-	}
-	if marker.StageDir != "" {
-		if err := os.RemoveAll(marker.StageDir); err != nil {
-			return err
-		}
-	}
-	if err := os.Remove(filepath.Join(destination, publicationMarkerName)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
 }
 
 var _ = io.EOF
