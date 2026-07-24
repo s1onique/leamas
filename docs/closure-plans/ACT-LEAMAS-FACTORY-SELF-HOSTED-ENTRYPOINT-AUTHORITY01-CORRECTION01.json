@@ -1,0 +1,164 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01",
+  "baseline": {
+    "commit_oid": "d20fc2c0f856b8a99330b626cd87fd256dc0a931",
+    "tree_oid": "49d10a413026ff5d655736dfb03da1ff0df1bae8"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "checks": [
+    {
+      "id": "focused-count-1",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/authority/...",
+        "./internal/factory/digest/...",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {
+        "CGO_ENABLED": "0"
+      }
+    },
+    {
+      "id": "focused-count-20",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=20",
+        "./internal/factory/authority/...",
+        "./internal/factory/digest/...",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {
+        "CGO_ENABLED": "0"
+      }
+    },
+    {
+      "id": "focused-race-5",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/authority/...",
+        "./internal/factory/digest/...",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {
+        "CGO_ENABLED": "1"
+      }
+    },
+    {
+      "id": "vet",
+      "mode": "run",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/authority/...",
+        "./internal/factory/digest/...",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 300,
+      "environment": {
+        "CGO_ENABLED": "0"
+      }
+    },
+    {
+      "id": "build",
+      "mode": "run",
+      "argv": [
+        "go",
+        "build",
+        "-buildvcs=true",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-self-hosted-authority-correction01",
+        "./cmd/leamas"
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {
+        "CGO_ENABLED": "0"
+      }
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {
+        "CGO_ENABLED": "0"
+      }
+    },
+    {
+      "id": "diff-check",
+      "mode": "run",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 60,
+      "environment": {
+        "CGO_ENABLED": "0"
+      }
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "No dupcode-owned source or registration changed."
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "manifest",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01.json",
+      "required": true,
+      "max_bytes": 65536,
+      "media_type": "application/json"
+    },
+    {
+      "id": "report",
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01.md",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "text/markdown"
+    },
+    {
+      "id": "erratum",
+      "path": "docs/lifecycle-errata/ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01.json",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "application/json"
+    }
+  ]
+}
