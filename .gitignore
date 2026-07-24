@@ -25,3 +25,4 @@ internal/execution/testdata/testhelper/main
 # and must be visible to `git add` despite the broad testdata/ rule above.
 !internal/factory/doctrinecompiler/testdata/
 !internal/factory/doctrinecompiler/testdata/**
+leamas

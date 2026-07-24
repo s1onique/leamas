@@ -44,7 +44,10 @@ func main() {
 	case "factory":
 		handleFactory()
 	case "doctor":
-		fmt.Println("Leamas doctor: all systems operational")
+		factoryArgs := os.Args[2:]
+		os.Exit(handleFactoryDoctor(os.Stdout, os.Stderr, factoryArgs))
+	case "bootstrap":
+		os.Exit(handleFactoryBootstrap(os.Stdout, os.Stderr, os.Args[2:]))
 	case "cockpit":
 		handleCockpit()
 	case "witness":
@@ -249,6 +252,7 @@ Commands:
   leamas factory coverage     Check coverage threshold
   leamas factory close        Closure Protocol v1
   leamas doctor               Run diagnostics
+  leamas bootstrap             Rebuild self-hosted binary
   leamas cockpit              Local web cockpit
   leamas witness              Witness proxy commands
   leamas gate-summary         Gate Summary wire format introspection

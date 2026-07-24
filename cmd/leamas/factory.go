@@ -22,7 +22,7 @@ func parseFactoryCommand(args []string) (string, error) {
 	}
 	cmd := args[0]
 	switch cmd {
-	case "verify", "gate", "factorize", "digest", "coverage", "gate-summary", "output-contract", "doctrine", "test-long", "close":
+	case "verify", "gate", "factorize", "digest", "coverage", "gate-summary", "output-contract", "doctrine", "test-long", "close", "bootstrap", "doctor":
 		return cmd, nil
 	default:
 		return "", fmt.Errorf("unknown factory command: %s", cmd)
@@ -36,6 +36,7 @@ func handleFactory() {
 		printFactoryUsage()
 		os.Exit(1)
 	}
+	cmdArgs := os.Args[3:]
 	switch cmd {
 	case "verify":
 		handleFactoryVerify()
@@ -57,6 +58,10 @@ func handleFactory() {
 		handleFactoryTestLong()
 	case "close":
 		handleFactoryClose()
+	case "bootstrap":
+		os.Exit(handleFactoryBootstrap(os.Stdout, os.Stderr, cmdArgs))
+	case "doctor":
+		os.Exit(handleFactoryDoctor(os.Stdout, os.Stderr, cmdArgs))
 	}
 }
 
