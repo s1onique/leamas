@@ -6,6 +6,8 @@ package digest
 import (
 	"fmt"
 	"strings"
+
+	"github.com/s1onique/leamas/internal/factory/authority"
 )
 
 // Mode represents the digest generation mode.
@@ -47,6 +49,20 @@ type ResolvedMode struct {
 	GeneratorIsAncestor bool
 	GeneratorStale      bool
 	StaleReason         string
+
+	// AuthorityStatus is the typed classification from the shared
+	// authority resolver. It is the single source of truth for
+	// whether the resolved range is authoritative.
+	AuthorityStatus authority.AuthorityStatus
+
+	// ToolIdentity records the exact executable that produced
+	// the digest. Equality of the binary bytes, declared commit,
+	// and VCS revision are recorded separately.
+	ToolIdentity authority.ToolIdentity
+
+	// ResolutionSource is the strategy label that resolved the
+	// range (closure_manifest, explicit_cli, etc.).
+	ResolutionSource string
 }
 
 // RangeStrategy returns the strategy label used to authoritatively
@@ -62,12 +78,39 @@ func (r *ResolvedMode) RangeStrategy() string {
 // on working tree state, and returns the authoritative ACT range when
 // the working tree is clean.
 //
-// The returned ResolvedMode carries the lifecycle metadata required
-// by ACT-LEAMAS-FACTORY-DIGEST-AUTO-ACT-RANGE01: ActID, freeze /
-// subject / closure OIDs, the strategy that selected the range, the
-// list of included commits, and the generator binary freshness
-// fields.
+// The function now delegates lifecycle classification to the shared
+// authority resolver in internal/factory/authority. It no longer
+// implements any heuristic fallback such as `HEAD~1..HEAD`; the
+// authoritative auto path must derive its range from validated
+// lifecycle artifacts only.
+//
+// Tool identity is recorded on every resolution so downstream
+// consumers can detect incompatible stale binaries.
 func ResolveAutoMode(repoRoot string) (*ResolvedMode, error) {
+	return resolveAutoModeWith(repoRoot, "", "")
+}
+
+// ResolveAutoModeWithTool is the entry point used by the CLI to
+// bind a specific tool binary path. The shared authority resolver
+// records the path, SHA-256, declared version, and embedded VCS
+// revision on every resolution.
+func ResolveAutoModeWithTool(repoRoot, toolPath string) (*ResolvedMode, error) {
+	return resolveAutoModeWith(repoRoot, toolPath, "")
+}
+
+// ResolveAutoModeExplicitRange is the entry point used when the
+// caller supplied an explicit --range. The authority resolver
+// classifies the result as AuthorityExplicitRange and never as
+// authoritative.
+func ResolveAutoModeExplicitRange(repoRoot, toolPath, rangeSpec string) (*ResolvedMode, error) {
+	return resolveAutoModeWith(repoRoot, toolPath, rangeSpec)
+}
+
+// resolveAutoModeWith is the test seam for ResolveAutoMode. The
+// optional toolPath and explicitRange allow callers and tests to
+// bind a specific binary and to bypass lifecycle authority for
+// diagnostic review.
+func resolveAutoModeWith(repoRoot, toolPath, explicitRange string) (*ResolvedMode, error) {
 	result := &ResolvedMode{}
 
 	head, err := runGitValueTrimmed(repoRoot, "rev-parse", "HEAD")
@@ -97,39 +140,94 @@ func ResolveAutoMode(repoRoot string) (*ResolvedMode, error) {
 		result.Mode = ModeDirty
 		result.Reason = "working tree has changes"
 		result.IsClean = false
+		result.AuthorityStatus = authority.AuthorityDirtyWorktree
 		return result, nil
 	}
 
-	// Working tree is clean: defer to the lifecycle resolver. The
-	// resolver inspects closure artifacts and falls back to the
-	// empty-tree / single-commit paths when no ACT is in scope.
+	// Working tree is clean: delegate to the shared authority
+	// resolver. No heuristic fallback is consulted; the resolver
+	// either returns an authoritative range from validated
+	// lifecycle artifacts or fails closed with a typed status.
 	result.IsClean = true
-	resolution, err := resolveLifecycleAtHEAD(repoRoot)
+	resolved, err := authority.Resolve(authority.ResolverOptions{
+		RepoRoot:      repoRoot,
+		ToolBinaryPath: toolPath,
+		ExplicitRange:  explicitRange,
+	})
 	if err != nil {
+		// Surface typed authority errors verbatim so callers can
+		// render a precise diagnostic without parsing prose.
+		var authErr *authority.AuthorityResolutionError
+		if e := err; e != nil {
+			if v, ok := e.(*authority.AuthorityResolutionError); ok {
+				authErr = v
+				_ = authErr
+			}
+		}
 		return nil, err
 	}
-	applyLifecycleToResolved(result, resolution)
+
+	applyAuthorityToResolved(result, resolved)
 	return result, nil
 }
 
-// applyLifecycleToResolved copies lifecycle metadata from a
-// LifecycleResolution into the legacy ResolvedMode used by the rest
-// of the digest pipeline. The function is intentionally local to
-// resolve.go so the two structs evolve together.
-func applyLifecycleToResolved(out *ResolvedMode, r *LifecycleResolution) {
-	out.Mode = ModeRange
-	out.Range = r.Range()
-	out.Reason = r.Reason
-	out.BaseCommit = r.RangeBase
-	out.HeadCommit = r.RangeHead
-	out.AutoRangeStrategy = r.Strategy
+// applyAuthorityToResolved copies the shared authority resolution
+// into the legacy ResolvedMode shape used by the digest pipeline.
+// The function is intentionally local to resolve.go so the two
+// structs evolve together.
+func applyAuthorityToResolved(out *ResolvedMode, r *authority.ResolvedAuthority) {
+	out.AuthorityStatus = r.AuthorityStatus
+	out.ToolIdentity = r.ToolIdentity
+	out.ResolutionSource = r.ResolutionSrc
 	out.ActID = r.ActID
-	out.LifecycleFreeze = r.LifecycleFreeze
-	out.LifecycleSubject = r.LifecycleSubject
-	out.LifecycleClosure = r.LifecycleClosure
-	out.IncludedCommits = append([]string(nil), r.IncludedCommits...)
-	out.GeneratorCommit = r.GeneratorCommit
-	out.GeneratorIsAncestor = r.GeneratorIsAncestor
-	out.GeneratorStale = r.GeneratorStale
-	out.StaleReason = r.StaleReason
+	out.LifecycleFreeze = r.FreezeCommit
+	out.LifecycleSubject = r.SubjectEnd
+	out.LifecycleClosure = r.ClosureCommit
+	out.HeadCommit = r.ToolIdentity.RepositoryHead
+	out.GeneratorCommit = r.ToolIdentity.ToolCommit
+	if r.SubjectEnd != "" && r.FreezeCommit != "" {
+		out.AutoRangeStrategy = authorityStatusStrategy(r.AuthorityStatus)
+	}
+	if r.AuthorityStatus == authority.AuthorityAuthoritativeClosed ||
+		r.AuthorityStatus == authority.AuthorityAuthoritativeClosedLocal {
+		out.Mode = ModeRange
+		out.Range = r.DigestRange
+		out.Reason = authorityStatusReason(r.AuthorityStatus, r)
+		out.BaseCommit = r.FreezeCommit
+		out.HeadCommit = r.SubjectEnd
+	} else if r.AuthorityStatus == authority.AuthorityExplicitRange {
+		out.Mode = ModeRange
+		out.Range = r.DigestRange
+		out.Reason = "explicit --range; non-authoritative"
+		out.BaseCommit = ""
+		out.HeadCommit = r.ToolIdentity.RepositoryHead
+	}
+}
+
+// authorityStatusStrategy returns the legacy strategy label
+// associated with the typed authority status.
+func authorityStatusStrategy(s authority.AuthorityStatus) string {
+	switch s {
+	case authority.AuthorityAuthoritativeClosed,
+		authority.AuthorityAuthoritativeClosedLocal:
+		return "closure_manifest"
+	case authority.AuthorityExplicitRange:
+		return "explicit_cli"
+	default:
+		return string(s)
+	}
+}
+
+// authorityStatusReason produces a one-line diagnostic for the
+// authority status. Callers render this in legacy "Reason" fields
+// without losing the typed classification.
+func authorityStatusReason(s authority.AuthorityStatus, r *authority.ResolvedAuthority) string {
+	switch s {
+	case authority.AuthorityAuthoritativeClosed:
+		return "manifest + attestation + annotated tag pin " + r.DigestRange
+	case authority.AuthorityAuthoritativeClosedLocal:
+		return "manifest pins " + r.DigestRange + " (tag or attestation missing)"
+	default:
+		return string(s)
+	}
 }

@@ -23,6 +23,11 @@ type Options struct {
 	Output string
 	// Range is the commit range for ModeRange (e.g., "HEAD~1..HEAD").
 	Range string
+	// ToolBinaryPath is the path to the binary that is
+	// generating this digest. The authority resolver uses it
+	// to record SHA-256, declared version, and embedded VCS
+	// revision on every digest header.
+	ToolBinaryPath string
 }
 
 // Generate creates a targeted digest and returns it as a string.
@@ -43,7 +48,13 @@ func Generate(opts Options) (string, error) {
 
 	// Handle auto mode
 	if mode == ModeAuto {
-		resolved, err := ResolveAutoMode(repoRoot)
+		var resolved *ResolvedMode
+		var err error
+		if opts.Range != "" {
+			resolved, err = ResolveAutoModeExplicitRange(repoRoot, opts.ToolBinaryPath, opts.Range)
+		} else {
+			resolved, err = ResolveAutoModeWithTool(repoRoot, opts.ToolBinaryPath)
+		}
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve auto mode: %w", err)
 		}
@@ -56,7 +67,14 @@ func Generate(opts Options) (string, error) {
 			return RenderDigestWithResolved(ModeDirty, repoRoot, files, resolved, false)
 		}
 
-		// Clean working tree: use range mode with HEAD~1..HEAD
+		// Clean working tree: the authoritative range must come
+		// from validated lifecycle artifacts. The resolver already
+		// failed closed with a typed status when no such artifacts
+		// exist, so a missing range here indicates an internal state
+		// mismatch we must surface rather than mask.
+		if resolved.Range == "" {
+			return "", fmt.Errorf("failed to resolve auto mode: digest: resolver returned no range with status %s", resolved.AuthorityStatus)
+		}
 		files, err := GetRangeFiles(repoRoot, resolved.Range)
 		if err != nil {
 			return "", fmt.Errorf("failed to get range files: %w", err)

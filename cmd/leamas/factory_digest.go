@@ -107,9 +107,20 @@ func runFactoryDigestWithClock(
 		return 1
 	}
 
+	// Resolve the binary path that is producing this digest. The
+	// authority resolver records the path, SHA-256, declared
+	// version, and embedded VCS revision so downstream consumers
+	// can detect incompatible stale binaries.
+	binaryPath, binaryErr := os.Executable()
+	if binaryErr != nil {
+		fmt.Fprintf(stderr, "ERROR: cannot resolve executable path: %v\n", binaryErr)
+		return 1
+	}
+
 	opts := digest.Options{
-		Mode:   parsed.mode,
-		Output: parsed.output,
+		Mode:          parsed.mode,
+		Output:        parsed.output,
+		ToolBinaryPath: binaryPath,
 	}
 	if parsed.hasRange {
 		opts.Range = parsed.rangeSpec

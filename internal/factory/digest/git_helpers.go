@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// Package digest: git_helpers.go preserves the small set of
+// subprocess helpers consumed by resolve.go and lifecycle_render.go
+// after the legacy HEAD~1..HEAD auto-range resolver was removed.
+//
+// These helpers were previously bundled in auto_range_git.go and
+// are now isolated here so the new authority-driven resolve path
+// can keep using them without re-introducing the heuristic.
 package digest
 
 import (
@@ -8,12 +15,6 @@ import (
 	"strings"
 )
 
-// readHeadBlob returns the contents of path at the given commit.
-// Returns an error if the file does not exist at that commit.
-func readHeadBlob(repoRoot, commit, path string) ([]byte, error) {
-	return runGitBytes(repoRoot, "show", commit+":"+path)
-}
-
 // runGitValueTrimmed runs `git <args>` and returns trimmed stdout.
 func runGitValueTrimmed(repoRoot string, args ...string) (string, error) {
 	out, err := runGitBytes(repoRoot, args...)
@@ -21,15 +22,6 @@ func runGitValueTrimmed(repoRoot string, args ...string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-// runGitOutput runs `git <args>` and returns the raw stdout.
-func runGitOutput(repoRoot string, args ...string) (string, error) {
-	out, err := runGitBytes(repoRoot, args...)
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
 }
 
 // runGitBytes runs `git <args>` and returns the captured stdout bytes.
@@ -43,23 +35,10 @@ func runGitBytes(repoRoot string, args ...string) ([]byte, error) {
 	return out, nil
 }
 
-// listTreeNames returns the file names under dir at the given commit.
-func listTreeNames(repoRoot, commit, dir string) ([]string, error) {
-	out, err := runGitBytes(repoRoot, "ls-tree", "--name-only", commit+"^{tree}", "--", dir)
-	if err != nil {
-		return nil, nil
-	}
-	var names []string
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if line = strings.TrimSpace(line); line != "" {
-			names = append(names, line)
-		}
-	}
-	return names, nil
-}
-
 // mustResolveOID resolves a short or full OID to a full OID, or ""
-// when resolution fails.
+// when resolution fails. It mirrors the helper the legacy
+// auto-range used and is preserved so digest_status_*_test.go
+// can continue to validate range semantics.
 func mustResolveOID(repoRoot, oid string) string {
 	oid = strings.TrimSpace(oid)
 	if oid == "" {
