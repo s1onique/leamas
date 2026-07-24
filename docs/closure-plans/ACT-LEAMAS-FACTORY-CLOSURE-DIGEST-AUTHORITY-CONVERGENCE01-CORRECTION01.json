@@ -1,0 +1,123 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01-CORRECTION01",
+  "baseline": {
+    "commit_oid": "275bd963fec5cf5ef8919a09c00edde14ddeb66e",
+    "tree_oid": "15fb86332fa50b78e23d4e10577c89edcc57474d"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "runner_binding": "subject_exact",
+  "checks": [
+    {
+      "id": "gofmt",
+      "mode": "run",
+      "argv": ["bash", "-lc", "test -z \"$(gofmt -l internal/factory/authority/ internal/factory/digest/ internal/factory/closure/ cmd/leamas/)\""],
+      "working_directory": ".",
+      "timeout_seconds": 60,
+      "environment": {}
+    },
+    {
+      "id": "build-all",
+      "mode": "run",
+      "argv": ["go", "build", "./..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "vet-affected",
+      "mode": "run",
+      "argv": ["go", "vet", "./internal/factory/authority/...", "./internal/factory/digest/...", "./internal/factory/closure/...", "./cmd/leamas/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "test-authority",
+      "mode": "run",
+      "argv": ["go", "test", "-count=1", "./internal/factory/authority/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "test-digest",
+      "mode": "run",
+      "argv": ["go", "test", "-count=1", "./internal/factory/digest/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "test-closure",
+      "mode": "run",
+      "argv": ["go", "test", "-count=1", "./internal/factory/closure/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "test-cmd",
+      "mode": "run",
+      "argv": ["go", "test", "-count=1", "./cmd/leamas/..."],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": ["make", "gate-fast"],
+      "working_directory": ".",
+      "timeout_seconds": 600,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "llm-friendly",
+      "mode": "run",
+      "argv": ["./bin/leamas", "factory", "verify", "llm-friendly"],
+      "working_directory": ".",
+      "timeout_seconds": 300,
+      "environment": {"CGO_ENABLED": "0"}
+    },
+    {
+      "id": "diff-check",
+      "mode": "run",
+      "argv": ["git", "diff", "--check"],
+      "working_directory": ".",
+      "timeout_seconds": 60,
+      "environment": {}
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "parent-manifest",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
+      "required": true,
+      "max_bytes": 65536,
+      "media_type": "application/json"
+    },
+    {
+      "id": "parent-report",
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.md",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "text/markdown"
+    },
+    {
+      "id": "parent-erratum",
+      "path": "docs/lifecycle-errata/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "application/json"
+    }
+  ]
+}
