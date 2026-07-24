@@ -1,452 +1,75 @@
 {
-  "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01",
-  "plan": {
-    "sha256": "c1c3046ac61505444ec7ddadb2925849e71859cb5105429f5192e86e6c833c63",
-    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json"
+  "artifact_summary": {
+    "failed": 0,
+    "generated_outputs": 4,
+    "inputs": 0,
+    "missing": 0,
+    "passed": 0,
+    "post_commit_evidence": 0
   },
-  "plan_freeze": {
-    "freeze_commit": "0ee790892b9f9b014d60446923dc9edc5d2f614f",
-    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
-    "plan_blob_oid": "fee23af931157b681990fcdb30a69b00ba801675",
-    "plan_sha256": "c1c3046ac61505444ec7ddadb2925849e71859cb5105429f5192e86e6c833c63",
-    "subject_commit": "98c6c3d364d790a999a840ffa34c11a1053deecf"
+  "check_summary": {
+    "excluded": 0,
+    "failed": 0,
+    "not_run": 0,
+    "passed": 0,
+    "total": 0
   },
-  "subject": {
-    "commit_oid": "98c6c3d364d790a999a840ffa34c11a1053deecf",
-    "tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f"
+  "closure_policy": {
+    "diagnostic_count": 0,
+    "tracked_full_digest_status": "pass"
   },
-  "runner": {
-    "leamas_version": "0.1.0+dev.98c6c3d364d7.20260724T114436Z",
-    "binary_sha256": "f730c41e1b0a4008fb277d1603e969027f4c644fad5f3355cc68f76e85244e8f",
-    "vcs_revision": "98c6c3d364d790a999a840ffa34c11a1053deecf",
-    "vcs_modified": false
-  },
-  "repository": {
-    "root": ".",
-    "remote_url": "git@github.com:s1onique/leamas.git",
+  "contract_version": 1,
+  "evidence_index": [
+    {
+      "byte_count": 159,
+      "media_type": "application/vnd.leamas.closure-evidence+json",
+      "path": "docs/closure-evidence/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01/checks.json",
+      "schema_version": 1,
+      "sha256": "abd6d1edad37be7e68e7163fcb883d2b384d9ea66bf153fee6d59b21c1064744"
+    },
+    {
+      "byte_count": 1567,
+      "media_type": "application/vnd.leamas.closure-evidence+json",
+      "path": "docs/closure-evidence/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01/artifacts.json",
+      "schema_version": 1,
+      "sha256": "eb375bf586ca0ef37ae7ea4e47ca2069f99bac75522fbdda29515ef470295f67"
+    }
+  ],
+  "execution_snapshot": {
     "branch": "main",
     "head_commit_oid": "98c6c3d364d790a999a840ffa34c11a1053deecf",
     "head_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-    "origin_main_commit_oid": "9480d3caa392ead35f18c11ff92b67bde319c0db",
-    "ahead_by": 11,
-    "behind_by": 0,
-    "working_tree_clean_before": true,
-    "working_tree_clean_after": true
+    "root": ".",
+    "working_tree_clean_after": true,
+    "working_tree_clean_before": true
   },
-  "checks": [
-    {
-      "check_id": "gofmt",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "bash",
-        "-lc",
-        "gofmt -l internal/factory/digest/ internal/factory/authority/ cmd/leamas/factory_digest.go"
-      ],
-      "working_directory": ".",
-      "overridden_environment": [],
-      "started_at_utc": "2026-07-24T11:45:06.041568647Z",
-      "finished_at_utc": "2026-07-24T11:45:06.108164329Z",
-      "duration_ms": 66,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_byte_count": 0,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 0,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "vet",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "go",
-        "vet",
-        "./internal/factory/digest/...",
-        "./internal/factory/authority/...",
-        "./cmd/leamas/..."
-      ],
-      "working_directory": ".",
-      "overridden_environment": [
-        "CGO_ENABLED"
-      ],
-      "started_at_utc": "2026-07-24T11:45:06.11155963Z",
-      "finished_at_utc": "2026-07-24T11:45:06.575751421Z",
-      "duration_ms": 464,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_byte_count": 0,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 0,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "test-digest",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "./internal/factory/digest/..."
-      ],
-      "working_directory": ".",
-      "overridden_environment": [
-        "CGO_ENABLED"
-      ],
-      "started_at_utc": "2026-07-24T11:45:06.579507811Z",
-      "finished_at_utc": "2026-07-24T11:45:12.471146658Z",
-      "duration_ms": 5891,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "e38e78ce11264d6367a3a65c50447275ec3d7ada28998c50f0e611566bb91533",
-      "stdout_byte_count": 63,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 63,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "test-authority",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "./internal/factory/authority/..."
-      ],
-      "working_directory": ".",
-      "overridden_environment": [
-        "CGO_ENABLED"
-      ],
-      "started_at_utc": "2026-07-24T11:45:12.474444091Z",
-      "finished_at_utc": "2026-07-24T11:45:13.995530818Z",
-      "duration_ms": 1521,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "58704690db47b128735a0028576620d2a0db1e0f4a87a55d2e3dfad08f983095",
-      "stdout_byte_count": 66,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 66,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "test-closure",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "./internal/factory/closure/..."
-      ],
-      "working_directory": ".",
-      "overridden_environment": [
-        "CGO_ENABLED"
-      ],
-      "started_at_utc": "2026-07-24T11:45:13.99781359Z",
-      "finished_at_utc": "2026-07-24T11:45:19.033457568Z",
-      "duration_ms": 5035,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "0e726efbc9416bb4d33ef795fe318a2fb85c211997c17266696b201d41b70de9",
-      "stdout_byte_count": 144,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 144,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "test-cmd",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "./cmd/leamas/..."
-      ],
-      "working_directory": ".",
-      "overridden_environment": [
-        "CGO_ENABLED"
-      ],
-      "started_at_utc": "2026-07-24T11:45:19.035862393Z",
-      "finished_at_utc": "2026-07-24T11:45:33.878574762Z",
-      "duration_ms": 14842,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "4c1fdd2473ca4045cdab69ea64894e4b026aeece9064e27ceb0277f9e2e752b9",
-      "stdout_byte_count": 51,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 51,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "build",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "go",
-        "build",
-        "-buildvcs=true",
-        "-trimpath",
-        "-o",
-        "/tmp/leamas-convergence01",
-        "./cmd/leamas"
-      ],
-      "working_directory": ".",
-      "overridden_environment": [
-        "CGO_ENABLED"
-      ],
-      "started_at_utc": "2026-07-24T11:45:33.881962718Z",
-      "finished_at_utc": "2026-07-24T11:45:34.901313918Z",
-      "duration_ms": 1019,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_byte_count": 0,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 0,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "gate-fast",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "make",
-        "gate-fast"
-      ],
-      "working_directory": ".",
-      "overridden_environment": [
-        "CGO_ENABLED"
-      ],
-      "started_at_utc": "2026-07-24T11:45:34.903271975Z",
-      "finished_at_utc": "2026-07-24T11:45:58.876882637Z",
-      "duration_ms": 23973,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "c501083a0cbd7b958cfb788ff1794afa6d4b6fd244b244fbf9497a2d95159e2d",
-      "stdout_byte_count": 699,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 699,
-      "cleanup_status": "pass"
-    },
-    {
-      "check_id": "diff-check",
-      "subject_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
-      "argv": [
-        "git",
-        "diff",
-        "--check"
-      ],
-      "working_directory": ".",
-      "overridden_environment": [],
-      "started_at_utc": "2026-07-24T11:45:58.878996929Z",
-      "finished_at_utc": "2026-07-24T11:45:58.888969659Z",
-      "duration_ms": 9,
-      "exit_code": 0,
-      "status": "pass",
-      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stdout_byte_count": 0,
-      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "stderr_byte_count": 0,
-      "output_truncated": false,
-      "output_incomplete": false,
-      "output_bytes_observed": 0,
-      "cleanup_status": "pass"
-    }
-  ],
-  "artifacts": [
-    {
-      "artifact_id": "manifest",
-      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
-      "required": true,
-      "media_type": "application/json",
-      "status": "missing",
-      "byte_count": 0,
-      "diagnostic": "inspect artifact path component \"docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json\": statat docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json: no such file or directory"
-    },
-    {
-      "artifact_id": "report",
-      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.md",
-      "required": true,
-      "media_type": "text/markdown",
-      "status": "missing",
-      "byte_count": 0,
-      "diagnostic": "inspect artifact path component \"docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.md\": statat docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.md: no such file or directory"
-    },
-    {
-      "artifact_id": "erratum",
-      "path": "docs/lifecycle-errata/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
-      "required": true,
-      "media_type": "application/json",
-      "status": "missing",
-      "byte_count": 0,
-      "diagnostic": "inspect artifact path component \"docs/lifecycle-errata/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json\": statat docs/lifecycle-errata/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json: no such file or directory"
-    }
-  ],
-  "detached_evidence": [
-    {
-      "logical_name": "gofmt.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "gofmt.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "vet.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "vet.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-digest.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e38e78ce11264d6367a3a65c50447275ec3d7ada28998c50f0e611566bb91533",
-      "byte_count": 63,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-digest.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-authority.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "58704690db47b128735a0028576620d2a0db1e0f4a87a55d2e3dfad08f983095",
-      "byte_count": 66,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-authority.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-closure.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "0e726efbc9416bb4d33ef795fe318a2fb85c211997c17266696b201d41b70de9",
-      "byte_count": 144,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-closure.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-cmd.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "4c1fdd2473ca4045cdab69ea64894e4b026aeece9064e27ceb0277f9e2e752b9",
-      "byte_count": 51,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "test-cmd.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "build.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "build.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "gate-fast.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "c501083a0cbd7b958cfb788ff1794afa6d4b6fd244b244fbf9497a2d95159e2d",
-      "byte_count": 699,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "gate-fast.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "diff-check.stdout",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "diff-check.stderr",
-      "media_type": "text/plain; charset=utf-8",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "byte_count": 0,
-      "availability": "detached"
-    },
-    {
-      "logical_name": "runner.diagnostics",
-      "media_type": "application/json",
-      "sha256": "fd4effc3b4617df96d6247de26bf64e3c82356270d412b4da213e2a62c55ea37",
-      "byte_count": 162,
-      "availability": "detached"
-    }
-  ],
   "patch_hygiene": {
-    "status": "pass",
-    "diagnostic_count": 0
+    "diagnostic_count": 0,
+    "status": "pass"
   },
-  "closure_policy": {
-    "tracked_full_digest_status": "pass",
-    "diagnostic_count": 0
+  "plan": {
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
+    "sha256": "237e0d5c752f3b6f18ebca6f593e16b37e5559bf86e7998cbc069e0261e01eef"
   },
-  "excluded_checks": [],
-  "verdict": "fail"
+  "plan_freeze": {
+    "freeze_commit": "0ee790892b9f9b014d60446923dc9edc5d2f614f",
+    "plan_blob_oid": "fee23af931157b681990fcdb30a69b00ba801675",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
+    "plan_sha256": "237e0d5c752f3b6f18ebca6f593e16b37e5559bf86e7998cbc069e0261e01eef",
+    "subject_commit": "98c6c3d364d790a999a840ffa34c11a1053deecf"
+  },
+  "runner": {
+    "binary_sha256": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    "leamas_version": "0.1.0+dev.test",
+    "vcs_modified": false,
+    "vcs_revision": "98c6c3d364d790a999a840ffa34c11a1053deecf"
+  },
+  "subject": {
+    "end_commit_oid": "98c6c3d364d790a999a840ffa34c11a1053deecf",
+    "end_tree_oid": "1f7a4618a2043314e54d5164e68dbba28115404f",
+    "start_commit_oid": "98c6c3d364d790a999a840ffa34c11a1053deecf"
+  },
+  "tag": "act/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01",
+  "verdict": "pass"
 }

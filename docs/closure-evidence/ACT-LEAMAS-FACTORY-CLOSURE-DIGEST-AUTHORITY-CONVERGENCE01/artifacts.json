@@ -1,0 +1,48 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01",
+  "generated_outputs": [
+    {
+      "id": "checks-evidence",
+      "max_bytes": 65536,
+      "media_type": "application/vnd.leamas.closure-evidence+json",
+      "path": "docs/closure-evidence/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01/checks.json",
+      "required": true,
+      "role": "generated_output"
+    },
+    {
+      "id": "artifacts-evidence",
+      "max_bytes": 65536,
+      "media_type": "application/vnd.leamas.closure-evidence+json",
+      "path": "docs/closure-evidence/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01/artifacts.json",
+      "required": true,
+      "role": "generated_output"
+    },
+    {
+      "id": "manifest",
+      "max_bytes": 65536,
+      "media_type": "application/json",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.json",
+      "required": true,
+      "role": "generated_output"
+    },
+    {
+      "id": "report",
+      "max_bytes": 32768,
+      "media_type": "text/markdown",
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01.md",
+      "required": true,
+      "role": "generated_output"
+    }
+  ],
+  "inputs": [],
+  "item_count": 5,
+  "post_commit_evidence": [],
+  "runner_diagnostics": {
+    "availability": "detached",
+    "byte_count": 0,
+    "logical_name": "runner.diagnostics",
+    "media_type": "application/json",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "schema_version": 1
+}
