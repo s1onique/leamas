@@ -93,7 +93,10 @@ func headIntroducedActs(git GitRunner, repoRoot, headOID string) ([]string, erro
 				continue
 			}
 			peeled, perr := git(repoRoot, "rev-parse", "--verify", "--end-of-options", name+"^{commit}")
-			if perr != nil || strings.TrimSpace(peeled) != headOID {
+			if perr != nil || strings.TrimSpace(peeled) == "" {
+				continue
+			}
+			if _, err := git(repoRoot, "merge-base", "--is-ancestor", strings.TrimSpace(peeled), headOID); err != nil {
 				continue
 			}
 			objType, terr := git(repoRoot, "cat-file", "-t", name)
@@ -238,19 +241,10 @@ func resolveSingleAct(git GitRunner, repoRoot, headOID, actID string) (*Resolved
 		}
 	}
 
-	// Head-commit identity. The manifest's recorded head_commit
-	// must equal the actual repository HEAD, otherwise the
-	// manifest was authored against a different repository
-	// state.
-	if mf.Repository.HeadCommitOID != "" {
-		recorded := mustResolveOID(git, repoRoot, mf.Repository.HeadCommitOID)
-		if recorded != headOID {
-			return nil, &AuthorityResolutionError{
-				Status: AuthorityRepositoryIdentityMismatch,
-				Reason: fmt.Sprintf("manifest %s: recorded HEAD %s != repository HEAD %s", manifestPath, shortSHA(recorded), shortSHA(headOID)),
-			}
-		}
-	}
+	// repository.head_commit_oid is the historical execution snapshot,
+	// not a query-time HEAD identity. A valid closure may be followed by
+	// descendants, so current HEAD is checked through subject/closure
+	// ancestry rather than equality with the recorded snapshot.
 
 	resolved := &ResolvedAuthority{
 		ActID:           actID,
