@@ -1,0 +1,186 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-ONE-SUBJECT-ONE-CLOSURE01",
+  "baseline": {
+    "commit_oid": "910f34dee65114575d7f1cdc0a57cfe76b65edeb",
+    "tree_oid": "04651a4a27fbfeb3879d68fb33f00b1c1edffaf4"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "go-test-count-1",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "go-test-count-20",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=20",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "go-test-race-5",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "1"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "go-vet",
+      "mode": "run",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "go-build",
+      "mode": "run",
+      "argv": [
+        "go",
+        "build",
+        "-buildvcs=true",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-closure-protocol-v2-self",
+        "./cmd/leamas"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "git-diff-check",
+      "mode": "run",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "closure-runner-identity-test",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestCurrentRunnerIdentity|TestAssertExactBinaryParity",
+        "./internal/factory/closure/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 120
+    },
+    {
+      "id": "closure-sidecar-evidence-test",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestSidecarEvidence|TestVerifySidecar",
+        "./internal/factory/closure/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 120
+    },
+    {
+      "id": "closure-publication-test",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestPublication|TestCrashRecovery",
+        "./internal/factory/closure/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 120
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "No dupcode-owned source or registration changed by this ACT."
+    }
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  },
+  "policy_profile": "leamas-act-v1"
+}
