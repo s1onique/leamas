@@ -77,6 +77,36 @@ func (e *ErrBuildFailed) Unwrap() error { return e.Err }
 // does not satisfy the embedded-commit contract.
 var ErrVerificationFailed = errors.New("bootstrap verification failed")
 
+// reentryEnvVars is the closed list of environment variables that
+// the emergency re-entry fuse in main.go uses to detect a nested
+// Leamas invocation. The bootstrap verify child must not see them,
+// otherwise the fresh binary refuses to start.
+var reentryEnvVars = []string{
+	"LEAMAS_EXEC_ROOT_ID",
+	"LEAMAS_EXEC_PARENT_PID",
+	"LEAMAS_EXEC_GENERATION",
+}
+
+// cleanReentryEnv returns env with every LEAMAS_EXEC_* variable
+// stripped. The verify child of the bootstrap must run as a fresh
+// root invocation.
+func cleanReentryEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, line := range env {
+		strip := false
+		for _, name := range reentryEnvVars {
+			if strings.HasPrefix(line, name+"=") {
+				strip = true
+				break
+			}
+		}
+		if !strip {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
 // BootstrapSelf rebuilds the leamas binary bound to the current
 // repository HEAD. The implementation:
 //
@@ -179,7 +209,15 @@ func verifyBuiltBinary(path, expected string) (sha256Hex, embeddedCommit string,
 		return "", "", fmt.Errorf("hash built binary: %w", err)
 	}
 
-	out, runErr := exec.Command(path, "version", "--json").Output()
+	verifyCmd := exec.Command(path, "version", "--json")
+	// The newly-built binary inherits the parent's environment,
+	// including LEAMAS_EXEC_ROOT_ID / LEAMAS_EXEC_PARENT_PID /
+	// LEAMAS_EXEC_GENERATION. Those variables are set by the
+	// emergency re-entry fuse in main.go and would cause the
+	// verification child to refuse to start. Strip them so the
+	// verify child starts as a fresh root invocation.
+	verifyCmd.Env = cleanReentryEnv(os.Environ())
+	out, runErr := verifyCmd.Output()
 	if runErr != nil {
 		return "", "", fmt.Errorf("%w: %v", ErrVerificationFailed, runErr)
 	}

@@ -1,0 +1,61 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01",
+  "kind": "lifecycle_erratum",
+  "recorded_by": "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01",
+  "recorded_at": "2026-07-24T07:30:00Z",
+  "implementation": {
+    "commit": "06c51158d104c20eec389736a2a0bcff06743630",
+    "tree": "897587b88dc06a6f40d68c796f4ed186dbd91b6e",
+    "status": "IMPLEMENTED_UNDER_HISTORICALLY_INVALID_LIFECYCLE"
+  },
+  "declared_subject": {
+    "commit": "06c5115a5d2e7c4f4a26f5c1e3b9a8d7c6e5f4a3",
+    "exists_in_repository": false,
+    "note": "The predecessor's reported subject OID does not exist in this repository."
+  },
+  "historical_closure": {
+    "status": "INVALID",
+    "reasons": [
+      "declared_subject_object_missing",
+      "no_pre_subject_plan_freeze",
+      "plan_contains_unresolved_placeholder",
+      "closure_manifest_missing",
+      "attestation_missing",
+      "annotated_tag_missing"
+    ],
+    "first_plan_appearance_commit": "d20fc2c0f856b8a99330b626cd87fd256dc0a931",
+    "first_plan_appearance_tree": "49d10a413026ff5d655736dfb03da1ff0df1bae8",
+    "plan_placeholder_field": "baseline.tree_oid",
+    "plan_placeholder_value": "TO_BE_FILLED"
+  },
+  "historical_verification": {
+    "status": "UNBOUND",
+    "note": "No verifiable closure artifact exists for the predecessor. The historical verification claim is unavailable."
+  },
+  "production_implementation": {
+    "status": "RETAINED",
+    "note": "The production implementation is retained and forward-requalified by ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01. No production code is rewritten."
+  },
+  "prior_closure_claim": {
+    "withdrawn": true,
+    "note": "The prior claim of CLOSED_LOCAL or PUBLISHED is withdrawn. Historical truth is preserved in this erratum."
+  },
+  "forward_requalification": {
+    "act_id": "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01",
+    "freeze_commit": "F1_PLACEHOLDER",
+    "subject_commit": "S1_PLACEHOLDER",
+    "closure_commit": "C1_PLACEHOLDER",
+    "tag_name": "act/leamas-factory-self-hosted-entrypoint-authority01-correction01",
+    "note": "F/S/C OIDs are recorded by the closure manifest and are not embedded here."
+  },
+  "do_not_reclassify": [
+    "VERIFIED",
+    "CLOSED_LOCAL",
+    "PUBLISHED"
+  ],
+  "diagnostic_outcome": {
+    "predecessor": "INVALID_LIFECYCLE",
+    "production": "RETAINED",
+    "forward": "GOVERNED_BY_CORRECTION01"
+  }
+}
