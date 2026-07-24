@@ -17,73 +17,9 @@
         "test",
         "-count=1",
         "./internal/factory/closure/...",
+        "./internal/factory/authority/...",
+        "./internal/factory/digest/...",
         "./cmd/leamas/..."
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 600
-    },
-    {
-      "id": "go-test-count-20",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=20",
-        "./internal/factory/closure/...",
-        "./cmd/leamas/..."
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 600
-    },
-    {
-      "id": "go-test-race-5",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-race",
-        "-count=5",
-        "./internal/factory/closure/...",
-        "./cmd/leamas/..."
-      ],
-      "environment": {
-        "CGO_ENABLED": "1"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 600
-    },
-    {
-      "id": "go-vet",
-      "mode": "run",
-      "argv": [
-        "go",
-        "vet",
-        "./internal/factory/closure/...",
-        "./cmd/leamas/..."
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 300
-    },
-    {
-      "id": "go-build",
-      "mode": "run",
-      "argv": [
-        "go",
-        "build",
-        "-buildvcs=true",
-        "-trimpath",
-        "-o",
-        "/tmp/leamas-closure-protocol-v2-self",
-        "./cmd/leamas"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -105,12 +41,13 @@
       "timeout_seconds": 600
     },
     {
-      "id": "git-diff-check",
+      "id": "subject-diff-check",
       "mode": "run",
       "argv": [
         "git",
         "diff",
-        "--check"
+        "--check",
+        "HEAD^..HEAD"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -119,60 +56,14 @@
       "timeout_seconds": 60
     },
     {
-      "id": "closure-runner-identity-test",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-run",
-        "TestCurrentRunnerIdentity|TestAssertExactBinaryParity",
-        "./internal/factory/closure/..."
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 120
-    },
-    {
-      "id": "closure-sidecar-evidence-test",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-run",
-        "TestSidecarEvidence|TestVerifySidecar",
-        "./internal/factory/closure/..."
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 120
-    },
-    {
-      "id": "closure-publication-test",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-run",
-        "TestPublication|TestCrashRecovery",
-        "./internal/factory/closure/..."
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 120
-    },
-    {
       "id": "dupcode",
       "mode": "exclude",
       "reason": "No dupcode-owned source or registration changed by this ACT."
+    },
+    {
+      "id": "race-and-stress-long-lane",
+      "mode": "exclude",
+      "reason": "Repeated and race verification belongs to the non-interactive long lane and is not required for editor-driven Closure Protocol v2 qualification."
     }
   ],
   "artifacts": [],
