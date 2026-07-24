@@ -16,8 +16,15 @@ type artifactHashHook func(stage string)
 func collectRepositoryArtifacts(repositoryRoot string, planned []PlanArtifact) []ArtifactResult {
 	results := make([]ArtifactResult, 0, len(planned))
 	for _, artifact := range planned {
+		// Generated outputs and post-commit evidence are produced at a
+		// later lifecycle boundary. Treating them as pre-run inputs would
+		// make a clean first run fail before it can generate its outputs.
+		if ArtifactRoleFor(artifact) != ArtifactRoleInput {
+			continue
+		}
 		result, err := hashRepositoryArtifact(repositoryRoot, artifact, nil)
 		if err == nil {
+			result.Role = ArtifactRoleFor(artifact)
 			results = append(results, result)
 			continue
 		}
@@ -31,6 +38,7 @@ func collectRepositoryArtifacts(repositoryRoot string, planned []PlanArtifact) [
 			Path:       artifact.Path,
 			Required:   *artifact.Required,
 			MediaType:  artifact.MediaType,
+			Role:       ArtifactRoleFor(artifact),
 			Status:     status,
 			Diagnostic: sanitizeDiagnostic(diagnostic),
 		})
@@ -100,6 +108,7 @@ func hashRepositoryArtifact(repositoryRoot string, planned PlanArtifact, hook ar
 		Path:       planned.Path,
 		Required:   *planned.Required,
 		MediaType:  planned.MediaType,
+		Role:       ArtifactRoleFor(planned),
 		Status:     ArtifactStatusPass,
 		SHA256:     firstHash,
 		ByteCount:  firstCount,

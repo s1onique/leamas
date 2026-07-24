@@ -98,11 +98,12 @@ type PlanCheck struct {
 }
 
 type PlanArtifact struct {
-	ID        string `json:"id"`
-	Path      string `json:"path"`
-	Required  *bool  `json:"required"`
-	MaxBytes  int64  `json:"max_bytes"`
-	MediaType string `json:"media_type"`
+	ID        string       `json:"id"`
+	Path      string       `json:"path"`
+	Required  *bool        `json:"required"`
+	MaxBytes  int64        `json:"max_bytes"`
+	MediaType string       `json:"media_type"`
+	Role      ArtifactRole `json:"role,omitempty"`
 }
 
 type PlanPolicy struct {
@@ -200,14 +201,15 @@ type CheckResult struct {
 }
 
 type ArtifactResult struct {
-	ArtifactID string `json:"artifact_id"`
-	Path       string `json:"path"`
-	Required   bool   `json:"required"`
-	MediaType  string `json:"media_type"`
-	Status     string `json:"status"`
-	SHA256     string `json:"sha256,omitempty"`
-	ByteCount  int64  `json:"byte_count"`
-	Diagnostic string `json:"diagnostic,omitempty"`
+	ArtifactID string       `json:"artifact_id"`
+	Path       string       `json:"path"`
+	Required   bool         `json:"required"`
+	MediaType  string       `json:"media_type"`
+	Role       ArtifactRole `json:"role,omitempty"`
+	Status     string       `json:"status"`
+	SHA256     string       `json:"sha256,omitempty"`
+	ByteCount  int64        `json:"byte_count"`
+	Diagnostic string       `json:"diagnostic,omitempty"`
 }
 
 type EvidenceRecord struct {

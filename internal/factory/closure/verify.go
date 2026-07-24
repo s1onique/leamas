@@ -114,14 +114,23 @@ func verifyRunResult(check PlanCheck, result CheckResult, subjectTree string) er
 }
 
 func verifyArtifactMatrix(manifest Manifest, plan Plan) error {
-	if len(manifest.Artifacts) != len(plan.Artifacts) {
-		return fmt.Errorf("artifact count mismatch: got %d, want %d", len(manifest.Artifacts), len(plan.Artifacts))
+	inputs := make([]PlanArtifact, 0, len(plan.Artifacts))
+	for _, planned := range plan.Artifacts {
+		if ArtifactRoleFor(planned) == ArtifactRoleInput {
+			inputs = append(inputs, planned)
+		}
 	}
-	for i, planned := range plan.Artifacts {
+	if len(manifest.Artifacts) != len(inputs) {
+		return fmt.Errorf("artifact count mismatch: got %d, want %d input artifacts", len(manifest.Artifacts), len(inputs))
+	}
+	for i, planned := range inputs {
 		actual := manifest.Artifacts[i]
 		if actual.ArtifactID != planned.ID || actual.Path != planned.Path ||
 			actual.Required != *planned.Required || actual.MediaType != planned.MediaType {
 			return fmt.Errorf("artifact order or identity mismatch at index %d", i)
+		}
+		if actual.Role != "" && actual.Role != ArtifactRoleInput {
+			return fmt.Errorf("artifact %q has non-input role in pre-run manifest", planned.ID)
 		}
 		if actual.ByteCount > planned.MaxBytes {
 			return fmt.Errorf("artifact %q exceeds planned maximum", planned.ID)

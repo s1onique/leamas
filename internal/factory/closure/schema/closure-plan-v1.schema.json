@@ -114,7 +114,11 @@
           "path": {"type": "string"},
           "required": {"type": "boolean"},
           "max_bytes": {"type": "integer", "minimum": 1},
-          "media_type": {"type": "string"}
+          "media_type": {"type": "string"},
+          "role": {
+            "type": "string",
+            "enum": ["input", "generated_output", "not_required", "failure_erratum", "post_commit_evidence"]
+          }
         }
       }
     },

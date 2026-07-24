@@ -192,6 +192,10 @@ func validatePlanArtifacts(artifacts []PlanArtifact) error {
 		if strings.TrimSpace(artifact.MediaType) == "" || containsClosurePlaceholder(artifact.MediaType) {
 			return fmt.Errorf("artifacts[%d].media_type is invalid", i)
 		}
+		role := ArtifactRoleFor(artifact)
+		if !validArtifactRole(role) {
+			return fmt.Errorf("artifacts[%d].role %q is invalid", i, role)
+		}
 	}
 	return nil
 }

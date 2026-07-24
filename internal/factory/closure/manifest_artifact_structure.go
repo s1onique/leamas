@@ -15,6 +15,9 @@ func validateArtifactResult(index int, artifact ArtifactResult) error {
 	if artifact.MediaType == "" || containsClosurePlaceholder(artifact.MediaType) {
 		return fmt.Errorf("%s.media_type is invalid", prefix)
 	}
+	if artifact.Role != "" && !validArtifactRole(artifact.Role) {
+		return fmt.Errorf("%s.role is invalid", prefix)
+	}
 	if artifact.ByteCount < 0 {
 		return fmt.Errorf("%s.byte_count is negative", prefix)
 	}
