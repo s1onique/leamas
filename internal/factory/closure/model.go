@@ -220,6 +220,33 @@ type EvidenceRecord struct {
 	Availability string `json:"availability"`
 }
 
+// DetachedEvidenceIndex binds a sidecar file in the canonical evidence
+// directory to the core manifest. The core manifest MUST reference every
+// detached sidecar through this index; the sidecar MUST validate against
+// the bound identity.
+type DetachedEvidenceIndex struct {
+	Path          string `json:"path"`
+	SchemaVersion int    `json:"schema_version"`
+	MediaType     string `json:"media_type"`
+	SHA256        string `json:"sha256"`
+	ByteCount     int64  `json:"byte_count"`
+	ItemCount     int    `json:"item_count"`
+}
+
+// CheckSummary replaces per-record detached evidence in the core manifest.
+// It carries only aggregate identity and the bound sidecar index.
+type CheckSummary struct {
+	CheckID             string `json:"check_id"`
+	SubjectTreeOID      string `json:"subject_tree_oid"`
+	Status              string `json:"status"`
+	ExitCode            *int   `json:"exit_code,omitempty"`
+	DurationMS          int64  `json:"duration_ms"`
+	OutputBytesObserved int64  `json:"output_bytes_observed"`
+	OutputTruncated     bool   `json:"output_truncated"`
+	OutputIncomplete    bool   `json:"output_incomplete"`
+	CleanupStatus       string `json:"cleanup_status"`
+}
+
 type PatchHygiene struct {
 	Status          string `json:"status"`
 	DiagnosticCount int    `json:"diagnostic_count"`
