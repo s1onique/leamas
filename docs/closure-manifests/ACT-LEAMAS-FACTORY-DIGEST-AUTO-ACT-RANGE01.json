@@ -1,0 +1,356 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-DIGEST-AUTO-ACT-RANGE01",
+  "plan": {
+    "sha256": "446d3c55c0eb7ba281b1ded9ec320a71ea524d283bf3dfd123cbf023ab378cbe",
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-DIGEST-AUTO-ACT-RANGE01.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "17948c74f92a8c311cae1de6ce14a55778700357",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-DIGEST-AUTO-ACT-RANGE01.json",
+    "plan_blob_oid": "6a66a7ad9ece606717b4509a0996b085cdbec7ed",
+    "plan_sha256": "446d3c55c0eb7ba281b1ded9ec320a71ea524d283bf3dfd123cbf023ab378cbe",
+    "subject_commit": "32ff96046ed27b4ae384b9f144f5e0bc3e1b459c"
+  },
+  "subject": {
+    "commit_oid": "32ff96046ed27b4ae384b9f144f5e0bc3e1b459c",
+    "tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev.32ff96046ed2.20260724T065541Z",
+    "binary_sha256": "a01b937148e3dd7b032dc36a09079b588fb8bddc1a637cb632a9a92d9836c5d3",
+    "vcs_revision": "32ff96046ed27b4ae384b9f144f5e0bc3e1b459c",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "32ff96046ed27b4ae384b9f144f5e0bc3e1b459c",
+    "head_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+    "origin_main_commit_oid": "43dd25446505a7b228086db43dd11dcb3dbbced0",
+    "ahead_by": 4,
+    "behind_by": 0,
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "checks": [
+    {
+      "check_id": "focused-count-1",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-24T06:56:32.63890996Z",
+      "finished_at_utc": "2026-07-24T06:56:45.288605074Z",
+      "duration_ms": 12649,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "587b820f4e7dc6783b3a5bda979c027497ccb4f77b641e0a193fdf6020a169e2",
+      "stdout_byte_count": 115,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 115,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "focused-count-20",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "argv": [
+        "go",
+        "test",
+        "-count=20",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-24T06:56:45.29133038Z",
+      "finished_at_utc": "2026-07-24T07:00:34.931989483Z",
+      "duration_ms": 229640,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "6f50ad16b34fe65f9db1b1ac8eea54258cc5da833d005645e6cd06d01f982f7e",
+      "stdout_byte_count": 117,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 117,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "focused-race-5",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-24T07:00:34.935185299Z",
+      "finished_at_utc": "2026-07-24T07:01:47.512240118Z",
+      "duration_ms": 72577,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "15445d7527edecb69606935e129d3494c9f94fcee79fe1f40c606e92e7859719",
+      "stdout_byte_count": 116,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 116,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "vet",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-24T07:01:47.516828667Z",
+      "finished_at_utc": "2026-07-24T07:01:47.954874937Z",
+      "duration_ms": 438,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "build",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "argv": [
+        "go",
+        "build",
+        "-buildvcs=true",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-closure-protocol-v1-self",
+        "./cmd/leamas"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-24T07:01:47.958231391Z",
+      "finished_at_utc": "2026-07-24T07:01:48.914938334Z",
+      "duration_ms": 956,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "gate-fast",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-24T07:01:48.918013547Z",
+      "finished_at_utc": "2026-07-24T07:02:12.087285165Z",
+      "duration_ms": 23169,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "c501083a0cbd7b958cfb788ff1794afa6d4b6fd244b244fbf9497a2d95159e2d",
+      "stdout_byte_count": 699,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 699,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "diff-check",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-07-24T07:02:12.09039621Z",
+      "finished_at_utc": "2026-07-24T07:02:12.107286518Z",
+      "duration_ms": 16,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    }
+  ],
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "focused-count-1.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "587b820f4e7dc6783b3a5bda979c027497ccb4f77b641e0a193fdf6020a169e2",
+      "byte_count": 115,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-count-1.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-count-20.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "6f50ad16b34fe65f9db1b1ac8eea54258cc5da833d005645e6cd06d01f982f7e",
+      "byte_count": 117,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-count-20.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-race-5.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "15445d7527edecb69606935e129d3494c9f94fcee79fe1f40c606e92e7859719",
+      "byte_count": 116,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-race-5.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "vet.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "vet.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "gate-fast.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "c501083a0cbd7b958cfb788ff1794afa6d4b6fd244b244fbf9497a2d95159e2d",
+      "byte_count": 699,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "gate-fast.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "runner.diagnostics",
+      "media_type": "application/json",
+      "sha256": "bf0b82b8b3acd88042dab1831602a036fac1c3a9cfd1e518b98f6517e81e919b",
+      "byte_count": 147,
+      "availability": "detached"
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [
+    {
+      "check_id": "dupcode",
+      "subject_tree_oid": "981b6db621ed67bc7dc20b07d1912fbbac9edd30",
+      "reason": "No dupcode-owned source or registration changed."
+    }
+  ],
+  "verdict": "pass"
+}
