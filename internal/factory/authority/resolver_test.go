@@ -198,7 +198,7 @@ func TestResolverToolPathIsRecorded(t *testing.T) {
 	// produces a typed error rather than an authoritative
 	// resolution.
 	_, err := Resolve(ResolverOptions{
-		RepoRoot:      repo,
+		RepoRoot:       repo,
 		ToolBinaryPath: fakeBin,
 	})
 	if err == nil {

@@ -118,8 +118,8 @@ func runFactoryDigestWithClock(
 	}
 
 	opts := digest.Options{
-		Mode:          parsed.mode,
-		Output:        parsed.output,
+		Mode:           parsed.mode,
+		Output:         parsed.output,
 		ToolBinaryPath: binaryPath,
 	}
 	if parsed.hasRange {

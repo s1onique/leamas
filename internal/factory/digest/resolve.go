@@ -150,7 +150,7 @@ func resolveAutoModeWith(repoRoot, toolPath, explicitRange string) (*ResolvedMod
 	// lifecycle artifacts or fails closed with a typed status.
 	result.IsClean = true
 	resolved, err := authority.Resolve(authority.ResolverOptions{
-		RepoRoot:      repoRoot,
+		RepoRoot:       repoRoot,
 		ToolBinaryPath: toolPath,
 		ExplicitRange:  explicitRange,
 	})
