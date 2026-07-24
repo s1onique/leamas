@@ -29,6 +29,8 @@ const (
 	LifecycleFieldGeneratorCommit   = "GENERATOR_COMMIT"
 	LifecycleFieldRepositoryHead    = "REPOSITORY_HEAD"
 	LifecycleFieldGeneratorStale    = "GENERATOR_STALE"
+	LifecycleFieldAuthorityStatus   = "AUTHORITY_STATUS"
+	LifecycleFieldResolutionSource  = "RESOLUTION_SOURCE"
 )
 
 // LifecycleSectionHeader is the section heading under which the
@@ -62,6 +64,8 @@ func RenderLifecycle(r *ResolvedMode) string {
 	appendKV(LifecycleFieldGeneratorCommit, renderOrUnset(r.GeneratorCommit))
 	appendKV(LifecycleFieldRepositoryHead, renderOrUnset(r.HeadCommit))
 	appendKV(LifecycleFieldGeneratorStale, renderStale(r))
+	appendKV(LifecycleFieldAuthorityStatus, renderOrUnset(string(r.AuthorityStatus)))
+	appendKV(LifecycleFieldResolutionSource, renderOrUnset(r.ResolutionSource))
 	return sb.String()
 }
 
