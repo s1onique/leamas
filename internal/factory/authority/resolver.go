@@ -368,6 +368,20 @@ func captureToolIdentity(opts ResolverOptions) (ToolIdentity, error) {
 	return identity, nil
 }
 
+
+// filterReentryEnv returns env with every LEAMAS_EXEC_* variable
+// stripped. The version probe must run as a fresh root invocation.
+func filterReentryEnv(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, line := range env {
+		if strings.HasPrefix(line, "LEAMAS_EXEC_") {
+			continue
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
 // populate fills the remaining ToolIdentity fields by running
 // `version --json` on path and hashing the binary bytes. The
 // working directory is set to the calling process's current
@@ -384,6 +398,9 @@ func (t *ToolIdentity) populate(path string) error {
 	if wd, _ := os.Getwd(); wd != "" {
 		cmd.Dir = wd
 	}
+	// Strip LEAMAS_EXEC_* re-entry fuse variables so the
+	// version probe can run as a fresh root invocation.
+	cmd.Env = filterReentryEnv(os.Environ())
 	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("tool version probe: %w", err)
