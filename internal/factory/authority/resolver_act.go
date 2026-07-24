@@ -86,28 +86,6 @@ func headIntroducedActs(git GitRunner, repoRoot, headOID string) ([]string, erro
 		}
 	}
 
-	if tagOut, terr := git(repoRoot, "for-each-ref", "--format=%(refname:short)", "refs/tags/act/"); terr == nil {
-		for _, raw := range strings.Split(tagOut, "\n") {
-			name := strings.TrimSpace(raw)
-			if !strings.HasPrefix(name, "act/") {
-				continue
-			}
-			peeled, perr := git(repoRoot, "rev-parse", "--verify", "--end-of-options", name+"^{commit}")
-			if perr != nil || strings.TrimSpace(peeled) == "" {
-				continue
-			}
-			if _, err := git(repoRoot, "merge-base", "--is-ancestor", strings.TrimSpace(peeled), headOID); err != nil {
-				continue
-			}
-			objType, terr := git(repoRoot, "cat-file", "-t", name)
-			if terr != nil || strings.TrimSpace(objType) != "tag" {
-				continue
-			}
-			id := strings.TrimPrefix(name, "act/")
-			acts[id] = struct{}{}
-		}
-	}
-
 	out := make([]string, 0, len(acts))
 	for id := range acts {
 		out = append(out, id)
@@ -181,12 +159,17 @@ func isHeadEvidenceOnly(git GitRunner, repoRoot, headOID string) bool {
 	return true
 }
 
-// resolveSingleAct loads and validates the manifest and (when
-// present) attestation for actID. It enforces ancestry, hash,
-// and tag-type invariants and returns the typed ResolvedAuthority.
+// resolveSingleAct is the legacy local-manifest entry point.
 func resolveSingleAct(git GitRunner, repoRoot, headOID, actID string) (*ResolvedAuthority, error) {
+	return resolveSingleActAt(git, repoRoot, headOID, headOID, actID, closureCandidate{})
+}
+
+// resolveSingleActAt loads and validates a manifest at the exact
+// closure boundary selected by the candidate algorithm. headOID is the
+// query snapshot used for descendant and post-closure evidence checks.
+func resolveSingleActAt(git GitRunner, repoRoot, headOID, manifestCommit, actID string, candidate closureCandidate) (*ResolvedAuthority, error) {
 	manifestPath := "docs/closure-manifests/" + actID + ".json"
-	raw, err := readBlobAt(git, repoRoot, headOID, manifestPath)
+	raw, err := readBlobAt(git, repoRoot, manifestCommit, manifestPath)
 	if err != nil {
 		return nil, &AuthorityResolutionError{
 			Status: AuthorityMissingAuthority,
@@ -200,10 +183,16 @@ func resolveSingleAct(git GitRunner, repoRoot, headOID, actID string) (*Resolved
 			Reason: fmt.Sprintf("decode manifest %s: %v", manifestPath, err),
 		}
 	}
-	if mf.ActID != "" && mf.ActID != actID {
+	if mf.ActID != actID {
 		return nil, &AuthorityResolutionError{
 			Status: AuthorityInvalidArtifact,
 			Reason: fmt.Sprintf("manifest act_id %q does not match %q", mf.ActID, actID),
+		}
+	}
+	if candidate.TagName != "" && mf.Tag != "" && mf.Tag != candidate.TagName {
+		return nil, &AuthorityResolutionError{
+			Status: AuthorityInvalidArtifact,
+			Reason: fmt.Sprintf("manifest tag %q does not match %q", mf.Tag, candidate.TagName),
 		}
 	}
 	freeze := mf.PlanFreeze.FreezeCommit
@@ -240,6 +229,12 @@ func resolveSingleAct(git GitRunner, repoRoot, headOID, actID string) (*Resolved
 			Reason: fmt.Sprintf("manifest %s: subject %s is not an ancestor of HEAD %s", manifestPath, shortSHA(subjectFull), shortSHA(headOID)),
 		}
 	}
+	if manifestCommit != headOID && !isAncestor(git, repoRoot, subjectFull, manifestCommit) {
+		return nil, &AuthorityResolutionError{
+			Status: AuthorityInvalidArtifact,
+			Reason: fmt.Sprintf("manifest %s: subject %s is not an ancestor of closure %s", manifestPath, shortSHA(subjectFull), shortSHA(manifestCommit)),
+		}
+	}
 
 	// repository.head_commit_oid is the historical execution snapshot,
 	// not a query-time HEAD identity. A valid closure may be followed by
@@ -253,6 +248,12 @@ func resolveSingleAct(git GitRunner, repoRoot, headOID, actID string) (*Resolved
 		SubjectEnd:      subjectFull,
 		AttestationPath: "docs/closure-manifests/" + actID + ".attestation.json",
 		ResolutionSrc:   "closure_manifest",
+	}
+	if candidate.TagName != "" {
+		resolved.ClosureCommit = candidate.ClosureCommit
+		resolved.TagName = candidate.TagName
+		resolved.TagObject = candidate.TagObject
+		resolved.TagTarget = candidate.ClosureCommit
 	}
 
 	// Attestation, when present, must validate.

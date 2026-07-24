@@ -327,6 +327,16 @@ func newFixtureRepo(t *testing.T) string {
 // annotated tag. Returns (freeze, subject, manifestPath).
 func fixtureClosedLocal(t *testing.T, repo string) (string, string, string) {
 	t.Helper()
+	planDir := filepath.Join(repo, "docs", "closure-plans")
+	if err := os.MkdirAll(planDir, 0o755); err != nil {
+		t.Fatalf("mkdir plan: %v", err)
+	}
+	planPath := filepath.Join(planDir, fixtureActID+".json")
+	if err := os.WriteFile(planPath, []byte("{\"act_id\":\""+fixtureActID+"\"}\n"), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+	git(t, repo, "add", "docs/closure-plans")
+	git(t, repo, "commit", "-q", "-m", "fixture plan")
 	freeze := git(t, repo, "rev-parse", "HEAD")
 
 	if err := os.WriteFile(filepath.Join(repo, "feature.go"), []byte("package x\n"), 0o644); err != nil {
@@ -343,7 +353,14 @@ func fixtureClosedLocal(t *testing.T, repo string) (string, string, string) {
 	if err := os.WriteFile(manifestPath, []byte(manifestJSON(fixtureActID, freeze, subject)), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	git(t, repo, "add", "docs/closure-manifests")
+	reportDir := filepath.Join(repo, "docs", "close-reports")
+	if err := os.MkdirAll(reportDir, 0o755); err != nil {
+		t.Fatalf("mkdir report: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(reportDir, fixtureActID+".md"), []byte("fixture closure report\n"), 0o644); err != nil {
+		t.Fatalf("write report: %v", err)
+	}
+	git(t, repo, "add", "docs/closure-manifests", "docs/close-reports")
 	git(t, repo, "commit", "-q", "-m", "docs(close): local manifest")
 	return freeze, subject, manifestPath
 }

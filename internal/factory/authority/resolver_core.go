@@ -191,7 +191,8 @@ type ManifestLoose struct {
 	ContractVersion int    `json:"contract_version"`
 	ActID           string `json:"act_id"`
 	Plan            struct {
-		Path string `json:"path"`
+		Path   string `json:"path"`
+		SHA256 string `json:"sha256"`
 	} `json:"plan"`
 	PlanFreeze struct {
 		FreezeCommit  string `json:"freeze_commit"`
@@ -235,96 +236,6 @@ type AttestationLoose struct {
 		PeeledTarget string `json:"peeled_target"`
 	} `json:"tag_identity"`
 	AttestationSHA256 string `json:"attestation_sha256,omitempty"`
-}
-
-// Resolve classifies the lifecycle authority for the supplied
-// resolver options. It is the single source of truth for
-// authoritative range selection across digest, status, and
-// verify commands.
-//
-// The resolver enforces three rules:
-//
-//  1. Zero-argument (auto) resolution only returns an
-//     authoritative range when validated lifecycle artifacts pin
-//     the implementation subject. Heuristic fallbacks such as
-//     `HEAD~1..HEAD`, the previous commit, and working-tree
-//     cleanliness are not consulted for authority classification.
-//  2. Explicit ranges are classified as AuthorityExplicitRange
-//     and never reported as authoritative.
-//  3. Tool identity is recorded on every resolution so the
-//     caller can detect incompatible stale binaries.
-func Resolve(opts ResolverOptions) (*ResolvedAuthority, error) {
-	if opts.RepoRoot == "" {
-		return nil, &AuthorityResolutionError{
-			Status: AuthorityInvalidArtifact,
-			Reason: "repository root is required",
-		}
-	}
-	git := opts.RunGit
-	if git == nil {
-		git = DefaultGitRunner
-	}
-
-	headOID, headTree, err := resolveHEAD(git, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	tool, err := captureToolIdentity(opts)
-	if err != nil {
-		return nil, err
-	}
-	tool.RepositoryHead = headOID
-	tool.RepositoryTree = headTree
-
-	// Explicit range bypasses lifecycle authority. The resolver
-	// still records identities but classifies the result as
-	// non-authoritative.
-	if strings.TrimSpace(opts.ExplicitRange) != "" {
-		return &ResolvedAuthority{
-			AuthorityStatus: AuthorityExplicitRange,
-			DigestRange:     strings.TrimSpace(opts.ExplicitRange),
-			ResolutionSrc:   "explicit_cli",
-			ToolIdentity:    tool,
-		}, nil
-	}
-
-	// Inspect HEAD-introduced ACTs.
-	actIDs, err := headIntroducedActs(git, opts.RepoRoot, headOID)
-	if err != nil {
-		return nil, &AuthorityResolutionError{
-			Status: AuthorityInvalidGitObject,
-			Reason: fmt.Sprintf("scan HEAD-introduced ACTs: %v", err),
-		}
-	}
-
-	if len(actIDs) == 0 {
-		if isHeadEvidenceOnly(git, opts.RepoRoot, headOID) {
-			return nil, &AuthorityResolutionError{
-				Status: AuthorityEvidenceOnlyHead,
-				Reason: fmt.Sprintf("HEAD %s is evidence-only; supply --range or close the ACT with closure artifacts", shortSHA(headOID)),
-			}
-		}
-		return nil, &AuthorityResolutionError{
-			Status: AuthorityMissingAuthority,
-			Reason: fmt.Sprintf("no authoritative ACT for clean tree; HEAD %s has no lifecycle artifacts", shortSHA(headOID)),
-		}
-	}
-
-	if len(actIDs) > 1 {
-		return nil, &AuthorityResolutionError{
-			Status: AuthorityAmbiguousAuthority,
-			Reason: fmt.Sprintf("multiple ACTs claim authority at HEAD: %s", strings.Join(actIDs, ",")),
-		}
-	}
-
-	actID := actIDs[0]
-	resolved, err := resolveSingleAct(git, opts.RepoRoot, headOID, actID)
-	if err != nil {
-		return nil, err
-	}
-	resolved.ToolIdentity = tool
-	return resolved, nil
 }
 
 // resolveHEAD returns the HEAD commit OID and tree OID, honoring
