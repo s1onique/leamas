@@ -104,7 +104,14 @@ func Generate(opts Options) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get range files: %w", err)
 		}
-		return RenderRangeDigest(repoRoot, files, opts.Range)
+		// An explicit CLI range is still classified by the shared
+		// authority resolver. It is intentionally non-authoritative,
+		// but the classification must remain visible in the digest.
+		resolved, err := ResolveAutoModeExplicitRange(repoRoot, opts.ToolBinaryPath, opts.Range)
+		if err != nil {
+			return "", fmt.Errorf("failed to classify explicit range: %w", err)
+		}
+		return RenderRangeDigestWithResolved(repoRoot, files, resolved)
 	default:
 		return "", fmt.Errorf("unsupported mode: %s", mode)
 	}

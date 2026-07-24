@@ -46,7 +46,7 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	sb.WriteString(fmt.Sprintf("Repo: %s\n", repoRoot))
 	sb.WriteString(fmt.Sprintf("Mode: %s\n", resolved.Mode))
 	sb.WriteString(fmt.Sprintf("Range: %s\n", resolved.Range))
-	if resolved.Reason != "explicit range mode" {
+	if resolved.Reason != "explicit range mode" && resolved.ResolutionSource != "explicit_cli" {
 		sb.WriteString(fmt.Sprintf("Resolved from: auto\n"))
 		sb.WriteString(fmt.Sprintf("Reason: %s\n", resolved.Reason))
 	}
