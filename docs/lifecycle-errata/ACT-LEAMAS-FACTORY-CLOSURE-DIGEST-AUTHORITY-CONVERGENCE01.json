@@ -4,5 +4,11 @@
   "erratum_type": "LIFECYCLE_DEFERRED",
   "status": "PARTIAL",
   "created_at": "2026-07-24T10:47:30Z",
-  "reason": "Closure lifecycle completed with manifest verdict FAIL because the gate-fast check required the worktree to be clean and the closure artifacts to be present. After the artifacts are committed in the next commit, the closure verdict is re-derivable to PASS."
+  "reason_code": "CLOSURE_LIFECYCLE_INCOMPLETE",
+  "reason_summary": "Closure artifacts require forward completion.",
+  "details": [
+    "The historical closure manifest recorded verdict FAIL.",
+    "Its gate-fast result was PASS; generated outputs were missing during the run.",
+    "The closure artifact commit must be verified separately before requalification."
+  ]
 }
