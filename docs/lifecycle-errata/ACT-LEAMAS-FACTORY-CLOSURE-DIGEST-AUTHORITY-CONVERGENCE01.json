@@ -1,0 +1,8 @@
+{
+  "erratum_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-DIGEST-AUTHORITY-CONVERGENCE01",
+  "erratum_type": "LIFECYCLE_DEFERRED",
+  "status": "PARTIAL",
+  "created_at": "2026-07-24T10:47:30Z",
+  "reason": "Closure lifecycle completed with manifest verdict FAIL because the gate-fast check required the worktree to be clean and the closure artifacts to be present. After the artifacts are committed in the next commit, the closure verdict is re-derivable to PASS."
+}
