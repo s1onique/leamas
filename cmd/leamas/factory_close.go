@@ -163,15 +163,54 @@ func runFactoryCloseChain(args []string, stdout, stderr io.Writer) int {
 	fs := newCloseFlagSet("factory close chain", stderr)
 	var req closure.ChainValidationRequest
 	var jsonFormat bool
+	var manifestPath string
 	fs.StringVar(&req.Freeze, "freeze", "", "freeze commit OID")
 	fs.StringVar(&req.Subject, "subject", "", "subject commit OID")
 	fs.StringVar(&req.Closure, "closure", "", "closure commit OID")
 	fs.StringVar(&req.Tag, "tag", "", "tag name")
 	fs.StringVar(&req.PlanPath, "plan-path", "", "plan path in repository")
+	fs.StringVar(&manifestPath, "manifest", "", "manifest path")
 	fs.BoolVar(&jsonFormat, "json", false, "output JSON format")
-	if err := parseCloseFlags(fs, args); err != nil || req.Freeze == "" || req.Subject == "" || req.Closure == "" {
-		return reportCloseFlagError(stderr, "factory close chain", err, "--freeze, --subject, and --closure are required")
+	if err := parseCloseFlags(fs, args); err != nil {
+		return reportCloseFlagError(stderr, "factory close chain", err, "flag parsing failed")
 	}
+	// Require all chain fields
+	if req.Freeze == "" {
+		return reportCloseFlagError(stderr, "factory close chain", nil, "--freeze is required")
+	}
+	if req.Subject == "" {
+		return reportCloseFlagError(stderr, "factory close chain", nil, "--subject is required")
+	}
+	if req.Closure == "" {
+		return reportCloseFlagError(stderr, "factory close chain", nil, "--closure is required")
+	}
+	if req.PlanPath == "" {
+		return reportCloseFlagError(stderr, "factory close chain", nil, "--plan-path is required")
+	}
+	if manifestPath == "" {
+		return reportCloseFlagError(stderr, "factory close chain", nil, "--manifest is required")
+	}
+	if req.Tag == "" {
+		return reportCloseFlagError(stderr, "factory close chain", nil, "--tag is required")
+	}
+
+	// Initialize repository authority
+	git := closure.RealGit{}
+	repoRoot, err := git.ShowToplevel(context.Background())
+	if err != nil {
+		return reportCloseError(stderr, "factory close chain", err)
+	}
+
+	// Load and validate manifest
+	manifest, _, err := closure.LoadManifest(manifestPath)
+	if err != nil {
+		return reportCloseError(stderr, "factory close chain", err)
+	}
+
+	req.RepoRoot = repoRoot
+	req.Git = git
+	req.Manifest = &manifest
+
 	result, err := closure.VerifyChain(context.Background(), req)
 	if err != nil {
 		return reportCloseError(stderr, "factory close chain", err)
@@ -186,9 +225,11 @@ func runFactoryCloseChain(args []string, stdout, stderr io.Writer) int {
 func runFactoryCloseAttest(args []string, stdout, stderr io.Writer) int {
 	fs := newCloseFlagSet("factory close attest", stderr)
 	var manifestPath, outputPath string
+	var closureCommit string
 	var jsonFormat bool
 	fs.StringVar(&manifestPath, "manifest", "", "closure manifest")
 	fs.StringVar(&outputPath, "output", "", "output attestation file")
+	fs.StringVar(&closureCommit, "closure", "", "closure commit OID (distinct from subject)")
 	fs.BoolVar(&jsonFormat, "json", false, "output JSON format")
 	if err := parseCloseFlags(fs, args); err != nil || manifestPath == "" || outputPath == "" {
 		return reportCloseFlagError(stderr, "factory close attest", err, "--manifest and --output are required")
@@ -219,14 +260,25 @@ func runFactoryCloseAttest(args []string, stdout, stderr io.Writer) int {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 
+	// Closure commit is distinct from subject (S != C for normal closure)
+	if closureCommit == "" {
+		fmt.Fprintln(stderr, "factory close attest: --closure is required (must be distinct from subject)")
+		return closeFailureCode("usage", "--closure required and must differ from subject")
+	}
+	if closureCommit == manifest.Subject.CommitOID {
+		fmt.Fprintln(stderr, "factory close attest: closure must differ from subject commit")
+		return closeFailureCode("usage", "closure must differ from subject")
+	}
+
 	chainReq := closure.ChainValidationRequest{
 		RepoRoot: repoRoot,
 		Git:      realGit,
 		Freeze:   manifest.PlanFreeze.FreezeCommit,
 		Subject:  manifest.Subject.CommitOID,
-		Closure:  manifest.Subject.CommitOID,
+		Closure:  closureCommit,
 		PlanPath: manifest.Plan.Path,
 		Tag:      manifest.Tag,
+		Manifest: &manifest,
 	}
 
 	// Validate chain
@@ -241,12 +293,13 @@ func runFactoryCloseAttest(args []string, stdout, stderr io.Writer) int {
 		return closeFailureCode("chain", "chain validation failed")
 	}
 
-	// Generate attestation
+	// Generate attestation with explicit closure commit
 	attestReq := closure.AttestationRequest{
-		RepoRoot:    repoRoot,
-		Git:         realGit,
-		Manifest:    manifest,
-		ChainResult: chainResult,
+		RepoRoot:      repoRoot,
+		Git:           realGit,
+		Manifest:      manifest,
+		ChainResult:   chainResult,
+		ClosureCommit: closureCommit,
 	}
 	attest, err := closure.GenerateAttestation(context.Background(), attestReq)
 	if err != nil {
@@ -258,19 +311,36 @@ func runFactoryCloseAttest(args []string, stdout, stderr io.Writer) int {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 
-	// Marshal and write atomically
+	// Marshal attestation
 	data, err := json.MarshalIndent(attest, "", "  ")
 	if err != nil {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 
-	// Atomic write - write to temp then rename
-	tmpPath := outputPath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+	// Robust atomic write using os.CreateTemp
+	tmpFile, err := os.CreateTemp("", "attest-*.json")
+	if err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer func() {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+	}()
+
+	if _, err := tmpFile.Write(data); err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+	if err := tmpFile.Sync(); err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+	if err := os.Chmod(tmpPath, 0644); err != nil {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 	if err := os.Rename(tmpPath, outputPath); err != nil {
-		os.Remove(tmpPath)
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 

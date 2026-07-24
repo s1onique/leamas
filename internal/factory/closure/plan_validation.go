@@ -70,6 +70,44 @@ func checkForbiddenKeys(node interface{}, path string) error {
 	return nil
 }
 
+// CheckPlanNoSelfReferenceFromBytes checks plan bytes for self-referential identities.
+func CheckPlanNoSelfReferenceFromBytes(data []byte) (NoSelfReferenceInPlan, error) {
+	var noSelf NoSelfReferenceInPlan
+	content := string(data)
+
+	selfRefFields := []string{
+		"freeze_commit", "freeze_tree",
+		"subject_commit", "subject_tree",
+		"closure_commit", "closure_tree",
+		"tag_oid", "tag_target",
+	}
+
+	for _, field := range selfRefFields {
+		pattern := fmt.Sprintf(`"%s"\s*:\s*"[0-9a-f]{40}"`, field)
+		matched, _ := regexp.MatchString(pattern, content)
+		switch field {
+		case "freeze_commit":
+			noSelf.PlanFreezeCommitInPlan = matched
+		case "freeze_tree":
+			noSelf.PlanFreezeTreeInPlan = matched
+		case "subject_commit":
+			noSelf.PlanSubjectCommitInPlan = matched
+		case "subject_tree":
+			noSelf.PlanSubjectTreeInPlan = matched
+		case "closure_commit":
+			noSelf.PlanClosureCommitInPlan = matched
+		case "closure_tree":
+			noSelf.PlanClosureTreeInPlan = matched
+		case "tag_oid":
+			noSelf.PlanTagOIDInPlan = matched
+		case "tag_target":
+			noSelf.PlanTagTargetInPlan = matched
+		}
+	}
+
+	return noSelf, nil
+}
+
 // ValidatePlanBytes validates plan bytes directly.
 func ValidatePlanBytes(data []byte) error {
 	var raw interface{}

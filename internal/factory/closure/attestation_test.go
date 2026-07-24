@@ -33,7 +33,10 @@ func TestDecodeAttestation_Valid(t *testing.T) {
 			"subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28",
 			"subject_tree": "7a8734d221eb54924c8810d625fb0ac3d2b4a997"
 		},
-		"chain_validity": {},
+		"chain_validity": {
+			"F_not_equal_S": true,
+			"tag_peeled_target_matches_C": true
+		},
 		"no_self_reference_in_plan": {}
 	}`)
 	a, err := DecodeAttestation(data)
@@ -71,7 +74,10 @@ func TestDecodeAttestation_InvalidTagType(t *testing.T) {
 			"subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28",
 			"subject_tree": "7a8734d221eb54924c8810d625fb0ac3d2b4a997"
 		},
-		"chain_validity": {},
+		"chain_validity": {
+			"F_not_equal_S": true,
+			"tag_peeled_target_matches_C": true
+		},
 		"no_self_reference_in_plan": {}
 	}`)
 	_, err := DecodeAttestation(data)
@@ -105,6 +111,9 @@ func TestDecodeAttestation_PlaceholderOID(t *testing.T) {
 		"subject_reference": {
 			"subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28",
 			"subject_tree": "7a8734d221eb54924c8810d625fb0ac3d2b4a997"
+		"chain_validity": {
+			"F_not_equal_S": true,
+			"tag_peeled_target_matches_C": true
 		},
 		"chain_validity": {},
 		"no_self_reference_in_plan": {}

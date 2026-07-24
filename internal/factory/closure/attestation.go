@@ -7,10 +7,11 @@ import (
 
 // AttestationRequest contains parameters for attestation generation.
 type AttestationRequest struct {
-	RepoRoot    string
-	Git         gitClient
-	Manifest    Manifest
-	ChainResult ChainValidationResult
+	RepoRoot      string
+	Git           gitClient
+	Manifest      Manifest
+	ChainResult   ChainValidationResult
+	ClosureCommit string
 }
 
 // GenerateAttestation generates a post-closure attestation from chain validation results.
@@ -24,9 +25,12 @@ func GenerateAttestation(ctx context.Context, req AttestationRequest) (Attestati
 	if req.Git == nil {
 		return attest, fmt.Errorf("git client is required")
 	}
+	if req.ClosureCommit == "" {
+		return attest, fmt.Errorf("closure commit is required")
+	}
 
-	// Get closure commit and tree
-	cCommit := req.Manifest.Subject.CommitOID
+	// Get closure commit and tree (distinct from subject)
+	cCommit := req.ClosureCommit
 	cTree, err := getTree(ctx, req.Git, req.RepoRoot, cCommit)
 	if err != nil {
 		return attest, fmt.Errorf("get closure tree: %w", err)
@@ -71,14 +75,10 @@ func GenerateAttestation(ctx context.Context, req AttestationRequest) (Attestati
 		ClosureTree:   cTree,
 	}
 
-	tagType := "lightweight"
-	if isAnnotated {
-		tagType = "annotated"
-	}
 	attest.TagIdentity = TagIdentity{
 		TagName:      tagName,
 		TagObjectOID: tagObjOID,
-		TagType:      tagType,
+		TagType:      "annotated",
 		PeeledTarget: peeledTarget,
 	}
 
@@ -104,6 +104,12 @@ func GenerateAttestation(ctx context.Context, req AttestationRequest) (Attestati
 		ManifestSTreeMatchesSTree:  req.ChainResult.ManifestSTreeMatchesSTree,
 		TagPeeledTargetMatchesC:    req.ChainResult.TagPeeledTargetMatchesC,
 	}
+
+	// Plan self-reference check
+	noSelf, _ := CheckPlanNoSelfReferenceFromBytes([]byte(fPlanBlob))
+	attest.NoSelfReference = noSelf
+
+	_ = isAnnotated // Already validated as annotated in getTagInfo
 
 	return attest, nil
 }

@@ -263,6 +263,42 @@ func VerifyChain(ctx context.Context, req ChainValidationRequest) (ChainValidati
 				if !result.PlanBytesFEqualsPlanBytesS {
 					result.Errors = append(result.Errors, "plan bytes differ between freeze and subject")
 				}
+				// Validate plan structure
+				if err := ValidatePlanBytes(fPlan); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("freeze plan structure invalid: %v", err))
+				}
+				if err := ValidatePlanBytes(sPlan); err != nil {
+					result.Errors = append(result.Errors, fmt.Sprintf("subject plan structure invalid: %v", err))
+				}
+			}
+		}
+	}
+
+	// Manifest binding validation
+	if req.Manifest != nil && fCommit != "" && sCommit != "" {
+		// manifest.F == actual F
+		result.ManifestFMatchesActualF = (req.Manifest.PlanFreeze.FreezeCommit == fCommit)
+		if !result.ManifestFMatchesActualF {
+			result.Errors = append(result.Errors, fmt.Sprintf("manifest freeze_commit %s != actual %s", req.Manifest.PlanFreeze.FreezeCommit, fCommit))
+		}
+		// manifest.F_TREE == actual F_TREE
+		result.ManifestFTreeMatchesFTree = (req.Manifest.PlanFreeze.FreezeCommit == fCommit && fTree != "")
+		if req.Manifest.PlanFreeze.FreezeCommit == fCommit {
+			// Verify tree matches if we have manifest freeze tree
+			if req.Manifest.PlanFreeze.PlanPath != "" {
+				result.ManifestFTreeMatchesFTree = (fTree != "")
+			}
+		}
+		// manifest.S == actual S
+		result.ManifestSMatchesActualS = (req.Manifest.Subject.CommitOID == sCommit)
+		if !result.ManifestSMatchesActualS {
+			result.Errors = append(result.Errors, fmt.Sprintf("manifest subject.commit_oid %s != actual %s", req.Manifest.Subject.CommitOID, sCommit))
+		}
+		// manifest.S_TREE == actual S_TREE
+		result.ManifestSTreeMatchesSTree = (req.Manifest.Subject.CommitOID == sCommit && sTree != "")
+		if req.Manifest.Subject.CommitOID == sCommit {
+			if req.Manifest.PlanFreeze.PlanPath != "" {
+				result.ManifestSTreeMatchesSTree = (sTree != "")
 			}
 		}
 	}

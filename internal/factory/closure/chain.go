@@ -178,6 +178,7 @@ type ChainValidationRequest struct {
 	Closure  string
 	Tag      string
 	PlanPath string
+	Manifest *Manifest
 }
 
 // ChainValidationResult contains validation results.
@@ -277,37 +278,60 @@ func DecodeAttestation(data []byte) (Attestation, error) {
 	return a, nil
 }
 
-// ValidateAttestation validates attestation structure.
+// ValidateAttestation validates attestation structure and truth.
 func ValidateAttestation(a Attestation) error {
 	if a.AttestationVersion != 1 {
 		return fmt.Errorf("unsupported attestation_version %d", a.AttestationVersion)
 	}
+	// Require annotated tags only
+	if a.TagIdentity.TagType != "annotated" {
+		return fmt.Errorf("tag_type must be annotated, got %q", a.TagIdentity.TagType)
+	}
+	// Require non-empty ACT ID
+	if a.ActID == "" {
+		return fmt.Errorf("act_id is required")
+	}
+	// Require closure identity
 	if err := ValidateOID("closure_reference.closure_commit", a.ClosureReference.ClosureCommit); err != nil {
 		return err
 	}
 	if err := ValidateOID("closure_reference.closure_tree", a.ClosureReference.ClosureTree); err != nil {
 		return err
 	}
-	if err := ValidateOID("tag_identity.tag_object_oid", a.TagIdentity.TagObjectOID); err != nil {
-		return err
-	}
-	if err := ValidateOID("tag_identity.peeled_target", a.TagIdentity.PeeledTarget); err != nil {
-		return err
-	}
-	if a.TagIdentity.TagType != "annotated" && a.TagIdentity.TagType != "lightweight" {
-		return fmt.Errorf("invalid tag_type %q", a.TagIdentity.TagType)
-	}
+	// Require freeze identity
 	if err := ValidateOID("freeze_reference.freeze_commit", a.FreezeReference.FreezeCommit); err != nil {
 		return err
 	}
 	if err := ValidateOID("freeze_reference.freeze_tree", a.FreezeReference.FreezeTree); err != nil {
 		return err
 	}
+	// Require subject identity
 	if err := ValidateOID("subject_reference.subject_commit", a.SubjectReference.SubjectCommit); err != nil {
 		return err
 	}
 	if err := ValidateOID("subject_reference.subject_tree", a.SubjectReference.SubjectTree); err != nil {
 		return err
+	}
+	// Require tag identity
+	if err := ValidateOID("tag_identity.tag_object_oid", a.TagIdentity.TagObjectOID); err != nil {
+		return err
+	}
+	if err := ValidateOID("tag_identity.peeled_target", a.TagIdentity.PeeledTarget); err != nil {
+		return err
+	}
+	// Verify identity separation
+	if a.FreezeReference.FreezeCommit == a.SubjectReference.SubjectCommit {
+		return fmt.Errorf("freeze_commit must differ from subject_commit")
+	}
+	if a.SubjectReference.SubjectCommit == a.ClosureReference.ClosureCommit {
+		return fmt.Errorf("subject_commit must differ from closure_commit")
+	}
+	// Verify chain validity
+	if !a.ChainValidity.FNotEqualS {
+		return fmt.Errorf("F_not_equal_S must be true")
+	}
+	if !a.ChainValidity.TagPeeledTargetMatchesC {
+		return fmt.Errorf("tag_peeled_target_matches_C must be true")
 	}
 	return nil
 }
