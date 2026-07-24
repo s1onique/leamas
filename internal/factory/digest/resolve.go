@@ -23,6 +23,11 @@ const (
 )
 
 // ResolvedMode represents the auto-resolved mode with context.
+//
+// Lifecycle* fields capture the authoritative ACT identities when the
+// resolver can identify the current ACT from closure artifacts. They
+// are zero when no ACT is in scope (for example, the single-commit
+// fallback when HEAD is not part of any ACT).
 type ResolvedMode struct {
 	Mode       Mode
 	Range      string
@@ -30,33 +35,61 @@ type ResolvedMode struct {
 	IsClean    bool
 	BaseCommit string
 	HeadCommit string
+
+	// Lifecycle metadata (populated by the auto-range resolver).
+	AutoRangeStrategy   string
+	ActID               string
+	LifecycleFreeze     string
+	LifecycleSubject    string
+	LifecycleClosure    string
+	IncludedCommits     []string
+	GeneratorCommit     string
+	GeneratorIsAncestor bool
+	GeneratorStale      bool
+	StaleReason         string
 }
 
-// ResolveAutoMode determines whether to use dirty or range mode based on working tree state.
+// RangeStrategy returns the strategy label used to authoritatively
+// pick the range, or empty when no lifecycle metadata is available.
+func (r *ResolvedMode) RangeStrategy() string {
+	if r == nil {
+		return ""
+	}
+	return r.AutoRangeStrategy
+}
+
+// ResolveAutoMode determines whether to use dirty or range mode based
+// on working tree state, and returns the authoritative ACT range when
+// the working tree is clean.
+//
+// The returned ResolvedMode carries the lifecycle metadata required
+// by ACT-LEAMAS-FACTORY-DIGEST-AUTO-ACT-RANGE01: ActID, freeze /
+// subject / closure OIDs, the strategy that selected the range, the
+// list of included commits, and the generator binary freshness
+// fields.
 func ResolveAutoMode(repoRoot string) (*ResolvedMode, error) {
 	result := &ResolvedMode{}
 
-	// Get HEAD commit
-	head, err := RunGit(repoRoot, []string{"rev-parse", "HEAD"})
+	head, err := runGitValueTrimmed(repoRoot, "rev-parse", "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get HEAD: %w", err)
 	}
-	result.HeadCommit = strings.TrimSpace(head)
+	result.HeadCommit = mustResolveOID(repoRoot, head)
 
 	// Check for staged changes - git diff --cached --quiet returns error if there are staged changes
-	_, stagedErr := RunGit(repoRoot, []string{"diff", "--cached", "--quiet"})
+	_, stagedErr := runGitBytes(repoRoot, "diff", "--cached", "--quiet")
 	hasStagedChanges := stagedErr != nil
 
 	// Check for unstaged changes - git diff --quiet returns error if there are unstaged changes
-	_, unstagedErr := RunGit(repoRoot, []string{"diff", "--quiet"})
+	_, unstagedErr := runGitBytes(repoRoot, "diff", "--quiet")
 	hasUnstagedChanges := unstagedErr != nil
 
 	// Check for untracked files
-	untrackedOutput, err := RunGit(repoRoot, []string{"ls-files", "--others", "--exclude-standard"})
+	untrackedOutput, err := runGitBytes(repoRoot, "ls-files", "--others", "--exclude-standard")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check untracked files: %w", err)
 	}
-	hasUntrackedFiles := strings.TrimSpace(untrackedOutput) != ""
+	hasUntrackedFiles := strings.TrimSpace(string(untrackedOutput)) != ""
 
 	isDirty := hasStagedChanges || hasUnstagedChanges || hasUntrackedFiles
 
@@ -67,27 +100,36 @@ func ResolveAutoMode(repoRoot string) (*ResolvedMode, error) {
 		return result, nil
 	}
 
-	// Working tree is clean, use previous commit range
+	// Working tree is clean: defer to the lifecycle resolver. The
+	// resolver inspects closure artifacts and falls back to the
+	// empty-tree / single-commit paths when no ACT is in scope.
 	result.IsClean = true
-
-	// Check if HEAD has a parent
-	parentCheck, err := RunGit(repoRoot, []string{"rev-parse", "--verify", "HEAD~1"})
+	resolution, err := resolveLifecycleAtHEAD(repoRoot)
 	if err != nil {
-		// No parent - initial commit
-		// Use empty tree baseline (4b825dc642cb6eb9a060e54bf8d69288fbee4904) for initial commit
-		result.Range = "4b825dc642cb6eb9a060e54bf8d69288fbee4904..HEAD"
-		result.Mode = ModeRange
-		result.Reason = "initial commit; diffing against empty tree baseline"
-		return result, nil
+		return nil, err
 	}
-
-	parentCommit := strings.TrimSpace(parentCheck)
-	result.BaseCommit = parentCommit
-
-	// Use HEAD~1..HEAD for the range
-	result.Range = "HEAD~1..HEAD"
-	result.Mode = ModeRange
-	result.Reason = "working tree clean; showing previous commit"
-
+	applyLifecycleToResolved(result, resolution)
 	return result, nil
+}
+
+// applyLifecycleToResolved copies lifecycle metadata from a
+// LifecycleResolution into the legacy ResolvedMode used by the rest
+// of the digest pipeline. The function is intentionally local to
+// resolve.go so the two structs evolve together.
+func applyLifecycleToResolved(out *ResolvedMode, r *LifecycleResolution) {
+	out.Mode = ModeRange
+	out.Range = r.Range()
+	out.Reason = r.Reason
+	out.BaseCommit = r.RangeBase
+	out.HeadCommit = r.RangeHead
+	out.AutoRangeStrategy = r.Strategy
+	out.ActID = r.ActID
+	out.LifecycleFreeze = r.LifecycleFreeze
+	out.LifecycleSubject = r.LifecycleSubject
+	out.LifecycleClosure = r.LifecycleClosure
+	out.IncludedCommits = append([]string(nil), r.IncludedCommits...)
+	out.GeneratorCommit = r.GeneratorCommit
+	out.GeneratorIsAncestor = r.GeneratorIsAncestor
+	out.GeneratorStale = r.GeneratorStale
+	out.StaleReason = r.StaleReason
 }

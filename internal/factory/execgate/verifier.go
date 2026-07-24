@@ -60,6 +60,8 @@ var AllowedFiles = map[string]bool{
 	"internal/factory/gate/platform_sampler.go":               true,
 	"internal/factory/digest/git.go":                          true,
 	"internal/factory/digest/digest_auto_test.go":             true,
+	"internal/factory/digest/auto_range.go":                   true,
+	"internal/factory/digest/auto_range_git.go":               true,
 	"internal/factory/dupcode/baseline_verify.go":             true,
 	"internal/factory/githooks/check.go":                      true,
 	"internal/factory/githooks/check_test.go":                 true,

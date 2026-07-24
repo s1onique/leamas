@@ -97,6 +97,8 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	sb.WriteString("\n")
 	sb.WriteString(dependencyDeltaSection)
 	sb.WriteString(fileEvidenceSection)
+	sb.WriteString("\n")
+	sb.WriteString(RenderLifecycle(resolved))
 
 	sb.WriteString("\n## Workflow anchors\n")
 
@@ -189,6 +191,10 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 	sb.WriteString("\n")
 	sb.WriteString(dependencyDeltaSection)
 	sb.WriteString(fileEvidenceSection)
+	if resolved != nil {
+		sb.WriteString("\n")
+		sb.WriteString(RenderLifecycle(resolved))
+	}
 
 	sb.WriteString("\n## Workflow anchors\n")
 
