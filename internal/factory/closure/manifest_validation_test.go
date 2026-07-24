@@ -16,7 +16,7 @@ func canonicalPlan() Plan {
 		ContractVersion: ContractVersionV1,
 		ActID:           "ACT-LEAMAS-TEST01",
 		Baseline:        Baseline{CommitOID: fullCommitOID, TreeOID: fullTreeOID},
-		Execution:       PlanExecution{Mode: ExecutionSerialFailFast},
+		Execution:       NewPlanExecution(ExecutionModeSerialFailFast),
 		Checks: []PlanCheck{
 			{ID: "focused-count-1", Mode: CheckModeRun, Argv: []string{"go", "test", "-count=1", "./internal/factory/closure/...", "./cmd/leamas/..."}, WorkingDirectory: ".", TimeoutSeconds: 600, Environment: map[string]string{}},
 			{ID: "focused-count-20", Mode: CheckModeRun, Argv: []string{"go", "test", "-count=20", "./internal/factory/closure/...", "./cmd/leamas/..."}, WorkingDirectory: ".", TimeoutSeconds: 600, Environment: map[string]string{}},

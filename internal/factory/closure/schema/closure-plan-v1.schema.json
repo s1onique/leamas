@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:leamas:closure-plan:v1",
+  "title": "Leamas Closure Plan v1",
+  "description": "Closure Protocol v1 plan wire schema. Authoritative description of accepted JSON shape; runtime and strict Go decoder MUST agree. See ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-PLAN-EXECUTION-MODE-RECONCILIATION01.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "act_id",
+    "baseline",
+    "execution",
+    "checks",
+    "artifacts",
+    "policy"
+  ],
+  "properties": {
+    "contract_version": {
+      "description": "Integer discriminator that identifies the v1 wire format. The current implementation accepts only the value 1.",
+      "type": "integer",
+      "const": 1
+    },
+    "act_id": {
+      "description": "Repository-scoped identifier of the Action Closure Tracker this plan belongs to.",
+      "type": "string",
+      "pattern": "^ACT-[A-Z0-9][A-Z0-9-]{2,199}$"
+    },
+    "baseline": {
+      "description": "Git identity that anchors the closure window.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit_oid", "tree_oid"],
+      "properties": {
+        "commit_oid": {
+          "description": "Full lowercase SHA-1 or SHA-256 Git OID identifying the baseline commit.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"
+        },
+        "tree_oid": {
+          "description": "Full lowercase Git OID identifying the baseline tree.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "execution": {
+      "description": "Execution policy descriptor. The mode field is required and must be the literal string 'serial_fail_fast'.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "description": "The execution mode the runtime should adopt. Closure Protocol v1 supports exactly one value: 'serial_fail_fast'.",
+          "type": "string",
+          "enum": ["serial_fail_fast"]
+        }
+      }
+    },
+    "checks": {
+      "description": "Ordered list of checks the runner must execute. At least one check is required.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "mode"],
+        "properties": {
+          "id": {
+            "description": "Stable, unique identifier for the check.",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$"
+          },
+          "mode": {
+            "description": "Whether the check is run or excluded from this closure plan.",
+            "type": "string",
+            "enum": ["run", "exclude"]
+          },
+          "argv": {
+            "description": "Command arguments. Required when mode='run'; absent when mode='exclude'.",
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string"}
+          },
+          "working_directory": {
+            "description": "Repository-relative working directory.",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "description": "Per-check timeout in seconds. Required when mode='run'; absent when mode='exclude'.",
+            "type": "integer",
+            "minimum": 1
+          },
+          "environment": {
+            "description": "Per-check environment overrides. Required when mode='run' (may be empty).",
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          },
+          "reason": {
+            "description": "Compact prose explaining why a check is excluded. Required when mode='exclude'; absent when mode='run'.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "description": "Optional list of artifacts the runner must record in the manifest.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "required", "max_bytes", "media_type"],
+        "properties": {
+          "id": {"type": "string"},
+          "path": {"type": "string"},
+          "required": {"type": "boolean"},
+          "max_bytes": {"type": "integer", "minimum": 1},
+          "media_type": {"type": "string"}
+        }
+      }
+    },
+    "policy": {
+      "description": "Closure policy fields. Every boolean field is required and must be true for closure v1.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "require_clean_before",
+        "require_clean_after",
+        "forbid_tracked_full_digests",
+        "require_diff_check"
+      ],
+      "properties": {
+        "require_clean_before": {"type": "boolean", "const": true},
+        "require_clean_after": {"type": "boolean", "const": true},
+        "forbid_tracked_full_digests": {"type": "boolean", "const": true},
+        "require_diff_check": {"type": "boolean", "const": true}
+      }
+    },
+    "policy_profile": {
+      "description": "Optional policy profile identifier.",
+      "type": "string"
+    },
+    "runner_binding": {
+      "description": "Optional runner binding identifier.",
+      "type": "string"
+    }
+  }
+}

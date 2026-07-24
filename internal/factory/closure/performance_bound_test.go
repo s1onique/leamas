@@ -12,7 +12,7 @@ func TestClosureVerifyAndRenderThousandChecksWithinBound(t *testing.T) {
 		ContractVersion: ContractVersionV1,
 		ActID:           "ACT-LEAMAS-PERF",
 		Baseline:        Baseline{CommitOID: fullTreeOID, TreeOID: fullCommitOID},
-		Execution:       PlanExecution{Mode: ExecutionSerialFailFast},
+		Execution:       NewPlanExecution(ExecutionModeSerialFailFast),
 		Checks:          make([]PlanCheck, 1000),
 		Artifacts:       nil,
 		Policy:          PlanPolicy{RequireCleanBefore: boolPtr(true), RequireCleanAfter: boolPtr(true), ForbidTrackedFullDigests: boolPtr(true), RequireDiffCheck: boolPtr(true)},

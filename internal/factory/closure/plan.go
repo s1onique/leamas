@@ -16,6 +16,12 @@ var (
 	environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
+// planExecutionModePath is the canonical JSON pointer used in every
+// diagnostic that names the execution-mode field. Centralising the
+// string keeps the runtime, JSON Schema, and CLI subprocess tests
+// aligned.
+const planExecutionModePath = "/execution/mode"
+
 func DecodePlan(data []byte) (Plan, error) {
 	var plan Plan
 	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
@@ -52,8 +58,8 @@ func ValidatePlan(plan Plan) error {
 	if err := validateOID("baseline.tree_oid", plan.Baseline.TreeOID); err != nil {
 		return err
 	}
-	if plan.Execution.Mode != ExecutionSerialFailFast {
-		return fmt.Errorf("unknown execution mode %q", plan.Execution.Mode)
+	if err := validatePlanExecutionMode(plan.Execution); err != nil {
+		return err
 	}
 	if len(plan.Checks) == 0 || len(plan.Checks) > MaxChecks {
 		return fmt.Errorf("checks count must be between 1 and %d", MaxChecks)
@@ -78,6 +84,31 @@ func ValidatePlan(plan Plan) error {
 		return err
 	}
 	return nil
+}
+
+// validatePlanExecutionMode is the single, authoritative entry point
+// for runtime execution-mode validation. It distinguishes every
+// presence category the JSON Schema recognises:
+//
+//   - the property absent            → ExecutionModeMissing;
+//   - the property present, ""        → ExecutionModePresentEmpty;
+//   - the property present, "   "     → ExecutionModePresentWhitespace;
+//   - the property present, anything else not in the closed enum
+//     → ExecutionModePresentUnknown.
+//
+// Every category is rejected. The validator never falls back to a
+// privileged default mode and never accepts an alias.
+func validatePlanExecutionMode(execution PlanExecution) error {
+	if execution.Mode == nil {
+		return &ExecutionModeError{
+			Path:      planExecutionModePath,
+			Value:     "",
+			Presence:  ExecutionModeMissing,
+			Supported: SupportedExecutionModes(),
+		}
+	}
+	_, err := ParseExecutionMode(planExecutionModePath, string(*execution.Mode))
+	return err
 }
 
 func validatePlanChecks(checks []PlanCheck) error {

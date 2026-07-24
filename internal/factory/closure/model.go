@@ -3,7 +3,6 @@ package closure
 
 const (
 	ContractVersionV1           = 1
-	ExecutionSerialFailFast     = "serial_fail_fast"
 	CheckModeRun                = "run"
 	CheckModeExclude            = "exclude"
 	VerdictPass                 = "pass"
@@ -24,6 +23,13 @@ const (
 	LifecycleDownstreamAccepted = "DOWNSTREAM_ACCEPTED"
 )
 
+// ExecutionSerialFailFast is retained as a deprecated alias of
+// ExecutionModeSerialFailFast. New code MUST use the typed
+// ExecutionMode value and ParseExecutionMode; this constant remains
+// only so existing string-typed call sites keep compiling while the
+// canonical contract is migrated.
+const ExecutionSerialFailFast = string(ExecutionModeSerialFailFast)
+
 type Plan struct {
 	ContractVersion int            `json:"contract_version"`
 	ActID           string         `json:"act_id"`
@@ -41,8 +47,44 @@ type Baseline struct {
 	TreeOID   string `json:"tree_oid"`
 }
 
+// PlanExecution is the canonical Closure Protocol v1 execution
+// descriptor. The Mode field is a pointer so the strict decoder can
+// distinguish:
+//
+//   - the property being absent (Mode == nil) — reported as
+//     ExecutionModeMissing;
+//   - the property being present with an empty string
+//     (Mode != nil, *Mode == "") — reported as
+//     ExecutionModePresentEmpty;
+//   - the property being present with a non-canonical value
+//     (Mode != nil, *Mode != ExecutionModeSerialFailFast) — reported
+//     as ExecutionModePresentUnknown.
+//
+// Tests and producers that build a PlanExecution struct literal MUST
+// pass an explicit pointer (see PlanExecutionMode helper below).
 type PlanExecution struct {
-	Mode string `json:"mode"`
+	Mode *ExecutionMode `json:"mode"`
+}
+
+// NewPlanExecution constructs a PlanExecution whose Mode is set to the
+// supplied ExecutionMode. Pass an empty ExecutionMode to represent
+// "field omitted"; callers that want to distinguish absent from empty
+// must use the pointer directly.
+func NewPlanExecution(mode ExecutionMode) PlanExecution {
+	if mode == "" {
+		return PlanExecution{}
+	}
+	m := mode
+	return PlanExecution{Mode: &m}
+}
+
+// PlanExecutionFromString builds a PlanExecution from a raw string,
+// wrapping every case — including the empty string — in a non-nil
+// pointer. This is the helper intended for producer code paths that
+// read a textual mode and want to defer parsing to the validator.
+func PlanExecutionFromString(raw string) PlanExecution {
+	m := ExecutionMode(raw)
+	return PlanExecution{Mode: &m}
 }
 
 type PlanCheck struct {

@@ -148,7 +148,7 @@ func minimalValidPlan() Plan {
 			CommitOID: "1111111111111111111111111111111111111111",
 			TreeOID:   "2222222222222222222222222222222222222222",
 		},
-		Execution: PlanExecution{Mode: ExecutionSerialFailFast},
+		Execution: NewPlanExecution(ExecutionModeSerialFailFast),
 		Policy: PlanPolicy{
 			RequireCleanBefore:       ptrBool(true),
 			RequireCleanAfter:        ptrBool(true),
