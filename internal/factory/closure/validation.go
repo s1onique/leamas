@@ -115,7 +115,7 @@ func getTagInfo(ctx context.Context, git gitClient, repoRoot, tagName string) (s
 }
 
 // VerifyChain validates the F → S → C → tag chain using Git.
-// A PASS requires: Freeze, Subject, Closure, PlanPath, Tag all provided,
+// A PASS requires: Manifest, Freeze, Subject, Closure, PlanPath, Tag all provided,
 // and all chain invariants to be satisfied.
 func VerifyChain(ctx context.Context, req ChainValidationRequest) (ChainValidationResult, error) {
 	var result ChainValidationResult
@@ -123,6 +123,13 @@ func VerifyChain(ctx context.Context, req ChainValidationRequest) (ChainValidati
 	// Repository root is required - fail closed if missing
 	if req.RepoRoot == "" {
 		result.Errors = append(result.Errors, "repository root is required")
+		result.Verdict = "FAIL"
+		return result, nil
+	}
+
+	// Manifest is required - fail closed if missing
+	if req.Manifest == nil {
+		result.Errors = append(result.Errors, "manifest is required")
 		result.Verdict = "FAIL"
 		return result, nil
 	}

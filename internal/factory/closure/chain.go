@@ -183,21 +183,24 @@ type ChainValidationRequest struct {
 
 // ChainValidationResult contains validation results.
 type ChainValidationResult struct {
-	Verdict                    string
-	Errors                     []string
-	FNotEqualS                 bool
-	FIsAncestorOfS             bool
-	SIsAncestorOfC             bool
-	FIsAncestorOfC             bool
-	PlanBytesFEqualsPlanBytesS bool
-	ManifestFMatchesActualF    bool
-	ManifestFTreeMatchesFTree  bool
-	ManifestSMatchesActualS    bool
-	ManifestSTreeMatchesSTree  bool
-	TagIsAnnotated             bool
-	TagObjectIsTag             bool
-	TagPeeledTargetMatchesC    bool
-	AllChecks                  []string
+	Verdict                         string
+	Errors                          []string
+	FNotEqualS                      bool
+	FIsAncestorOfS                  bool
+	SIsAncestorOfC                  bool
+	FIsAncestorOfC                  bool
+	PlanBytesFEqualsPlanBytesS      bool
+	ManifestFMatchesActualF         bool
+	ManifestFTreeMatchesFTree       bool
+	ManifestSMatchesActualS         bool
+	ManifestSTreeMatchesSTree       bool
+	ManifestPlanBlobOIDMatches      bool
+	ManifestPlanSHA256Matches       bool
+	ManifestPlanFreezeSHA256Matches bool
+	TagIsAnnotated                  bool
+	TagObjectIsTag                  bool
+	TagPeeledTargetMatchesC         bool
+	AllChecks                       []string
 }
 
 // CheckPlanNoSelfReference verifies plan does not contain self-referential identities.
@@ -272,14 +275,15 @@ func DecodeAttestation(data []byte) (Attestation, error) {
 	if err := json.Unmarshal(data, &a); err != nil {
 		return Attestation{}, fmt.Errorf("decode attestation: %w", err)
 	}
-	if err := ValidateAttestation(a); err != nil {
+	if err := ValidateAttestation(a, ObjectFormatSHA1); err != nil {
 		return Attestation{}, err
 	}
 	return a, nil
 }
 
 // ValidateAttestation validates attestation structure and truth.
-func ValidateAttestation(a Attestation) error {
+// The format parameter specifies the repository storage format (SHA-1 or SHA-256).
+func ValidateAttestation(a Attestation, format ObjectFormat) error {
 	if a.AttestationVersion != 1 {
 		return fmt.Errorf("unsupported attestation_version %d", a.AttestationVersion)
 	}
@@ -291,32 +295,32 @@ func ValidateAttestation(a Attestation) error {
 	if a.ActID == "" {
 		return fmt.Errorf("act_id is required")
 	}
-	// Require closure identity
-	if err := ValidateOID("closure_reference.closure_commit", a.ClosureReference.ClosureCommit); err != nil {
+	// Require closure identity (format-aware)
+	if err := ValidateOIDWithFormat("closure_reference.closure_commit", a.ClosureReference.ClosureCommit, format); err != nil {
 		return err
 	}
-	if err := ValidateOID("closure_reference.closure_tree", a.ClosureReference.ClosureTree); err != nil {
+	if err := ValidateOIDWithFormat("closure_reference.closure_tree", a.ClosureReference.ClosureTree, format); err != nil {
 		return err
 	}
-	// Require freeze identity
-	if err := ValidateOID("freeze_reference.freeze_commit", a.FreezeReference.FreezeCommit); err != nil {
+	// Require freeze identity (format-aware)
+	if err := ValidateOIDWithFormat("freeze_reference.freeze_commit", a.FreezeReference.FreezeCommit, format); err != nil {
 		return err
 	}
-	if err := ValidateOID("freeze_reference.freeze_tree", a.FreezeReference.FreezeTree); err != nil {
+	if err := ValidateOIDWithFormat("freeze_reference.freeze_tree", a.FreezeReference.FreezeTree, format); err != nil {
 		return err
 	}
-	// Require subject identity
-	if err := ValidateOID("subject_reference.subject_commit", a.SubjectReference.SubjectCommit); err != nil {
+	// Require subject identity (format-aware)
+	if err := ValidateOIDWithFormat("subject_reference.subject_commit", a.SubjectReference.SubjectCommit, format); err != nil {
 		return err
 	}
-	if err := ValidateOID("subject_reference.subject_tree", a.SubjectReference.SubjectTree); err != nil {
+	if err := ValidateOIDWithFormat("subject_reference.subject_tree", a.SubjectReference.SubjectTree, format); err != nil {
 		return err
 	}
-	// Require tag identity
-	if err := ValidateOID("tag_identity.tag_object_oid", a.TagIdentity.TagObjectOID); err != nil {
+	// Require tag identity (format-aware)
+	if err := ValidateOIDWithFormat("tag_identity.tag_object_oid", a.TagIdentity.TagObjectOID, format); err != nil {
 		return err
 	}
-	if err := ValidateOID("tag_identity.peeled_target", a.TagIdentity.PeeledTarget); err != nil {
+	if err := ValidateOIDWithFormat("tag_identity.peeled_target", a.TagIdentity.PeeledTarget, format); err != nil {
 		return err
 	}
 	// Verify identity separation

@@ -307,8 +307,14 @@ func runFactoryCloseAttest(args []string, stdout, stderr io.Writer) int {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 
-	// Validate attestation
-	if err := closure.ValidateAttestation(attest); err != nil {
+	// Detect repository storage format for format-aware validation
+	format, err := closure.DetectStorageFormat(context.Background(), realGit, repoRoot)
+	if err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+
+	// Validate attestation (format-aware)
+	if err := closure.ValidateAttestation(attest, format); err != nil {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 

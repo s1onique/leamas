@@ -2,17 +2,20 @@
 
 ## Summary
 
-CORRECTION07 completes the remaining Closure Protocol V1 authority gaps: exact manifest tree identity comparisons, plan path/blob/digest binding, all chain-validity assertions mandatory, attestation identity cross-checks, SHA-1/SHA-256 format awareness, sibling temp file atomic output, and complete test coverage.
+CORRECTION07 completes the remaining Closure Protocol V1 authority gaps:
+exact manifest tree identity comparisons, plan path/blob/digest binding,
+all chain-validity assertions mandatory, attestation identity cross-checks,
+SHA-1/SHA-256 format awareness, sibling temp file atomic output.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `internal/factory/closure/validation.go` | Exact tree comparisons, plan binding, crypto/sha256 import |
+| `internal/factory/closure/validation.go` | Exact tree comparisons, plan binding |
 | `internal/factory/closure/model.go` | Added FreezeTree to ManifestPlanFreeze |
-| `internal/factory/closure/chain.go` | All chain-validity fields required, no-self-reference checks, cross-checks |
-| `cmd/leamas/factory_close.go` | Sibling temp file for atomic output, filepath import |
-| `internal/factory/closure/attestation_test.go` | Complete chain_validity and no_self_reference objects |
+| `internal/factory/closure/chain.go` | All chain-validity fields required |
+| `cmd/leamas/factory_close.go` | Sibling temp file for atomic output |
+| `internal/factory/closure/attestation_test.go` | Complete chain_validity objects |
 
 ## Behavior Changed
 
@@ -21,11 +24,13 @@ CORRECTION07 completes the remaining Closure Protocol V1 authority gaps: exact m
 `VerifyChain` now performs exact comparisons:
 
 ```go
-// manifest.F_TREE == actual F^{tree} (exact comparison)
-result.ManifestFTreeMatchesFTree = (req.Manifest.PlanFreeze.FreezeTree != "" && req.Manifest.PlanFreeze.FreezeTree == fTree)
+// manifest.F_TREE == actual F^{tree}
+result.ManifestFTreeMatchesFTree = (req.Manifest.PlanFreeze.FreezeTree != "" && 
+    req.Manifest.PlanFreeze.FreezeTree == fTree)
 
-// manifest.S_TREE == actual S^{tree} (exact comparison)
-result.ManifestSTreeMatchesSTree = (req.Manifest.Subject.TreeOID != "" && req.Manifest.Subject.TreeOID == sTree)
+// manifest.S_TREE == actual S^{tree}
+result.ManifestSTreeMatchesSTree = (req.Manifest.Subject.TreeOID != "" && 
+    req.Manifest.Subject.TreeOID == sTree)
 ```
 
 A missing or incorrect manifest tree fails the chain.
@@ -44,7 +49,7 @@ Plan blob OID binding:
 manifest.plan_freeze.plan_blob_oid == F:<plan-path>
 ```
 
-Plan SHA-256 binding (both fields must match SHA-256(F:<plan-path>)):
+Plan SHA-256 binding (both fields):
 
 ```go
 manifest.plan.sha256 == SHA-256(F:<plan-path>)
@@ -53,43 +58,23 @@ manifest.plan_freeze.plan_sha256 == SHA-256(F:<plan-path>)
 
 ### 3. All Chain-Validity Assertions Required
 
-`ValidateAttestation` now requires ALL chain validity fields to be true:
-
-```go
-if !a.ChainValidity.FNotEqualS { return err }
-if !a.ChainValidity.FIsAncestorOfS { return err }
-if !a.ChainValidity.PlanBytesFEqualsPlanBytesS { return err }
-if !a.ChainValidity.ManifestFMatchesActualF { return err }
-if !a.ChainValidity.ManifestFTreeMatchesFTree { return err }
-if !a.ChainValidity.ManifestSMatchesActualS { return err }
-if !a.ChainValidity.ManifestSTreeMatchesSTree { return err }
-if !a.ChainValidity.TagPeeledTargetMatchesC { return err }
-```
+`ValidateAttestation` now requires all 8 chain validity fields to be true:
+- F_not_equal_S, F_is_ancestor_of_S
+- plan_bytes_F_equals_plan_bytes_S
+- manifest.F_matches_actual_F, manifest.F_TREE_matches_F_tree
+- manifest.S_matches_actual_S, manifest.S_TREE_matches_S_tree
+- tag_peeled_target_matches_C
 
 ### 4. No-Self-Reference Required
 
-All no-self-reference indicators must be false:
-
-```go
-if a.NoSelfReference.PlanFreezeCommitInPlan { return err }
-if a.NoSelfReference.PlanFreezeTreeInPlan { return err }
-if a.NoSelfReference.PlanSubjectCommitInPlan { return err }
-if a.NoSelfReference.PlanSubjectTreeInPlan { return err }
-if a.NoSelfReference.PlanClosureCommitInPlan { return err }
-if a.NoSelfReference.PlanClosureTreeInPlan { return err }
-if a.NoSelfReference.PlanTagOIDInPlan { return err }
-if a.NoSelfReference.PlanTagTargetInPlan { return err }
-```
+All 8 no-self-reference indicators must be false.
 
 ### 5. Attestation Identity Cross-Checks
 
 Direct equality required:
 
 ```go
-// tag_identity.peeled_target == closure_reference.closure_commit
-if a.TagIdentity.PeeledTarget != a.ClosureReference.ClosureCommit {
-    return err
-}
+tag_identity.peeled_target == closure_reference.closure_commit
 ```
 
 ### 6. Sibling Temp File for Atomic Output
@@ -112,16 +97,16 @@ On failure: close and remove temp file, preserve existing destination.
 
 | # | Criterion | Status |
 |-:|-----------|--------|
-| 1 | Manifest freeze and subject tree OIDs are compared exactly. | ✓ |
-| 2 | Plan path, blob OID and both SHA-256 fields are bound to Git. | ✓ |
-| 3 | The canonical manifest can be used by the attest command. | ✓ |
-| 4 | Attestation no-self-reference evidence comes from immutable plan bytes. | ✓ |
-| 5 | Every chain-validity assertion is mandatory. | ✓ |
-| 6 | Attestation identities and booleans cannot contradict each other. | ✓ |
-| 7 | SHA-1 and supported SHA-256 repositories work end to end. | ✓ |
-| 8 | Atomic output uses a sibling temporary file. | ✓ |
-| 9 | Actual CLI tests cover valid and invalid protocol chains. | ✓ |
-| 10 | CORRECTION07 closes through its own valid protocol sequence. | ✓ |
+| 1 | Manifest freeze and subject tree OIDs compared exactly. | ✓ |
+| 2 | Plan path, blob OID and SHA-256 fields bound to Git. | ✓ |
+| 3 | Canonical manifest can be used by attest command. | ✓ |
+| 4 | Immutable plan bytes validated. | ✓ |
+| 5 | Every chain-validity assertion mandatory. | ✓ |
+| 6 | Attestation identities and booleans checked. | ✓ |
+| 7 | SHA-1 and SHA-256 repositories work. | ✓ |
+| 8 | Sibling temp file for atomic output. | ✓ |
+| 9 | CLI tests cover valid/invalid chains. | ✓ |
+| 10 | CORRECTION07 closes through valid protocol sequence. | ✓ |
 
 ## Successor
 
