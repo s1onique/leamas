@@ -1,0 +1,135 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-DIGEST-AUTO-ACT-RANGE01",
+  "baseline": {
+    "commit_oid": "6fa5605c90b8b0ddd2498770c34ebe90ea61d45a",
+    "tree_oid": "2d3d482d0401999dec26082813592256d483cd07"
+  },
+  "checks": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "focused-count-1",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=20",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "focused-count-20",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "1"
+      },
+      "id": "focused-race-5",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "vet",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "build",
+        "-buildvcs=true",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-closure-protocol-v1-self",
+        "./cmd/leamas"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "build",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "gate-fast",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "diff-check",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "No dupcode-owned source or registration changed."
+    }
+  ],
+  "artifacts": [],
+  "contract_version": 1,
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "policy_profile": "leamas-act-v1"
+}
