@@ -90,6 +90,7 @@ type Manifest struct {
 
 type ManifestPlanFreeze struct {
 	FreezeCommit  string `json:"freeze_commit"`
+	FreezeTree    string `json:"freeze_tree,omitempty"`
 	PlanPath      string `json:"plan_path"`
 	PlanBlobOID   string `json:"plan_blob_oid"`
 	PlanSHA256    string `json:"plan_sha256"`

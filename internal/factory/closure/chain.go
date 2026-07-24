@@ -326,12 +326,59 @@ func ValidateAttestation(a Attestation) error {
 	if a.SubjectReference.SubjectCommit == a.ClosureReference.ClosureCommit {
 		return fmt.Errorf("subject_commit must differ from closure_commit")
 	}
-	// Verify chain validity
+	// Require all chain validity fields to be true
 	if !a.ChainValidity.FNotEqualS {
 		return fmt.Errorf("F_not_equal_S must be true")
 	}
+	if !a.ChainValidity.FIsAncestorOfS {
+		return fmt.Errorf("F_is_ancestor_of_S must be true")
+	}
+	if !a.ChainValidity.PlanBytesFEqualsPlanBytesS {
+		return fmt.Errorf("plan_bytes_F_equals_plan_bytes_S must be true")
+	}
+	if !a.ChainValidity.ManifestFMatchesActualF {
+		return fmt.Errorf("manifest.F_matches_actual_F must be true")
+	}
+	if !a.ChainValidity.ManifestFTreeMatchesFTree {
+		return fmt.Errorf("manifest.F_TREE_matches_F_tree must be true")
+	}
+	if !a.ChainValidity.ManifestSMatchesActualS {
+		return fmt.Errorf("manifest.S_matches_actual_S must be true")
+	}
+	if !a.ChainValidity.ManifestSTreeMatchesSTree {
+		return fmt.Errorf("manifest.S_TREE_matches_S_tree must be true")
+	}
 	if !a.ChainValidity.TagPeeledTargetMatchesC {
 		return fmt.Errorf("tag_peeled_target_matches_C must be true")
+	}
+	// Require no self-reference in plan (all should be false)
+	if a.NoSelfReference.PlanFreezeCommitInPlan {
+		return fmt.Errorf("plan must not contain freeze_commit")
+	}
+	if a.NoSelfReference.PlanFreezeTreeInPlan {
+		return fmt.Errorf("plan must not contain freeze_tree")
+	}
+	if a.NoSelfReference.PlanSubjectCommitInPlan {
+		return fmt.Errorf("plan must not contain subject_commit")
+	}
+	if a.NoSelfReference.PlanSubjectTreeInPlan {
+		return fmt.Errorf("plan must not contain subject_tree")
+	}
+	if a.NoSelfReference.PlanClosureCommitInPlan {
+		return fmt.Errorf("plan must not contain closure_commit")
+	}
+	if a.NoSelfReference.PlanClosureTreeInPlan {
+		return fmt.Errorf("plan must not contain closure_tree")
+	}
+	if a.NoSelfReference.PlanTagOIDInPlan {
+		return fmt.Errorf("plan must not contain tag_oid")
+	}
+	if a.NoSelfReference.PlanTagTargetInPlan {
+		return fmt.Errorf("plan must not contain tag_target")
+	}
+	// Cross-check: tag_identity.peeled_target must equal closure_reference.closure_commit
+	if a.TagIdentity.PeeledTarget != a.ClosureReference.ClosureCommit {
+		return fmt.Errorf("tag_identity.peeled_target %q != closure_reference.closure_commit %q", a.TagIdentity.PeeledTarget, a.ClosureReference.ClosureCommit)
 	}
 	return nil
 }

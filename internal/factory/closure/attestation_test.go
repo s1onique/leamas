@@ -25,8 +25,8 @@ func TestDecodeAttestation_Valid(t *testing.T) {
 			"peeled_target": "8362d35c65f66ccd140f5b5044b776f435fdc711"
 		},
 		"freeze_reference": {
-			"freeze_commit": "8362d35c65f66ccd140f5b5044b776f435fdc711",
-			"freeze_tree": "906b2afc0c7a8da3a003231dcc0c32a91d5e829b",
+			"freeze_commit": "5362d35c65f66ccd140f5b5044b776f435fdc700",
+			"freeze_tree": "a06b2afc0c7a8da3a003231dcc0c32a91d5e829b",
 			"plan_blob_oid": "334829218ab7af3283e6c5ee29e31fc062860d5f"
 		},
 		"subject_reference": {
@@ -35,9 +35,24 @@ func TestDecodeAttestation_Valid(t *testing.T) {
 		},
 		"chain_validity": {
 			"F_not_equal_S": true,
+			"F_is_ancestor_of_S": true,
+			"plan_bytes_F_equals_plan_bytes_S": true,
+			"manifest.F_matches_actual_F": true,
+			"manifest.F_TREE_matches_F_tree": true,
+			"manifest.S_matches_actual_S": true,
+			"manifest.S_TREE_matches_S_tree": true,
 			"tag_peeled_target_matches_C": true
 		},
-		"no_self_reference_in_plan": {}
+		"no_self_reference_in_plan": {
+			"plan_freeze_commit_in_plan": false,
+			"plan_freeze_tree_in_plan": false,
+			"plan_subject_commit_in_plan": false,
+			"plan_subject_tree_in_plan": false,
+			"plan_closure_commit_in_plan": false,
+			"plan_closure_tree_in_plan": false,
+			"plan_tag_oid_in_plan": false,
+			"plan_tag_target_in_plan": false
+		}
 	}`)
 	a, err := DecodeAttestation(data)
 	if err != nil {
@@ -66,8 +81,8 @@ func TestDecodeAttestation_InvalidTagType(t *testing.T) {
 			"peeled_target": "8362d35c65f66ccd140f5b5044b776f435fdc711"
 		},
 		"freeze_reference": {
-			"freeze_commit": "8362d35c65f66ccd140f5b5044b776f435fdc711",
-			"freeze_tree": "906b2afc0c7a8da3a003231dcc0c32a91d5e829b",
+			"freeze_commit": "5362d35c65f66ccd140f5b5044b776f435fdc700",
+			"freeze_tree": "a06b2afc0c7a8da3a003231dcc0c32a91d5e829b",
 			"plan_blob_oid": "334829218ab7af3283e6c5ee29e31fc062860d5f"
 		},
 		"subject_reference": {
@@ -76,9 +91,24 @@ func TestDecodeAttestation_InvalidTagType(t *testing.T) {
 		},
 		"chain_validity": {
 			"F_not_equal_S": true,
+			"F_is_ancestor_of_S": true,
+			"plan_bytes_F_equals_plan_bytes_S": true,
+			"manifest.F_matches_actual_F": true,
+			"manifest.F_TREE_matches_F_tree": true,
+			"manifest.S_matches_actual_S": true,
+			"manifest.S_TREE_matches_S_tree": true,
 			"tag_peeled_target_matches_C": true
 		},
-		"no_self_reference_in_plan": {}
+		"no_self_reference_in_plan": {
+			"plan_freeze_commit_in_plan": false,
+			"plan_freeze_tree_in_plan": false,
+			"plan_subject_commit_in_plan": false,
+			"plan_subject_tree_in_plan": false,
+			"plan_closure_commit_in_plan": false,
+			"plan_closure_tree_in_plan": false,
+			"plan_tag_oid_in_plan": false,
+			"plan_tag_target_in_plan": false
+		}
 	}`)
 	_, err := DecodeAttestation(data)
 	if err == nil {
@@ -111,12 +141,27 @@ func TestDecodeAttestation_PlaceholderOID(t *testing.T) {
 		"subject_reference": {
 			"subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28",
 			"subject_tree": "7a8734d221eb54924c8810d625fb0ac3d2b4a997"
+		},
 		"chain_validity": {
 			"F_not_equal_S": true,
+			"F_is_ancestor_of_S": true,
+			"plan_bytes_F_equals_plan_bytes_S": true,
+			"manifest.F_matches_actual_F": true,
+			"manifest.F_TREE_matches_F_tree": true,
+			"manifest.S_matches_actual_S": true,
+			"manifest.S_TREE_matches_S_tree": true,
 			"tag_peeled_target_matches_C": true
 		},
-		"chain_validity": {},
-		"no_self_reference_in_plan": {}
+		"no_self_reference_in_plan": {
+			"plan_freeze_commit_in_plan": false,
+			"plan_freeze_tree_in_plan": false,
+			"plan_subject_commit_in_plan": false,
+			"plan_subject_tree_in_plan": false,
+			"plan_closure_commit_in_plan": false,
+			"plan_closure_tree_in_plan": false,
+			"plan_tag_oid_in_plan": false,
+			"plan_tag_target_in_plan": false
+		}
 	}`)
 	_, err := DecodeAttestation(data)
 	if err == nil {

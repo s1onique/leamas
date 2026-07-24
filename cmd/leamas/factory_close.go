@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/closure"
@@ -317,30 +318,34 @@ func runFactoryCloseAttest(args []string, stdout, stderr io.Writer) int {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 
-	// Robust atomic write using os.CreateTemp
-	tmpFile, err := os.CreateTemp("", "attest-*.json")
+	// Robust atomic write using sibling temp file (same filesystem as destination)
+	dir := filepath.Dir(outputPath)
+	tmpFile, err := os.CreateTemp(dir, ".attest-*.tmp")
 	if err != nil {
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 	tmpPath := tmpFile.Name()
-	defer func() {
-		tmpFile.Close()
-		os.Remove(tmpPath)
-	}()
 
 	if _, err := tmpFile.Write(data); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpPath)
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 	if err := os.Chmod(tmpPath, 0644); err != nil {
+		os.Remove(tmpPath)
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 	if err := os.Rename(tmpPath, outputPath); err != nil {
+		os.Remove(tmpPath)
 		return reportCloseError(stderr, "factory close attest", err)
 	}
 

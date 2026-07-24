@@ -3,6 +3,7 @@ package closure
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -281,24 +282,57 @@ func VerifyChain(ctx context.Context, req ChainValidationRequest) (ChainValidati
 		if !result.ManifestFMatchesActualF {
 			result.Errors = append(result.Errors, fmt.Sprintf("manifest freeze_commit %s != actual %s", req.Manifest.PlanFreeze.FreezeCommit, fCommit))
 		}
-		// manifest.F_TREE == actual F_TREE
-		result.ManifestFTreeMatchesFTree = (req.Manifest.PlanFreeze.FreezeCommit == fCommit && fTree != "")
-		if req.Manifest.PlanFreeze.FreezeCommit == fCommit {
-			// Verify tree matches if we have manifest freeze tree
-			if req.Manifest.PlanFreeze.PlanPath != "" {
-				result.ManifestFTreeMatchesFTree = (fTree != "")
-			}
+
+		// manifest.F_TREE == actual F^{tree} (exact comparison)
+		result.ManifestFTreeMatchesFTree = (req.Manifest.PlanFreeze.FreezeTree != "" && req.Manifest.PlanFreeze.FreezeTree == fTree)
+		if !result.ManifestFTreeMatchesFTree {
+			result.Errors = append(result.Errors, fmt.Sprintf("manifest freeze_tree %s != actual F^{tree} %s", req.Manifest.PlanFreeze.FreezeTree, fTree))
 		}
+
 		// manifest.S == actual S
 		result.ManifestSMatchesActualS = (req.Manifest.Subject.CommitOID == sCommit)
 		if !result.ManifestSMatchesActualS {
 			result.Errors = append(result.Errors, fmt.Sprintf("manifest subject.commit_oid %s != actual %s", req.Manifest.Subject.CommitOID, sCommit))
 		}
-		// manifest.S_TREE == actual S_TREE
-		result.ManifestSTreeMatchesSTree = (req.Manifest.Subject.CommitOID == sCommit && sTree != "")
-		if req.Manifest.Subject.CommitOID == sCommit {
-			if req.Manifest.PlanFreeze.PlanPath != "" {
-				result.ManifestSTreeMatchesSTree = (sTree != "")
+
+		// manifest.S_TREE == actual S^{tree} (exact comparison)
+		result.ManifestSTreeMatchesSTree = (req.Manifest.Subject.TreeOID != "" && req.Manifest.Subject.TreeOID == sTree)
+		if !result.ManifestSTreeMatchesSTree {
+			result.Errors = append(result.Errors, fmt.Sprintf("manifest subject.tree_oid %s != actual S^{tree} %s", req.Manifest.Subject.TreeOID, sTree))
+		}
+
+		// Plan path binding: manifest.plan.path == manifest.plan_freeze.plan_path == CLI --plan-path
+		planPathMatch := (req.Manifest.Plan.Path != "" && req.Manifest.PlanFreeze.PlanPath != "")
+		if planPathMatch {
+			planPathMatch = (req.Manifest.Plan.Path == req.Manifest.PlanFreeze.PlanPath && req.Manifest.PlanFreeze.PlanPath == req.PlanPath)
+		}
+		if req.Manifest.Plan.Path == "" || req.Manifest.PlanFreeze.PlanPath == "" || req.PlanPath == "" {
+			result.Errors = append(result.Errors, "plan path missing in manifest")
+		} else if !planPathMatch {
+			result.Errors = append(result.Errors, fmt.Sprintf("plan path mismatch: manifest.plan.path=%s manifest.plan_freeze.plan_path=%s CLI=%s", req.Manifest.Plan.Path, req.Manifest.PlanFreeze.PlanPath, req.PlanPath))
+		}
+
+		// Plan blob OID binding: manifest.plan_freeze.plan_blob_oid == F:<plan-path>
+		if req.Manifest.PlanFreeze.PlanBlobOID != "" && req.Manifest.PlanFreeze.PlanPath != "" {
+			actualBlobOID, err := runGitValue(ctx, req.Git, req.RepoRoot, "rev-parse", "--verify", fCommit+":"+req.Manifest.PlanFreeze.PlanPath)
+			if err != nil {
+				result.Errors = append(result.Errors, fmt.Sprintf("resolve plan blob at %s:%s: %v", fCommit, req.Manifest.PlanFreeze.PlanPath, err))
+			} else if actualBlobOID != req.Manifest.PlanFreeze.PlanBlobOID {
+				result.Errors = append(result.Errors, fmt.Sprintf("manifest plan_blob_oid %s != actual %s", req.Manifest.PlanFreeze.PlanBlobOID, actualBlobOID))
+			}
+		}
+
+		// Plan SHA-256 binding: both manifest fields must match SHA-256(F:<plan-path>)
+		if req.Manifest.PlanFreeze.PlanPath != "" {
+			planBytes, err := getPlanBytes(ctx, req.Git, req.RepoRoot, fCommit, req.Manifest.PlanFreeze.PlanPath)
+			if err == nil {
+				actualSHA256 := fmt.Sprintf("%x", sha256.Sum256(planBytes))
+				if req.Manifest.Plan.SHA256 != "" && req.Manifest.Plan.SHA256 != actualSHA256 {
+					result.Errors = append(result.Errors, fmt.Sprintf("manifest.plan.sha256 %s != actual %s", req.Manifest.Plan.SHA256, actualSHA256))
+				}
+				if req.Manifest.PlanFreeze.PlanSHA256 != "" && req.Manifest.PlanFreeze.PlanSHA256 != actualSHA256 {
+					result.Errors = append(result.Errors, fmt.Sprintf("manifest.plan_freeze.plan_sha256 %s != actual %s", req.Manifest.PlanFreeze.PlanSHA256, actualSHA256))
+				}
 			}
 		}
 	}
