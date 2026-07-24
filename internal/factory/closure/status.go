@@ -20,7 +20,7 @@ type StatusResult struct {
 }
 
 func Status(ctx context.Context, options StatusOptions) (StatusResult, error) {
-	return statusWithGit(ctx, options, realGitClient{})
+	return statusWithGit(ctx, options, RealGit{})
 }
 
 func statusWithGit(ctx context.Context, options StatusOptions, git gitClient) (StatusResult, error) {

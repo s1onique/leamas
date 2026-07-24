@@ -16,7 +16,7 @@ func newGitRepository(t *testing.T) (string, string) {
 		{"config", "user.name", "Closure Test"},
 		{"config", "user.email", "closure@example.invalid"},
 	} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, repository, args...); err != nil {
 			t.Fatalf("git %v: %v", args, err)
 		}
 	}
@@ -24,11 +24,11 @@ func newGitRepository(t *testing.T) (string, string) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "subject.txt"}, {"commit", "-m", "subject"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, repository, args...); err != nil {
 			t.Fatalf("git %v: %v", args, err)
 		}
 	}
-	commit, err := runGitValue(context.Background(), realGitClient{}, repository, "rev-parse", "HEAD")
+	commit, err := runGitValue(context.Background(), RealGit{}, repository, "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestClosureRunRequiresCleanWorktree(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(repository, "dirty.txt"), []byte("dirty"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := snapshotSubject(context.Background(), realGitClient{}, repository, subject)
+	_, err := snapshotSubject(context.Background(), RealGit{}, repository, subject)
 	if err == nil || !strings.Contains(err.Error(), "dirty") {
 		t.Fatalf("snapshot error = %v", err)
 	}
@@ -52,11 +52,11 @@ func TestClosureRunRequiresHeadEqualsSubject(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "second.txt"}, {"commit", "-m", "second"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, repository, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	_, err := snapshotSubject(context.Background(), realGitClient{}, repository, subject)
+	_, err := snapshotSubject(context.Background(), RealGit{}, repository, subject)
 	if err == nil || !strings.Contains(err.Error(), "HEAD") {
 		t.Fatalf("snapshot error = %v", err)
 	}
@@ -64,7 +64,7 @@ func TestClosureRunRequiresHeadEqualsSubject(t *testing.T) {
 
 func TestClosureRunBindsFullCommitAndTree(t *testing.T) {
 	repository, subject := newGitRepository(t)
-	snapshot, err := snapshotSubject(context.Background(), realGitClient{}, repository, subject[:12])
+	snapshot, err := snapshotSubject(context.Background(), RealGit{}, repository, subject[:12])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestClosureRunBindsFullCommitAndTree(t *testing.T) {
 
 func TestClosureRunRejectsSubjectTreeMismatch(t *testing.T) {
 	repository, subject := newGitRepository(t)
-	client := &treeMismatchGitClient{delegate: realGitClient{}}
+	client := &treeMismatchGitClient{delegate: RealGit{}}
 	_, err := snapshotSubject(context.Background(), client, repository, subject)
 	if err == nil || !strings.Contains(err.Error(), "tree") {
 		t.Fatalf("snapshot error = %v", err)

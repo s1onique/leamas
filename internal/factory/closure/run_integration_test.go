@@ -19,7 +19,7 @@ func (f fixedRunnerIdentity) Identity() (RunnerIdentity, error) { return f.value
 func prepareRunnableRepository(t *testing.T) (string, string, string) {
 	t.Helper()
 	repository, baseline := newGitRepository(t)
-	baselineTree, err := runGitValue(context.Background(), realGitClient{}, repository, "rev-parse", "HEAD^{tree}")
+	baselineTree, err := runGitValue(context.Background(), RealGit{}, repository, "rev-parse", "HEAD^{tree}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,11 +45,11 @@ func prepareRunnableRepository(t *testing.T) (string, string, string) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "docs/closure-plans/" + plan.ActID + ".json"}, {"commit", "-m", "add plan"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, repository, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	subject, err := runGitValue(context.Background(), realGitClient{}, repository, "rev-parse", "HEAD")
+	subject, err := runGitValue(context.Background(), RealGit{}, repository, "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func runOptionsForTest(t *testing.T, repository, planPath, subject string) RunOp
 func prepareFreezeAndSubject(t *testing.T) (string, string, string, string) {
 	t.Helper()
 	repository, baseline := newGitRepository(t)
-	baselineTree, err := runGitValue(context.Background(), realGitClient{}, repository, "rev-parse", "HEAD^{tree}")
+	baselineTree, err := runGitValue(context.Background(), RealGit{}, repository, "rev-parse", "HEAD^{tree}")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,20 +102,20 @@ func prepareFreezeAndSubject(t *testing.T) (string, string, string, string) {
 	}
 	planDir := "docs/closure-plans/" + plan.ActID + ".json"
 	for _, args := range [][]string{{"add", planDir}, {"commit", "-m", "freeze plan"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, repository, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	freeze, err := runGitValue(context.Background(), realGitClient{}, repository, "rev-parse", "HEAD")
+	freeze, err := runGitValue(context.Background(), RealGit{}, repository, "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"commit", "--allow-empty", "-m", "subject commit"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, repository, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	subject, err := runGitValue(context.Background(), realGitClient{}, repository, "rev-parse", "HEAD")
+	subject, err := runGitValue(context.Background(), RealGit{}, repository, "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func prepareFreezeAndSubject(t *testing.T) (string, string, string, string) {
 
 func passingRunDependencies(subject string, executor commandExecutor) runDependencies {
 	return runDependencies{
-		Git:      realGitClient{},
+		Git:      RealGit{},
 		Commands: executor,
 		Runner:   fixedRunnerIdentity{value: RunnerIdentity{LeamasVersion: "0.1.0", BinarySHA256: strings.Repeat("a", 64), VCSRevision: subject}},
 		Now:      func() time.Time { return time.Date(2026, 7, 23, 7, 0, 0, 0, time.UTC) },

@@ -114,10 +114,10 @@ func TestClosureTagHasNoForceOption(t *testing.T) {
 
 func commitClosureChanges(t *testing.T, repository, message string) {
 	t.Helper()
-	if _, err := runGitValue(context.Background(), realGitClient{}, repository, "add", "docs/closure-manifests", "docs/close-reports"); err != nil {
+	if _, err := runGitValue(context.Background(), RealGit{}, repository, "add", "docs/closure-manifests", "docs/close-reports"); err != nil {
 		t.Fatalf("git add: %v", err)
 	}
-	if _, err := runGitValue(context.Background(), realGitClient{}, repository, "commit", "-m", message); err != nil {
+	if _, err := runGitValue(context.Background(), RealGit{}, repository, "commit", "-m", message); err != nil {
 		t.Fatalf("git commit: %v", err)
 	}
 }

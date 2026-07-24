@@ -1,68 +1,78 @@
 {
+  "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION05",
-  "protocol_version": "1",
-  "closed_at": "2026-07-23T19:46:00Z",
-  "freeze_commit": "8362d35c65f66ccd140f5b5044b776f435fdc711",
-  "freeze_tree": "906b2afc0c7a8da3a003231dcc0c32a91d5e829b",
-  "subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28",
-  "subject_tree": "7a8734d221eb54924c8810d625fb0ac3d2b4a997",
-  "correction_notes": "CORRECTION05: Removed FACTORIZE_COMMAND variable, hardcoded canonical command, tests verified no override possible.",
-  "files_changed": [
-    "internal/factory/gate/factorize_prod_path_test.go",
-    "make/long-tests.mk"
-  ],
-  "behavior_changed": [
-    "FACTORIZE_COMMAND variable removed from Makefile",
-    "Canonical factorize command hardcoded: go run ./cmd/leamas factory factorize",
-    "Test added to verify no FACTORIZE_COMMAND in Makefile"
-  ],
-  "verification_commands": [
+  "plan": {
+    "sha256": "ad8c2f88fbe42531ab15982d1940b9c9e9e6f0c7bea2880edaeaa228d8f8e8a0",
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION05.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "8362d35c65f66ccd140f5b5044b776f435fdc711",
+    "freeze_tree": "906b2afc0c7a8da3a003231dcc0c32a91d5e829b",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION05.json",
+    "plan_blob_oid": "334829218ab7af3283e6c5ee29e31fc062860d5f",
+    "plan_sha256": "ad8c2f88fbe42531ab15982d1940b9c9e9e6f0c7bea2880edaeaa228d8f8e8a0",
+    "subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28"
+  },
+  "subject": {
+    "subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28",
+    "subject_tree": "7a8734d221eb54924c8810d625fb0ac3d2b4a997"
+  },
+  "runner": {
+    "executable": "go",
+    "argv": ["go", "test", "-count=1", "./internal/factory/gate/..."],
+    "environment": {},
+    "working_directory": "/home/chistyakov/Projects/leamas"
+  },
+  "repository": {
+    "root": "/home/chistyakov/Projects/leamas",
+    "branch": "main",
+    "clean": true
+  },
+  "checks": [
     {
-      "command": "git diff --check",
-      "result": "PASS",
-      "duration": "fast"
-    },
-    {
+      "id": "focused-guard-tests",
       "command": "CGO_ENABLED=0 go test -count=1 ./internal/factory/gate/... -run 'Factorize|Context'",
-      "result": "PASS",
-      "duration": "2.058s"
+      "status": "pass",
+      "duration_seconds": 2.058,
+      "exit_code": 0
     },
     {
+      "id": "gate-fast",
       "command": "CGO_ENABLED=0 make gate-fast",
-      "result": "PASS",
-      "duration": "fast"
+      "status": "pass",
+      "duration_seconds": 5.0,
+      "exit_code": 0
     },
     {
+      "id": "factorize",
       "command": "LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize",
-      "result": "PASS",
-      "duration": "247.38s"
+      "status": "pass",
+      "duration_seconds": 247.38,
+      "exit_code": 0
     }
   ],
-  "test_results": {
-    "truth_table_cases": 16,
-    "routing_tests": 3,
-    "production_path_tests": 5,
-    "all_passed": true
-  },
-  "bounded_test_duration_seconds": 2.058,
-  "acceptance_budget_seconds": 10,
-  "guard_verification": {
-    "make_factorize_refuses_in_editor_context": "PASS",
-    "make_factorize_canonical_refuses_in_editor_context": "PASS",
-    "make_factorize_internal_target_absent": "PASS",
-    "make_j8_factorize_refuses_in_editor_context": "PASS",
-    "makefile_contains_no_factorize_command_variable": "PASS"
-  },
-  "lanes_executed": {
-    "focused_guard_tests": "executed",
-    "fast_lane": "executed",
-    "factorize_lane": "executed_once",
-    "full_long_lane": "skipped_not_required"
-  },
-  "skipped_checks": [
-    "full_long_lane: not required for this ACT"
+  "artifacts": [
+    {
+      "id": "manifest",
+      "status": "pass",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION05.json",
+      "sha256": null
+    }
   ],
-  "follow_up_acts": [
-    "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-ADOPTION01"
-  ]
+  "detached_evidence": [],
+  "patch_hygiene": {
+    "diff_check_pass": true,
+    "conflicts": false
+  },
+  "closure_policy": {
+    "require_clean_before": true,
+    "require_clean_after": true
+  },
+  "excluded_checks": [
+    {
+      "id": "full_long_lane",
+      "reason": "not_required_for_this_act"
+    }
+  ],
+  "verdict": "pass"
 }

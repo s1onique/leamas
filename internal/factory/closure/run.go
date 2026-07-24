@@ -45,7 +45,7 @@ type resolvedFreeze struct {
 
 func RunClosure(ctx context.Context, options RunOptions) (Manifest, []byte, error) {
 	return runClosureWithDependencies(ctx, options, runDependencies{
-		Git:      realGitClient{},
+		Git:      RealGit{},
 		Commands: boundedCommandExecutor{},
 		Runner:   currentRunnerIdentity{},
 		Now:      time.Now,

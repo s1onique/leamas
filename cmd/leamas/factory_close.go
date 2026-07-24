@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -35,6 +36,10 @@ func runFactoryClose(args []string, stdout, stderr io.Writer) int {
 		return runFactoryCloseTag(args[1:], stdout, stderr)
 	case "status":
 		return runFactoryCloseStatus(args[1:], stdout, stderr)
+	case "chain":
+		return runFactoryCloseChain(args[1:], stdout, stderr)
+	case "attest":
+		return runFactoryCloseAttest(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "factory close: unknown subcommand %q\n", args[0])
 		printFactoryCloseUsage(stderr)
@@ -152,4 +157,123 @@ func closeFailureCode(code, message string) int {
 	result := factoryoutput.NewResult("factory-close")
 	result.AddFailure(code, message)
 	return result.ExitCode()
+}
+
+func runFactoryCloseChain(args []string, stdout, stderr io.Writer) int {
+	fs := newCloseFlagSet("factory close chain", stderr)
+	var req closure.ChainValidationRequest
+	var jsonFormat bool
+	fs.StringVar(&req.Freeze, "freeze", "", "freeze commit OID")
+	fs.StringVar(&req.Subject, "subject", "", "subject commit OID")
+	fs.StringVar(&req.Closure, "closure", "", "closure commit OID")
+	fs.StringVar(&req.Tag, "tag", "", "tag name")
+	fs.StringVar(&req.PlanPath, "plan-path", "", "plan path in repository")
+	fs.BoolVar(&jsonFormat, "json", false, "output JSON format")
+	if err := parseCloseFlags(fs, args); err != nil || req.Freeze == "" || req.Subject == "" || req.Closure == "" {
+		return reportCloseFlagError(stderr, "factory close chain", err, "--freeze, --subject, and --closure are required")
+	}
+	result, err := closure.VerifyChain(context.Background(), req)
+	if err != nil {
+		return reportCloseError(stderr, "factory close chain", err)
+	}
+	result.Output(stdout, jsonFormat)
+	if result.Verdict == "FAIL" {
+		return closeFailureCode("chain", "chain validation failed")
+	}
+	return closeSuccessCode()
+}
+
+func runFactoryCloseAttest(args []string, stdout, stderr io.Writer) int {
+	fs := newCloseFlagSet("factory close attest", stderr)
+	var manifestPath, outputPath string
+	var jsonFormat bool
+	fs.StringVar(&manifestPath, "manifest", "", "closure manifest")
+	fs.StringVar(&outputPath, "output", "", "output attestation file")
+	fs.BoolVar(&jsonFormat, "json", false, "output JSON format")
+	if err := parseCloseFlags(fs, args); err != nil || manifestPath == "" || outputPath == "" {
+		return reportCloseFlagError(stderr, "factory close attest", err, "--manifest and --output are required")
+	}
+
+	// Load manifest with strict decoding
+	manifest, _, err := closure.LoadManifest(manifestPath)
+	if err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+
+	// Require tag in manifest
+	if manifest.Tag == "" {
+		fmt.Fprintln(stderr, "factory close attest: manifest must include tag field")
+		return closeFailureCode("manifest", "tag field required in manifest")
+	}
+
+	// Require pass verdict
+	if manifest.Verdict != closure.VerdictPass {
+		fmt.Fprintln(stderr, "factory close attest: manifest verdict must be pass")
+		return closeFailureCode("verdict", "manifest verdict is fail")
+	}
+
+	// Build chain request for validation
+	var realGit closure.RealGit
+	repoRoot, err := realGit.ShowToplevel(context.Background())
+	if err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+
+	chainReq := closure.ChainValidationRequest{
+		RepoRoot: repoRoot,
+		Git:      realGit,
+		Freeze:   manifest.PlanFreeze.FreezeCommit,
+		Subject:  manifest.Subject.CommitOID,
+		Closure:  manifest.Subject.CommitOID,
+		PlanPath: manifest.Plan.Path,
+		Tag:      manifest.Tag,
+	}
+
+	// Validate chain
+	chainResult, err := closure.VerifyChain(context.Background(), chainReq)
+	if err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+	if chainResult.Verdict != "PASS" {
+		for _, e := range chainResult.Errors {
+			fmt.Fprintf(stderr, "factory close attest: %s\n", e)
+		}
+		return closeFailureCode("chain", "chain validation failed")
+	}
+
+	// Generate attestation
+	attestReq := closure.AttestationRequest{
+		RepoRoot:    repoRoot,
+		Git:         realGit,
+		Manifest:    manifest,
+		ChainResult: chainResult,
+	}
+	attest, err := closure.GenerateAttestation(context.Background(), attestReq)
+	if err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+
+	// Validate attestation
+	if err := closure.ValidateAttestation(attest); err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+
+	// Marshal and write atomically
+	data, err := json.MarshalIndent(attest, "", "  ")
+	if err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+
+	// Atomic write - write to temp then rename
+	tmpPath := outputPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+	if err := os.Rename(tmpPath, outputPath); err != nil {
+		os.Remove(tmpPath)
+		return reportCloseError(stderr, "factory close attest", err)
+	}
+
+	fmt.Fprintln(stdout, outputPath)
+	return closeSuccessCode()
 }

@@ -1,0 +1,47 @@
+{
+  "attestation_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION05",
+  "protocol_version": "1",
+  "attested_at": "2026-07-23T19:47:00Z",
+  "description": "Post-closure attestation for CORRECTION05. Records closure artifacts and tag identity. This file is created AFTER the closure commit (C) and tag creation.",
+  "closure_reference": {
+    "closure_commit": "56ba5bbe2816f77acc0f1e228666481444b14056",
+    "closure_tree": "a46b8457a6249b3dc2c6964487dc5a04e5e0cae9"
+  },
+  "tag_identity": {
+    "tag_name": "act/ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION05",
+    "tag_object_oid": "0235c610b7679647c94ce8bfb2dc752b63384031",
+    "tag_type": "annotated",
+    "peeled_target": "56ba5bbe2816f77acc0f1e228666481444b14056"
+  },
+  "freeze_reference": {
+    "freeze_commit": "8362d35c65f66ccd140f5b5044b776f435fdc711",
+    "freeze_tree": "906b2afc0c7a8da3a003231dcc0c32a91d5e829b",
+    "plan_blob_oid": "334829218ab7af3283e6c5ee29e31fc062860d5f"
+  },
+  "subject_reference": {
+    "subject_commit": "64b6c20c0e0230f1eeb8aa1f5e21f96220f9bf28",
+    "subject_tree": "7a8734d221eb54924c8810d625fb0ac3d2b4a997"
+  },
+  "chain_validity": {
+    "F_not_equal_S": true,
+    "F_is_ancestor_of_S": true,
+    "plan_bytes_F_equals_plan_bytes_S": true,
+    "manifest.F_matches_actual_F": true,
+    "manifest.F_TREE_matches_F_tree": true,
+    "manifest.S_matches_actual_S": true,
+    "manifest.S_TREE_matches_S_tree": true,
+    "tag_peeled_target_matches_C": true
+  },
+  "no_self_reference_in_plan": {
+    "plan_freeze_commit_in_plan": false,
+    "plan_freeze_tree_in_plan": false,
+    "plan_subject_commit_in_plan": false,
+    "plan_subject_tree_in_plan": false,
+    "plan_closure_commit_in_plan": false,
+    "plan_closure_tree_in_plan": false,
+    "plan_tag_oid_in_plan": false,
+    "plan_tag_target_in_plan": false
+  },
+  "_note": "This attestation records information that cannot exist at plan freeze time (F). It is created after closure commit (C) and tag creation. The plan itself must NOT contain these values - that is the fix applied by this ACT."
+}

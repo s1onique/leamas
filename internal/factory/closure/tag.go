@@ -41,7 +41,7 @@ func CreateTag(ctx context.Context, options TagOptions) ([]byte, error) {
 	if options.Target == "" {
 		return nil, fmt.Errorf("closure tag target is required")
 	}
-	git := realGitClient{}
+	git := RealGit{}
 	root, err := runGitValue(ctx, git, options.RepositoryDirectory, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, err

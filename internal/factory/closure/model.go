@@ -85,6 +85,7 @@ type Manifest struct {
 	ClosurePolicy    ClosurePolicyResult `json:"closure_policy"`
 	ExcludedChecks   []ExcludedCheck     `json:"excluded_checks"`
 	Verdict          string              `json:"verdict"`
+	Tag              string              `json:"tag,omitempty"`
 }
 
 type ManifestPlanFreeze struct {

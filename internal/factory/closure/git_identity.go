@@ -22,11 +22,21 @@ type gitClient interface {
 	Run(context.Context, string, ...string) gitCommandResult
 }
 
-type realGitClient struct{}
+type RealGit struct{}
 
-func (realGitClient) Run(ctx context.Context, directory string, args ...string) gitCommandResult {
+func (RealGit) Run(ctx context.Context, directory string, args ...string) gitCommandResult {
 	result, err := execution.RunGit(ctx, directory, args...)
 	return gitCommandResult{Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Err: err}
+}
+
+// NewRealGit creates a new real Git client.
+func NewRealGit() gitClient {
+	return &RealGit{}
+}
+
+// ShowToplevel returns the repository root via git rev-parse --show-toplevel.
+func (c *RealGit) ShowToplevel(ctx context.Context) (string, error) {
+	return runGitValue(ctx, c, ".", "rev-parse", "--show-toplevel")
 }
 
 type subjectSnapshot struct {

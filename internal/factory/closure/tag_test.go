@@ -59,11 +59,11 @@ func prepareClosureFixture(t *testing.T) closureFixture {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "docs/closure-manifests", "docs/close-reports"}, {"commit", "-m", "close act"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, repo, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, repo, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	closureCommit, err := runGitValue(context.Background(), realGitClient{}, repo, "rev-parse", "HEAD")
+	closureCommit, err := runGitValue(context.Background(), RealGit{}, repo, "rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestClosureTagCreatesAnnotatedTag(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	objectType, err := runGitValue(context.Background(), realGitClient{}, fixture.repository, "cat-file", "-t", "refs/tags/"+fixture.tag)
+	objectType, err := runGitValue(context.Background(), RealGit{}, fixture.repository, "cat-file", "-t", "refs/tags/"+fixture.tag)
 	if err != nil || objectType != "tag" {
 		t.Fatalf("type = %q, %v", objectType, err)
 	}
@@ -95,7 +95,7 @@ func TestClosureTagMessageExactBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw := realGitClient{}.Run(context.Background(), fixture.repository, "cat-file", "tag", "refs/tags/"+fixture.tag)
+	raw := RealGit{}.Run(context.Background(), fixture.repository, "cat-file", "tag", "refs/tags/"+fixture.tag)
 	if raw.Err != nil {
 		t.Fatal(raw.Err)
 	}
@@ -110,7 +110,7 @@ func TestClosureTagTargetsClosureCommit(t *testing.T) {
 	if _, err := CreateTag(context.Background(), fixture.options()); err != nil {
 		t.Fatal(err)
 	}
-	target, err := runGitValue(context.Background(), realGitClient{}, fixture.repository, "rev-parse", fixture.tag+"^{commit}")
+	target, err := runGitValue(context.Background(), RealGit{}, fixture.repository, "rev-parse", fixture.tag+"^{commit}")
 	if err != nil || target != fixture.closureCommit {
 		t.Fatalf("target = %q, %v", target, err)
 	}

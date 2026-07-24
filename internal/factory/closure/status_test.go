@@ -39,7 +39,7 @@ func TestClosureStatusImplemented(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"add", "docs/closure-manifests", "docs/close-reports"}, {"commit", "-m", "record failed closure"}} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, fixture.repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, fixture.repository, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -74,7 +74,7 @@ func TestClosureStatusPublished(t *testing.T) {
 		t.Fatal(err)
 	}
 	remote := filepath.Join(t.TempDir(), "remote.git")
-	if _, err := runGitValue(context.Background(), realGitClient{}, ".", "init", "--bare", remote); err != nil {
+	if _, err := runGitValue(context.Background(), RealGit{}, ".", "init", "--bare", remote); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
@@ -82,7 +82,7 @@ func TestClosureStatusPublished(t *testing.T) {
 		{"push", "origin", "main"},
 		{"push", "origin", "refs/tags/" + fixture.tag},
 	} {
-		if _, err := runGitValue(context.Background(), realGitClient{}, fixture.repository, args...); err != nil {
+		if _, err := runGitValue(context.Background(), RealGit{}, fixture.repository, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -99,7 +99,7 @@ func TestClosureStatusRejectsMovedLocalTag(t *testing.T) {
 	if _, err := CreateTag(context.Background(), fixture.options()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runGitValue(context.Background(), realGitClient{}, fixture.repository, "tag", "--force", fixture.tag, "HEAD^"); err != nil {
+	if _, err := runGitValue(context.Background(), RealGit{}, fixture.repository, "tag", "--force", fixture.tag, "HEAD^"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Status(context.Background(), fixture.statusOptions()); err == nil {
@@ -112,7 +112,7 @@ func TestClosureStatusRejectsRemoteTagObjectMismatch(t *testing.T) {
 	if _, err := CreateTag(context.Background(), fixture.options()); err != nil {
 		t.Fatal(err)
 	}
-	client := &remoteMutationGitClient{delegate: realGitClient{}, mutateDirect: true}
+	client := &remoteMutationGitClient{delegate: RealGit{}, mutateDirect: true}
 	options := fixture.statusOptions()
 	options.Remote = "origin"
 	if _, err := statusWithGit(context.Background(), options, client); err == nil || !strings.Contains(err.Error(), "tag object") {
@@ -125,7 +125,7 @@ func TestClosureStatusRejectsRemotePeeledTargetMismatch(t *testing.T) {
 	if _, err := CreateTag(context.Background(), fixture.options()); err != nil {
 		t.Fatal(err)
 	}
-	client := &remoteMutationGitClient{delegate: realGitClient{}, mutatePeeled: true}
+	client := &remoteMutationGitClient{delegate: RealGit{}, mutatePeeled: true}
 	options := fixture.statusOptions()
 	options.Remote = "origin"
 	if _, err := statusWithGit(context.Background(), options, client); err == nil || !strings.Contains(err.Error(), "peeled") {

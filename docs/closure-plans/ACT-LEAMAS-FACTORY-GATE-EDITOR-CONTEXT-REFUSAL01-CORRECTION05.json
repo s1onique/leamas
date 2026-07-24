@@ -3,8 +3,6 @@
   "protocol_version": "1",
   "frozen_at": "2026-07-23T19:41:00Z",
   "description": "Canonical verifier authority and immutable closure repair",
-  "freeze_commit": "461017d5f8a6d1b3c9e4f2a7d0c8e5b1f4a3d2c6",
-  "freeze_tree": "a1b2c3d4e5f6",
   "predecessor": "ACT-LEAMAS-FACTORY-GATE-EDITOR-CONTEXT-REFUSAL01-CORRECTION04",
   "required_changes": [
     "Remove FACTORIZE_COMMAND override variable from make/long-tests.mk",
@@ -13,7 +11,7 @@
     "Add test verifying Makefile contains no FACTORIZE_COMMAND",
     "Verify editor-context refusal remains effective",
     "Run real factorize with LEAMAS_ALLOW_FULL_FACTORIZE=1",
-    "Create proper F → S → C closure sequence"
+    "Create proper F → S → C closure sequence with post-closure attestation"
   ],
   "verification_commands": [
     "git diff --check",
@@ -26,9 +24,11 @@
     "No Make variable can substitute the canonical factorize verifier",
     "Focused tests remain within 10 seconds",
     "Real factorize passes against exact subject S",
-    "CORRECTION05 plan exists in immutable freeze commit F",
-    "All commit, tree, tag-object and tag-target OIDs are full and mechanically verified",
+    "CORRECTION05 plan contains no self-referential Git identities",
+    "Closure manifest records F, F_TREE, S, S_TREE",
+    "Post-closure attestation records C, C_TREE, tag object, peeled target",
     "Reports disclose skipped lanes accurately",
     "Publication is an ordinary fast-forward with no history rewriting"
-  ]
+  ],
+  "_note": "Git OIDs (freeze_commit, freeze_tree, subject_commit, etc.) are NOT permitted in this plan. They must be recorded in closure manifest and post-closure attestation."
 }
