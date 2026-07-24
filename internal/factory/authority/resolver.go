@@ -34,6 +34,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -368,7 +369,9 @@ func captureToolIdentity(opts ResolverOptions) (ToolIdentity, error) {
 }
 
 // populate fills the remaining ToolIdentity fields by running
-// `version --json` on path and hashing the binary bytes.
+// `version --json` on path and hashing the binary bytes. The
+// working directory is set to the calling process's current
+// directory so relative paths like "./bin/leamas" resolve.
 func (t *ToolIdentity) populate(path string) error {
 	data, err := readFileBytes(path)
 	if err != nil {
@@ -378,6 +381,9 @@ func (t *ToolIdentity) populate(path string) error {
 	t.ToolSHA256 = hex.EncodeToString(sum[:])
 
 	cmd := exec.Command(path, "version", "--json")
+	if wd, _ := os.Getwd(); wd != "" {
+		cmd.Dir = wd
+	}
 	out, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("tool version probe: %w", err)
