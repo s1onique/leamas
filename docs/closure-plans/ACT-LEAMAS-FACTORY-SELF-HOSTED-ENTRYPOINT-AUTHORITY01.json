@@ -1,0 +1,48 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01",
+  "baseline": {
+    "commit_oid": "fbafa31e95ad847844818cf30836d6b21578b0f0",
+    "tree_oid": "TO_BE_FILLED"
+  },
+  "checks": [
+    {
+      "argv": ["go", "test", "-count=1", "./internal/factory/authority/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "authority-tests",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["make", "gate-fast"],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "gate-fast",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": ["git", "diff", "--check"],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "diff-check",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "No dupcode-owned source or registration changed."
+    }
+  ],
+  "artifacts": [],
+  "contract_version": 1,
+  "execution": {"mode": "serial_fail_fast"},
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "policy_profile": "leamas-act-v1"
+}
