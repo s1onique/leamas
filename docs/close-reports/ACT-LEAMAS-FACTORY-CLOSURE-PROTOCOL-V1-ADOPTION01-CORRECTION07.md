@@ -25,12 +25,12 @@ SHA-1/SHA-256 format awareness, sibling temp file atomic output.
 
 ```go
 // manifest.F_TREE == actual F^{tree}
-result.ManifestFTreeMatchesFTree = (req.Manifest.PlanFreeze.FreezeTree != "" && 
-    req.Manifest.PlanFreeze.FreezeTree == fTree)
+result.ManifestFTreeMatchesFTree = (req.Manifest.PlanFreeze.FreezeTree != ""
+    && req.Manifest.PlanFreeze.FreezeTree == fTree)
 
 // manifest.S_TREE == actual S^{tree}
-result.ManifestSTreeMatchesSTree = (req.Manifest.Subject.TreeOID != "" && 
-    req.Manifest.Subject.TreeOID == sTree)
+result.ManifestSTreeMatchesSTree = (req.Manifest.Subject.TreeOID != ""
+    && req.Manifest.Subject.TreeOID == sTree)
 ```
 
 A missing or incorrect manifest tree fails the chain.
@@ -97,16 +97,16 @@ On failure: close and remove temp file, preserve existing destination.
 
 | # | Criterion | Status |
 |-:|-----------|--------|
-| 1 | Manifest freeze and subject tree OIDs compared exactly. | ✓ |
-| 2 | Plan path, blob OID and SHA-256 fields bound to Git. | ✓ |
-| 3 | Canonical manifest can be used by attest command. | ✓ |
-| 4 | Immutable plan bytes validated. | ✓ |
-| 5 | Every chain-validity assertion mandatory. | ✓ |
-| 6 | Attestation identities and booleans checked. | ✓ |
-| 7 | SHA-1 and SHA-256 repositories work. | ✓ |
-| 8 | Sibling temp file for atomic output. | ✓ |
-| 9 | CLI tests cover valid/invalid chains. | ✓ |
-| 10 | CORRECTION07 closes through valid protocol sequence. | ✓ |
+| 1 | Manifest freeze and subject tree OIDs compared exactly. | PASS |
+| 2 | Plan path, blob OID and SHA-256 fields bound to Git. | PASS |
+| 3 | Canonical manifest can be used by attest command. | PASS |
+| 4 | Immutable plan bytes validated. | PASS |
+| 5 | Every chain-validity assertion mandatory. | PASS |
+| 6 | Attestation identities and booleans checked. | PASS |
+| 7 | SHA-1 and SHA-256 repositories work. | PASS |
+| 8 | Sibling temp file for atomic output. | PASS |
+| 9 | CLI tests cover valid/invalid chains. | PASS |
+| 10 | CORRECTION07 closes through valid protocol sequence. | PASS |
 
 ## Successor
 
