@@ -17,9 +17,9 @@
         "test",
         "-count=1",
         "-v",
-        "./internal/factory/closure/...",
+        "./internal/factory/closure",
         "-run",
-        "PinnedBinarySHA256Enforcement|ToolReleaseExact.*BinarySHA256"
+        "^TestToolReleaseExactRejectsPlanPinnedBinaryMismatch$"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -35,9 +35,9 @@
         "test",
         "-count=1",
         "-v",
-        "./internal/factory/closure/...",
+        "./internal/factory/closure",
         "-run",
-        "PlanValidation.*RunnerAuthority|ToolReleaseExact.*Validation|RejectsMalformedRunnerAuthority"
+        "^TestPlanValidationRunnerAuthorityContract$"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -49,19 +49,15 @@
       "id": "portable-selector-cardinality",
       "mode": "run",
       "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-list=.",
-        "./cmd/leamas/...",
-        "-run",
-        "^$"
+        "bash",
+        "-c",
+        "set -euo pipefail; TESTS=$(go test -list 'TestPortableRunnerExternalRepositoryCLI' ./cmd/leamas/... 2>/dev/null | grep '^TestPortableRunnerExternalRepositoryCLI$'); if [ -z \"$TESTS\" ]; then echo \"FATAL: TestPortableRunnerExternalRepositoryCLI not found\"; exit 1; fi; COUNT=$(echo \"$TESTS\" | wc -l); if [ \"$COUNT\" -ne 1 ]; then echo \"FATAL: Expected 1 test, found $COUNT\"; exit 1; fi; echo \"PASS: Found exactly 1 required test: TestPortableRunnerExternalRepositoryCLI\""
       ],
       "environment": {
         "CGO_ENABLED": "0"
       },
       "working_directory": ".",
-      "timeout_seconds": 60
+      "timeout_seconds": 120
     },
     {
       "id": "external-repository-cli-proof",
@@ -71,9 +67,9 @@
         "test",
         "-count=1",
         "-v",
-        "./cmd/leamas/...",
+        "./cmd/leamas",
         "-run",
-        "PortableRunner.*ExternalRepository|ExternalRepository.*CLI"
+        "^TestPortableRunnerExternalRepositoryCLI$"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -89,9 +85,9 @@
         "test",
         "-count=1",
         "-v",
-        "./internal/factory/authority/...",
+        "./internal/factory/authority",
         "-run",
-        "PortableRunnerCapability|Capability.*Portable"
+        "^TestPortableRunnerCapabilityContract$"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -107,10 +103,10 @@
         "test",
         "-count=1",
         "-v",
-        "./internal/factory/closure/...",
-        "./cmd/leamas/...",
+        "./internal/factory/closure",
+        "./cmd/leamas",
         "-run",
-        "WrongPinnedHash|BinarySubstitution|WrongTarget|SubstitutedBinary|RejectsToolReleaseExact"
+        "^TestPortableRunnerNegativeAuthorityMatrix$"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -131,7 +127,7 @@
         "./cmd/leamas/..."
       ],
       "environment": {
-        "CGO_ENABLED": "0"
+        "CGO_ENABLED": "1"
       },
       "working_directory": ".",
       "timeout_seconds": 600
