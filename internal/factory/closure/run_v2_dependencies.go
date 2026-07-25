@@ -58,6 +58,7 @@ type v2FinalizeInput struct {
 	Branch             string
 	EvidenceDirectory  string
 	Runner             RunnerIdentity
+	RunnerAuthority    *RunnerAuthority
 	Checks             []CheckResult
 	CheckEvidence      []EvidenceRecord
 	Patch              policyEvaluation[PatchHygiene]
@@ -73,7 +74,7 @@ func defaultV2FinalizeNew(ctx context.Context, input v2FinalizeInput) (*Transact
 		PlanSHA256: fmt.Sprintf("%x", sha256.Sum256(input.AuthoritativeBytes)), PlanBlobOID: input.PlanBlobOID,
 		FreezeCommit: input.FreezeCommit, FreezeTree: input.FreezeTree,
 		SubjectCommit: input.SubjectCommit, SubjectTree: input.SubjectTree,
-		Branch: input.Branch, Runner: input.Runner, Checks: input.Checks,
+		Branch: input.Branch, Runner: input.Runner, RunnerAuthority: input.RunnerAuthority, Checks: input.Checks,
 		PatchHygiene: input.Patch.Value, ClosurePolicy: input.Closure.Value,
 	})
 	if err != nil {

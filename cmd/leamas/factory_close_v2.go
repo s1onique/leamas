@@ -15,6 +15,7 @@ func runFactoryCloseRunV2(args []string, stdout, stderr io.Writer) int {
 	var options closure.RunV2Options
 	fs.StringVar(&options.PlanPath, "plan", "", "frozen closure plan")
 	fs.StringVar(&options.Subject, "subject", "", "subject commit")
+	fs.StringVar(&options.RepoDirectory, "repo", ".", "repository directory")
 	fs.BoolVar(&options.JSONOutput, "json", false, "output JSON format")
 	if err := parseCloseFlags(fs, args); err != nil || options.PlanPath == "" || options.Subject == "" {
 		return reportCloseFlagError(stderr, "factory close run", err,

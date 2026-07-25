@@ -146,6 +146,55 @@
     "runner_binding": {
       "description": "Optional runner binding identifier.",
       "type": "string"
+    },
+    "runner_authority": {
+      "description": "Optional runner authority declaration for Closure Protocol v2 portable runner authority. Defines how the runner identity is bound to the closure subject.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "description": "The runner authority mode. 'subject_exact' requires runner vcs.revision == target subject. 'tool_release_exact' requires runner vcs.revision == pinned tool revision (independent of target).",
+          "type": "string",
+          "enum": ["subject_exact", "tool_release_exact"]
+        },
+        "tool": {
+          "description": "Tool authority block. Required for tool_release_exact mode. Optional and forbidden in strict mode for subject_exact.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["revision", "binary_sha256"],
+          "properties": {
+            "revision": {
+              "description": "Full lowercase 40-character Git OID of the Leamas source revision.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "tree_oid": {
+              "description": "Full lowercase Git OID of the Leamas source tree.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"
+            },
+            "binary_sha256": {
+              "description": "Lowercase SHA-256 hex digest of the runner binary.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "version": {
+              "description": "Declared Leamas version string.",
+              "type": "string"
+            },
+            "tag_name": {
+              "description": "Annotated release tag name.",
+              "type": "string"
+            },
+            "tag_object_oid": {
+              "description": "Annotated tag object OID.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$|^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -145,7 +145,7 @@ func runClosureV2WithDependencies(ctx context.Context, options RunV2Options, dep
 		if err != nil {
 			return RunnerIdentity{}, fmt.Errorf("compute running binary SHA256: %w", err)
 		}
-		if err := enforceRunnerIdentity(runnerIdentity, subjectCommit, actualHash); err != nil {
+		if err := EnforceRunnerAuthority(plan.RunnerAuthority, runnerIdentity, actualHash, subjectCommit, subjectTree); err != nil {
 			return RunnerIdentity{}, err
 		}
 		return runnerIdentity, nil
@@ -235,6 +235,7 @@ func runClosureV2WithDependencies(ctx context.Context, options RunV2Options, dep
 		Branch:             branch,
 		EvidenceDirectory:  stagingDir,
 		Runner:             runnerIdentity,
+		RunnerAuthority:    plan.RunnerAuthority,
 		Checks:             nil,
 		CheckEvidence:      nil,
 		Patch:              policyEvaluation[PatchHygiene]{},

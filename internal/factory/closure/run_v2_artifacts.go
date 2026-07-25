@@ -21,19 +21,20 @@ type v2CanonicalArtifacts struct {
 }
 
 type v2CanonicalArtifactInput struct {
-	ActID         string
-	PlanPath      string
-	PlanSHA256    string
-	PlanBlobOID   string
-	FreezeCommit  string
-	FreezeTree    string
-	SubjectCommit string
-	SubjectTree   string
-	Branch        string // detached-only input; deliberately not serialized
-	Runner        RunnerIdentity
-	Checks        []CheckResult
-	PatchHygiene  PatchHygiene
-	ClosurePolicy ClosurePolicyResult
+	ActID           string
+	PlanPath        string
+	PlanSHA256      string
+	PlanBlobOID     string
+	FreezeCommit    string
+	FreezeTree      string
+	SubjectCommit   string
+	SubjectTree     string
+	Branch          string // detached-only input; deliberately not serialized
+	Runner          RunnerIdentity
+	RunnerAuthority *RunnerAuthority
+	Checks          []CheckResult
+	PatchHygiene    PatchHygiene
+	ClosurePolicy   ClosurePolicyResult
 }
 
 type v2CanonicalManifest struct {
@@ -51,7 +52,9 @@ type v2CanonicalManifest struct {
 }
 
 type v2RunnerAuthority struct {
-	Mode string `json:"mode"`
+	Mode     RunnerAuthorityMode `json:"mode"`
+	Tool     *ToolAuthority      `json:"tool,omitempty"`
+	Revision string              `json:"revision,omitempty"`
 }
 
 type v2CanonicalCheck struct {
@@ -78,6 +81,15 @@ func generateV2CanonicalArtifacts(input v2CanonicalArtifactInput) (v2CanonicalAr
 		input.ClosurePolicy.TrackedFullDigestStatus != CheckStatusPass {
 		verdict = VerdictFail
 	}
+
+	// Determine runner authority mode
+	runnerMode := RunnerAuthoritySubjectExact
+	var runnerTool *ToolAuthority
+	if input.RunnerAuthority != nil {
+		runnerMode = input.RunnerAuthority.Mode
+		runnerTool = input.RunnerAuthority.Tool
+	}
+
 	manifest := v2CanonicalManifest{
 		ContractVersion: ContractVersionV1, ClosureProtocolVersion: closureProtocolVersionV2,
 		ActID: input.ActID,
@@ -86,7 +98,7 @@ func generateV2CanonicalArtifacts(input v2CanonicalArtifactInput) (v2CanonicalAr
 			PlanPath: input.PlanPath, PlanBlobOID: input.PlanBlobOID, PlanSHA256: input.PlanSHA256,
 			SubjectCommit: input.SubjectCommit},
 		Subject:         ManifestSubject{CommitOID: input.SubjectCommit, TreeOID: input.SubjectTree},
-		RunnerAuthority: v2RunnerAuthority{Mode: "subject_exact"}, Checks: checks,
+		RunnerAuthority: v2RunnerAuthority{Mode: runnerMode, Tool: runnerTool}, Checks: checks,
 		PatchHygiene: input.PatchHygiene, ClosurePolicy: input.ClosurePolicy, Verdict: verdict,
 	}
 	manifestBytes, err := marshalCanonicalJSON(manifest)

@@ -31,15 +31,53 @@ const (
 const ExecutionSerialFailFast = string(ExecutionModeSerialFailFast)
 
 type Plan struct {
-	ContractVersion int            `json:"contract_version"`
-	ActID           string         `json:"act_id"`
-	Baseline        Baseline       `json:"baseline"`
-	Execution       PlanExecution  `json:"execution"`
-	Checks          []PlanCheck    `json:"checks"`
-	Artifacts       []PlanArtifact `json:"artifacts"`
-	Policy          PlanPolicy     `json:"policy"`
-	PolicyProfile   string         `json:"policy_profile,omitempty"`
-	RunnerBinding   string         `json:"runner_binding,omitempty"`
+	ContractVersion int              `json:"contract_version"`
+	ActID           string           `json:"act_id"`
+	Baseline        Baseline         `json:"baseline"`
+	Execution       PlanExecution    `json:"execution"`
+	Checks          []PlanCheck      `json:"checks"`
+	Artifacts       []PlanArtifact   `json:"artifacts"`
+	Policy          PlanPolicy       `json:"policy"`
+	PolicyProfile   string           `json:"policy_profile,omitempty"`
+	RunnerBinding   string           `json:"runner_binding,omitempty"`
+	RunnerAuthority *RunnerAuthority `json:"runner_authority,omitempty"`
+}
+
+// RunnerAuthorityMode represents the authority mode for runner identity binding.
+type RunnerAuthorityMode string
+
+const (
+	// RunnerAuthoritySubjectExact uses the subject_exact mode where
+	// runner vcs.revision must equal target subject S.
+	RunnerAuthoritySubjectExact RunnerAuthorityMode = "subject_exact"
+	// RunnerAuthorityToolReleaseExact uses the tool_release_exact mode where
+	// runner vcs.revision must equal the pinned tool revision (independent of target).
+	RunnerAuthorityToolReleaseExact RunnerAuthorityMode = "tool_release_exact"
+)
+
+// ToolAuthority declares the exact tool identity for tool_release_exact mode.
+type ToolAuthority struct {
+	// Revision is the full lowercase 40-character Git OID of the Leamas
+	// source revision from which the runner was built.
+	Revision string `json:"revision"`
+	// TreeOID is the full lowercase Git OID of the Leamas source tree.
+	TreeOID string `json:"tree_oid,omitempty"`
+	// BinarySHA256 is the lowercase SHA-256 hex digest of the runner binary.
+	BinarySHA256 string `json:"binary_sha256"`
+	// Version is the declared Leamas version string.
+	Version string `json:"version,omitempty"`
+	// TagName is the annotated release tag name.
+	TagName string `json:"tag_name,omitempty"`
+	// TagObjectOID is the annotated tag object OID.
+	TagObjectOID string `json:"tag_object_oid,omitempty"`
+}
+
+// RunnerAuthority declares the runner authority mode and tool identity.
+// For subject_exact mode, the tool block is optional (but not allowed in
+// strict mode). For tool_release_exact mode, the tool block is required.
+type RunnerAuthority struct {
+	Mode RunnerAuthorityMode `json:"mode"`
+	Tool *ToolAuthority      `json:"tool,omitempty"`
 }
 
 type Baseline struct {
