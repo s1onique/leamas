@@ -72,6 +72,5 @@
     "require_clean_after": true,
     "forbid_tracked_full_digests": true,
     "require_diff_check": true
-  },
-  "policy_profile": "leamas-act-v1"
+  }
 }
