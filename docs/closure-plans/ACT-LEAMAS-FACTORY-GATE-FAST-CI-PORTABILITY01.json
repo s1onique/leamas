@@ -1,0 +1,183 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-GATE-FAST-CI-PORTABILITY01",
+  "baseline": {
+    "commit_oid": "55096ec81ce58587228be95f198eb57d18e2bbe8",
+    "tree_oid": "a7cbae406d807359ae671ccb79a2f27efce2f16e"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "focused-authority-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/factory/authority/...",
+        "-run",
+        "DiscoverPATH|RequiredCapabilities|RepositoryRoot"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "focused-closure-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/factory/closure/...",
+        "-run",
+        "Correction01PlanFreeze|LifecycleErratum"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "repeated-hermeticity-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=50",
+        "./internal/factory/authority/...",
+        "-run",
+        "DiscoverPATH|RequiredCapabilities|RepositoryRoot"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "repeated-closure-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=50",
+        "./internal/factory/closure/...",
+        "-run",
+        "Correction01PlanFreeze|LifecycleErratum"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "race-count-5",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/authority/...",
+        "./internal/factory/closure/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "1"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "go-vet",
+      "mode": "run",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/authority/...",
+        "./internal/factory/closure/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "shallow-clone-gate-fast",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast-shallow-clone"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "subject-diff-check",
+      "mode": "run",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "HEAD^..HEAD"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "Repair is test-hermeticity scoped; no dupcode-owned source or baseline changed."
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "manifest",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-GATE-FAST-CI-PORTABILITY01.json",
+      "required": true,
+      "max_bytes": 65536,
+      "media_type": "application/json"
+    },
+    {
+      "id": "report",
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-GATE-FAST-CI-PORTABILITY01.md",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "text/markdown"
+    }
+  ],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}
