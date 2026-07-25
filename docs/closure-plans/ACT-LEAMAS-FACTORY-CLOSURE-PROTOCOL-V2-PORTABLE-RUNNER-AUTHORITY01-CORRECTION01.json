@@ -1,0 +1,65 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION01",
+  "baseline": {
+    "commit_oid": "5ed2420",
+    "note": "origin/main after invalid local closure preserved in rescue/portable-runner-authority01-invalid-local-cff1e12bb875"
+  },
+  "subject": {
+    "type": "commit_range",
+    "range": "origin/main"
+  },
+  "runner_authority": {
+    "mode": "subject_exact"
+  },
+  "checks": [
+    {
+      "check_id": "tool-release-exact-enforcement",
+      "description": "Verify pinned binary SHA-256 is enforced against actual executable",
+      "timeout_seconds": 300,
+      "command": ["go", "test", "-v", "-count=1", "./internal/factory/closure/...", "-run", "ToolReleaseExactBinaryEnforcement"]
+    },
+    {
+      "check_id": "external-repo-proof",
+      "description": "Verify external repository test pattern matches actual tests",
+      "timeout_seconds": 60,
+      "command": ["go", "test", "-list", "PortableRunner|ExternalRepository|ToolReleaseExact", "./cmd/leamas/..."]
+    },
+    {
+      "check_id": "validate-runner-authority-wired",
+      "description": "Verify ValidateRunnerAuthority is called in plan validation",
+      "timeout_seconds": 60,
+      "command": ["grep", "-r", "ValidateRunnerAuthority", "./internal/factory/closure/", "--include=*.go"]
+    },
+    {
+      "check_id": "capability-declaration",
+      "description": "Verify portable-runner capability declared in required-capabilities",
+      "timeout_seconds": 30,
+      "command": ["grep", "-l", "portable-runner", ".factory/required-capabilities.json"]
+    },
+    {
+      "check_id": "gate-fast",
+      "description": "Run standard gate-fast checks",
+      "timeout_seconds": 300,
+      "command": ["make", "gate-fast"]
+    },
+    {
+      "check_id": "gate-fast-shallow-clone",
+      "description": "Run gate-fast with shallow clone",
+      "timeout_seconds": 300,
+      "command": ["make", "gate-fast-shallow-clone"]
+    },
+    {
+      "check_id": "go-vet",
+      "description": "Run go vet on closure packages",
+      "timeout_seconds": 60,
+      "command": ["go", "vet", "./internal/factory/closure/...", "./internal/factory/authority/...", "./cmd/leamas/..."]
+    },
+    {
+      "check_id": "diff-check",
+      "description": "Verify no whitespace errors in diff",
+      "timeout_seconds": 30,
+      "command": ["git", "diff", "--check", "HEAD^..HEAD"]
+    }
+  ]
+}
