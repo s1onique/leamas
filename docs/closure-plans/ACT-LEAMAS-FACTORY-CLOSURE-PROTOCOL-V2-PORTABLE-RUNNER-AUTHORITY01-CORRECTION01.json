@@ -2,64 +2,223 @@
   "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION01",
   "baseline": {
-    "commit_oid": "5ed2420",
-    "note": "origin/main after invalid local closure preserved in rescue/portable-runner-authority01-invalid-local-cff1e12bb875"
+    "commit_oid": "5ed24202060fc2bbe1adc27140770fa3b614561b",
+    "tree_oid": "ce237fb71631806755ecd0729bc20ee6f6150050"
   },
-  "subject": {
-    "type": "commit_range",
-    "range": "origin/main"
-  },
-  "runner_authority": {
-    "mode": "subject_exact"
+  "execution": {
+    "mode": "serial_fail_fast"
   },
   "checks": [
     {
-      "check_id": "tool-release-exact-enforcement",
-      "description": "Verify pinned binary SHA-256 is enforced against actual executable",
-      "timeout_seconds": 300,
-      "command": ["go", "test", "-v", "-count=1", "./internal/factory/closure/...", "-run", "ToolReleaseExactBinaryEnforcement"]
+      "id": "pinned-binary-enforcement",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/factory/closure/...",
+        "-run",
+        "PinnedBinarySHA256Enforcement|ToolReleaseExact.*BinarySHA256"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
     },
     {
-      "check_id": "external-repo-proof",
-      "description": "Verify external repository test pattern matches actual tests",
-      "timeout_seconds": 60,
-      "command": ["go", "test", "-list", "PortableRunner|ExternalRepository|ToolReleaseExact", "./cmd/leamas/..."]
+      "id": "runner-authority-validation-wired",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/factory/closure/...",
+        "-run",
+        "PlanValidation.*RunnerAuthority|ToolReleaseExact.*Validation|RejectsMalformedRunnerAuthority"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
     },
     {
-      "check_id": "validate-runner-authority-wired",
-      "description": "Verify ValidateRunnerAuthority is called in plan validation",
-      "timeout_seconds": 60,
-      "command": ["grep", "-r", "ValidateRunnerAuthority", "./internal/factory/closure/", "--include=*.go"]
+      "id": "portable-selector-cardinality",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-list=.",
+        "./cmd/leamas/...",
+        "-run",
+        "^$"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
     },
     {
-      "check_id": "capability-declaration",
-      "description": "Verify portable-runner capability declared in required-capabilities",
-      "timeout_seconds": 30,
-      "command": ["grep", "-l", "portable-runner", ".factory/required-capabilities.json"]
+      "id": "external-repository-cli-proof",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./cmd/leamas/...",
+        "-run",
+        "PortableRunner.*ExternalRepository|ExternalRepository.*CLI"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
     },
     {
-      "check_id": "gate-fast",
-      "description": "Run standard gate-fast checks",
-      "timeout_seconds": 300,
-      "command": ["make", "gate-fast"]
+      "id": "portable-capability-contract",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/factory/authority/...",
+        "-run",
+        "PortableRunnerCapability|Capability.*Portable"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
     },
     {
-      "check_id": "gate-fast-shallow-clone",
-      "description": "Run gate-fast with shallow clone",
-      "timeout_seconds": 300,
-      "command": ["make", "gate-fast-shallow-clone"]
+      "id": "portable-negative-matrix",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/...",
+        "-run",
+        "WrongPinnedHash|BinarySubstitution|WrongTarget|SubstitutedBinary|RejectsToolReleaseExact"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
     },
     {
-      "check_id": "go-vet",
-      "description": "Run go vet on closure packages",
-      "timeout_seconds": 60,
-      "command": ["go", "vet", "./internal/factory/closure/...", "./internal/factory/authority/...", "./cmd/leamas/..."]
+      "id": "race-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/closure/...",
+        "./internal/factory/authority/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
     },
     {
-      "check_id": "diff-check",
-      "description": "Verify no whitespace errors in diff",
-      "timeout_seconds": 30,
-      "command": ["git", "diff", "--check", "HEAD^..HEAD"]
+      "id": "go-vet",
+      "mode": "run",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./internal/factory/authority/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "gate-fast-shallow-clone",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast-shallow-clone"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "subject-diff-check",
+      "mode": "run",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "HEAD^..HEAD"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "Correction is confined to runner authority enforcement, validation wiring, capability declaration, and external repository proof; no dupcode-owned source or baseline changed."
     }
-  ]
+  ],
+  "artifacts": [
+    {
+      "id": "manifest",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION01.json",
+      "required": true,
+      "max_bytes": 65536,
+      "media_type": "application/json"
+    },
+    {
+      "id": "report",
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION01.md",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "text/markdown"
+    }
+  ],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
 }
