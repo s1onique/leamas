@@ -77,7 +77,7 @@
         "CGO_ENABLED": "0"
       },
       "working_directory": ".",
-      "timeout_seconds": 900
+      "timeout_seconds": 600
     },
     {
       "id": "race-tests",
