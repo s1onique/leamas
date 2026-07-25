@@ -1,0 +1,81 @@
+{
+  "contract_version": 1,
+  "closure_protocol_version": 2,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-ONE-SUBJECT-ONE-CLOSURE01",
+  "plan": {
+    "sha256": "c531ec0b6054624d504c99d41a5169774f198500524e00cda3f63fbf9497e6f9",
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-ONE-SUBJECT-ONE-CLOSURE01.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "85dcc6e2d9154320dd6bb5e3ec48b531e4084a26",
+    "freeze_tree": "49f58e556e9dff7ba77ab3647bbb6131bb19610c",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-ONE-SUBJECT-ONE-CLOSURE01.json",
+    "plan_blob_oid": "79d303e8ff2ff37698697aaacd671a6f168bd6c7",
+    "plan_sha256": "c531ec0b6054624d504c99d41a5169774f198500524e00cda3f63fbf9497e6f9",
+    "subject_commit": "89be2ea8d5273c61a91a3d24ca47292bb9df1351"
+  },
+  "subject": {
+    "commit_oid": "89be2ea8d5273c61a91a3d24ca47292bb9df1351",
+    "tree_oid": "e1b7d00d37cc0417f9906f51d07e77e9a1d30339"
+  },
+  "runner_authority": {
+    "mode": "subject_exact"
+  },
+  "checks": [
+    {
+      "check_id": "go-test-count-1",
+      "subject_tree_oid": "e1b7d00d37cc0417f9906f51d07e77e9a1d30339",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/closure/...",
+        "./internal/factory/authority/...",
+        "./internal/factory/digest/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass",
+      "output_complete": true
+    },
+    {
+      "check_id": "gate-fast",
+      "subject_tree_oid": "e1b7d00d37cc0417f9906f51d07e77e9a1d30339",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "working_directory": ".",
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass",
+      "output_complete": true
+    },
+    {
+      "check_id": "subject-diff-check",
+      "subject_tree_oid": "e1b7d00d37cc0417f9906f51d07e77e9a1d30339",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "HEAD^..HEAD"
+      ],
+      "working_directory": ".",
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass",
+      "output_complete": true
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "verdict": "pass"
+}
