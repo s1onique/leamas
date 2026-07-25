@@ -2,7 +2,7 @@
   "contract_version": 1,
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01",
   "baseline": {
-    "commit_oid": "39a53b0c7f1c7e7f3e2c3e1f9c2d1a0b9c8d7e6f",
+    "commit_oid": "a1759e16666c19461975371c7c81366b58fab6dc",
     "tree_oid": "127f92e7ff53343c5e8ece6440267693c84595a0"
   },
   "execution": {
