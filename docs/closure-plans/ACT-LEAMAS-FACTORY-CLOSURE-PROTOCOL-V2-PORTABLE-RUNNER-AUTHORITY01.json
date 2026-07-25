@@ -1,0 +1,185 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01",
+  "baseline": {
+    "commit_oid": "c44e284db8ba7ffd5dc044716931dac65f31921b",
+    "tree_oid": "127f92e7ff53343c5e8ece6440267693c84595a0"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "focused-schema-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./internal/factory/closure/...",
+        "-run",
+        "RunnerAuthority|ToolReleaseExact|SubjectExact|Portable"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "repeated-authority-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=50",
+        "./internal/factory/closure/...",
+        "-run",
+        "RunnerAuthority|ToolReleaseExact|SubjectExact|Portable"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "subprocess-portable-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "./cmd/leamas/...",
+        "-run",
+        "PortableRunner|ExternalRepository|ToolReleaseExact"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "repeated-subprocess-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=10",
+        "./cmd/leamas/...",
+        "-run",
+        "PortableRunner|ExternalRepository|ToolReleaseExact"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 900
+    },
+    {
+      "id": "race-tests",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-race",
+        "-count=5",
+        "./internal/factory/closure/...",
+        "./internal/factory/authority/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "1"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "go-vet",
+      "mode": "run",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./internal/factory/authority/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "gate-fast-shallow-clone",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast-shallow-clone"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "diff-check",
+      "mode": "run",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "HEAD^..HEAD"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "Portable runner authority is schema/type/validation scoped; no dupcode-owned source or baseline changed."
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "manifest",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01.json",
+      "required": true,
+      "max_bytes": 65536,
+      "media_type": "application/json"
+    },
+    {
+      "id": "report",
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01.md",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "text/markdown"
+    }
+  ],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}
