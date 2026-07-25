@@ -10,6 +10,19 @@
   },
   "checks": [
     {
+      "id": "required-test-selector-cardinality",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "scripts/verify_portable_runner_test_selection.sh"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 120
+    },
+    {
       "id": "pinned-binary-enforcement",
       "mode": "run",
       "argv": [
@@ -44,20 +57,6 @@
       },
       "working_directory": ".",
       "timeout_seconds": 300
-    },
-    {
-      "id": "portable-selector-cardinality",
-      "mode": "run",
-      "argv": [
-        "bash",
-        "-c",
-        "set -euo pipefail; TESTS=$(go test -list 'TestPortableRunnerExternalRepositoryCLI' ./cmd/leamas/... 2>/dev/null | grep '^TestPortableRunnerExternalRepositoryCLI$'); if [ -z \"$TESTS\" ]; then echo \"FATAL: TestPortableRunnerExternalRepositoryCLI not found\"; exit 1; fi; COUNT=$(echo \"$TESTS\" | wc -l); if [ \"$COUNT\" -ne 1 ]; then echo \"FATAL: Expected 1 test, found $COUNT\"; exit 1; fi; echo \"PASS: Found exactly 1 required test: TestPortableRunnerExternalRepositoryCLI\""
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 120
     },
     {
       "id": "external-repository-cli-proof",
@@ -103,7 +102,6 @@
         "test",
         "-count=1",
         "-v",
-        "./internal/factory/closure",
         "./cmd/leamas",
         "-run",
         "^TestPortableRunnerNegativeAuthorityMatrix$"
