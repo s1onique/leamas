@@ -24,88 +24,12 @@
       "timeout_seconds": 120
     },
     {
-      "id": "pinned-binary-enforcement",
+      "id": "required-test-pass-no-skip",
       "mode": "run",
       "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-v",
-        "./internal/factory/closure",
-        "-run",
-        "^TestToolReleaseExactRejectsPlanPinnedBinaryMismatch$"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 300
-    },
-    {
-      "id": "runner-authority-validation-wired",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-v",
-        "./internal/factory/closure",
-        "-run",
-        "^TestPlanValidationRunnerAuthorityContract$"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 300
-    },
-    {
-      "id": "external-repository-cli-proof",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-v",
-        "./cmd/leamas",
-        "-run",
-        "^TestPortableRunnerExternalRepositoryCLI$"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 600
-    },
-    {
-      "id": "portable-capability-contract",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-v",
-        "./internal/factory/authority",
-        "-run",
-        "^TestPortableRunnerCapabilityContract$"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 300
-    },
-    {
-      "id": "portable-negative-matrix",
-      "mode": "run",
-      "argv": [
-        "go",
-        "test",
-        "-count=1",
-        "-v",
-        "./cmd/leamas",
-        "-run",
-        "^TestPortableRunnerNegativeAuthorityMatrix$"
+        "bash",
+        "-c",
+        "set -euo pipefail\nrequire_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${test_name}$\" \"$package\" >\"$output\"; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s in %s run=%s pass=%s skip=%s fail=%s\\n' \"$test_name\" \"$package\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s in %s\\n' \"$test_name\" \"$package\"\n}\nrequire_pass ./internal/factory/closure TestToolReleaseExactRejectsPlanPinnedBinaryMismatch\nrequire_pass ./internal/factory/closure TestPlanValidationRunnerAuthorityContract\nrequire_pass ./internal/factory/authority TestPortableRunnerCapabilityContract\nrequire_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI\nrequire_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix\necho 'All 5 required tests executed with run=1 pass=1 skip=0 fail=0'"
       ],
       "environment": {
         "CGO_ENABLED": "0"
