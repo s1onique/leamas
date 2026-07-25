@@ -3,7 +3,7 @@
 # Include long-test tier targets
 include make/long-tests.mk
 
-.PHONY: help gate gate-fast gate-dupcode gate-canonical gate-context-guard
+.PHONY: help gate gate-fast gate-dupcode gate-canonical gate-context-guard gate-fast-shallow-clone
 .PHONY: factorize factorize-canonical factorize-context-guard
 .PHONY: test test-fast test-long test-long-dupcode clean digest verify-doctrine verify-factory
 .PHONY: verify-forbidden verify-single-lang verify-static verify-agent-doctrine

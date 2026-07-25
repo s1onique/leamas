@@ -65,7 +65,9 @@ type RequiredCapabilities struct {
 }
 
 // LoadRequired parses the JSON manifest at path. Missing files
-// return an empty RequiredCapabilities with nil Raw.
+// return an empty RequiredCapabilities with nil Raw. Production
+// consumers that need a mandatory manifest should use
+// LoadRequiredCanonical instead.
 func LoadRequired(path string) (*RequiredCapabilities, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -75,6 +77,25 @@ func LoadRequired(path string) (*RequiredCapabilities, error) {
 		return nil, fmt.Errorf("read required capabilities: %w", err)
 	}
 	return parseRequired(data)
+}
+
+// LoadRequiredCanonical parses the JSON manifest at path and fails
+// closed when the file is missing. The canonical required-capabilities
+// file is mandatory inside a Leamas source repository; loading
+// silently must not become empty success.
+func LoadRequiredCanonical(path string) (*RequiredCapabilities, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read required capabilities: %w", err)
+	}
+	rc, err := parseRequired(data)
+	if err != nil {
+		return nil, err
+	}
+	if rc.Raw == nil {
+		rc.Raw = map[string]int{}
+	}
+	return rc, nil
 }
 
 func parseRequired(data []byte) (*RequiredCapabilities, error) {

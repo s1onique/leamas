@@ -27,6 +27,17 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Topology snapshot
+        # Make the checkout topology visible so CI failures can be
+        # diagnosed against an explicit depth, branch, and worktree
+        # status. The fast lane must pass from a shallow checkout
+        # without depending on historical unreachable objects.
+        run: |
+          git rev-parse --is-shallow-repository
+          git rev-parse HEAD
+          git status --short
+          echo "branch=$(git branch --show-current)"
+
       - name: Bootstrap git hooks
         run: make bootstrap
 
@@ -37,6 +48,31 @@ jobs:
 
       - name: Run gate-fast
         run: make gate-fast
+
+  factory-fresh-clone-portability:
+    name: Factory Fresh-Clone Portability
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Build source binary in worktree
+        run: |
+          mkdir -p bin
+          CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
+
+      - name: Run gate-fast in depth-one clone
+        # Reproduce the CI fast lane against a depth-one clone of a
+        # local bare remote. The clone has no fetches to GitHub, no
+        # full history, and no alternates; gate-fast must pass.
+        run: make gate-fast-shallow-clone
 
   factory-dupcode:
     name: Factory Dupcode

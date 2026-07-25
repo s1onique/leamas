@@ -7,8 +7,10 @@
 // The contract is required by
 // ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01.
 //
-// Tests in this file are independent of the closure plan / manifest
-// pipeline so they exercise the validation contract in isolation.
+// Tests in this file validate the canonical declared facts in the
+// erratum document. They do NOT depend on the continued reachability
+// of the predecessor historical Git objects; the erratum itself
+// classifies the original binding as UNBOUND/UNAVAILABLE.
 package closure
 
 import (
@@ -17,64 +19,84 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/s1onique/leamas/internal/factory/authority"
 )
 
-// TestLifecycleErratumSchema covers the JSON shape and required
-// fields of the lifecycle erratum for the predecessor ACT.
-//
-// The erratum must be a real file in the repository, not a fabricated
-// placeholder, and it must classify the predecessor ACT's lifecycle
-// as INVALID rather than as a generic CLOSED or VERIFIED status.
-func TestLifecycleErratumSchema(t *testing.T) {
-	// Resolve the repository root from this test file's package.
+// resolveErratumPath returns the canonical path to the recorded
+// lifecycle erratum.
+func resolveErratumPath(t *testing.T) string {
+	t.Helper()
+	root := findLeamasRepoRoot(t)
+	return filepath.Join(root, "docs", "lifecycle-errata",
+		"ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01.json")
+}
+
+// findLeamasRepoRoot locates the Leamas repository root by walking
+// up from this test file's package directory until it finds the
+// first directory containing `docs/lifecycle-errata`.
+func findLeamasRepoRoot(t *testing.T) string {
+	t.Helper()
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	repoRoot := filepath.Clean(filepath.Join(wd, "..", "..", ".."))
+	dir := wd
+	for i := 0; i < 8; i++ {
+		candidate := filepath.Join(dir, "docs", "lifecycle-errata")
+		if info, statErr := os.Stat(candidate); statErr == nil && info.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatalf("could not locate Leamas repository root from %s", wd)
+	return ""
+}
 
-	path := filepath.Join(repoRoot, "docs", "lifecycle-errata",
-		"ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01.json")
+// loadErratumDocument reads and unmarshals the canonical erratum.
+func loadErratumDocument(t *testing.T) map[string]any {
+	t.Helper()
+	path := resolveErratumPath(t)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read lifecycle erratum %s: %v", path, err)
 	}
-
-	var got map[string]any
-	if err := json.Unmarshal(data, &got); err != nil {
+	var doc map[string]any
+	if err := json.Unmarshal(data, &doc); err != nil {
 		t.Fatalf("lifecycle erratum is not valid JSON: %v", err)
 	}
-	if got["kind"] != "lifecycle_erratum" {
-		t.Fatalf("kind=%v want lifecycle_erratum", got["kind"])
-	}
-	if got["act_id"] != "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01" {
-		t.Fatalf("act_id=%v", got["act_id"])
-	}
-	if got["recorded_by"] != "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01" {
-		t.Fatalf("recorded_by=%v", got["recorded_by"])
-	}
+	return doc
+}
 
-	// declared_subject exists-in-repository must be false.
-	decl, ok := got["declared_subject"].(map[string]any)
+// TestLifecycleErratumSchema covers the JSON shape and required
+// fields of the lifecycle erratum for the predecessor ACT.
+func TestLifecycleErratumSchema(t *testing.T) {
+	doc := loadErratumDocument(t)
+	if doc["kind"] != "lifecycle_erratum" {
+		t.Fatalf("kind=%v want lifecycle_erratum", doc["kind"])
+	}
+	if doc["act_id"] != "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01" {
+		t.Fatalf("act_id=%v", doc["act_id"])
+	}
+	if doc["recorded_by"] != "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01" {
+		t.Fatalf("recorded_by=%v", doc["recorded_by"])
+	}
+	decl, ok := doc["declared_subject"].(map[string]any)
 	if !ok {
 		t.Fatalf("declared_subject missing or wrong type")
 	}
 	if exists, ok := decl["exists_in_repository"].(bool); !ok || exists {
 		t.Fatalf("declared_subject.exists_in_repository=%v want false", decl["exists_in_repository"])
 	}
-
-	// historical_closure.status must be INVALID.
-	hc, ok := got["historical_closure"].(map[string]any)
+	hc, ok := doc["historical_closure"].(map[string]any)
 	if !ok {
 		t.Fatalf("historical_closure missing or wrong type")
 	}
 	if hc["status"] != "INVALID" {
 		t.Fatalf("historical_closure.status=%v want INVALID", hc["status"])
 	}
-
-	// historical_closure.reasons must list the six documented reasons.
 	reasons, ok := hc["reasons"].([]any)
 	if !ok {
 		t.Fatalf("historical_closure.reasons missing or wrong type")
@@ -101,30 +123,22 @@ func TestLifecycleErratumSchema(t *testing.T) {
 			t.Fatalf("historical_closure.reasons missing %q (got %v)", reason, reasons)
 		}
 	}
-
-	// historical_verification.status must be UNBOUND.
-	hv, ok := got["historical_verification"].(map[string]any)
+	hv, ok := doc["historical_verification"].(map[string]any)
 	if !ok || hv["status"] != "UNBOUND" {
 		t.Fatalf("historical_verification.status=%v want UNBOUND", hv)
 	}
-
-	// production_implementation.status must be RETAINED.
-	pi, ok := got["production_implementation"].(map[string]any)
+	pi, ok := doc["production_implementation"].(map[string]any)
 	if !ok || pi["status"] != "RETAINED" {
-		t.Fatalf("production_implementation.status=%v want RETAINED", pi)
+		t.Fatalf("production_implementation.status=%v want RETAINED", pi["status"])
 	}
-
-	// prior_closure_claim.withdrawn must be true.
-	pcc, ok := got["prior_closure_claim"].(map[string]any)
+	pcc, ok := doc["prior_closure_claim"].(map[string]any)
 	if !ok {
 		t.Fatalf("prior_closure_claim missing")
 	}
 	if w, ok := pcc["withdrawn"].(bool); !ok || !w {
 		t.Fatalf("prior_closure_claim.withdrawn=%v want true", pcc["withdrawn"])
 	}
-
-	// do_not_reclassify must contain VERIFIED, CLOSED_LOCAL, PUBLISHED.
-	dnr, ok := got["do_not_reclassify"].([]any)
+	dnr, ok := doc["do_not_reclassify"].([]any)
 	if !ok {
 		t.Fatalf("do_not_reclassify missing")
 	}
@@ -142,51 +156,171 @@ func TestLifecycleErratumSchema(t *testing.T) {
 	}
 }
 
-// TestLifecycleErratumSubjectCommitResolvesAsCommit asserts the
-// actual S0 OID recorded in the erratum resolves as a real Git
-// commit object. This is the key predicate that distinguishes a
-// truthful erratum from a fabricated one.
-func TestLifecycleErratumSubjectCommitResolvesAsCommit(t *testing.T) {
-	const subject = "06c51158d104c20eec389736a2a0bcff06743630"
-	if err := assertCommitResolves(subject); err != nil {
-		t.Fatalf("%v", err)
+// TestLifecycleErratumRecordsActualSubjectIdentity covers the
+// document-contract claim that the actual implementation commit
+// (the production subject retained after the historical correction)
+// is recorded as a structured field. The test does not assert that
+// the historical Git object remains reachable in a fresh or shallow
+// clone; it validates that the erratum JSON retains the recorded
+// identity unchanged.
+func TestLifecycleErratumRecordsActualSubjectIdentity(t *testing.T) {
+	doc := loadErratumDocument(t)
+	impl, ok := doc["implementation"].(map[string]any)
+	if !ok {
+		t.Fatalf("implementation block missing")
+	}
+	commit, ok := impl["commit"].(string)
+	if !ok || commit == "" {
+		t.Fatalf("implementation.commit missing or empty")
+	}
+	if !looksLikeOID(commit) {
+		t.Fatalf("implementation.commit %q is not a 40-char hex OID", commit)
+	}
+	tree, ok := impl["tree"].(string)
+	if !ok || tree == "" {
+		t.Fatalf("implementation.tree missing or empty")
+	}
+	if !looksLikeOID(tree) {
+		t.Fatalf("implementation.tree %q is not a 40-char hex OID", tree)
+	}
+	if status, _ := impl["status"].(string); !containsAnyLower(status,
+		"retained", "implemented", "implementation") {
+		t.Fatalf("implementation.status=%q must acknowledge retained/implemented state", status)
 	}
 }
 
-// TestLifecycleErratumDeclaredSubjectDoesNotResolve asserts the
-// declared-but-nonexistent OID fails the same resolver. This is the
-// inverse of the previous test and pins the historical defect.
-func TestLifecycleErratumDeclaredSubjectDoesNotResolve(t *testing.T) {
-	const declared = "06c5115a5d2e7c4f4a26f5c1e3b9a8d7c6e5f4a3"
-	_, err := authority.DefaultGitRunner(".", "cat-file", "-e", declared)
-	if err == nil {
-		t.Fatalf("declared subject %q must not resolve as a commit", declared)
+// TestLifecycleErratumRecordsProductionTree covers the assertion
+// that the recorded production tree OID is committed text inside
+// the erratum document and matches the documented 40-char hex shape.
+// The test does NOT invoke `git rev-parse` against any unreachable
+// Git object; that contract is delegated to the optional retention
+// audit defined in ACT-LEAMAS-FACTORY-GATE-FAST-CI-PORTABILITY01 §8.5.
+func TestLifecycleErratumRecordsProductionTree(t *testing.T) {
+	doc := loadErratumDocument(t)
+	impl, ok := doc["implementation"].(map[string]any)
+	if !ok {
+		t.Fatalf("implementation block missing")
 	}
-	if !strings.Contains(err.Error(), "exit") {
-		t.Fatalf("expected git failure, got %v", err)
+	gotTree, ok := impl["tree"].(string)
+	if !ok {
+		t.Fatalf("implementation.tree missing")
+	}
+	wantTree := "897587b88dc06a6f40d68c796f4ed186dbd91b6e"
+	if gotTree != wantTree {
+		t.Fatalf("implementation.tree=%q want=%q", gotTree, wantTree)
+	}
+	hc, ok := doc["historical_closure"].(map[string]any)
+	if !ok {
+		t.Fatalf("historical_closure missing")
+	}
+	firstTree, ok := hc["first_plan_appearance_tree"].(string)
+	if !ok || !looksLikeOID(firstTree) {
+		t.Fatalf("historical_closure.first_plan_appearance_tree=%v want OID", firstTree)
 	}
 }
 
-// TestLifecycleErratumProductionTreeMatches asserts the recorded
-// production tree OID matches the actual tree of the recorded
-// production subject commit. This pins the relationship between the
-// erratum and the real Git history.
-func TestLifecycleErratumProductionTreeMatches(t *testing.T) {
-	const subject = "06c51158d104c20eec389736a2a0bcff06743630"
-	const tree = "897587b88dc06a6f40d68c796f4ed186dbd91b6e"
-	out, err := authority.DefaultGitRunner(".", "rev-parse", subject+"^{tree}")
-	if err != nil {
-		t.Fatalf("rev-parse %s^{tree}: %v", subject, err)
+// TestLifecycleErratumRecordsUnavailableOriginalBinding covers
+// the contract that the canonical verification status of the
+// predecessor is UNBOUND, and the recorded note states that the
+// historical verification claim is unavailable.
+func TestLifecycleErratumRecordsUnavailableOriginalBinding(t *testing.T) {
+	doc := loadErratumDocument(t)
+	hv, ok := doc["historical_verification"].(map[string]any)
+	if !ok {
+		t.Fatalf("historical_verification missing")
 	}
-	if strings.TrimSpace(out) != tree {
-		t.Fatalf("erratum tree=%s != git %s^{tree}=%s", tree, subject, out)
+	if hv["status"] != "UNBOUND" {
+		t.Fatalf("historical_verification.status=%q want UNBOUND", hv["status"])
+	}
+	note, _ := hv["note"].(string)
+	if note == "" {
+		t.Fatalf("historical_verification.note missing")
+	}
+	if !containsAnyLower(note, "unavailable", "no verifiable") {
+		t.Fatalf("historical_verification.note=%q must declare unavailable binding", note)
+	}
+	decl, ok := doc["declared_subject"].(map[string]any)
+	if !ok {
+		t.Fatalf("declared_subject missing")
+	}
+	commit, ok := decl["commit"].(string)
+	if !ok || !looksLikeOID(commit) {
+		t.Fatalf("declared_subject.commit missing or wrong shape")
 	}
 }
 
-// assertCommitResolves asserts the given 40-char hex commit OID
-// resolves to a real Git object. It uses `git cat-file -e`, which
-// exits non-zero when the object is missing.
-func assertCommitResolves(oid string) error {
-	_, err := authority.DefaultGitRunner(".", "cat-file", "-e", oid)
-	return err
+// TestLifecycleErratumRecordsPlanAppearanceCommit covers the
+// recorded first-appearance commit for the predecessor plan.
+func TestLifecycleErratumRecordsPlanAppearanceCommit(t *testing.T) {
+	doc := loadErratumDocument(t)
+	hc, ok := doc["historical_closure"].(map[string]any)
+	if !ok {
+		t.Fatalf("historical_closure missing")
+	}
+	want := "d20fc2c0f856b8a99330b626cd87fd256dc0a931"
+	if got, _ := hc["first_plan_appearance_commit"].(string); got != want {
+		t.Fatalf("first_plan_appearance_commit=%q want=%q", got, want)
+	}
+	if got, _ := hc["first_plan_appearance_tree"].(string); !looksLikeOID(got) {
+		t.Fatalf("first_plan_appearance_tree=%v want OID", got)
+	}
+	placeholderField, _ := hc["plan_placeholder_field"].(string)
+	if placeholderField != "baseline.tree_oid" {
+		t.Fatalf("plan_placeholder_field=%q want=baseline.tree_oid", placeholderField)
+	}
+	if got, _ := hc["plan_placeholder_value"].(string); !strings.Contains(got, "TO_BE") {
+		t.Fatalf("plan_placeholder_value=%q must record the unresolved token", got)
+	}
+}
+
+// TestLifecycleErratumRecordsForwardRequalification covers the
+// recorded forward-requalification identity.
+func TestLifecycleErratumRecordsForwardRequalification(t *testing.T) {
+	doc := loadErratumDocument(t)
+	fr, ok := doc["forward_requalification"].(map[string]any)
+	if !ok {
+		t.Fatalf("forward_requalification missing")
+	}
+	wantActID := "ACT-LEAMAS-FACTORY-SELF-HOSTED-ENTRYPOINT-AUTHORITY01-CORRECTION01"
+	if got, _ := fr["act_id"].(string); got != wantActID {
+		t.Fatalf("act_id=%q want=%q", got, wantActID)
+	}
+	wantTag := "act/leamas-factory-self-hosted-entrypoint-authority01-correction01"
+	if got, _ := fr["tag_name"].(string); got != wantTag {
+		t.Fatalf("tag_name=%q want=%q", got, wantTag)
+	}
+	note, _ := fr["note"].(string)
+	if !strings.Contains(note, "manifest") {
+		t.Fatalf("forward_requalification.note=%q must defer identities to manifest", note)
+	}
+}
+
+// looksLikeOID returns true when s is a 40-char lower/upper-case
+// hex string.
+func looksLikeOID(s string) bool {
+	if len(s) != 40 {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= '0' && r <= '9':
+		case r >= 'a' && r <= 'f':
+		case r >= 'A' && r <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// containsAnyLower reports whether s (lowercased) contains any of
+// the supplied substrings (also lowercased).
+func containsAnyLower(s string, subs ...string) bool {
+	ls := strings.ToLower(s)
+	for _, sub := range subs {
+		if strings.Contains(ls, strings.ToLower(sub)) {
+			return true
+		}
+	}
+	return false
 }

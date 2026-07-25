@@ -92,17 +92,27 @@ func TestPlanRejectsUnknownFields(t *testing.T) {
 }
 
 // TestCorrection01PlanFreezePredecessorOrdering covers acceptance
-// criterion #5: the predecessor closure plan first appeared AFTER
-// the predecessor subject. This is the historical defect that
-// motivates the forward requalification.
+// criterion #5: when a predecessor plan appears AFTER the
+// predecessor subject, the resulting forward-requalification
+// patch must adopt a freeze commit that acknowledges the temporal
+// ordering. The semantic check exercised here is the merge-base
+// ancestry relation; the production lookup is asserted on a
+// temporary repository so the test does not depend on the
+// presence of any particular Git object outside what the test
+// itself creates.
 func TestCorrection01PlanFreezePredecessorOrdering(t *testing.T) {
-	const (
-		predecessorSubject   = "06c51158d104c20eec389736a2a0bcff06743630"
-		predecessorPlanFirst = "d20fc2c0f856b8a99330b626cd87fd256dc0a931"
-	)
-	if !isAncestorGit(".", predecessorSubject, predecessorPlanFirst) {
-		t.Fatalf("predecessor plan %s must be a descendant of predecessor subject %s",
-			predecessorPlanFirst, predecessorSubject)
+	fx := newTemporaryGitFixture(t)
+	if ok, err := fx.isAncestor(t, fx.oids["S0"], fx.oids["E0"]); !ok {
+		t.Fatalf("merge-base --is-ancestor(S0=%s, E0=%s) failed: %v",
+			fx.oids["S0"], fx.oids["E0"], err)
+	}
+	if ok, _ := fx.isAncestor(t, fx.oids["E0"], fx.oids["S0"]); ok {
+		t.Fatalf("merge-base --is-ancestor(E0=%s, S0=%s) must be false",
+			fx.oids["E0"], fx.oids["S0"])
+	}
+	bogus := strings.Repeat("0", 40)
+	if ok, err := fx.isAncestor(t, bogus, fx.oids["E0"]); ok || err == nil {
+		t.Fatalf("merge-base must reject nonexistent ancestor (ok=%v, err=%v)", ok, err)
 	}
 }
 

@@ -63,16 +63,22 @@ func TestSnapshotEmbeddedIsSortedDeterministic(t *testing.T) {
 }
 
 // TestRequiredCapabilitiesFileSatisfiedByProduction pins the
-// contract between the repository's required-capabilities
-// declaration and the production table.
+// canonical-repository contract: the production required-capabilities
+// file is mandatory, must load strictly, and must declare every
+// canonical Leamas capability with a level the running binary
+// satisfies.
+//
+// The repository root is resolved through the authoritative
+// FindRepositoryRoot helper so the test does not silently snap to
+// a wrong directory when the package test working directory shifts
+// (shallow clone, different module layout, symlink, etc.).
 func TestRequiredCapabilitiesFileSatisfiedByProduction(t *testing.T) {
-	wd, err := os.Getwd()
+	repoRoot, err := FindRepositoryRoot("")
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("FindRepositoryRoot: %v", err)
 	}
-	repoRoot := filepath.Clean(filepath.Join(wd, "..", "..", ".."))
 	path := DefaultPath(repoRoot)
-	required, err := LoadRequired(path)
+	required, err := LoadRequiredCanonical(path)
 	if err != nil {
 		t.Fatalf("load required capabilities from %s: %v", path, err)
 	}
@@ -162,9 +168,8 @@ func TestSymlinkedCanonicalBinaryIsResolved(t *testing.T) {
 // discoverable in PATH, the doctor surfaces an ambiguity diagnostic.
 //
 // The test pins the predicate `len(entries) >= 2` using the
-// production-discoverable helper `discoverPATHExecutables`. The
-// helper returns at most `maxEntries` candidates to bound the
-// surface and avoid surprising system-wide scans.
+// production seam discoverPATHExecutablesFrom. The scanner never
+// touches process-global PATH state.
 func TestDiscoverPATHAmbiguityReturnsMultiple(t *testing.T) {
 	dir := t.TempDir()
 	first := filepath.Join(dir, "leamas")
@@ -173,37 +178,16 @@ func TestDiscoverPATHAmbiguityReturnsMultiple(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	for _, p := range []string{first, second} {
-		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		if err := os.WriteFile(p, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 			t.Fatalf("write %s: %v", p, err)
+		}
+		if err := os.Chmod(p, 0o755); err != nil {
+			t.Fatalf("chmod %s: %v", p, err)
 		}
 	}
 	path := dir + string(os.PathListSeparator) + filepath.Dir(second)
-	entries := discoverPATHExecutablesForName("leamas", []string{path})
+	entries := discoverPATHExecutablesFrom("leamas", path, os.Stat)
 	if len(entries) < 2 {
 		t.Fatalf("entries=%v want at least two", entries)
 	}
-}
-
-// discoverPATHExecutablesForName mirrors the production helper's
-// behavior: scan PATH for executables whose basename matches name.
-// It returns at most `maxEntries` entries (capped to keep the test
-// surface bounded).
-func discoverPATHExecutablesForName(name string, paths []string) []string {
-	const maxEntries = 16
-	var out []string
-	for _, p := range paths {
-		for _, segment := range strings.Split(p, string(os.PathListSeparator)) {
-			if segment == "" {
-				continue
-			}
-			candidate := filepath.Join(segment, name)
-			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
-				out = append(out, candidate)
-				if len(out) >= maxEntries {
-					return out
-				}
-			}
-		}
-	}
-	return out
 }

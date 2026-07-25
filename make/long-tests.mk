@@ -150,3 +150,17 @@ factorize:
 	@echo "Running factory factorize..."
 	@chmod +x scripts/verify_*.sh
 	@go run ./cmd/leamas factory factorize
+
+# gate-fast-shallow-clone qualifies gate-fast under a depth-one
+# clone built from a local bare remote. It is the gate that
+# proves CI reproduction without depending on the source
+# repository's object directory.
+#
+# The script uses file:// + --depth=1 so Git performs a real
+# network-style clone and treats the resulting repository as
+# shallow; this exercises the fast lane against the same
+# checkout topology GitHub Actions provides.
+.PHONY: gate-fast-shallow-clone
+gate-fast-shallow-clone:
+	@chmod +x scripts/gate_fast_shallow_clone.sh
+	@scripts/gate_fast_shallow_clone.sh

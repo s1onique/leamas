@@ -142,34 +142,31 @@ func TestCheckExecutable_NoRepositoryRoot(t *testing.T) {
 }
 
 // TestDiscoverPATHExecutablesMultiple asserts scenario 6: multiple
-// leamas executables exist in PATH. The helper is defined in the
-// cmd/leamas package; this test asserts the same PATH semantics at
-// the authority-package level using direct os.Stat.
+// leamas executables exist in PATH. The test drives the explicit
+// production seam and never mutates process-global PATH state.
 func TestDiscoverPATHExecutablesMultiple(t *testing.T) {
-	dir := t.TempDir()
-	a := filepath.Join(dir, "a")
-	b := filepath.Join(dir, "b")
-	for _, p := range []string{a, b} {
-		if err := os.WriteFile(p, []byte("#!/bin/sh\n"), 0o755); err != nil {
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	candA := filepath.Join(dirA, "leamas")
+	candB := filepath.Join(dirB, "leamas")
+	for _, p := range []string{candA, candB} {
+		if err := os.WriteFile(p, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-	}
-	prev := os.Getenv("PATH")
-	t.Setenv("PATH", a+string(os.PathListSeparator)+b+string(os.PathListSeparator)+prev)
-	defer func() { _ = os.Setenv("PATH", prev) }()
-
-	count := 0
-	for _, dirEntry := range strings.Split(os.Getenv("PATH"), string(os.PathListSeparator)) {
-		if dirEntry == "" {
-			continue
-		}
-		candidate := filepath.Join(dirEntry, "leamas")
-		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
-			count++
+		if err := os.Chmod(p, 0o755); err != nil {
+			t.Fatalf("chmod: %v", err)
 		}
 	}
-	if count < 2 {
-		t.Fatalf("expected at least 2 hits, got %d", count)
+	pathValue := strings.Join([]string{dirA, dirB}, string(os.PathListSeparator))
+	got := discoverPATHExecutablesFrom("leamas", pathValue, os.Stat)
+	if len(got) != 2 {
+		t.Fatalf("got %d hits, want exactly 2", len(got))
+	}
+	want := []string{candA, candB}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got[%d]=%q want %q", i, got[i], want[i])
+		}
 	}
 }
 
