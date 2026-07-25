@@ -20,12 +20,30 @@ type gitCommandResult struct {
 
 type gitClient interface {
 	Run(context.Context, string, ...string) gitCommandResult
+	RunWithStdin(context.Context, string, string, ...string) gitCommandResult
+	RunWithEnv(context.Context, string, []string, ...string) gitCommandResult
+	RunWithStdinAndEnv(context.Context, string, string, []string, ...string) gitCommandResult
 }
 
 type RealGit struct{}
 
 func (RealGit) Run(ctx context.Context, directory string, args ...string) gitCommandResult {
 	result, err := execution.RunGit(ctx, directory, args...)
+	return gitCommandResult{Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Err: err}
+}
+
+func (RealGit) RunWithStdin(ctx context.Context, directory, stdin string, args ...string) gitCommandResult {
+	result, err := execution.RunGitWithStdin(ctx, directory, stdin, args...)
+	return gitCommandResult{Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Err: err}
+}
+
+func (RealGit) RunWithEnv(ctx context.Context, directory string, env []string, args ...string) gitCommandResult {
+	result, err := execution.RunGitWithEnv(ctx, directory, env, args...)
+	return gitCommandResult{Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Err: err}
+}
+
+func (RealGit) RunWithStdinAndEnv(ctx context.Context, directory, stdin string, env []string, args ...string) gitCommandResult {
+	result, err := execution.RunGitWithStdinAndEnv(ctx, directory, stdin, env, args...)
 	return gitCommandResult{Stdout: result.Stdout, Stderr: result.Stderr, ExitCode: result.ExitCode, Err: err}
 }
 

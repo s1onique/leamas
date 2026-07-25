@@ -82,6 +82,43 @@ func TestClosureCLIEndToEndSubprocess(t *testing.T) {
 		"--tag", tagName)
 }
 
+func TestClosureCLIV2StaleRunnerRejectionLeavesRepositoryUnchanged(t *testing.T) {
+	binary := buildLeamasForTest(t)
+	repository, planPath, _, subject := prepareClosureCLIRepository(t)
+	headBefore := gitForClosureTest(t, repository, "rev-parse", "HEAD")
+
+	stdout, stderr, err := runClosureSubprocess(binary, repository,
+		"factory", "close", "run", "--protocol", "v2",
+		"--plan", planPath,
+		"--subject", subject)
+	if err == nil {
+		t.Fatalf("v2 stale runner unexpectedly succeeded: stdout=%q stderr=%q", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "runner") {
+		t.Fatalf("stderr = %q, want runner authority rejection", stderr)
+	}
+	if headAfter := gitForClosureTest(t, repository, "rev-parse", "HEAD"); headAfter != headBefore {
+		t.Fatalf("HEAD changed from %s to %s", headBefore, headAfter)
+	}
+
+	assertClosurePathAbsent(t, filepath.Join(repository, ".factory", "closure-evidence", "ACT-LEAMAS-CLI-SUBPROCESS01", subject))
+	assertClosurePathAbsent(t, filepath.Join(repository, "docs", "closure-manifests", "ACT-LEAMAS-CLI-SUBPROCESS01.json"))
+	assertClosurePathAbsent(t, filepath.Join(repository, "docs", "close-reports", "ACT-LEAMAS-CLI-SUBPROCESS01.md"))
+
+	command := exec.Command("git", "show-ref", "--verify", "--quiet", "refs/tags/act/act-leamas-cli-subprocess01")
+	command.Dir = repository
+	if err := command.Run(); err == nil {
+		t.Fatal("v2 rejection created closure tag")
+	}
+}
+
+func assertClosurePathAbsent(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("path %s exists or cannot be classified: %v", path, err)
+	}
+}
+
 func TestClosureCLIMissingSubcommand(t *testing.T) {
 	binary := buildLeamasForTest(t)
 	command := exec.Command(binary, "factory", "close")

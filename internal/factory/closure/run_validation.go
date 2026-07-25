@@ -50,6 +50,13 @@ func validateBaselineIdentity(ctx context.Context, git gitClient, root string, b
 	return nil
 }
 
+// evaluateRequiredPatchHygiene is the Closure Protocol v1 (legacy
+// run.go path) entry point. Its range is the historical ACT scope
+// plan.baseline..HEAD, which is appropriate for the legacy single
+// manifest model but is NOT what the v2 orchestrator uses. See
+// PolicyRangeDecision in run_v2_policy.go for the explicit v2
+// distinction: v2 patch hygiene is F..S; v1 patch hygiene is
+// plan.baseline..HEAD.
 func evaluateRequiredPatchHygiene(ctx context.Context, git gitClient, root string, plan Plan) (PatchHygiene, []byte) {
 	if !*plan.Policy.RequireDiffCheck {
 		return PatchHygiene{Status: CheckStatusPass}, nil

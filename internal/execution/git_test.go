@@ -221,7 +221,7 @@ func TestRunGitWithLimits_BothStreams(t *testing.T) {
 		for i in $(seq 1 50); do echo "stderr-$i" >&2; done &
 		wait
 	`
-	result, err := runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 16384, "-c", script)
+	result, err := runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 16384, "", nil, "-c", script)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -253,7 +253,7 @@ func TestBoundedWriter_OnOverflowCallback(t *testing.T) {
 // TestRunGitWithLimits exercises the test seam with deterministic limits.
 func TestRunGitWithLimits_Success(t *testing.T) {
 	ctx := context.Background()
-	result, err := runCommandWithLimits(ctx, "true", ".", 5*time.Second, 1024)
+	result, err := runCommandWithLimits(ctx, "true", ".", 5*time.Second, 1024, "", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -265,7 +265,7 @@ func TestRunGitWithLimits_Success(t *testing.T) {
 func TestRunGitWithLimits_Overflow(t *testing.T) {
 	// Use /bin/sh -c 'yes' to overflow the output limit
 	ctx := context.Background()
-	_, err := runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 100, "-c", "yes | head -c 1000")
+	_, err := runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 100, "", nil, "-c", "yes | head -c 1000")
 	if err == nil {
 		t.Error("expected ErrOutputLimit")
 	}
@@ -296,7 +296,7 @@ func TestAtomicBool(t *testing.T) {
 // the code path: if waitErr is nil and overflow is false, we return (nil).
 func TestRunGitWithLimits_RejectsBadClassification(t *testing.T) {
 	ctx := context.Background()
-	result, err := runCommandWithLimits(ctx, "true", ".", 5*time.Second, 1024)
+	result, err := runCommandWithLimits(ctx, "true", ".", 5*time.Second, 1024, "", nil)
 	if err != nil {
 		t.Fatalf("expected no error for true, got %v", err)
 	}
@@ -312,7 +312,7 @@ func TestRunGitWithLimits_DefaultTimeoutEnforced(t *testing.T) {
 	// Use a helper that would run forever if not killed
 	ctx := context.Background()
 	start := time.Now()
-	_, err := runCommandWithLimits(ctx, "sleep", ".", 100*time.Millisecond, 1024, "60")
+	_, err := runCommandWithLimits(ctx, "sleep", ".", 100*time.Millisecond, 1024, "", nil, "60")
 	elapsed := time.Since(start)
 
 	if err == nil {
@@ -341,7 +341,7 @@ func TestRunGitWithLimits_RetainedPipeBound(t *testing.T) {
 	`
 	ctx := context.Background()
 	start := time.Now()
-	_, _ = runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 1024, "-c", script)
+	_, _ = runCommandWithLimits(ctx, "/bin/sh", ".", 5*time.Second, 1024, "", nil, "-c", script)
 	elapsed := time.Since(start)
 
 	// With DefaultGitWaitDelay = 2s, RunGit should return within 3 seconds
@@ -362,7 +362,7 @@ func TestRunGitWithLimits_ExplicitCancellation(t *testing.T) {
 	}()
 
 	start := time.Now()
-	_, err := runCommandWithLimits(ctx, "sleep", ".", 30*time.Second, 1024, "60")
+	_, err := runCommandWithLimits(ctx, "sleep", ".", 30*time.Second, 1024, "", nil, "60")
 	elapsed := time.Since(start)
 
 	if err == nil {

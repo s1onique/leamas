@@ -45,6 +45,20 @@ func LoadPlan(path string) (Plan, []byte, error) {
 	return plan, data, nil
 }
 
+// LoadPlanFromBytes parses plan bytes without reading from the filesystem.
+// It enforces the size bound and strict JSON syntax only; callers that need
+// an executable plan must subsequently invoke ValidatePlan explicitly.
+func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
+	if len(data) > MaxPlanBytes {
+		return Plan{}, nil, fmt.Errorf("plan exceeds maximum size: %d > %d", len(data), MaxPlanBytes)
+	}
+	var plan Plan
+	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
+		return Plan{}, nil, fmt.Errorf("decode closure plan: %w", err)
+	}
+	return plan, data, nil
+}
+
 func ValidatePlan(plan Plan) error {
 	if plan.ContractVersion != ContractVersionV1 {
 		return fmt.Errorf("unsupported closure plan contract_version %d", plan.ContractVersion)

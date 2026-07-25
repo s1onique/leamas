@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -50,7 +52,22 @@ type GitResult struct {
 //   - process termination on timeout/cancellation
 //   - explicit exit status preservation
 func RunGit(ctx context.Context, dir string, args ...string) (GitResult, error) {
-	return runCommandWithLimits(ctx, "git", dir, DefaultGitTimeout, int(DefaultOutputLimit), args...)
+	return runCommandWithLimits(ctx, "git", dir, DefaultGitTimeout, int(DefaultOutputLimit), "", nil, args...)
+}
+
+// RunGitWithStdin runs a git command with stdin input and full bounded execution.
+func RunGitWithStdin(ctx context.Context, dir, stdin string, args ...string) (GitResult, error) {
+	return runCommandWithLimits(ctx, "git", dir, DefaultGitTimeout, int(DefaultOutputLimit), stdin, nil, args...)
+}
+
+// RunGitWithEnv runs a git command with environment variables and full bounded execution.
+func RunGitWithEnv(ctx context.Context, dir string, env []string, args ...string) (GitResult, error) {
+	return runCommandWithLimits(ctx, "git", dir, DefaultGitTimeout, int(DefaultOutputLimit), "", env, args...)
+}
+
+// RunGitWithStdinAndEnv runs Git with exact stdin and explicit environment.
+func RunGitWithStdinAndEnv(ctx context.Context, dir, stdin string, env []string, args ...string) (GitResult, error) {
+	return runCommandWithLimits(ctx, "git", dir, DefaultGitTimeout, int(DefaultOutputLimit), stdin, env, args...)
 }
 
 // runCommandWithLimits is the internal test seam. Production callers use RunGit.
@@ -61,6 +78,8 @@ func runCommandWithLimits(
 	dir string,
 	timeout time.Duration,
 	outputLimit int,
+	stdin string,
+	env []string,
 	args ...string,
 ) (GitResult, error) {
 	if ctx == nil {
@@ -84,6 +103,19 @@ func runCommandWithLimits(
 	cmd := exec.CommandContext(runCtx, executable, args...)
 	cmd.Dir = dir
 	cmd.WaitDelay = DefaultGitWaitDelay
+
+	// Set up stdin if provided
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
+
+	// Set up environment if provided (inherits current env + adds new vars)
+	if len(env) > 0 {
+		cmd.Env = os.Environ()
+		for _, e := range env {
+			cmd.Env = append(cmd.Env, e)
+		}
+	}
 
 	// Use bytes.Buffer for concurrent draining via cmd.Stdout/cmd.Stderr
 	var stdout, stderr bytes.Buffer

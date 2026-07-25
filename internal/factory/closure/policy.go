@@ -9,9 +9,14 @@ import (
 
 var fullDigestMarker = []byte("LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION:")
 
-func evaluateTrackedDigestPolicy(ctx context.Context, git gitClient, root, baselineCommit, subjectCommit string) (ClosurePolicyResult, []byte) {
+// evaluateTrackedDigestPolicy enforces the historical-ACT-scope
+// tracked-digest policy on the plan.baseline..S range. See
+// ProvenanceTopology (run_v2_authority.go) and the explicit policy
+// range decision in run_v2_policy.go for why this range — not F..S
+// — is the right one for "no new full digests in this ACT".
+func evaluateTrackedDigestPolicy(ctx context.Context, git gitClient, root, planBaselineCommit, subjectCommit string) (ClosurePolicyResult, []byte) {
 	result := ClosurePolicyResult{TrackedFullDigestStatus: CheckStatusPass}
-	rangeSpec := baselineCommit + ".." + subjectCommit
+	rangeSpec := planBaselineCommit + ".." + subjectCommit
 	changed := git.Run(ctx, root, "diff", "--name-only", "-z", "--diff-filter=AM", rangeSpec, "--")
 	if changed.Err != nil || changed.ExitCode != 0 {
 		result.TrackedFullDigestStatus = CheckStatusFail
@@ -46,8 +51,14 @@ func evaluateTrackedDigestPolicy(ctx context.Context, git gitClient, root, basel
 	return result, []byte(diagnostics.String())
 }
 
-func evaluatePatchHygiene(ctx context.Context, git gitClient, root, baselineCommit, subjectCommit string) (PatchHygiene, []byte) {
-	rangeSpec := baselineCommit + ".." + subjectCommit
+// evaluatePatchHygiene enforces the subject-only patch-hygiene policy
+// on the F..S range. The parameter is named freezeCommit (NOT
+// baselineCommit) precisely because F is the subject-only origin:
+// callers MUST pass the freeze commit F, never plan.baseline B.
+// See ProvenanceTopology (run_v2_authority.go) and the explicit
+// policy range decision in run_v2_policy.go for the rationale.
+func evaluatePatchHygiene(ctx context.Context, git gitClient, root, freezeCommit, subjectCommit string) (PatchHygiene, []byte) {
+	rangeSpec := freezeCommit + ".." + subjectCommit
 	result := git.Run(ctx, root, "diff", "--check", rangeSpec, "--")
 	diagnostics := append(append([]byte(nil), result.Stdout...), result.Stderr...)
 	status := CheckStatusPass

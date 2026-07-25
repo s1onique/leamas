@@ -161,3 +161,15 @@ func (c *remoteMutationGitClient) Run(ctx context.Context, directory string, arg
 	}
 	return c.delegate.Run(ctx, directory, args...)
 }
+
+func (c *remoteMutationGitClient) RunWithEnv(ctx context.Context, directory string, env []string, args ...string) gitCommandResult {
+	return c.delegate.RunWithEnv(ctx, directory, env, args...)
+}
+
+func (c *remoteMutationGitClient) RunWithStdinAndEnv(ctx context.Context, directory, stdin string, env []string, args ...string) gitCommandResult {
+	return c.delegate.RunWithStdinAndEnv(ctx, directory, stdin, env, args...)
+}
+
+func (c *remoteMutationGitClient) RunWithStdin(ctx context.Context, directory, stdin string, args ...string) gitCommandResult {
+	return c.delegate.RunWithStdin(ctx, directory, stdin, args...)
+}

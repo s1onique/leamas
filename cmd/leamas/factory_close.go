@@ -67,14 +67,25 @@ func runFactoryClosePlan(args []string, stdout, stderr io.Writer) int {
 }
 
 func runFactoryCloseRun(args []string, stdout, stderr io.Writer) int {
-	fs := newCloseFlagSet("factory close run", stderr)
+	// Parse --protocol first to determine which dispatcher to use
+	protocol, protoArgs, err := parseProtocolFlag(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "factory close run: %v\n", err)
+		return closeFailureCode("usage", err.Error())
+	}
+
+	if protocol == "v2" {
+		return runFactoryCloseRunV2(protoArgs, stdout, stderr)
+	}
+
 	var options closure.RunOptions
+	fs := newCloseFlagSet("factory close run", stderr)
 	fs.StringVar(&options.PlanPath, "plan", "", "frozen closure plan")
 	fs.StringVar(&options.PlanFreeze, "plan-freeze", "", "pre-subject plan freeze as <commit>:<path>")
 	fs.StringVar(&options.Subject, "subject", "", "subject commit")
 	fs.StringVar(&options.EvidenceDirectory, "evidence-dir", "", "absolute detached evidence directory")
 	fs.StringVar(&options.ManifestOutput, "manifest-out", "", "absolute detached manifest output")
-	if err := parseCloseFlags(fs, args); err != nil || options.PlanPath == "" || options.Subject == "" || options.EvidenceDirectory == "" || options.ManifestOutput == "" || options.PlanFreeze == "" {
+	if err := parseCloseFlags(fs, protoArgs); err != nil || options.PlanPath == "" || options.Subject == "" || options.EvidenceDirectory == "" || options.ManifestOutput == "" || options.PlanFreeze == "" {
 		return reportCloseFlagError(stderr, "factory close run", err, "--plan, --plan-freeze, --subject, --evidence-dir, and --manifest-out are required")
 	}
 	manifest, _, err := closure.RunClosure(context.Background(), options)
@@ -146,6 +157,13 @@ func reportCloseFlagError(stderr io.Writer, command string, parseErr error, requ
 func reportCloseError(stderr io.Writer, command string, err error) int {
 	fmt.Fprintf(stderr, "%s: %v\n", command, err)
 	return closeFailureCode("failure", err.Error())
+}
+
+func trunc8(s string) string {
+	if len(s) < 8 {
+		return s
+	}
+	return s[:8]
 }
 
 func closeSuccessCode() int {

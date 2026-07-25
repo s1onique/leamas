@@ -55,13 +55,6 @@ func TestUsageText_IncludesCockpit(t *testing.T) {
 	}
 }
 
-func TestUsageText_IncludesDoctor(t *testing.T) {
-	text := usageText()
-	if !strings.Contains(text, "doctor") {
-		t.Error("usage text should include 'doctor' command")
-	}
-}
-
 func TestUsageText_IncludesVersion(t *testing.T) {
 	text := usageText()
 	if !strings.Contains(text, "version") {

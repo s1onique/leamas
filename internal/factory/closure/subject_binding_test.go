@@ -97,3 +97,15 @@ func (c *treeMismatchGitClient) Run(ctx context.Context, directory string, args 
 	}
 	return result
 }
+
+func (c *treeMismatchGitClient) RunWithEnv(ctx context.Context, directory string, env []string, args ...string) gitCommandResult {
+	return c.delegate.RunWithEnv(ctx, directory, env, args...)
+}
+
+func (c *treeMismatchGitClient) RunWithStdinAndEnv(ctx context.Context, directory, stdin string, env []string, args ...string) gitCommandResult {
+	return c.delegate.RunWithStdinAndEnv(ctx, directory, stdin, env, args...)
+}
+
+func (c *treeMismatchGitClient) RunWithStdin(ctx context.Context, directory, stdin string, args ...string) gitCommandResult {
+	return c.delegate.RunWithStdin(ctx, directory, stdin, args...)
+}
