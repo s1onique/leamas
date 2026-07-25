@@ -14,7 +14,8 @@
       "mode": "run",
       "argv": [
         "bash",
-        "scripts/verify_portable_runner_test_selection.sh"
+        "-c",
+        "set -euo pipefail\nrequire_one() {\n  package=\"$1\"\n  test_name=\"$2\"\n  output=\"$(go test -list \"^${test_name}$\" \"$package\")\"\n  count=\"$(printf '%s\\n' \"$output\" | grep -c \"^${test_name}$\" || true)\"\n  if [ \"$count\" -ne 1 ]; then\n    printf 'FAIL: expected exactly one %s in %s; found %s\\n' \"$test_name\" \"$package\" \"$count\" >&2\n    exit 1\n  fi\n  printf 'PASS: %s in %s\\n' \"$test_name\" \"$package\"\n}\nrequire_one ./internal/factory/closure TestToolReleaseExactRejectsPlanPinnedBinaryMismatch\nrequire_one ./internal/factory/closure TestPlanValidationRunnerAuthorityContract\nrequire_one ./internal/factory/authority TestPortableRunnerCapabilityContract\nrequire_one ./cmd/leamas TestPortableRunnerExternalRepositoryCLI\nrequire_one ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix\necho 'All 5 required tests verified with cardinality 1'"
       ],
       "environment": {
         "CGO_ENABLED": "0"
