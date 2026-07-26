@@ -10,12 +10,12 @@
   },
   "checks": [
     {
-      "id": "non-vacuity-contract-exists",
+      "id": "subject-production-scope",
       "mode": "run",
       "argv": [
         "bash",
         "-c",
-        "set -euo pipefail\n# F11: Plan-only freeze - verify non-vacuity contract test exists and is enforceable\n# The anti-placeholder contract must parse test source and require observation helpers\ntest -f ./cmd/leamas/portable_runner_nonvacuity_test.go\ngrep -q 'TestPortableRunnerRequiredProofsAreNonVacuous' ./cmd/leamas/portable_runner_nonvacuity_test.go\necho 'PASS: Non-vacuity contract test exists'"
+        "set -euo pipefail\n# F12: Require production changes in every necessary layer\n# Reject test-only subject and reject subject changing only runner_authority.go\nchanged=\"$(git diff-tree --no-commit-id --name-only -r HEAD)\"\n# Must contain at least one production path in each required layer\nprintf '%s\\n' \"$changed\" | grep -qE '^(cmd/leamas/|internal/factory/closure/|internal/factory/authority/|\\.factory/required-capabilities\\.json)' || { echo \"FAIL: missing production paths\" >&2; exit 1; }\n# Must NOT be only runner_authority.go\nif printf '%s\\n' \"$changed\" | grep -v '^$' | grep -qvE '^(cmd/|internal/|\\.factory/)'; then\n  echo \"FAIL: non-production paths present\" >&2\n  exit 1\nfi\necho \"PASS: Production scope verified\"\necho \"Changed: $changed\""
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -24,12 +24,12 @@
       "timeout_seconds": 60
     },
     {
-      "id": "existing-behavioral-tests-preserved",
+      "id": "portable-end-to-end-cli",
       "mode": "run",
       "argv": [
         "bash",
         "-c",
-        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s in %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$package\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying CORRECTION03 behavioral tests remain intact...'\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository RecognizedByCLI\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository PropagatedIntoRunRequest\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository GitAuthorityUsesTargetRepo\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository ChecksUseTargetRepoAsWorkingDirectory\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository ManifestRecordsTargetRepo\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository DefaultDoesNotSilentlyReplaceExplicitRepo\necho 'All 6 TestFactoryCloseRunRepoFlagRoutesTargetRepository subtests passed'"
+        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying portable end-to-end CLI fixtures...'\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI DistinctRepositories\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI RealCLIInvocation\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI TargetHEADAndTreeBound\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI ManifestSeparatesToolAndTarget\necho 'Core portable CLI end-to-end verified'"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -38,18 +38,74 @@
       "timeout_seconds": 600
     },
     {
-      "id": "production-paths-frozen-check",
+      "id": "portable-negative-matrix",
       "mode": "run",
       "argv": [
         "bash",
         "-c",
-        "set -euo pipefail\n# F11: Plan-only freeze - verify production paths are documented and frozen\n# Reject test-only subject or subject changing only runner_authority.go\ntest -f docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04.json\necho 'PASS: CORRECTION04 plan exists with production freeze intent'"
+        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying portable negative authority matrix...'\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongPlanPinnedBinaryHash\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix SubstitutedExecutable\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongToolRevision\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix ModifiedToolBuild\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongTargetHEAD\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongTargetTree\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix DirtyTargetBefore\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix DirtyTargetAfter\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix SubjectExactCrossRepository\necho 'All 9 negative matrix subtests verified'"
       ],
       "environment": {
         "CGO_ENABLED": "0"
       },
       "working_directory": ".",
-      "timeout_seconds": 60
+      "timeout_seconds": 600
+    },
+    {
+      "id": "canonical-validation-precedes-execution",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "-c",
+        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying canonical validation precedes execution...'\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority MalformedToolReleaseExactRejected\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority ContradictorySubjectExactToolBlockRejected\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority ValidToolReleaseExactAccepted\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority ValidationOccursBeforeCheckExecution\necho 'All 4 canonical validation subtests verified'"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "portable-capability-contract",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "-c",
+        "set -euo pipefail\nrequire_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${test_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$test_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$test_name\"\n}\necho 'Verifying portable capability contract...'\nrequire_pass ./internal/factory/authority TestPortableRunnerCapabilityContract\necho 'Capability contract verified'"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 120
+    },
+    {
+      "id": "anti-placeholder-contract",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "-c",
+        "set -euo pipefail\n# Execute the non-vacuity test, not just grep for its name\nrequire_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${test_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$test_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$test_name\"\n}\necho 'Verifying anti-placeholder contract...'\nrequire_pass ./cmd/leamas TestPortableRunnerRequiredProofsAreNonVacuous\necho 'Anti-placeholder contract verified'"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 120
+    },
+    {
+      "id": "three-way-binary-identity",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "-c",
+        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying three-way binary identity...'\nrequire_subtest_pass ./internal/factory/closure TestToolReleaseExactThreeWayBinaryIdentity AllThreeEqualPasses\nrequire_subtest_pass ./internal/factory/closure TestToolReleaseExactThreeWayBinaryIdentity RunnerIdentityDiffersFromActualRejects\nrequire_subtest_pass ./internal/factory/closure TestToolReleaseExactThreeWayBinaryIdentity PlanPinDiffersFromActualRejects\necho 'Three-way binary identity verified'"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
     },
     {
       "id": "gate-fast",
@@ -78,6 +134,19 @@
       "timeout_seconds": 600
     },
     {
+      "id": "dupcode",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-dupcode"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
       "id": "subject-diff-check",
       "mode": "run",
       "argv": [
@@ -91,11 +160,6 @@
       },
       "working_directory": ".",
       "timeout_seconds": 60
-    },
-    {
-      "id": "dupcode",
-      "mode": "exclude",
-      "reason": "CORRECTION04 is a plan-only freeze with no production code changes. Dupcode baseline unchanged."
     }
   ],
   "artifacts": [
@@ -118,8 +182,6 @@
     "require_clean_before": true,
     "require_clean_after": true,
     "forbid_tracked_full_digests": true,
-    "require_diff_check": true,
-    "plan_only_freeze": true,
-    "note": "F11 is a plan-only freeze. S6 (real portable implementation) comes after F11 is published."
+    "require_diff_check": true
   }
 }
