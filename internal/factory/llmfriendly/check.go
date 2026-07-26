@@ -51,8 +51,9 @@ func CheckRepo(root string, cfg Config) ([]Finding, error) {
 	}
 
 	var findings []Finding
-	for _, file := range files {
-		f, err := checkFile(filepath.Join(root, file), cfg)
+	for _, relativePath := range files {
+		absolutePath := filepath.Join(root, relativePath)
+		f, err := checkFile(absolutePath, relativePath, cfg)
 		if err != nil {
 			// Skip files we can't read
 			continue
@@ -124,11 +125,12 @@ func runGitCommand(root string, args ...string) ([]string, error) {
 }
 
 // checkFile checks a single file for LLM-friendliness violations.
-func checkFile(path string, cfg Config) ([]Finding, error) {
-	// Check structural ignores (defensive, in case git didn't catch them)
+// absolutePath is used for file operations; relativePath is used for classification.
+func checkFile(absolutePath, relativePath string, cfg Config) ([]Finding, error) {
+	// Check structural ignores using relative path
 	ignoredDirs := []string{".git", "build", "bin", "vendor", "testdata"}
 	for _, dir := range ignoredDirs {
-		if strings.HasPrefix(path, dir+"/") || path == dir {
+		if strings.HasPrefix(relativePath, dir+"/") || relativePath == dir {
 			return nil, nil
 		}
 	}
@@ -139,13 +141,13 @@ func checkFile(path string, cfg Config) ([]Finding, error) {
 		".factory/coverage.out",
 	}
 	for _, p := range ignoredPaths {
-		if path == p || strings.HasSuffix(path, p) {
+		if relativePath == p || strings.HasSuffix(relativePath, p) {
 			return nil, nil
 		}
 	}
 
 	// Get file info
-	info, err := os.Stat(path)
+	info, err := os.Stat(absolutePath)
 	if err != nil {
 		return nil, err
 	}
@@ -158,60 +160,39 @@ func checkFile(path string, cfg Config) ([]Finding, error) {
 	// Check file size
 	if info.Size() > cfg.MaxBytes {
 		return []Finding{{
-			Path:    path,
+			Path:    relativePath,
 			Kind:    "too_large",
 			Message: fmt.Sprintf("%d > %d bytes", info.Size(), cfg.MaxBytes),
 		}}, nil
 	}
 
 	// Detect and skip binary files
-	if isBinary(path) {
+	if isBinary(absolutePath) {
 		return nil, nil
 	}
 
 	// Open and check contents
-	file, err := os.Open(path)
+	file, err := os.Open(absolutePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	return scanTextFile(path, file, cfg)
+	return scanTextFile(relativePath, file, cfg)
 }
 
-// isCanonicalClosurePlan returns true if the path is a canonical closure-plan JSON file.
-// Only files directly under docs/closure-plans/ with .json extension are exempt.
-func isCanonicalClosurePlan(path string) bool {
-	// Normalize to forward slashes for comparison
-	normalized := filepath.ToSlash(path)
-	ext := filepath.Ext(normalized)
-
-	// Must have .json extension (case-insensitive)
-	if !strings.EqualFold(ext, ".json") {
+// isCanonicalClosurePlan returns true if the relativePath is a canonical closure-plan JSON file.
+// Only files under docs/closure-plans/ with .json extension are exempt from
+// long_line and minified_line findings.
+func isCanonicalClosurePlan(relativePath string) bool {
+	normalized := filepath.ToSlash(relativePath)
+	// Repository paths from git ls-files are always relative, no absolute or .. paths
+	if filepath.IsAbs(normalized) || strings.HasPrefix(normalized, "../") {
 		return false
 	}
-
-	// Check for docs/closure-plans/ (case-insensitive)
-	// We need to match:
-	// - docs/closure-plans/... (relative path)
-	// - .../docs/closure-plans/... (embedded in absolute path)
-	lower := strings.ToLower(normalized)
-	if !strings.Contains(lower, "docs/closure-plans/") {
-		return false
-	}
-
-	// Verify it's a proper directory boundary
-	// Find where "docs/closure-plans/" starts in the lowercase version
-	idx := strings.Index(lower, "docs/closure-plans/")
-	if idx > 0 {
-		// Path starts with something else, verify it's a /
-		if normalized[idx-1] != '/' {
-			return false
-		}
-	}
-	// idx == 0 is valid (path starts with docs/closure-plans/)
-
-	return true
+	// Must start with docs/closure-plans/ (case-insensitive for cross-platform compatibility)
+	return strings.HasPrefix(strings.ToLower(normalized), "docs/closure-plans/") &&
+		strings.EqualFold(filepath.Ext(normalized), ".json")
 }
 
 // isBinary detects if a file is binary by checking for NUL bytes.
@@ -239,11 +220,12 @@ func isBinary(path string) bool {
 }
 
 // scanTextFile scans a text file for LLM-friendliness violations.
-func scanTextFile(path string, file *os.File, cfg Config) ([]Finding, error) {
+func scanTextFile(relativePath string, file *os.File, cfg Config) ([]Finding, error) {
 	var findings []Finding
 	lineNum := 0
-	maxLineLen := 0
-	minifiedDetected := false
+
+	// Canonical closure plans are exempt from long_line and minified_line
+	isCanonical := isCanonicalClosurePlan(relativePath)
 
 	// Use a large scanner buffer for long line detection
 	const maxTokenSize = 64 * 1024 // 64KB buffer
@@ -256,29 +238,22 @@ func scanTextFile(path string, file *os.File, cfg Config) ([]Finding, error) {
 		line := scanner.Text()
 		lineLen := len(line)
 
-		// Track max line length
-		if lineLen > maxLineLen {
-			maxLineLen = lineLen
-		}
-
 		// Check for long lines (exempt canonical closure-plan JSON files)
-		if lineLen > cfg.MaxLineLength && !isCanonicalClosurePlan(path) {
+		if lineLen > cfg.MaxLineLength && !isCanonical {
 			findings = append(findings, Finding{
-				Path:    path,
+				Path:    relativePath,
 				Kind:    "long_line",
 				Message: fmt.Sprintf("line %d: %d > %d chars", lineNum, lineLen, cfg.MaxLineLength),
 			})
 		}
 
-		// Check for minified-looking lines (only in certain file types)
-		if isMinifiableFile(path) && lineLen > cfg.MinifiedLineLength {
+		// Check for minified-looking lines (exempt canonical closure-plan JSON files)
+		if isMinifiableFile(relativePath) && lineLen > cfg.MinifiedLineLength && !isCanonical {
 			findings = append(findings, Finding{
-				Path:    path,
+				Path:    relativePath,
 				Kind:    "minified_line",
 				Message: fmt.Sprintf("line %d: %d > %d chars (minified)", lineNum, lineLen, cfg.MinifiedLineLength),
 			})
-			minifiedDetected = true
-			// Don't break - still need to count lines
 		}
 	}
 
@@ -286,10 +261,10 @@ func scanTextFile(path string, file *os.File, cfg Config) ([]Finding, error) {
 		// Scanner errors are non-fatal; continue with what we have
 	}
 
-	// Check total line count (only if we haven't already flagged minified lines)
-	if lineNum > cfg.MaxLines && !minifiedDetected {
+	// Check total line count
+	if lineNum > cfg.MaxLines {
 		findings = append(findings, Finding{
-			Path:    path,
+			Path:    relativePath,
 			Kind:    "too_many_lines",
 			Message: fmt.Sprintf("%d > %d", lineNum, cfg.MaxLines),
 		})
