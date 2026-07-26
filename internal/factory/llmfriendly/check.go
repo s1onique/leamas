@@ -179,25 +179,39 @@ func checkFile(path string, cfg Config) ([]Finding, error) {
 	return scanTextFile(path, file, cfg)
 }
 
-// isClosurePlanCommandString returns true if this is a long line in a closure plan command string.
-// Closure plans contain frozen bash commands that may exceed 240 chars.
-func isClosurePlanCommandString(path string, lineLen int) bool {
-	if lineLen <= 240 {
+// isCanonicalClosurePlan returns true if the path is a canonical closure-plan JSON file.
+// Only files directly under docs/closure-plans/ with .json extension are exempt.
+func isCanonicalClosurePlan(path string) bool {
+	// Normalize to forward slashes for comparison
+	normalized := filepath.ToSlash(path)
+	ext := filepath.Ext(normalized)
+
+	// Must have .json extension (case-insensitive)
+	if !strings.EqualFold(ext, ".json") {
 		return false
 	}
-	// Handle both relative and absolute paths
-	if filepath.IsAbs(path) {
-		// Extract relative part from absolute path
-		parts := strings.Split(filepath.ToSlash(path), "/")
-		for i, part := range parts {
-			if part == "closure-plans" && i < len(parts)-1 {
-				return true
-			}
+
+	// Check for docs/closure-plans/ (case-insensitive)
+	// We need to match:
+	// - docs/closure-plans/... (relative path)
+	// - .../docs/closure-plans/... (embedded in absolute path)
+	lower := strings.ToLower(normalized)
+	if !strings.Contains(lower, "docs/closure-plans/") {
+		return false
+	}
+
+	// Verify it's a proper directory boundary
+	// Find where "docs/closure-plans/" starts in the lowercase version
+	idx := strings.Index(lower, "docs/closure-plans/")
+	if idx > 0 {
+		// Path starts with something else, verify it's a /
+		if normalized[idx-1] != '/' {
+			return false
 		}
-		return false
 	}
-	return strings.Contains(path, "closure-plans") ||
-		strings.HasPrefix(path, "docs/closure-plans/")
+	// idx == 0 is valid (path starts with docs/closure-plans/)
+
+	return true
 }
 
 // isBinary detects if a file is binary by checking for NUL bytes.
@@ -247,8 +261,8 @@ func scanTextFile(path string, file *os.File, cfg Config) ([]Finding, error) {
 			maxLineLen = lineLen
 		}
 
-		// Check for long lines (but allow in closure plan command strings)
-		if lineLen > cfg.MaxLineLength && !isClosurePlanCommandString(path, lineLen) {
+		// Check for long lines (exempt canonical closure-plan JSON files)
+		if lineLen > cfg.MaxLineLength && !isCanonicalClosurePlan(path) {
 			findings = append(findings, Finding{
 				Path:    path,
 				Kind:    "long_line",
