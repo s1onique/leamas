@@ -11,22 +11,55 @@
 #   - injecting unreachable objects,
 #   - branch-conditional skips.
 #
+# Works with both attached HEAD (local development) and detached HEAD
+# (GitHub pull_request workflow checkouts).
+#
 # Exit codes: 0 on pass, non-zero on any failure.
 
 set -euo pipefail
 
 source_root="$(git rev-parse --show-toplevel)"
-branch="$(git -C "$source_root" branch --show-current)"
+source_head="$(git -C "$source_root" rev-parse 'HEAD^{commit}')"
+
 tmp_root="$(mktemp -d)"
 trap 'rm -rf "$tmp_root"' EXIT
 
-git -C "$source_root" clone --bare --quiet "$source_root" "$tmp_root/remote.git"
-git clone --depth=1 --branch "$branch" --quiet \
-  "file://$tmp_root/remote.git" "$tmp_root/shallow"
+remote="$tmp_root/remote.git"
+qualification_branch="leamas-gate-fast-subject"
+qualification_ref="refs/heads/$qualification_branch"
 
-is_shallow="$(git -C "$tmp_root/shallow" rev-parse --is-shallow-repository)"
+git -C "$source_root" clone --bare --quiet \
+  "$source_root" "$remote"
+
+git --git-dir="$remote" cat-file -e \
+  "$source_head^{commit}"
+
+git --git-dir="$remote" update-ref \
+  "$qualification_ref" "$source_head"
+
+git clone \
+  --depth=1 \
+  --branch "$qualification_branch" \
+  --quiet \
+  "file://$remote" \
+  "$tmp_root/shallow"
+
+cloned_head="$(
+  git -C "$tmp_root/shallow" rev-parse 'HEAD^{commit}'
+)"
+if [ "$cloned_head" != "$source_head" ]; then
+  printf 'shallow clone HEAD mismatch: expected %s, got %s\n' \
+    "$source_head" "$cloned_head" >&2
+  exit 1
+fi
+
+is_shallow="$(
+  git -C "$tmp_root/shallow" \
+    rev-parse --is-shallow-repository
+)"
 if [ "$is_shallow" != "true" ]; then
-  echo "shallow clone did not produce a shallow repository: $is_shallow" >&2
+  printf 'shallow clone did not produce a shallow repository: %s\n' \
+    "$is_shallow" >&2
   exit 1
 fi
 

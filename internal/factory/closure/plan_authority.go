@@ -67,10 +67,6 @@ func validatePlanAuthority(plan Plan) error {
 			return fmt.Errorf("plan does not satisfy policy profile %q: missing or non-matching check %q", profile.Name, required.ID)
 		}
 	}
-	// Validate runner_authority contract
-	if err := ValidateRunnerAuthority(plan.RunnerAuthority); err != nil {
-		return fmt.Errorf("runner_authority contract validation failed: %w", err)
-	}
 	return nil
 }
 

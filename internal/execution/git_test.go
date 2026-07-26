@@ -50,35 +50,37 @@ func TestRunGit_DefaultTimeout(t *testing.T) {
 	}
 }
 
-func TestRunGit_DeadlineExceeded(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+func TestRunGitWithLimits_CallerDeadlineExceeded(t *testing.T) {
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		50*time.Millisecond,
+	)
 	defer cancel()
 
-	result, err := RunGit(ctx, ".", "rev-list", "--all", "--count")
-	if err == nil {
-		t.Error("expected deadline exceeded error")
-	}
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("expected DeadlineExceeded, got %v", err)
-	}
-	if result.ExitCode != -1 && result.ExitCode != 124 {
-		t.Logf("note: deadline exit code %d may vary", result.ExitCode)
-	}
-}
+	start := time.Now()
 
-func TestRunGit_Cancellation(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		time.Sleep(50 * time.Millisecond)
-		cancel()
-	}()
-	result, err := RunGit(ctx, ".", "rev-list", "--all", "--count")
-	if err != nil {
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("expected Canceled, got %v", err)
-		}
+	result, err := runCommandWithLimits(
+		ctx,
+		"sleep",
+		".",
+		30*time.Second, // internal fallback; caller deadline must win
+		1024,
+		"",
+		nil,
+		"60",
+	)
+
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected DeadlineExceeded, got result=%+v err=%v", result, err)
 	}
-	t.Logf("result: exit=%d, stdout=%d bytes, err=%v", result.ExitCode, len(result.Stdout), err)
+	if result.ExitCode == 0 {
+		t.Fatalf("expected nonzero exit code after deadline, got %+v", result)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("deadline cancellation was not bounded: %v", elapsed)
+	}
 }
 
 func TestRunGit_OutputLimit(t *testing.T) {
