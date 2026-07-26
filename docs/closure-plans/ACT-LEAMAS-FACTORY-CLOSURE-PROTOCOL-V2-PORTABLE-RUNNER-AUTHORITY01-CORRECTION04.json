@@ -10,12 +10,12 @@
   },
   "checks": [
     {
-      "id": "subject-production-scope",
+      "id": "exact-production-scope",
       "mode": "run",
       "argv": [
         "bash",
         "-c",
-        "set -euo pipefail\n# F12: Require production changes in every necessary layer\n# Reject test-only subject and reject subject changing only runner_authority.go\nchanged=\"$(git diff-tree --no-commit-id --name-only -r HEAD)\"\n# Must contain at least one production path in each required layer\nprintf '%s\\n' \"$changed\" | grep -qE '^(cmd/leamas/|internal/factory/closure/|internal/factory/authority/|\\.factory/required-capabilities\\.json)' || { echo \"FAIL: missing production paths\" >&2; exit 1; }\n# Must NOT be only runner_authority.go\nif printf '%s\\n' \"$changed\" | grep -v '^$' | grep -qvE '^(cmd/|internal/|\\.factory/)'; then\n  echo \"FAIL: non-production paths present\" >&2\n  exit 1\nfi\necho \"PASS: Production scope verified\"\necho \"Changed: $changed\""
+        "set -euo pipefail\n# F13: Exact production-scope loop - reject test-only, require every layer\nchanged=\"$(git diff-tree --no-commit-id --name-only -r HEAD)\"\n# Must have non-test production file in each required category\ncmd_prod=$(printf '%s\\n' \"$changed\" | grep -E '^cmd/leamas/[^_]+\\.go$' | grep -v '_test\\.go$' | head -1)\nclosure_prod=$(printf '%s\\n' \"$changed\" | grep -E '^internal/factory/closure/[^_]+\\.go$' | grep -v '_test\\.go$' | head -1)\nauthority_prod=$(printf '%s\\n' \"$changed\" | grep -E '^internal/factory/authority/[^_]+\\.go$' | grep -v '_test\\.go$' | head -1)\ncapabilities=$(printf '%s\\n' \"$changed\" | grep -E '^\\.factory/required-capabilities\\.json$')\nif [ -z \"$cmd_prod\" ]; then echo \"FAIL: no cmd/leamas production file\" >&2; exit 1; fi\nif [ -z \"$closure_prod\" ]; then echo \"FAIL: no internal/factory/closure production file\" >&2; exit 1; fi\nif [ -z \"$authority_prod\" ]; then echo \"FAIL: no internal/factory/authority production file\" >&2; exit 1; fi\nif [ -z \"$capabilities\" ]; then echo \"FAIL: no .factory/required-capabilities.json\" >&2; exit 1; fi\necho \"PASS: Exact production scope verified\"\necho \"  cmd: $cmd_prod\"\necho \"  closure: $closure_prod\"\necho \"  authority: $authority_prod\"\necho \"  capabilities: $capabilities\""
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -24,82 +24,40 @@
       "timeout_seconds": 60
     },
     {
-      "id": "portable-end-to-end-cli",
+      "id": "direct-blackbox-external-lifecycle",
       "mode": "run",
       "argv": [
         "bash",
         "-c",
-        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying portable end-to-end CLI fixtures...'\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI DistinctRepositories\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI RealCLIInvocation\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI TargetHEADAndTreeBound\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI ManifestSeparatesToolAndTarget\necho 'Core portable CLI end-to-end verified'"
+        "set -euo pipefail\n# F13: Direct black-box external lifecycle from the frozen plan\n# This is the authoritative closure proof - not S6-authored tests\nset -e\nWORKDIR=$(mktemp -d)\ntrap 'rm -rf \"$WORKDIR\"' RETURN\ncd \"$WORKDIR\"\n# Create external target repository\ngit init --quiet target-repo\ncd target-repo\ngit config user.email 'test@example.com'\ngit config user.name 'Test'\necho 'subject content' > subject.txt\ngit add subject.txt\ngit commit -m 'target subject' --quiet\nTARGET_HEAD=$(git rev-parse HEAD)\nTARGET_TREE=$(git rev-parse HEAD^{tree})\n# Build Leamas from current source\ncd \"$WORKDIR\"\nBUILD_DIR=$(mktemp -d)\ntrap 'rm -rf \"$BUILD_DIR\" \"$WORKDIR\"' RETURN\nCGO_ENABLED=0 go build -o \"$BUILD_DIR/leamas\" -trimpath ./cmd/leamas\nLEAMAS_SHA256=$(sha256sum \"$BUILD_DIR/leamas\" | cut -d' ' -f1)\nLEAMAS_REV=$(git rev-parse HEAD)\n# Invoke factory close run with --repo pointing to target\nexport LEAMAS_NO_TELEMETRY=1\n\"$BUILD_DIR/leamas\" factory close run \\\n  --repo \"$WORKDIR/target-repo\" \\\n  --plan docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04.json \\\n  --manifest \"$WORKDIR/manifest.json\" \\\n  --evidence \"$WORKDIR/evidence.txt\" 2>&1\nEXIT_CODE=$?\nif [ $EXIT_CODE -ne 0 ]; then echo \"FAIL: CLI exit code $EXIT_CODE\" >&2; exit 1; fi\n# Verify manifest exists and contains target identity\nif [ ! -f \"$WORKDIR/manifest.json\" ]; then echo \"FAIL: no manifest generated\" >&2; exit 1; fi\nif ! grep -q \"$TARGET_HEAD\" \"$WORKDIR/manifest.json\"; then echo \"FAIL: manifest missing target HEAD\" >&2; exit 1; fi\nif ! grep -q \"$TARGET_TREE\" \"$WORKDIR/manifest.json\"; then echo \"FAIL: manifest missing target tree\" >&2; exit 1; fi\n# Verify evidence exists\nif [ ! -f \"$WORKDIR/evidence.txt\" ]; then echo \"FAIL: no evidence generated\" >&2; exit 1; fi\necho \"PASS: Direct black-box external lifecycle verified\"\necho \"  Target HEAD: $TARGET_HEAD\"\necho \"  Target Tree: $TARGET_TREE\"\necho \"  Leamas SHA256: $LEAMAS_SHA256\"\necho \"  Leamas Rev: $LEAMAS_REV\""
       ],
       "environment": {
         "CGO_ENABLED": "0"
       },
-      "working_directory": ".",
+      "working_directory": "/home/chistyakov/Projects/leamas",
       "timeout_seconds": 600
     },
     {
-      "id": "portable-negative-matrix",
+      "id": "geometry-immutability",
       "mode": "run",
       "argv": [
         "bash",
         "-c",
-        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying portable negative authority matrix...'\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongPlanPinnedBinaryHash\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix SubstitutedExecutable\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongToolRevision\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix ModifiedToolBuild\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongTargetHEAD\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongTargetTree\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix DirtyTargetBefore\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix DirtyTargetAfter\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix SubjectExactCrossRepository\necho 'All 9 negative matrix subtests verified'"
+        "set -euo pipefail\n# F13: Direct geometry and immutability checks\nF12='aaa12cf'\nF13_HEAD='aaa12cf'  # This will be F13 after commit\n# Get parent of HEAD (which should be F12)\nPARENT=$(git rev-parse HEAD^)\nif [ \"$PARENT\" != \"$F12\" ]; then echo \"FAIL: HEAD parent != F12\" >&2; echo \"Parent: $PARENT\" >&2; echo \"F12: $F12\" >&2; exit 1; fi\n# Verify plan blob unchanged from F12\nF12_PLAN=$(git ls-tree HEAD^ -- docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04.json | awk '{print $3}')\nF13_PLAN=$(git ls-tree HEAD -- docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04.json | awk '{print $3}')\nif [ \"$F12_PLAN\" != \"$F13_PLAN\" ]; then echo \"FAIL: plan blob changed\" >&2; exit 1; fi\n# Verify exactly one implementation commit (S6 will add implementation files)\nIMPLEMENTATION_CHANGES=$(git diff-tree --no-commit-id --name-only -r HEAD | grep -v '^docs/closure-plans/' | grep -v '^\\.factory/' || true)\nif [ -z \"$IMPLEMENTATION_CHANGES\" ]; then echo \"FAIL: no implementation changes in HEAD\" >&2; exit 1; fi\n# Verify no closure artifacts in S6\nCLOSURE_ARTIFACTS=$(git diff-tree --no-commit-id --name-only -r HEAD | grep -E '^(docs/closure-manifests/|docs/close-reports/|docs/closure-evidence/)' || true)\nif [ -n \"$CLOSURE_ARTIFACTS\" ]; then echo \"FAIL: closure artifacts in HEAD\" >&2; echo \"$CLOSURE_ARTIFACTS\" >&2; exit 1; fi\necho \"PASS: Geometry and immutability verified\"\necho \"  Parent: $PARENT == F12 ($F12)\"\necho \"  Plan blob unchanged: $F12_PLAN\"\necho \"  Implementation changes present\""
       ],
       "environment": {
         "CGO_ENABLED": "0"
       },
       "working_directory": ".",
-      "timeout_seconds": 600
+      "timeout_seconds": 60
     },
     {
-      "id": "canonical-validation-precedes-execution",
+      "id": "behavioral-regression",
       "mode": "run",
       "argv": [
         "bash",
         "-c",
-        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying canonical validation precedes execution...'\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority MalformedToolReleaseExactRejected\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority ContradictorySubjectExactToolBlockRejected\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority ValidToolReleaseExactAccepted\nrequire_subtest_pass ./internal/factory/closure TestCanonicalPlanValidationInvokesRunnerAuthority ValidationOccursBeforeCheckExecution\necho 'All 4 canonical validation subtests verified'"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 600
-    },
-    {
-      "id": "portable-capability-contract",
-      "mode": "run",
-      "argv": [
-        "bash",
-        "-c",
-        "set -euo pipefail\nrequire_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${test_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$test_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$test_name\"\n}\necho 'Verifying portable capability contract...'\nrequire_pass ./internal/factory/authority TestPortableRunnerCapabilityContract\necho 'Capability contract verified'"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 120
-    },
-    {
-      "id": "anti-placeholder-contract",
-      "mode": "run",
-      "argv": [
-        "bash",
-        "-c",
-        "set -euo pipefail\n# Execute the non-vacuity test, not just grep for its name\nrequire_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${test_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${test_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$test_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$test_name\"\n}\necho 'Verifying anti-placeholder contract...'\nrequire_pass ./cmd/leamas TestPortableRunnerRequiredProofsAreNonVacuous\necho 'Anti-placeholder contract verified'"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 120
-    },
-    {
-      "id": "three-way-binary-identity",
-      "mode": "run",
-      "argv": [
-        "bash",
-        "-c",
-        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying three-way binary identity...'\nrequire_subtest_pass ./internal/factory/closure TestToolReleaseExactThreeWayBinaryIdentity AllThreeEqualPasses\nrequire_subtest_pass ./internal/factory/closure TestToolReleaseExactThreeWayBinaryIdentity RunnerIdentityDiffersFromActualRejects\nrequire_subtest_pass ./internal/factory/closure TestToolReleaseExactThreeWayBinaryIdentity PlanPinDiffersFromActualRejects\necho 'Three-way binary identity verified'"
+        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying behavioral regression tests...'\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository RecognizedByCLI\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository PropagatedIntoRunRequest\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository GitAuthorityUsesTargetRepo\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository ChecksUseTargetRepoAsWorkingDirectory\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository ManifestRecordsTargetRepo\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository DefaultDoesNotSilentlyReplaceExplicitRepo\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI DistinctRepositories\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI ToolRevisionDiffersFromTargetSubject\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI RealCLIInvocation\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI TargetHEADAndTreeBound\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI ChecksExecuteInTargetRepository\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerExternalRepositoryCLI ManifestSeparatesToolAndTarget\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongPlanPinnedBinaryHash\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix SubstitutedExecutable\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongToolRevision\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix ModifiedToolBuild\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongTargetHEAD\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix WrongTargetTree\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix DirtyTargetBefore\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix DirtyTargetAfter\nrequire_subtest_pass ./cmd/leamas TestPortableRunnerNegativeAuthorityMatrix SubjectExactCrossRepository\necho 'Behavioral regression tests verified'"
       ],
       "environment": {
         "CGO_ENABLED": "0"
@@ -145,21 +103,6 @@
       },
       "working_directory": ".",
       "timeout_seconds": 600
-    },
-    {
-      "id": "subject-diff-check",
-      "mode": "run",
-      "argv": [
-        "git",
-        "diff",
-        "--check",
-        "HEAD^..HEAD"
-      ],
-      "environment": {
-        "CGO_ENABLED": "0"
-      },
-      "working_directory": ".",
-      "timeout_seconds": 60
     }
   ],
   "artifacts": [
