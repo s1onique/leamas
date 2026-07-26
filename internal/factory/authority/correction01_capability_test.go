@@ -20,14 +20,15 @@ import (
 	"testing"
 )
 
-// TestProductionCapabilitiesExposeAllThreeNames asserts the
-// production capability table embeds the three required names.
-func TestProductionCapabilitiesExposeAllThreeNames(t *testing.T) {
+// TestProductionCapabilitiesExposeAllFourNames asserts the
+// production capability table embeds the four required names.
+func TestProductionCapabilitiesExposeAllFourNames(t *testing.T) {
 	got := Embedded()
 	for _, name := range []string{
 		CapDigestAutoRange,
 		CapSelfHostedAuthority,
 		CapClosureProtocol,
+		CapClosureProtocolV2PortableRunnerAuth,
 	} {
 		if _, ok := got[name]; !ok {
 			t.Fatalf("production capability table missing %q (got %v)", name, got)
@@ -50,10 +51,13 @@ func TestSnapshotEmbeddedIsSortedDeterministic(t *testing.T) {
 		}
 	}
 	// And the order must be the canonical order documented in
-	// production: closure_protocol < factory_digest_auto_range <
+	// production: closure_protocol <
+	// closure_protocol_v2_portable_runner_authority <
+	// factory_digest_auto_range <
 	// factory_self_hosted_authority (lexicographic).
 	want := []string{
 		"closure_protocol",
+		"closure_protocol_v2_portable_runner_authority",
 		"factory_digest_auto_range",
 		"factory_self_hosted_authority",
 	}
