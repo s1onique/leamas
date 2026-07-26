@@ -1,0 +1,125 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04",
+  "baseline": {
+    "commit_oid": "4116676d4a1d806bdab08415c0257c2d155b6348",
+    "tree_oid": "e1f68b4a789c6a3028194d62c7903bebdf35d69e"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "non-vacuity-contract-exists",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "-c",
+        "set -euo pipefail\n# F11: Plan-only freeze - verify non-vacuity contract test exists and is enforceable\n# The anti-placeholder contract must parse test source and require observation helpers\ntest -f ./cmd/leamas/portable_runner_nonvacuity_test.go\ngrep -q 'TestPortableRunnerRequiredProofsAreNonVacuous' ./cmd/leamas/portable_runner_nonvacuity_test.go\necho 'PASS: Non-vacuity contract test exists'"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "existing-behavioral-tests-preserved",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "-c",
+        "set -euo pipefail\nrequire_subtest_pass() {\n  package=\"$1\"\n  test_name=\"$2\"\n  subtest_name=\"$3\"\n  full_name=\"${test_name}/${subtest_name}\"\n  output=\"$(mktemp)\"\n  trap 'rm -f \"$output\"' RETURN\n  if ! go test -json -count=1 -run \"^${full_name}$\" \"$package\" >\"$output\" 2>&1; then\n    cat \"$output\" >&2\n    return 1\n  fi\n  run_count=\"$(grep -Ec '\"Action\":\"run\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  pass_count=\"$(grep -Ec '\"Action\":\"pass\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  skip_count=\"$(grep -Ec '\"Action\":\"skip\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  fail_count=\"$(grep -Ec '\"Action\":\"fail\".*\"Test\":\"'\"${full_name}\"'\"' \"$output\" || true)\"\n  if [ \"$run_count\" -ne 1 ] || [ \"$pass_count\" -ne 1 ] || [ \"$skip_count\" -ne 0 ] || [ \"$fail_count\" -ne 0 ]; then\n    cat \"$output\" >&2\n    printf 'FAIL: %s in %s run=%s pass=%s skip=%s fail=%s\\n' \"$full_name\" \"$package\" \"$run_count\" \"$pass_count\" \"$skip_count\" \"$fail_count\" >&2\n    return 1\n  fi\n  printf 'PASS: %s\\n' \"$full_name\"\n}\necho 'Verifying CORRECTION03 behavioral tests remain intact...'\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository RecognizedByCLI\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository PropagatedIntoRunRequest\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository GitAuthorityUsesTargetRepo\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository ChecksUseTargetRepoAsWorkingDirectory\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository ManifestRecordsTargetRepo\nrequire_subtest_pass ./cmd/leamas TestFactoryCloseRunRepoFlagRoutesTargetRepository DefaultDoesNotSilentlyReplaceExplicitRepo\necho 'All 6 TestFactoryCloseRunRepoFlagRoutesTargetRepository subtests passed'"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "production-paths-frozen-check",
+      "mode": "run",
+      "argv": [
+        "bash",
+        "-c",
+        "set -euo pipefail\n# F11: Plan-only freeze - verify production paths are documented and frozen\n# Reject test-only subject or subject changing only runner_authority.go\ntest -f docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04.json\necho 'PASS: CORRECTION04 plan exists with production freeze intent'"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "gate-fast-shallow-clone",
+      "mode": "run",
+      "argv": [
+        "make",
+        "gate-fast-shallow-clone"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "subject-diff-check",
+      "mode": "run",
+      "argv": [
+        "git",
+        "diff",
+        "--check",
+        "HEAD^..HEAD"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "CORRECTION04 is a plan-only freeze with no production code changes. Dupcode baseline unchanged."
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "manifest",
+      "path": "docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04.json",
+      "required": true,
+      "max_bytes": 65536,
+      "media_type": "application/json"
+    },
+    {
+      "id": "report",
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-PORTABLE-RUNNER-AUTHORITY01-CORRECTION04.md",
+      "required": true,
+      "max_bytes": 32768,
+      "media_type": "text/markdown"
+    }
+  ],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true,
+    "plan_only_freeze": true,
+    "note": "F11 is a plan-only freeze. S6 (real portable implementation) comes after F11 is published."
+  }
+}
