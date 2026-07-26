@@ -185,14 +185,18 @@ func checkFile(absolutePath, relativePath string, cfg Config) ([]Finding, error)
 // Only files under docs/closure-plans/ with .json extension are exempt from
 // long_line and minified_line findings.
 func isCanonicalClosurePlan(relativePath string) bool {
-	normalized := filepath.ToSlash(relativePath)
-	// Repository paths from git ls-files are always relative, no absolute or .. paths
-	if filepath.IsAbs(normalized) || strings.HasPrefix(normalized, "../") {
+	normalized := filepath.ToSlash(filepath.Clean(relativePath))
+
+	if filepath.IsAbs(normalized) ||
+		normalized == ".." ||
+		strings.HasPrefix(normalized, "../") {
 		return false
 	}
-	// Must start with docs/closure-plans/ (case-insensitive for cross-platform compatibility)
-	return strings.HasPrefix(strings.ToLower(normalized), "docs/closure-plans/") &&
-		strings.EqualFold(filepath.Ext(normalized), ".json")
+
+	return strings.HasPrefix(
+		normalized,
+		"docs/closure-plans/",
+	) && filepath.Ext(normalized) == ".json"
 }
 
 // isBinary detects if a file is binary by checking for NUL bytes.
@@ -223,6 +227,7 @@ func isBinary(path string) bool {
 func scanTextFile(relativePath string, file *os.File, cfg Config) ([]Finding, error) {
 	var findings []Finding
 	lineNum := 0
+	minifiedDetected := false
 
 	// Canonical closure plans are exempt from long_line and minified_line
 	isCanonical := isCanonicalClosurePlan(relativePath)
@@ -254,6 +259,7 @@ func scanTextFile(relativePath string, file *os.File, cfg Config) ([]Finding, er
 				Kind:    "minified_line",
 				Message: fmt.Sprintf("line %d: %d > %d chars (minified)", lineNum, lineLen, cfg.MinifiedLineLength),
 			})
+			minifiedDetected = true
 		}
 	}
 
@@ -261,8 +267,8 @@ func scanTextFile(relativePath string, file *os.File, cfg Config) ([]Finding, er
 		// Scanner errors are non-fatal; continue with what we have
 	}
 
-	// Check total line count
-	if lineNum > cfg.MaxLines {
+	// Check total line count (suppress too_many_lines if minified_line was already emitted)
+	if lineNum > cfg.MaxLines && (isCanonical || !minifiedDetected) {
 		findings = append(findings, Finding{
 			Path:    relativePath,
 			Kind:    "too_many_lines",

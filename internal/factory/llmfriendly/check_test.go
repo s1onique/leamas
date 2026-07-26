@@ -34,15 +34,17 @@ func TestIsMinifiableFile(t *testing.T) {
 
 func TestIsCanonicalClosurePlan(t *testing.T) {
 	for p, want := range map[string]bool{
-		"docs/closure-plans/plan.json":     true,
-		"docs/closure-plans/sub/plan.json": true,
-		"DOCS/CLOSURE-PLANS/PLAN.JSON":     true,
-		"docs/other/plan.json":             false,
-		"docs/closure-manifests/plan.json": false,
-		"tmp/closure-plans/plan.json":      false,
-		"vendor/docs/closure-plans/x.json": false,
-		"docs/closure-plans/plan.txt":      false,
-		"docs/not-closure-plans/file.json": false,
+		"docs/closure-plans/plan.json":      true,
+		"docs/closure-plans/sub/plan.json":  true,
+		"DOCS/CLOSURE-PLANS/PLAN.JSON":      false, // must use exact case
+		"docs/other/plan.json":              false,
+		"docs/closure-manifests/plan.json":  false,
+		"tmp/closure-plans/plan.json":       false,
+		"vendor/docs/closure-plans/x.json":  false,
+		"docs/closure-plans/plan.txt":       false,
+		"docs/not-closure-plans/file.json":  false,
+		"../docs/closure-plans/plan.json":   false,
+		"/abs/docs/closure-plans/plan.json": false,
 	} {
 		if got := isCanonicalClosurePlan(p); got != want {
 			t.Errorf("isCanonicalClosurePlan(%q)=%v, want %v", p, got, want)
@@ -56,6 +58,22 @@ func TestCheckRepo_SmallFiles(t *testing.T) {
 	gitInit(tmpDir)
 	if findings, err := CheckRepo(tmpDir, DefaultConfig()); err != nil || len(findings) != 0 {
 		t.Fatalf("expected no findings, got %d: %v", len(findings), err)
+	}
+}
+
+func TestCheckRepo_IgnoredDirs(t *testing.T) {
+	tmpDir := t.TempDir()
+	for _, name := range []string{"build/x.txt", "bin/x.txt", "vendor/x.txt", "testdata/x.txt", ".git/x.txt"} {
+		writeLongFile(tmpDir, name, 300)
+	}
+	gitInit(tmpDir)
+	findings, _ := CheckRepo(tmpDir, DefaultConfig())
+	for _, f := range findings {
+		if strings.Contains(f.Path, "build") || strings.Contains(f.Path, "bin") ||
+			strings.Contains(f.Path, "vendor") || strings.Contains(f.Path, "testdata") ||
+			strings.Contains(f.Path, ".git") {
+			t.Errorf("ignored dir file should not appear: %v", f)
+		}
 	}
 }
 
@@ -95,18 +113,11 @@ func TestCheckRepo_ClosurePlanTooManyLinesStillFails(t *testing.T) {
 	tmpDir := t.TempDir()
 	writePlan(tmpDir, "docs/closure-plans/many.json", "")
 	path := filepath.Join(tmpDir, "docs", "closure-plans", "many.json")
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 450; i++ {
-		f.WriteString("line\n")
-	}
-	f.Close()
+	mustWriteLines(path, 450)
 	gitInit(tmpDir)
 	findings, _ := CheckRepo(tmpDir, DefaultConfig())
 	if !hasFinding(findings, "too_many_lines", "") {
-		t.Error("expected too_many_lines for plan")
+		t.Error("expected too_many_lines for canonical plan")
 	}
 }
 
@@ -140,6 +151,34 @@ func TestCheckRepo_MinifiedLineInClosurePlanAllowed(t *testing.T) {
 		if f.Kind == "minified_line" && strings.Contains(f.Path, "cmd.json") {
 			t.Errorf("closure plan minified_line should be exempt: %v", f)
 		}
+	}
+}
+
+func TestCheckRepo_MinifiedLineSuppressesTooManyLines(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "data.json")
+	// Build 450 lines, each > 1000 chars but stay under 64KB total (~50KB)
+	var lines []string
+	for i := 0; i < 30; i++ {
+		lines = append(lines, `"`+strings.Repeat("x", 1200)+`"`)
+	}
+	content := "[\n" + strings.Join(lines, ",\n") + "\n]\n"
+	// Pad with shorter lines to reach 450 total lines
+	for i := 30; i < 450; i++ {
+		content += `"x",\n`
+	}
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitInit(tmpDir)
+	findings, _ := CheckRepo(tmpDir, DefaultConfig())
+	hasMinified := hasFinding(findings, "minified_line", "")
+	hasTooMany := hasFinding(findings, "too_many_lines", "")
+	if !hasMinified {
+		t.Errorf("expected minified_line, got: %v", findings)
+	}
+	if hasTooMany {
+		t.Error("minified file should NOT get too_many_lines")
 	}
 }
 
@@ -177,40 +216,71 @@ func TestCheckRepo_SortedFindings(t *testing.T) {
 
 func writeFile(dir, name string, data []byte) string {
 	p := filepath.Join(dir, name)
-	os.MkdirAll(filepath.Dir(p), 0755)
-	os.WriteFile(p, data, 0644)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(p, data, 0644); err != nil {
+		panic(err)
+	}
 	return p
 }
 
 func writeLongFile(dir, name string, length int) {
 	p := filepath.Join(dir, name)
-	os.MkdirAll(filepath.Dir(p), 0755)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		panic(err)
+	}
 	data := make([]byte, length+1)
 	for i := 0; i < length; i++ {
 		data[i] = 'a'
 	}
 	data[length] = '\n'
-	os.WriteFile(p, data, 0644)
+	if err := os.WriteFile(p, data, 0644); err != nil {
+		panic(err)
+	}
 }
 
 func writeLargeFile(dir, name string) {
 	p := filepath.Join(dir, name)
-	os.MkdirAll(filepath.Dir(p), 0755)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		panic(err)
+	}
 	data := make([]byte, 70*1024)
 	for i := 0; i < len(data); i++ {
 		data[i] = 'a'
 	}
-	os.WriteFile(p, data, 0644)
+	if err := os.WriteFile(p, data, 0644); err != nil {
+		panic(err)
+	}
 }
 
 func writePlan(dir, name, content string) string {
 	p := filepath.Join(dir, name)
-	os.MkdirAll(filepath.Dir(p), 0755)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		panic(err)
+	}
 	if content == "" {
 		content = `{"checks":[]}`
 	}
-	os.WriteFile(p, []byte(content), 0644)
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		panic(err)
+	}
 	return p
+}
+
+func mustWriteLines(path string, n int) {
+	f, err := os.Create(path)
+	if err != nil {
+		panic(err)
+	}
+	for i := 0; i < n; i++ {
+		if _, err := f.WriteString("line\n"); err != nil {
+			panic(err)
+		}
+	}
+	if err := f.Close(); err != nil {
+		panic(err)
+	}
 }
 
 func gitInit(dir string) {
