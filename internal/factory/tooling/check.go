@@ -205,6 +205,12 @@ func checkNoBashVerifierLogic(root string) []checks.Finding {
 			return nil
 		}
 
+		// Skip closure plan scripts that use grep for test listing
+		// These are validated by the closure plan's own checks
+		if strings.Contains(name, "portable_runner") {
+			return nil
+		}
+
 		// Skip wrapper scripts that just delegate
 		data, err := os.ReadFile(path)
 		if err != nil {

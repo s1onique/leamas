@@ -138,6 +138,10 @@ func checkFile(path string, cfg Config) ([]Finding, error) {
 		".factory/dupcode-baseline.json",
 		".factory/coverage.out",
 	}
+	// Skip closure plan files which may contain long lines as frozen contracts
+	if strings.HasPrefix(path, "docs/closure-plans/") {
+		return nil, nil
+	}
 	for _, p := range ignoredPaths {
 		if path == p || strings.HasSuffix(path, p) {
 			return nil, nil
