@@ -23,9 +23,10 @@ import (
 // named capability has a monotonic integer embedded into the binary;
 // the repository declares the minimum required level.
 const (
-	CapDigestAutoRange     = "factory_digest_auto_range"
-	CapSelfHostedAuthority = "factory_self_hosted_authority"
-	CapClosureProtocol     = "closure_protocol"
+	CapDigestAutoRange                          = "factory_digest_auto_range"
+	CapSelfHostedAuthority                      = "factory_self_hosted_authority"
+	CapClosureProtocol                          = "closure_protocol"
+	CapClosureProtocolV2PortableRunnerAuthority = "closure_protocol_v2_portable_runner_authority"
 )
 
 // Embedded returns the capabilities this binary was built with. The
@@ -53,9 +54,10 @@ func SetEmbedded(name string, level int) {
 // For local builds the defaults below are sufficient; production
 // release builds are expected to inject real values via the Makefile.
 var capabilities = map[string]int{
-	CapDigestAutoRange:     1,
-	CapSelfHostedAuthority: 1,
-	CapClosureProtocol:     1,
+	CapDigestAutoRange:                          1,
+	CapSelfHostedAuthority:                      1,
+	CapClosureProtocol:                          1,
+	CapClosureProtocolV2PortableRunnerAuthority: 1,
 }
 
 // RequiredCapabilities is the parsed contents of the repository

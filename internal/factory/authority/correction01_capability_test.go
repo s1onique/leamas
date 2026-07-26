@@ -50,10 +50,11 @@ func TestSnapshotEmbeddedIsSortedDeterministic(t *testing.T) {
 		}
 	}
 	// And the order must be the canonical order documented in
-	// production: closure_protocol < factory_digest_auto_range <
-	// factory_self_hosted_authority (lexicographic).
+	// production: closure_protocol < closure_protocol_v2_portable_runner_authority <
+	// factory_digest_auto_range < factory_self_hosted_authority (lexicographic).
 	want := []string{
 		"closure_protocol",
+		"closure_protocol_v2_portable_runner_authority",
 		"factory_digest_auto_range",
 		"factory_self_hosted_authority",
 	}
