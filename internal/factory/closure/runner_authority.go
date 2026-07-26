@@ -302,13 +302,11 @@ func enforceToolReleaseExact(
 		}
 	}
 
-	// 3. Binary SHA256 must match plan-pinned value
-	// The plan's binary_sha256 is authoritative; compare it against the
-	// actual executing binary's hash. The identity hash is informational.
-	if tool.BinarySHA256 == "" {
+	// 3. Binary SHA256 must match pinned value
+	if identity.BinarySHA256 == "" {
 		return &RunnerAuthorityError{
-			Field:   "tool.binary_sha256",
-			Message: "plan pinned binary_sha256 is empty",
+			Field:   "binary_sha256",
+			Message: "runner binary_sha256 is empty",
 		}
 	}
 	if actualBinarySHA256 == "" {
@@ -317,10 +315,10 @@ func enforceToolReleaseExact(
 			Message: "actual binary SHA256 is empty",
 		}
 	}
-	if tool.BinarySHA256 != actualBinarySHA256 {
+	if identity.BinarySHA256 != actualBinarySHA256 {
 		return &RunnerAuthorityError{
 			Field:   "binary_sha256",
-			Message: fmt.Sprintf("plan pinned binary SHA256 does not match actual runner binary: plan=%s actual=%s", tool.BinarySHA256, actualBinarySHA256),
+			Message: fmt.Sprintf("runner binary SHA256 mismatch: identity=%s actual=%s", identity.BinarySHA256, actualBinarySHA256),
 		}
 	}
 
