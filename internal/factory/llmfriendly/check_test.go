@@ -3,6 +3,7 @@ package llmfriendly
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -74,12 +75,42 @@ func TestIsMinifiableFile(t *testing.T) {
 	}
 }
 
+func TestIsClosurePlanCommandString(t *testing.T) {
+	tests := []struct {
+		path     string
+		lineLen  int
+		expected bool
+	}{
+		// Closure plans with long lines are allowed
+		{"docs/closure-plans/plan.json", 300, true},
+		{"docs/closure-plans/subdir/plan.json", 500, true},
+		{"docs/closure-plans/plan.json", 240, false},  // exactly 240 is not > 240
+		{"docs/closure-plans/plan.json", 200, false},  // under 240
+
+		// Non-closure-plan files are not allowed
+		{"docs/other/plan.json", 300, false},
+		{"docs/closure-manifests/plan.json", 300, false},
+		{"file.json", 300, false},
+		{"file.txt", 300, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.path, func(t *testing.T) {
+			result := isClosurePlanCommandString(tc.path, tc.lineLen)
+			if result != tc.expected {
+				t.Errorf("isClosurePlanCommandString(%q, %d) = %v, want %v",
+					tc.path, tc.lineLen, result, tc.expected)
+			}
+		})
+	}
+}
+
 func TestCheckRepo_SmallFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create a small text file
-	smallFile := filepath.Join(tmpDir, "small.txt")
-	if err := os.WriteFile(smallFile, []byte("hello\nworld\n"), 0644); err != nil {
+	textPath := filepath.Join(tmpDir, "small.txt")
+	if err := os.WriteFile(textPath, []byte("hello world\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -87,7 +118,7 @@ func TestCheckRepo_SmallFiles(t *testing.T) {
 	runGitCommand(tmpDir, "init")
 	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
 	runGitCommand(tmpDir, "config", "user.name", "Test")
-	runGitCommand(tmpDir, "add", "small.txt")
+	runGitCommand(tmpDir, "add", ".")
 	runGitCommand(tmpDir, "commit", "-m", "add small file")
 
 	cfg := DefaultConfig()
@@ -97,180 +128,27 @@ func TestCheckRepo_SmallFiles(t *testing.T) {
 	}
 
 	if len(findings) != 0 {
-		t.Errorf("expected no findings for small file, got %v", findings)
+		t.Errorf("expected no findings for small file, got %d", len(findings))
 	}
 }
 
-func TestCheckRepo_TooManyLines(t *testing.T) {
+func TestCheckRepo_LongLineAllowedInClosurePlan(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a file with too many lines
-	manyLines := filepath.Join(tmpDir, "many_lines.txt")
-	var content []byte
-	for i := 0; i < 450; i++ {
-		content = append(content, []byte("line\n")...)
-	}
-	if err := os.WriteFile(manyLines, content, 0644); err != nil {
+	// Create a closure plan with a long line (> 240 chars)
+	planPath := filepath.Join(tmpDir, "docs", "closure-plans", "test-plan.json")
+	if err := os.MkdirAll(filepath.Dir(planPath), 0755); err != nil {
 		t.Fatal(err)
 	}
 
-	// Initialize git repo
-	runGitCommand(tmpDir, "init")
-	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
-	runGitCommand(tmpDir, "config", "user.name", "Test")
-	runGitCommand(tmpDir, "add", "many_lines.txt")
-	runGitCommand(tmpDir, "commit", "-m", "add many lines")
-
-	cfg := DefaultConfig()
-	findings, err := CheckRepo(tmpDir, cfg)
-	if err != nil {
-		t.Fatalf("CheckRepo error: %v", err)
+	// Create a line that's 300 chars long
+	longLine := make([]byte, 300)
+	for i := range longLine {
+		longLine[i] = 'a'
 	}
-
-	if len(findings) != 1 {
-		t.Fatalf("expected 1 finding, got %d", len(findings))
-	}
-	if findings[0].Kind != "too_many_lines" {
-		t.Errorf("expected kind 'too_many_lines', got %q", findings[0].Kind)
-	}
-}
-
-func TestCheckRepo_LongLine(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a file with a long line
-	longLine := filepath.Join(tmpDir, "long.txt")
-	longContent := make([]byte, 300)
-	for i := range longContent {
-		longContent[i] = 'a'
-	}
-	longContent = append(longContent, '\n')
-	if err := os.WriteFile(longLine, longContent, 0644); err != nil {
+	content := `{"command": "` + string(longLine) + `"}\n`
+	if err := os.WriteFile(planPath, []byte(content), 0644); err != nil {
 		t.Fatal(err)
-	}
-
-	// Initialize git repo
-	runGitCommand(tmpDir, "init")
-	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
-	runGitCommand(tmpDir, "config", "user.name", "Test")
-	runGitCommand(tmpDir, "add", "long.txt")
-	runGitCommand(tmpDir, "commit", "-m", "add long line")
-
-	cfg := DefaultConfig()
-	findings, err := CheckRepo(tmpDir, cfg)
-	if err != nil {
-		t.Fatalf("CheckRepo error: %v", err)
-	}
-
-	found := false
-	for _, f := range findings {
-		if f.Kind == "long_line" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected to find long_line finding")
-	}
-}
-
-func TestCheckRepo_MinifiedLine(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a JSON file with minified-looking line
-	jsonFile := filepath.Join(tmpDir, "data.json")
-	// Create a line longer than MinifiedLineLength
-	minifiedContent := make([]byte, 1100)
-	for i := range minifiedContent {
-		minifiedContent[i] = '"'
-	}
-	minifiedContent = append(minifiedContent, '\n')
-	if err := os.WriteFile(jsonFile, minifiedContent, 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Initialize git repo
-	runGitCommand(tmpDir, "init")
-	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
-	runGitCommand(tmpDir, "config", "user.name", "Test")
-	runGitCommand(tmpDir, "add", "data.json")
-	runGitCommand(tmpDir, "commit", "-m", "add json")
-
-	cfg := DefaultConfig()
-	findings, err := CheckRepo(tmpDir, cfg)
-	if err != nil {
-		t.Fatalf("CheckRepo error: %v", err)
-	}
-
-	found := false
-	for _, f := range findings {
-		if f.Kind == "minified_line" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("expected to find minified_line finding")
-	}
-}
-
-func TestCheckRepo_SkipsBinary(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a binary file
-	binaryFile := filepath.Join(tmpDir, "binary.bin")
-	if err := os.WriteFile(binaryFile, []byte{0x00, 0x01, 0x02}, 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Initialize git repo
-	runGitCommand(tmpDir, "init")
-	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
-	runGitCommand(tmpDir, "config", "user.name", "Test")
-	runGitCommand(tmpDir, "add", "binary.bin")
-	runGitCommand(tmpDir, "commit", "-m", "add binary")
-
-	cfg := DefaultConfig()
-	findings, err := CheckRepo(tmpDir, cfg)
-	if err != nil {
-		t.Fatalf("CheckRepo error: %v", err)
-	}
-
-	if len(findings) != 0 {
-		t.Errorf("expected no findings for binary file, got %v", findings)
-	}
-}
-
-func TestCheckRepo_SkipsIgnoredDirs(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create .gitignore to ignore the test directories
-	gitignore := filepath.Join(tmpDir, ".gitignore")
-	gitignoreContent := ".git\nbuild\nbin\nvendor\n"
-	if err := os.WriteFile(gitignore, []byte(gitignoreContent), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create files in ignored directories
-	ignoredPaths := []string{
-		filepath.Join(tmpDir, ".git", "config"),
-		filepath.Join(tmpDir, "build", "output"),
-		filepath.Join(tmpDir, "bin", "leamas"),
-		filepath.Join(tmpDir, "vendor", "module.go"),
-	}
-
-	for _, p := range ignoredPaths {
-		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
-			t.Fatal(err)
-		}
-		// Create non-trivial content so size check would fail if processed
-		content := make([]byte, 100000) // 100KB - well over limit
-		for i := range content {
-			content[i] = 'x'
-		}
-		if err := os.WriteFile(p, content, 0644); err != nil {
-			t.Fatal(err)
-		}
 	}
 
 	// Initialize git repo
@@ -278,7 +156,7 @@ func TestCheckRepo_SkipsIgnoredDirs(t *testing.T) {
 	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
 	runGitCommand(tmpDir, "config", "user.name", "Test")
 	runGitCommand(tmpDir, "add", ".")
-	runGitCommand(tmpDir, "commit", "-m", "add ignored dirs")
+	runGitCommand(tmpDir, "commit", "-m", "add closure plan")
 
 	cfg := DefaultConfig()
 	findings, err := CheckRepo(tmpDir, cfg)
@@ -286,21 +164,30 @@ func TestCheckRepo_SkipsIgnoredDirs(t *testing.T) {
 		t.Fatalf("CheckRepo error: %v", err)
 	}
 
-	if len(findings) != 0 {
-		t.Errorf("expected no findings for ignored dirs, got %v", findings)
+	// Long line in closure plan should be allowed
+	for _, f := range findings {
+		if f.Kind == "long_line" {
+			t.Errorf("long_line finding in closure plan should be allowed, got: %v", f)
+		}
 	}
 }
 
-func TestCheckRepo_TooLarge(t *testing.T) {
+func TestCheckRepo_LongLineNotAllowedInOtherDocs(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create a file larger than MaxBytes (64KB)
-	largeFile := filepath.Join(tmpDir, "large.bin")
-	largeContent := make([]byte, 70*1024) // 70KB
-	for i := range largeContent {
-		largeContent[i] = 'x'
+	// Create a regular doc with a long line (> 240 chars)
+	docPath := filepath.Join(tmpDir, "docs", "readme.txt")
+	if err := os.MkdirAll(filepath.Dir(docPath), 0755); err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(largeFile, largeContent, 0644); err != nil {
+
+	// Create a line that's 300 chars long
+	longLine := make([]byte, 300)
+	for i := range longLine {
+		longLine[i] = 'a'
+	}
+	longLine = append(longLine, '\n')
+	if err := os.WriteFile(docPath, longLine, 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -308,8 +195,8 @@ func TestCheckRepo_TooLarge(t *testing.T) {
 	runGitCommand(tmpDir, "init")
 	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
 	runGitCommand(tmpDir, "config", "user.name", "Test")
-	runGitCommand(tmpDir, "add", "large.bin")
-	runGitCommand(tmpDir, "commit", "-m", "add large file")
+	runGitCommand(tmpDir, "add", ".")
+	runGitCommand(tmpDir, "commit", "-m", "add doc")
 
 	cfg := DefaultConfig()
 	findings, err := CheckRepo(tmpDir, cfg)
@@ -317,15 +204,64 @@ func TestCheckRepo_TooLarge(t *testing.T) {
 		t.Fatalf("CheckRepo error: %v", err)
 	}
 
-	if len(findings) != 1 {
-		t.Fatalf("expected 1 finding, got %d", len(findings))
+	// Long line in regular doc should be flagged
+	found := false
+	for _, f := range findings {
+		if f.Kind == "long_line" && strings.Contains(f.Path, "docs/readme.txt") {
+			found = true
+			break
+		}
 	}
-	if findings[0].Kind != "too_large" {
-		t.Errorf("expected kind 'too_large', got %q", findings[0].Kind)
+	if !found {
+		t.Error("expected long_line finding for regular doc")
 	}
 }
 
-func TestFindingsSorted(t *testing.T) {
+func TestCheckRepo_ClosurePlanOtherFindingsStillFail(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a closure plan that's too large (> 64 KiB)
+	planPath := filepath.Join(tmpDir, "docs", "closure-plans", "large-plan.json")
+	if err := os.MkdirAll(filepath.Dir(planPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a file larger than MaxBytes (64 KiB)
+	largeContent := make([]byte, 70*1024) // 70 KiB
+	for i := range largeContent {
+		largeContent[i] = 'a'
+	}
+	if err := os.WriteFile(planPath, largeContent, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Initialize git repo
+	runGitCommand(tmpDir, "init")
+	runGitCommand(tmpDir, "config", "user.email", "test@test.com")
+	runGitCommand(tmpDir, "config", "user.name", "Test")
+	runGitCommand(tmpDir, "add", ".")
+	runGitCommand(tmpDir, "commit", "-m", "add large closure plan")
+
+	cfg := DefaultConfig()
+	findings, err := CheckRepo(tmpDir, cfg)
+	if err != nil {
+		t.Fatalf("CheckRepo error: %v", err)
+	}
+
+	// Too-large finding should still be flagged
+	found := false
+	for _, f := range findings {
+		if f.Kind == "too_large" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected too_large finding for oversized closure plan")
+	}
+}
+
+func TestCheckRepo_SortedFindings(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create multiple files

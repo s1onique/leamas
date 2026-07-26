@@ -179,6 +179,27 @@ func checkFile(path string, cfg Config) ([]Finding, error) {
 	return scanTextFile(path, file, cfg)
 }
 
+// isClosurePlanCommandString returns true if this is a long line in a closure plan command string.
+// Closure plans contain frozen bash commands that may exceed 240 chars.
+func isClosurePlanCommandString(path string, lineLen int) bool {
+	if lineLen <= 240 {
+		return false
+	}
+	// Handle both relative and absolute paths
+	if filepath.IsAbs(path) {
+		// Extract relative part from absolute path
+		parts := strings.Split(filepath.ToSlash(path), "/")
+		for i, part := range parts {
+			if part == "closure-plans" && i < len(parts)-1 {
+				return true
+			}
+		}
+		return false
+	}
+	return strings.Contains(path, "closure-plans") ||
+		strings.HasPrefix(path, "docs/closure-plans/")
+}
+
 // isBinary detects if a file is binary by checking for NUL bytes.
 func isBinary(path string) bool {
 	file, err := os.Open(path)
@@ -226,8 +247,8 @@ func scanTextFile(path string, file *os.File, cfg Config) ([]Finding, error) {
 			maxLineLen = lineLen
 		}
 
-		// Check for long lines
-		if lineLen > cfg.MaxLineLength {
+		// Check for long lines (but allow in closure plan command strings)
+		if lineLen > cfg.MaxLineLength && !isClosurePlanCommandString(path, lineLen) {
 			findings = append(findings, Finding{
 				Path:    path,
 				Kind:    "long_line",
