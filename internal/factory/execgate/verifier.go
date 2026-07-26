@@ -88,8 +88,6 @@ var AllowedFiles = map[string]bool{
 	"cmd/leamas/gate_summary_schema_subprocess_test.go":               true,
 	"cmd/leamas/factory_close_subprocess_test.go":                     true,
 	"cmd/leamas/factory_close_plan_execution_mode_subprocess_test.go": true,
-	"cmd/leamas/portable_runner_external_test.go":                     true,
-	"cmd/leamas/portable_runner_negative_test.go":                     true,
 }
 
 // AllowedImports are packages that may only be imported by test files.

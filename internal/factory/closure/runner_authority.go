@@ -121,6 +121,37 @@ func validateToolBlock(tool *ToolAuthority) error {
 		}
 	}
 
+	// Optional fields validation
+	if tool.TreeOID != "" {
+		if len(tool.TreeOID) != 40 && len(tool.TreeOID) != 64 {
+			return &RunnerAuthorityError{
+				Field:   "tool.tree_oid",
+				Message: "tree_oid must be 40 or 64 characters",
+			}
+		}
+		if !isValidOID(tool.TreeOID) {
+			return &RunnerAuthorityError{
+				Field:   "tool.tree_oid",
+				Message: "tree_oid must be lowercase hexadecimal",
+			}
+		}
+	}
+
+	if tool.TagObjectOID != "" {
+		if len(tool.TagObjectOID) != 40 && len(tool.TagObjectOID) != 64 {
+			return &RunnerAuthorityError{
+				Field:   "tool.tag_object_oid",
+				Message: "tag_object_oid must be 40 or 64 characters",
+			}
+		}
+		if !isValidOID(tool.TagObjectOID) {
+			return &RunnerAuthorityError{
+				Field:   "tool.tag_object_oid",
+				Message: "tag_object_oid must be lowercase hexadecimal",
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -271,31 +302,17 @@ func enforceToolReleaseExact(
 		}
 	}
 
-	// 3. Binary SHA256 must match pinned value in plan
-	if tool.BinarySHA256 == "" {
+	// 3. Binary SHA256 must match pinned value
+	if identity.BinarySHA256 == "" {
 		return &RunnerAuthorityError{
-			Field:   "tool.binary_sha256",
-			Message: "pinned binary_sha256 is empty in plan",
+			Field:   "binary_sha256",
+			Message: "runner binary_sha256 is empty",
 		}
 	}
 	if actualBinarySHA256 == "" {
 		return &RunnerAuthorityError{
 			Field:   "binary_sha256",
 			Message: "actual binary SHA256 is empty",
-		}
-	}
-	if tool.BinarySHA256 != actualBinarySHA256 {
-		return &RunnerAuthorityError{
-			Field:   "binary_sha256",
-			Message: fmt.Sprintf("plan-pinned binary SHA256 (%s) does not match actual binary SHA256 (%s)", tool.BinarySHA256, actualBinarySHA256),
-		}
-	}
-
-	// 4. Runner identity binary SHA256 must match actual binary SHA256
-	if identity.BinarySHA256 == "" {
-		return &RunnerAuthorityError{
-			Field:   "binary_sha256",
-			Message: "runner binary_sha256 is empty",
 		}
 	}
 	if identity.BinarySHA256 != actualBinarySHA256 {
