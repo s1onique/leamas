@@ -251,20 +251,38 @@ func (d *Dispatcher) resolveVerifier(id string) *registry.Verifier {
 	return nil
 }
 
-// LookupVerifier returns a deep copy of a verifier by ID or an error if not found.
-func (d *Dispatcher) LookupVerifier(id string) (registry.Verifier, error) {
+// LookupVerifierMetadata returns non-executable metadata for a verifier by ID.
+// This does NOT expose the Run function; use Dispatch for execution.
+func (d *Dispatcher) LookupVerifierMetadata(id string) (VerifierMetadata, error) {
 	v := d.resolveVerifier(id)
 	if v == nil {
-		return registry.Verifier{}, &ErrVerifierNotFound{VerifierID: id}
+		return VerifierMetadata{}, &ErrVerifierNotFound{VerifierID: id}
 	}
-	return cloneRegistryVerifier(*v), nil
+	return VerifierMetadata{
+		Name:      v.Name,
+		Lane:      v.Lane,
+		Authority: v.Authority,
+		Kind:      v.Execution.Kind,
+		ImplID:    v.Execution.ImplementationID,
+		EnvVars:   slices.Clone(v.Execution.EnvVars),
+		Cache:     v.Cache,
+	}, nil
 }
 
-// GetVerifiers returns a deep copy of the verifier registry.
-func (d *Dispatcher) GetVerifiers() []registry.Verifier {
-	result := make([]registry.Verifier, len(d.verifiers))
+// GetVerifierMetadata returns non-executable metadata for all verifiers.
+// This does NOT expose Run functions; use Dispatch for execution.
+func (d *Dispatcher) GetVerifierMetadata() []VerifierMetadata {
+	result := make([]VerifierMetadata, len(d.verifiers))
 	for i, v := range d.verifiers {
-		result[i] = cloneRegistryVerifier(v)
+		result[i] = VerifierMetadata{
+			Name:      v.Name,
+			Lane:      v.Lane,
+			Authority: v.Authority,
+			Kind:      v.Execution.Kind,
+			ImplID:    v.Execution.ImplementationID,
+			EnvVars:   slices.Clone(v.Execution.EnvVars),
+			Cache:     v.Cache,
+		}
 	}
 	return result
 }
