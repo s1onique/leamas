@@ -26,11 +26,12 @@ const CanonicalAdapterPath = "github.com/s1onique/leamas/internal/factory/protec
 
 // DupcodeAllowedPaths are the canonical paths allowed to call protected dupcode packages.
 // Only these specific paths may import dupcode; no wildcard matches.
+// NOTE: This is the single source of truth for enforcement in isAllowedCaller.
 var DupcodeAllowedPaths = []string{
 	"github.com/s1onique/leamas/internal/factory/dupcode",           // dupcode itself
-	"github.com/s1onique/leamas/internal/factory/protectedverifier", // canonical adapter
-	"github.com/s1onique/leamas/internal/factory/gate",              // gate package (for testing integration)
-	"github.com/s1onique/leamas/cmd",                                // cmd package (verifier adapters)
+	"github.com/s1onique/leamas/internal/factory/protectedverifier", // canonical adapter (ONLY production entry point)
+	"github.com/s1onique/leamas/internal/factory/gate",              // gate orchestration (internal infrastructure)
+	"github.com/s1onique/leamas/internal/factory/forbidden",         // bypass policy enforcement
 }
 
 // BypassError represents a policy violation for direct protected access.
@@ -214,7 +215,8 @@ func (p *DupcodeBypassPolicy) isProtectedPackage(path string) bool {
 }
 
 // isAllowedCaller checks if the file at the given path is allowed to call the protected package.
-// Authorization is based on the canonical repository-relative directory path, not package name.
+// Authorization is based on the canonical repository-relative directory path.
+// Only DupcodeAllowedPaths are permitted - this is the single source of truth.
 func (p *DupcodeBypassPolicy) isAllowedCaller(filePath, protectedPackage string) bool {
 	// Get the repository-relative directory
 	relDir := p.getFileDirectory(filePath)
@@ -222,27 +224,24 @@ func (p *DupcodeBypassPolicy) isAllowedCaller(filePath, protectedPackage string)
 	// Normalize to forward slashes for consistent comparison
 	relDir = filepath.ToSlash(relDir)
 
-	// Check if the file is in the canonical adapter directory
-	if relDir == "internal/factory/protectedverifier" || strings.HasPrefix(relDir, "internal/factory/protectedverifier/") {
-		return true
+	// Check against allowed paths from DupcodeAllowedPaths
+	// Only these specific directories may import dupcode
+	allowedDirs := []struct {
+		path        string
+		description string
+	}{
+		{"internal/factory/protectedverifier", "canonical adapter"},
+		{"internal/factory/dupcode", "dupcode itself"},
+		{"internal/factory/gate", "gate orchestration (internal infrastructure)"},
 	}
 
-	// Check if the file is in the dupcode directory (dupcode can use itself)
-	if relDir == "internal/factory/dupcode" || strings.HasPrefix(relDir, "internal/factory/dupcode/") {
-		return true
+	for _, allowed := range allowedDirs {
+		if relDir == allowed.path || strings.HasPrefix(relDir, allowed.path+"/") {
+			return true
+		}
 	}
 
-	// Check if the file is in the gate directory (for testing integration)
-	if relDir == "internal/factory/gate" || strings.HasPrefix(relDir, "internal/factory/gate/") {
-		return true
-	}
-
-	// Check if the file is in the cmd directory (verifier adapters)
-	if relDir == "cmd" || strings.HasPrefix(relDir, "cmd/") {
-		return true
-	}
-
-	// No other paths are allowed
+	// No other paths are allowed - fail closed
 	return false
 }
 
@@ -291,7 +290,7 @@ func CheckDupcodeBypass(root string) []checks.Finding {
 			continue
 		}
 
-		filepath.Walk(scanPath, func(path string, info os.FileInfo, err error) error {
+		walkErr := filepath.Walk(scanPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				// Fail closed: walk error
 				relPath, _ := filepath.Rel(absRoot, path)
@@ -340,12 +339,12 @@ func CheckDupcodeBypass(root string) []checks.Finding {
 			return nil
 		})
 
-		if err != nil {
+		if walkErr != nil {
 			// Walk failed completely
 			findings = append(findings, checks.Finding{
 				Path:     dir,
 				Kind:     "dupcode_bypass_walk_error",
-				Message:  fmt.Sprintf("directory walk failed: %v", err),
+				Message:  fmt.Sprintf("directory walk failed: %v", walkErr),
 				Severity: checks.SeverityError,
 			})
 		}

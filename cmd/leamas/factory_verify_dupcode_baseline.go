@@ -9,8 +9,8 @@ import (
 	"os"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
-	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/gate"
+	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 )
 
 // Default thresholds for the baseline policy
@@ -64,18 +64,20 @@ func handleFactoryVerifyDupcodeBaseline() {
 	}
 
 	// Build policy
-	policy := dupcode.BaselinePolicy{
+	policy := protectedverifier.BaselinePolicy{
 		Path:      *baselinePath,
 		MinLines:  *minLines,
 		MinTokens: *minTokens,
 	}
 
-	// Run verification through dispatcher - captures findings in result
+	// Run verification through dispatcher using protectedverifier adapter
 	ctx := context.Background()
 
 	runnerFactory := func() func(root string) []checks.Finding {
 		return func(root string) []checks.Finding {
-			findings, err := dupcode.VerifyBaseline(root, policy)
+			// Use the protectedverifier adapter - the ONLY authorized entry point
+			runner := protectedverifier.NewDupcodeRunner()
+			findings, err := runner.VerifyBaseline(root, policy)
 			if err != nil {
 				// Convert error to findings - errors are handled within the runner
 				return []checks.Finding{
@@ -94,30 +96,20 @@ func handleFactoryVerifyDupcodeBaseline() {
 	// Use the dispatcher for baseline verification - captures typed findings
 	result := gate.DispatchDupcodeBaselineVerify(ctx, ".", runnerFactory)
 
-	// Handle authority denial or runner errors
-	if len(result.Findings) > 0 {
-		f := result.Findings[0]
-		if *jsonOutput {
-			printJSONAndExit(jsonError{Error: f.Message}, 1)
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", f.Message)
-			os.Exit(1)
-		}
-	}
-
+	// Handle authority denial or runner errors (infrastructure failures only)
 	if result.Error != nil {
 		if *jsonOutput {
-			printJSONAndExit(jsonError{Error: fmt.Sprintf("runner error: %v", result.Error)}, 1)
+			printJSONAndExit(jsonError{Error: fmt.Sprintf("dispatcher error: %v", result.Error)}, 1)
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
 			os.Exit(1)
 		}
 	}
 
-	// Use findings captured from the dispatcher result
+	// Get the typed findings from the authorized runner
 	findings := result.Findings
 
-	// Print results
+	// Print results with proper exit semantics
 	if *jsonOutput {
 		type jsonFinding struct {
 			Path    string `json:"path"`
@@ -156,6 +148,6 @@ func handleFactoryVerifyDupcodeBaseline() {
 		printJSONAndExit(result, code)
 	}
 
-	code := dupcode.PrintBaselineVerifyResult("dupcode baseline", findings)
+	code := protectedverifier.PrintBaselineVerifyResult("dupcode baseline", findings)
 	os.Exit(code)
 }

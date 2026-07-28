@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
-	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
@@ -53,8 +52,8 @@ func handleFactoryVerifyDupcode() {
 		os.Exit(2)
 	}
 
-	// Build config
-	cfg := dupcode.DefaultConfig()
+	// Build config using protectedverifier adapter
+	cfg := protectedverifier.DefaultConfig()
 	cfg.MinLines = *minLines
 	cfg.MinTokens = *minTokens
 
@@ -66,7 +65,7 @@ func handleFactoryVerifyDupcode() {
 	handleVerifyBaseline(*baselinePath, cfg, *jsonOutput)
 }
 
-func handleUpdateBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bool) {
+func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jsonOutput bool) {
 	// Route through the central dispatcher with OperationUpdateBaseline.
 	// Authority validation happens BEFORE any expensive operations.
 	ctx := context.Background()
@@ -147,7 +146,7 @@ func handleUpdateBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bo
 	os.Exit(0)
 }
 
-func handleVerifyBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bool) {
+func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jsonOutput bool) {
 	// Route through the central dispatcher with OperationVerify.
 	// Authority validation happens BEFORE any expensive operations.
 	ctx := context.Background()
