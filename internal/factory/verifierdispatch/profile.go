@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"slices"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -60,24 +61,28 @@ func NewAuthorizedProfile() *AuthorizedProfile {
 // Getters for immutable access
 
 func (p *AuthorizedProfile) RepositoryRoot() string { return p.root }
+
 func (p *AuthorizedProfile) Requests() []ProfileRequest {
 	if p == nil {
 		return nil
 	}
 	return slices.Clone(p.requests)
 }
+
 func (p *AuthorizedProfile) VerifierIDs() []string {
 	if p == nil {
 		return nil
 	}
 	return slices.Clone(p.verifierIDs)
 }
+
 func (p *AuthorizedProfile) RegistryDigest() [32]byte {
 	if p == nil {
 		return [32]byte{}
 	}
 	return p.registryDigest
 }
+
 func (p *AuthorizedProfile) Context() *verifierauthority.ExecutionContext {
 	if p == nil || p.context == nil {
 		return nil
@@ -85,12 +90,25 @@ func (p *AuthorizedProfile) Context() *verifierauthority.ExecutionContext {
 	ec := *p.context
 	return &ec
 }
+
 func (p *AuthorizedProfile) Denials() []ProfileDenial {
 	if p == nil {
 		return nil
 	}
-	return slices.Clone(p.denials)
+	// Deep clone to prevent mutation of inner Findings slices
+	return cloneDenials(p.denials)
 }
+
+// cloneDenials creates a deep clone of the denials slice.
+func cloneDenials(input []ProfileDenial) []ProfileDenial {
+	output := make([]ProfileDenial, len(input))
+	for i := range input {
+		output[i] = input[i]
+		output[i].Findings = slices.Clone(input[i].Findings)
+	}
+	return output
+}
+
 func (p *AuthorizedProfile) AuthorizationSucceeded() bool {
 	if p == nil {
 		return false
@@ -244,6 +262,11 @@ func (d *Dispatcher) AuthorizeProfile(
 		profile.verifierIDs = nil
 	}
 
+	// Deep clone denials for storage
+	if len(profile.denials) > 0 {
+		profile.denials = cloneDenials(profile.denials)
+	}
+
 	// Compute registry digest if authorization succeeded
 	if profile.authorizationSucceeded {
 		profile.registryDigest = d.computeRegistryDigest(profile.requests, resolved)
@@ -253,6 +276,7 @@ func (d *Dispatcher) AuthorizeProfile(
 }
 
 // computeRegistryDigest computes a canonical SHA-256 digest of the authorized verifier set.
+// Uses streaming hash to avoid fixed-buffer panic risk.
 // The digest includes: verifier IDs, lanes, authorities, operations, and execution metadata.
 // Ordering is canonical (sorted by verifier ID).
 func (d *Dispatcher) computeRegistryDigest(requests []ProfileRequest, resolved []*registry.Verifier) [32]byte {
@@ -278,57 +302,41 @@ func (d *Dispatcher) computeRegistryDigest(requests []ProfileRequest, resolved [
 		return cmpString(left.id, right.id)
 	})
 
-	// Build canonical bytes for hashing
-	var buf [8192]byte
-	offset := 0
+	// Use streaming hash to avoid fixed-buffer overflow
+	h := sha256.New()
 
 	for _, e := range entries {
 		// Write verifier name
-		s := e.v.Name
-		binary.LittleEndian.PutUint32(buf[offset:], uint32(len(s)))
-		offset += 4
-		copy(buf[offset:], s)
-		offset += len(s)
+		writeString(h, e.v.Name)
 
 		// Write lane
-		s = string(e.v.Lane)
-		binary.LittleEndian.PutUint32(buf[offset:], uint32(len(s)))
-		offset += 4
-		copy(buf[offset:], s)
-		offset += len(s)
+		writeString(h, string(e.v.Lane))
 
 		// Write authority
-		s = string(e.v.Authority)
-		binary.LittleEndian.PutUint32(buf[offset:], uint32(len(s)))
-		offset += 4
-		copy(buf[offset:], s)
-		offset += len(s)
+		writeString(h, string(e.v.Authority))
 
 		// Write operation
-		s = string(e.req.Operation)
-		binary.LittleEndian.PutUint32(buf[offset:], uint32(len(s)))
-		offset += 4
-		copy(buf[offset:], s)
-		offset += len(s)
+		writeString(h, string(e.req.Operation))
 
 		// Write execution kind
-		s = string(e.v.Execution.Kind)
-		binary.LittleEndian.PutUint32(buf[offset:], uint32(len(s)))
-		offset += 4
-		copy(buf[offset:], s)
-		offset += len(s)
+		writeString(h, string(e.v.Execution.Kind))
 
 		// Write implementation ID
-		s = e.v.Execution.ImplementationID
-		binary.LittleEndian.PutUint32(buf[offset:], uint32(len(s)))
-		offset += 4
-		copy(buf[offset:], s)
-		offset += len(s)
+		writeString(h, e.v.Execution.ImplementationID)
 	}
 
-	// SHA-256 of canonical bytes
-	h := sha256.Sum256(buf[:offset])
-	return h
+	// Get the hash sum
+	var digest [32]byte
+	copy(digest[:], h.Sum(nil))
+	return digest
+}
+
+// writeString writes a length-prefixed string to the hash using streaming writes.
+func writeString(h io.Writer, s string) {
+	var length [4]byte
+	binary.LittleEndian.PutUint32(length[:], uint32(len(s)))
+	h.Write(length[:])
+	h.Write([]byte(s))
 }
 
 // cmpString compares two strings lexicographically.
