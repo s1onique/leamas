@@ -10,6 +10,7 @@ import (
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
+	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
 
 // clock abstracts the time source used to measure check and total
@@ -143,5 +144,84 @@ func exitCode(failed bool) int {
 	if failed {
 		return 1
 	}
+	return 0
+}
+
+// runFactorizeWithRunners executes factorize using ID-bound runners from the dispatcher.
+// This is the atomic entry point that binds authorization to execution.
+// The runners are already bound to the exact authorized profile inventory.
+func runFactorizeWithRunners(
+	out io.Writer,
+	clk clock,
+	profile *verifierdispatch.AuthorizedProfile,
+	runners []verifierdispatch.BoundProfileRunner,
+	metrics *MetricsCollectionV3,
+	sampler ResourceSampler,
+) int {
+	startedAt := clk.Now()
+	failed := false
+
+	ordinal := 1
+	for _, runner := range runners {
+		before, err := sampler.Sample()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: resource sample before %s: %v\n", runner.VerifierID, err)
+			failed = true
+			ordinal++
+			continue
+		}
+
+		started := clk.Now()
+		findings := runner.Run(profile.RepositoryRoot())
+		elapsed := clk.Now().Sub(started)
+
+		status := "OK"
+		if len(findings) > 0 {
+			status = "FAILED"
+		}
+		fmt.Fprintf(out, "  %s: %s: %.2fs\n", runner.VerifierID, status, elapsed.Seconds())
+
+		if len(findings) > 0 {
+			failed = true
+			printFailureFindings(out, runner.VerifierID, findings)
+		}
+
+		after, err := sampler.Sample()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: resource sample after %s: %v\n", runner.VerifierID, err)
+			failed = true
+			ordinal++
+			continue
+		}
+
+		if metrics != nil {
+			env := os.Environ()
+			verifier := registry.Verifier{Name: runner.VerifierID}
+			if err := metrics.AddCheckWithResources(
+				verifier,
+				ordinal,
+				findings,
+				elapsed,
+				after.UserCPU-before.UserCPU,
+				after.SystemCPU-before.SystemCPU,
+				after.ProcessMaxRSSKB,
+				profile.RepositoryRoot(),
+				env,
+			); err != nil {
+				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", runner.VerifierID, err)
+				failed = true
+			}
+		}
+		ordinal++
+	}
+
+	elapsed := clk.Now().Sub(startedAt)
+
+	if failed {
+		fmt.Fprintf(out, "\n*** FACTORIZE FAILED: %.2fs ***\n", elapsed.Seconds())
+		return 1
+	}
+
+	fmt.Fprintf(out, "\n*** FACTORIZE PASSED: %.2fs ***\n", elapsed.Seconds())
 	return 0
 }
