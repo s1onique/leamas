@@ -65,6 +65,9 @@ type DupcodeExecutionContext struct {
 	GitHubWorkspace string
 	RepositoryRoot  string
 	HeadCommit      string
+	HeadErr         error
+	WorktreeStatus  string
+	StatusErr       error
 	WorktreeClean   bool
 }
 
@@ -75,31 +78,44 @@ type EnvLookup func(string) string
 // LookupFromOS returns os.Getenv. The default EnvLookup for production.
 func LookupFromOS(key string) string { return os.Getenv(key) }
 
-// HeadReader returns the result of `git rev-parse HEAD^{commit}` for
-// the supplied root. The returned strings are empty on failure.
-type HeadReader func(root string) string
+// GitObservation captures the result of Git status reads.
+// Failures are encoded in the Err field; any non-nil error means
+// the observation must be treated as a denial of authority.
+type GitObservation struct {
+	Head      string
+	Status    string
+	HeadErr   error
+	StatusErr error
+}
 
-// WorktreeReader returns the porcelain-v1 status of the supplied root.
-type WorktreeReader func(root string) string
+// HeadReader returns the result of `git rev-parse HEAD^{commit}` for
+// the supplied root, along with any execution error.
+type HeadReader func(root string) (string, error)
+
+// WorktreeReader returns the porcelain-v1 status of the supplied root,
+// along with any execution error.
+type WorktreeReader func(root string) (string, error)
 
 // LookupFromGit uses the supplied root to compute HeadCommit via
 // `git rev-parse HEAD^{commit}` and the porcelain status of the
-// working tree. The returned HeadCommit is empty on failure; the
-// returned status is empty on failure.
+// working tree. Any Git execution error is recorded in the observation
+// and MUST cause authority denial.
 func LookupFromGit(root string) (HeadReader, WorktreeReader) {
-	head := func(r string) string {
-		out, err := exec.Command("git", "-C", r, "rev-parse", "HEAD^{commit}").Output()
+	head := func(r string) (string, error) {
+		cmd := exec.Command("git", "-C", r, "rev-parse", "HEAD^{commit}")
+		out, err := cmd.Output()
 		if err != nil {
-			return ""
+			return "", err
 		}
-		return strings.TrimSpace(string(out))
+		return strings.TrimSpace(string(out)), nil
 	}
-	status := func(r string) string {
-		out, err := exec.Command("git", "-C", r, "status", "--porcelain=v1").Output()
+	status := func(r string) (string, error) {
+		cmd := exec.Command("git", "-C", r, "status", "--porcelain=v1")
+		out, err := cmd.Output()
 		if err != nil {
-			return ""
+			return "", err
 		}
-		return strings.TrimSpace(string(out))
+		return strings.TrimSpace(string(out)), nil
 	}
 	return head, status
 }
@@ -107,9 +123,12 @@ func LookupFromGit(root string) (HeadReader, WorktreeReader) {
 // DetectContext reads the production environment and the supplied
 // repository root to assemble a DupcodeExecutionContext. The HeadCommit
 // is computed via `git rev-parse HEAD^{commit}`; the worktree cleanliness
-// is computed via `git status --porcelain=v1`.
+// is computed via `git status --porcelain=v1`. Any Git error is recorded
+// in the context's GitError field; callers MUST check this and deny if set.
 func DetectContext(root string) DupcodeExecutionContext {
 	head, status := LookupFromGit(root)
+	headCommit, headErr := head(root)
+	worktreeStatus, statusErr := status(root)
 	return DupcodeExecutionContext{
 		CI:              LookupFromOS(envCI),
 		GitHubActions:   LookupFromOS(envGitHubActions),
@@ -117,8 +136,11 @@ func DetectContext(root string) DupcodeExecutionContext {
 		GitHubSHA:       LookupFromOS(envGitHubSHA),
 		GitHubWorkspace: LookupFromOS(envGitHubWorkspace),
 		RepositoryRoot:  root,
-		HeadCommit:      head(root),
-		WorktreeClean:   status(root) == "",
+		HeadCommit:      headCommit,
+		HeadErr:         headErr,
+		WorktreeStatus:  worktreeStatus,
+		StatusErr:       statusErr,
+		WorktreeClean:   statusErr == nil && worktreeStatus == "",
 	}
 }
 
@@ -146,9 +168,17 @@ func IsDupcodeDenied(err error) bool {
 // mutually consistent. Otherwise it returns a wrapped ErrDupcodeDenied
 // carrying the specific failure reason.
 //
-// The seven conditions are evaluated in the order GitHub Actions
-// publishes them. The first failure short-circuits.
+// The conditions are evaluated in the order GitHub Actions publishes them.
+// The first failure short-circuits. Any Git execution error causes denial.
 func ValidateDupcodeExecutionAuthority(ctx DupcodeExecutionContext) error {
+	// Git errors fail-closed: any failure to read HEAD or worktree status
+	// must deny authorization. This is not recoverable.
+	if ctx.HeadErr != nil {
+		return newDupcodeDenied(fmt.Sprintf("git rev-parse HEAD failed: %v", ctx.HeadErr))
+	}
+	if ctx.StatusErr != nil {
+		return newDupcodeDenied(fmt.Sprintf("git status failed: %v", ctx.StatusErr))
+	}
 	if ctx.CI != "true" {
 		return newDupcodeDenied("CI must be set to \"true\"")
 	}

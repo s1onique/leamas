@@ -159,11 +159,11 @@ coverage:
 		--json-output .factory/coverage-summary.json
 
 # Dupcode baseline: generate or update the duplicate code baseline
-# Use this to create or refresh .factory/dupcode-baseline.json
+# Dupcode is a CI-only verifier lane; this target is prohibited locally.
 dupcode-baseline:
-	@echo "Updating duplicate code baseline..."
-	@mkdir -p .factory
-	@go run ./cmd/leamas factory verify dupcode --update-baseline
+	@echo "dupcode: dupcode is a CI-only verifier lane; local execution is prohibited;" \
+		"push a branch or open a PR and use the Factory Dupcode status check" >&2; \
+		exit 1
 
 bootstrap:
 	@echo "Configuring git hooks path..."

@@ -1,0 +1,74 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-DUPCODE-CI-ONLY-AUTHORITY01-CORRECTION01",
+  "predecessor": "ACT-LEAMAS-FACTORY-DUPCODE-CI-ONLY-AUTHORITY01",
+  "baseline": {
+    "commit_oid": "7e95325b8fdf14400fe03c6e638820cd831d6afd",
+    "tree_oid": "TO_BE_FILLED"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": ["make", "gate-fast"],
+      "environment": {"CGO_ENABLED": "0"},
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "go-test-count-1",
+      "mode": "run",
+      "argv": ["go", "test", "-count=1", "-race", "./internal/factory/gate/dupcodeauthority/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "dupcode-cli-denial",
+      "mode": "run",
+      "argv": ["./bin/leamas", "factory", "gate", "--lane=dupcode"],
+      "environment": {},
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "full-gate-denial",
+      "mode": "run",
+      "argv": ["./bin/leamas", "factory", "gate", "--test-mode=full"],
+      "environment": {},
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "factorize-denial",
+      "mode": "run",
+      "argv": ["./bin/leamas", "factory", "factorize"],
+      "environment": {},
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "dupcode-baseline-denial",
+      "mode": "run",
+      "argv": ["make", "dupcode-baseline"],
+      "environment": {},
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "dupcode is a CI-only verifier lane; local execution is prohibited by design"
+    }
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}

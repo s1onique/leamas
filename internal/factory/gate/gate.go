@@ -67,6 +67,7 @@ type Verifier struct {
 }
 
 // RunGate runs all verifiers and Go toolchain checks.
+// Dupcode lane verifiers are checked against the central authority first.
 func RunGate(root string) int {
 	verifiers := AllVerifiers()
 
@@ -83,7 +84,27 @@ func RunGate(root string) int {
 	failed := false
 
 	for _, v := range verifiers {
-		findings := v.Run(root)
+		var findings []checks.Finding
+
+		// Dupcode lane verifiers require central authority check
+		if v.Lane == VerifierLaneDupcode {
+			if err := ValidateDupcodeAuthorityForCLI(root); err != nil {
+				findings = []checks.Finding{
+					{
+						Path:     v.Name,
+						Kind:     "dupcode_ci_only_authority_denied",
+						Message:  err.Error(),
+						Severity: checks.SeverityError,
+					},
+				}
+			}
+		}
+
+		// Run verifier only if not denied by authority
+		if len(findings) == 0 {
+			findings = v.Run(root)
+		}
+
 		if len(findings) > 0 {
 			failed = true
 			fmt.Printf("\n--- %s FAILED ---\n", v.Name)
@@ -129,7 +150,15 @@ func shouldCollectMetrics() bool {
 // Factorize uses a shared dupcode analysis context to ensure that both
 // "dupcode" and "dupcode-baseline" verifiers perform only one scan of the
 // repository during a single factorize invocation.
+//
+// Dupcode lane verifiers require central authority check.
 func RunFactorize(root string) int {
+	// Central authority check: deny locally before any verifier initialization
+	if err := ValidateDupcodeAuthorityForCLI(root); err != nil {
+		fmt.Fprintf(os.Stderr, "dupcode: %v\n", err)
+		return 1
+	}
+
 	// Build verifiers with shared dupcode context
 	verifiers, err := FactorizeVerifiersWithDupcodeContext(root)
 	if err != nil {
