@@ -158,11 +158,24 @@ func validateFactoryDupcodeWorkflow(content []byte, requireCanonical bool) []Wor
 			})
 		}
 
-		// Check authority step command
-		if !strings.Contains(authorityStep.Run, "make gate-dupcode") {
+		// Check authority step command using exact line matching
+		authLines := strings.Split(authorityStep.Run, "\n")
+		var authExecutableLines []string
+		for _, l := range authLines {
+			l = strings.TrimSpace(l)
+			if l == "" || strings.HasPrefix(l, "#") {
+				continue
+			}
+			authExecutableLines = append(authExecutableLines, l)
+		}
+		authLineSet := make(map[string]bool)
+		for _, l := range authExecutableLines {
+			authLineSet[l] = true
+		}
+		if !authLineSet["make gate-dupcode"] {
 			violations = append(violations, WorkflowViolation{
 				Type:    ViolationMissingGateDupcode,
-				Message: "authority step must run 'make gate-dupcode', got: " + authorityStep.Run,
+				Message: "authority step must execute exact line: make gate-dupcode",
 			})
 		}
 	}

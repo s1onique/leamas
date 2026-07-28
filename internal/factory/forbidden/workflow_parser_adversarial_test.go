@@ -97,6 +97,49 @@ jobs:
 	findViolation(t, violations, ViolationMissingGateDupcode, "missing make gate-dupcode")
 }
 
+// TestContractRejectsEchoMakeGateDupcode verifies echo "make gate-dupcode" is not accepted.
+func TestContractRejectsEchoMakeGateDupcode(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run gate-dupcode
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: |
+          echo "make gate-dupcode"
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
+	findViolation(t, violations, ViolationMissingGateDupcode, "echo containing make gate-dupcode")
+}
+
+// TestContractRejectsCommentedMakeGateDupcode verifies commented make gate-dupcode is not accepted.
+func TestContractRejectsCommentedMakeGateDupcode(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run gate-dupcode
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: |
+          # make gate-dupcode
+          echo "something else"
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
+	findViolation(t, violations, ViolationMissingGateDupcode, "commented make gate-dupcode")
+}
+
 // TestContractRejectsSiblingLeakage verifies sibling job steps don't leak into factory-dupcode.
 func TestContractRejectsSiblingLeakage(t *testing.T) {
 	yaml := `name: Factory CI
