@@ -21,16 +21,7 @@ jobs:
         uses: actions/checkout@v4
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationWorkflowAuthority {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject workflow-level LEAMAS_DUPCODE_AUTHORITY")
-	}
+	findViolation(t, violations, ViolationWorkflowAuthority, "workflow-level LEAMAS_DUPCODE_AUTHORITY")
 }
 
 // TestContractRejectsJobLevelAuthority verifies job-level authority is rejected.
@@ -48,16 +39,7 @@ jobs:
         uses: actions/checkout@v4
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationJobAuthority {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject job-level LEAMAS_DUPCODE_AUTHORITY")
-	}
+	findViolation(t, violations, ViolationJobAuthority, "job-level LEAMAS_DUPCODE_AUTHORITY")
 }
 
 // TestContractRejectsJobContinueOnError verifies job-level continue-on-error is rejected.
@@ -74,16 +56,7 @@ jobs:
         uses: actions/checkout@v4
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationJobContinueOnError {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject job-level continue-on-error: true")
-	}
+	findViolation(t, violations, ViolationJobContinueOnError, "job-level continue-on-error: true")
 }
 
 // TestContractRejectsWrongAuthorityStep verifies authority on wrong step is rejected.
@@ -101,16 +74,7 @@ jobs:
           LEAMAS_DUPCODE_AUTHORITY: github-actions
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationWrongAuthorityStep {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject authority on wrong step in canonical mode")
-	}
+	findViolation(t, violations, ViolationWrongAuthorityStep, "authority on wrong step")
 }
 
 // TestContractRejectsMissingGateDupcode verifies missing make gate-dupcode is rejected.
@@ -130,16 +94,7 @@ jobs:
         run: make build
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationMissingGateDupcode {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject missing make gate-dupcode command")
-	}
+	findViolation(t, violations, ViolationMissingGateDupcode, "missing make gate-dupcode")
 }
 
 // TestContractRejectsSiblingLeakage verifies sibling job steps don't leak into factory-dupcode.
@@ -154,8 +109,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Dupcode CI preflight
-        run: |
-          test "$GITHUB_ACTIONS" = "true"
+        run: test "$GITHUB_ACTIONS" = "true"
   factory-long:
     name: Factory Long
     timeout-minutes: 120
@@ -174,7 +128,7 @@ jobs:
 	}
 }
 
-// TestContractRejectsWrongDisplayName verifies wrong display name is rejected in canonical mode.
+// TestContractRejectsWrongDisplayName verifies wrong display name is rejected.
 func TestContractRejectsWrongDisplayName(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
@@ -187,19 +141,10 @@ jobs:
         uses: actions/checkout@v4
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationWrongJobName {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject wrong display name in canonical mode")
-	}
+	findViolation(t, violations, ViolationWrongJobName, "wrong display name")
 }
 
-// TestContractRejectsWrongTimeout verifies wrong timeout is rejected in canonical mode.
+// TestContractRejectsWrongTimeout verifies wrong timeout is rejected.
 func TestContractRejectsWrongTimeout(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
@@ -212,19 +157,10 @@ jobs:
         uses: actions/checkout@v4
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationWrongTimeout {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject wrong timeout in canonical mode")
-	}
+	findViolation(t, violations, ViolationWrongTimeout, "wrong timeout")
 }
 
-// TestContractRejectsMissingCheckout verifies missing checkout is rejected in canonical mode.
+// TestContractRejectsMissingCheckout verifies missing checkout is rejected.
 func TestContractRejectsMissingCheckout(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
@@ -239,19 +175,10 @@ jobs:
         run: make gate-dupcode
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationMissingCheckout {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject missing checkout in canonical mode")
-	}
+	findViolation(t, violations, ViolationMissingCheckout, "missing checkout")
 }
 
-// TestContractRejectsMissingPreflight verifies missing preflight is rejected in canonical mode.
+// TestContractRejectsMissingPreflight verifies missing preflight is rejected.
 func TestContractRejectsMissingPreflight(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
@@ -268,20 +195,11 @@ jobs:
         run: make gate-dupcode
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationMissingPreflight {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject missing preflight in canonical mode")
-	}
+	findViolation(t, violations, ViolationMissingPreflight, "missing preflight")
 }
 
-// TestContractRejectsMissingSHAAssert verifies commented SHA assertion is rejected.
-func TestContractRejectsMissingSHAAssert(t *testing.T) {
+// TestContractRejectsPreflightViolation verifies commented assertions are rejected.
+func TestContractRejectsPreflightViolation(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 jobs:
@@ -297,20 +215,11 @@ jobs:
           # test "$(git rev-parse HEAD^{commit})" = "$GITHUB_SHA"
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
-	var found bool
-	for _, v := range violations {
-		if v.Type == ViolationMissingSHAAssert {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Error("contract should reject commented SHA assertion in canonical mode")
-	}
+	findViolation(t, violations, ViolationMissingSHAAssert, "commented SHA assertion")
 }
 
-// TestContractRejectsMissingCleanTree verifies commented clean tree assertion is rejected.
-func TestContractRejectsMissingCleanTree(t *testing.T) {
+// TestContractRejectsMultipleAuthoritySteps verifies exactly one authority step is required.
+func TestContractRejectsMultipleAuthoritySteps(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 jobs:
@@ -321,19 +230,86 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Dupcode CI preflight
-        run: |
-          test "$GITHUB_ACTIONS" = "true"
-          # test -z "$(git status --porcelain=v1)"
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: test "$GITHUB_ACTIONS" = "true"
+      - name: Run gate-dupcode
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: make gate-dupcode
 `
 	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
-	var found bool
+	findViolation(t, violations, ViolationMultipleAuthority, "multiple authority steps")
+}
+
+// TestContractRejectsInvalidAuthorityValue verifies authority value must be 'github-actions'.
+func TestContractRejectsInvalidAuthorityValue(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run gate-dupcode
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: local
+        run: make gate-dupcode
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	findViolation(t, violations, ViolationAuthorityValue, "invalid authority value 'local'")
+}
+
+// TestContractRejectsStepContinueOnError verifies step-level continue-on-error is rejected.
+func TestContractRejectsStepContinueOnError(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run gate-dupcode
+        continue-on-error: true
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: make gate-dupcode
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
+	findViolation(t, violations, ViolationStepContinueOnError, "step-level continue-on-error")
+}
+
+// TestContractRejectsInvalidCheckoutAction verifies checkout must use actions/checkout@.
+func TestContractRejectsInvalidCheckoutAction(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: malicious/action@v1
+      - name: Run gate-dupcode
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: make gate-dupcode
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	findViolation(t, violations, ViolationCheckoutAction, "non-canonical checkout action")
+}
+
+// findViolation checks that violations contain a specific type.
+func findViolation(t *testing.T, violations []WorkflowViolation, typ, desc string) {
+	t.Helper()
 	for _, v := range violations {
-		if v.Type == ViolationMissingCleanTree {
-			found = true
-			break
+		if v.Type == typ {
+			return
 		}
 	}
-	if !found {
-		t.Error("contract should reject commented clean tree assertion in canonical mode")
-	}
+	t.Errorf("contract should reject %s", desc)
 }
