@@ -73,6 +73,9 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 	// Create runner using the protectedverifier adapter
 	runner := protectedverifier.NewDupcodeRunner()
 
+	// Capture report data for output
+	var scanReport protectedverifier.Report
+
 	// Create runner factory - invoked ONLY after authority validation passes
 	runnerFactory := func() func(root string) []checks.Finding {
 		return func(root string) []checks.Finding {
@@ -87,6 +90,9 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 					},
 				}
 			}
+
+			// Capture report for output
+			scanReport = report
 
 			// Write baseline inside the runner factory
 			if err := runner.WriteBaseline(baselinePath, report); err != nil {
@@ -131,16 +137,21 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		os.Exit(1)
 	}
 
+	// Report actual scan results
+	findingsCount := len(scanReport.Findings)
+
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
 		enc.Encode(map[string]interface{}{
-			"baseline":   baselinePath,
-			"findings":   0,
-			"thresholds": map[string]int{"min_lines": cfg.MinLines, "min_tokens": cfg.MinTokens},
+			"baseline":    baselinePath,
+			"findings":    findingsCount,
+			"thresholds":  map[string]int{"min_lines": cfg.MinLines, "min_tokens": cfg.MinTokens},
+			"scan_report": scanReport,
 		})
 	} else {
 		fmt.Printf("Baseline written to: %s\n", baselinePath)
 		fmt.Printf("Thresholds: min_lines=%d, min_tokens=%d\n", cfg.MinLines, cfg.MinTokens)
+		fmt.Printf("Scan found %d duplicate blocks\n", findingsCount)
 	}
 
 	os.Exit(0)
@@ -153,6 +164,10 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 
 	// Create runner using the protectedverifier adapter
 	runner := protectedverifier.NewDupcodeRunner()
+
+	// Capture comparison result for output
+	var compareResult protectedverifier.CompareResult
+	var report protectedverifier.Report
 
 	// Create runner factory - invoked ONLY after authority validation passes
 	runnerFactory := func() func(root string) []checks.Finding {
@@ -170,7 +185,7 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 				}
 			}
 
-			report, err := runner.RunCheckReport(root, cfg)
+			scanReport, err := runner.RunCheckReport(root, cfg)
 			if err != nil {
 				return []checks.Finding{
 					{
@@ -182,12 +197,14 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 				}
 			}
 
-			compareResult := runner.CompareToBaseline(report, baseline)
+			report = scanReport
+			comparison := runner.CompareToBaseline(scanReport, baseline)
+			compareResult = comparison
 
 			// Convert to findings
 			var findings []checks.Finding
-			if compareResult.HasChanges {
-				for _, f := range compareResult.NewFindings {
+			if comparison.HasChanges {
+				for _, f := range comparison.NewFindings {
 					findings = append(findings, checks.Finding{
 						Path:     "dupcode",
 						Kind:     "new_duplicate",
@@ -195,7 +212,7 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 						Severity: checks.SeverityError,
 					})
 				}
-				for _, f := range compareResult.WorsenedFindings {
+				for _, f := range comparison.WorsenedFindings {
 					findings = append(findings, checks.Finding{
 						Path:     "dupcode",
 						Kind:     "worsened_duplicate",
@@ -236,12 +253,25 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		os.Exit(1)
 	}
 
-	// Success
+	// Report comparison results
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
-		enc.Encode(map[string]interface{}{"has_changes": false})
+		enc.Encode(map[string]interface{}{
+			"has_changes":       compareResult.HasChanges,
+			"new_count":         len(compareResult.NewFindings),
+			"worsened_count":    len(compareResult.WorsenedFindings),
+			"new_findings":      compareResult.NewFindings,
+			"worsened_findings": compareResult.WorsenedFindings,
+			"current_report":    report,
+		})
 	} else {
-		fmt.Printf("No duplicate code violations found.\n")
+		if compareResult.HasChanges {
+			fmt.Printf("Duplicate code violations found:\n")
+			fmt.Printf("  New: %d\n", len(compareResult.NewFindings))
+			fmt.Printf("  Worsened: %d\n", len(compareResult.WorsenedFindings))
+		} else {
+			fmt.Printf("No duplicate code violations found.\n")
+		}
 	}
 
 	os.Exit(0)
