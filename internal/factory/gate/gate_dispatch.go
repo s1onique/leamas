@@ -16,7 +16,10 @@ func DispatcherForVerifier(verifierName string) (*verifierdispatch.Dispatcher, b
 	verifiers := AllVerifiers()
 	for _, v := range verifiers {
 		if v.Name == verifierName {
-			dispatcher := verifierdispatch.NewDispatcher(verifiers)
+			dispatcher, err := verifierdispatch.NewDispatcher(verifiers)
+			if err != nil {
+				return nil, false
+			}
 			return dispatcher, true
 		}
 	}
@@ -40,8 +43,9 @@ func DispatchDupcodeVerify(ctx context.Context, root string, factory verifierdis
 		Root:       root,
 	}
 
-	// Use Dispatch with RunnerFactory - factory is invoked only after authority validation
-	return dispatcher.Dispatch(ctx, request, factory)
+	// Use Dispatch with observer - factory is invoked only after authority validation
+	observer := &verifierdispatch.DefaultContextObserver{}
+	return dispatcher.Dispatch(ctx, request, observer, factory)
 }
 
 // DispatchDupcodeBaselineVerify dispatches a dupcode-baseline verify request.
@@ -61,8 +65,9 @@ func DispatchDupcodeBaselineVerify(ctx context.Context, root string, factory ver
 		Root:       root,
 	}
 
-	// Use Dispatch with RunnerFactory - factory is invoked only after authority validation
-	return dispatcher.Dispatch(ctx, request, factory)
+	// Use Dispatch with observer - factory is invoked only after authority validation
+	observer := &verifierdispatch.DefaultContextObserver{}
+	return dispatcher.Dispatch(ctx, request, observer, factory)
 }
 
 // DispatchDupcodeUpdateBaseline dispatches a dupcode update-baseline request.
@@ -82,6 +87,7 @@ func DispatchDupcodeUpdateBaseline(ctx context.Context, root string, factory ver
 		Root:       root,
 	}
 
-	// Use Dispatch with RunnerFactory - factory is invoked only after authority validation
-	return dispatcher.Dispatch(ctx, request, factory)
+	// Use Dispatch with observer - factory is invoked only after authority validation
+	observer := &verifierdispatch.DefaultContextObserver{}
+	return dispatcher.Dispatch(ctx, request, observer, factory)
 }

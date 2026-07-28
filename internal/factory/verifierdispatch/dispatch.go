@@ -17,7 +17,9 @@ package verifierdispatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
@@ -41,45 +43,135 @@ type Result struct {
 	Error    error
 }
 
+// ErrVerifierNotFound is returned when a verifier ID is not in the registry.
+type ErrVerifierNotFound struct {
+	VerifierID string
+}
+
+func (e *ErrVerifierNotFound) Error() string {
+	return fmt.Sprintf("verifier not found: %s", e.VerifierID)
+}
+
+// ContextObserver observes execution context when required by authority.
+// For local_safe verifiers, the observer is never called.
+// For ci_exact_checkout verifiers, the observer is called exactly once
+// before authority validation.
+type ContextObserver interface {
+	Observe(ctx context.Context, root string) verifierauthority.ExecutionContext
+}
+
+// DefaultContextObserver is the production context observer using DetectExecutionContext.
+type DefaultContextObserver struct{}
+
+func (d *DefaultContextObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
+	return verifierauthority.DetectExecutionContext(ctx, root)
+}
+
 // Dispatcher is the central production dispatcher for verifier execution.
 type Dispatcher struct {
 	verifiers []registry.Verifier
 }
 
 // NewDispatcher creates a new dispatcher with the canonical verifier registry.
-func NewDispatcher(verifiers []registry.Verifier) *Dispatcher {
-	return &Dispatcher{verifiers: verifiers}
+// The registry is validated for structural correctness:
+//   - No empty verifier IDs
+//   - No duplicate verifier IDs
+//   - No empty authority
+//   - All authorities must be known
+//   - No dupcode lane with local_safe
+//   - No fast lane with ci_exact_checkout
+//
+// The registry is copied defensively; caller may modify original after construction.
+func NewDispatcher(verifiers []registry.Verifier) (*Dispatcher, error) {
+	if len(verifiers) == 0 {
+		return nil, errors.New("verifiers slice is empty")
+	}
+
+	// Copy to prevent caller mutation
+	verifiers = slices.Clone(verifiers)
+
+	seen := make(map[string]bool)
+
+	for i, v := range verifiers {
+		// Check for empty verifier ID
+		if v.Name == "" {
+			return nil, &RegistryValidationError{
+				Verifier: fmt.Sprintf("[%d]", i),
+				Field:    "Name",
+				Reason:   "verifier ID cannot be empty",
+			}
+		}
+
+		// Check for duplicate verifier IDs
+		if seen[v.Name] {
+			return nil, &RegistryValidationError{
+				Verifier: v.Name,
+				Field:    "Name",
+				Reason:   "duplicate verifier ID",
+			}
+		}
+		seen[v.Name] = true
+
+		// Delegate to registry's own validation for authority and lane compatibility
+		if err := v.Validate(); err != nil {
+			var validationErr *registry.ValidationError
+			if errors.As(err, &validationErr) {
+				return nil, &RegistryValidationError{
+					Verifier: v.Name,
+					Field:    validationErr.Field,
+					Reason:   validationErr.Reason,
+				}
+			}
+			return nil, &RegistryValidationError{
+				Verifier: v.Name,
+				Field:    "Authority",
+				Reason:   err.Error(),
+			}
+		}
+	}
+
+	return &Dispatcher{verifiers: verifiers}, nil
+}
+
+// RegistryValidationError represents a dispatcher construction validation failure.
+type RegistryValidationError struct {
+	Verifier string
+	Field    string
+	Reason   string
+}
+
+func (e *RegistryValidationError) Error() string {
+	return fmt.Sprintf("verifier %s: %s %s", e.Verifier, e.Field, e.Reason)
 }
 
 // Dispatch routes a verifier execution request through authority validation.
 // It returns the verifier's findings if authority permits, or a denial finding
 // if authority is denied. The RunnerFactory is never invoked unless authority
 // validation passes.
-func (d *Dispatcher) Dispatch(ctx context.Context, request Request, factory RunnerFactory) Result {
+//
+// For local_safe verifiers, the ContextObserver is NOT called.
+// For ci_exact_checkout verifiers, the ContextObserver is called exactly once.
+func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer ContextObserver, factory RunnerFactory) Result {
 	// Step 1: Resolve verifier metadata from registry
 	v := d.resolveVerifier(request.VerifierID)
 	if v == nil {
 		return Result{
-			Error: fmt.Errorf("verifier not found: %s", request.VerifierID),
+			Error: &ErrVerifierNotFound{VerifierID: request.VerifierID},
 		}
 	}
 
-	// Step 2: Validate authority
-	// For local_safe verifiers, skip expensive Git observation
-	var ec *verifierauthority.ExecutionContext
-	var err error
+	// Step 2: Get execution context (observer NOT called for local_safe)
+	var ec verifierauthority.ExecutionContext
 	if v.Authority == verifierauthority.AuthorityLocalSafe {
-		ec, err = verifierauthority.NewLocalOnlyContext(), nil
+		// Local-safe: no Git observation needed
+		ec = *verifierauthority.NewLocalOnlyContext()
 	} else {
-		observed := verifierauthority.DetectExecutionContext(ctx, request.Root)
-		ec = &observed
+		// CI authority: observer is called exactly once, even if operation is denied
+		ec = observer.Observe(ctx, request.Root)
 	}
-	if err != nil {
-		return Result{
-			Error: err,
-		}
-	}
-	if err := verifierauthority.ValidateAuthority(*ec, v.Authority, request.Operation); err != nil {
+
+	// Step 3: Validate operation against authority policy
+	if err := validateOperation(v.Authority, request.Operation); err != nil {
 		findings := []checks.Finding{
 			{
 				Path:     v.Name,
@@ -94,26 +186,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, factory Runn
 		}
 	}
 
-	// Step 3: Authority passed - invoke factory
-	runner := factory()
-	return Result{
-		Findings: runner(request.Root),
-	}
-}
-
-// DispatchGuarded is a convenience wrapper that resolves the execution context
-// and applies authority validation. Use this when you cannot supply a pre-built context.
-func (d *Dispatcher) DispatchGuarded(ctx context.Context, request Request, runner func(root string) []checks.Finding) Result {
-	// Step 1: Resolve verifier metadata from registry
-	v := d.resolveVerifier(request.VerifierID)
-	if v == nil {
-		return Result{
-			Error: fmt.Errorf("verifier not found: %s", request.VerifierID),
-		}
-	}
-
-	// Step 2: Validate authority
-	ec := verifierauthority.DetectExecutionContext(ctx, request.Root)
+	// Step 4: Validate authority
 	if err := verifierauthority.ValidateAuthority(ec, v.Authority, request.Operation); err != nil {
 		findings := []checks.Finding{
 			{
@@ -129,10 +202,32 @@ func (d *Dispatcher) DispatchGuarded(ctx context.Context, request Request, runne
 		}
 	}
 
-	// Step 3: Authority passed - run the verifier
+	// Step 5: Authority passed - invoke factory
+	runner := factory()
 	return Result{
 		Findings: runner(request.Root),
 	}
+}
+
+// DispatchWithDefaultObserver is a convenience wrapper that uses the default
+// production context observer. For testing, prefer Dispatch with a fake observer.
+func (d *Dispatcher) DispatchWithDefaultObserver(ctx context.Context, request Request, factory RunnerFactory) Result {
+	return d.Dispatch(ctx, request, &DefaultContextObserver{}, factory)
+}
+
+// validateOperation checks if the operation is allowed for the authority.
+// Returns error if the operation is not permitted.
+func validateOperation(authority verifierauthority.ExecutionAuthority, operation verifierauthority.VerifierOperation) error {
+	// OperationUpdateBaseline is denied for ci_exact_checkout
+	if authority == verifierauthority.AuthorityCIExactCheckout && operation == verifierauthority.OperationUpdateBaseline {
+		return &verifierauthority.AuthorityError{
+			RequiredAuthority: authority,
+			Operation:         operation,
+			ReasonCode:        verifierauthority.ReasonCodeOperationDenied,
+			Message:           "update_baseline operation is not permitted under ci_exact_checkout authority",
+		}
+	}
+	return nil
 }
 
 // resolveVerifier looks up a verifier by ID in the registry.
@@ -145,15 +240,6 @@ func (d *Dispatcher) resolveVerifier(id string) *registry.Verifier {
 	return nil
 }
 
-// ErrVerifierNotFound is returned when a verifier ID is not in the registry.
-type ErrVerifierNotFound struct {
-	VerifierID string
-}
-
-func (e *ErrVerifierNotFound) Error() string {
-	return fmt.Sprintf("verifier not found: %s", e.VerifierID)
-}
-
 // LookupVerifier returns a verifier by ID or an error if not found.
 func (d *Dispatcher) LookupVerifier(id string) (*registry.Verifier, error) {
 	v := d.resolveVerifier(id)
@@ -161,4 +247,9 @@ func (d *Dispatcher) LookupVerifier(id string) (*registry.Verifier, error) {
 		return nil, &ErrVerifierNotFound{VerifierID: id}
 	}
 	return v, nil
+}
+
+// GetVerifiers returns a copy of the verifier registry.
+func (d *Dispatcher) GetVerifiers() []registry.Verifier {
+	return slices.Clone(d.verifiers)
 }
