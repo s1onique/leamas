@@ -4,6 +4,7 @@ package dupcodeauthority
 
 import (
 	"errors"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 	"testing"
 )
 
@@ -21,7 +22,7 @@ func TestDupcodeAuthorityErrorMessageStability(t *testing.T) {
 		WorktreeClean:   true,
 	}
 
-	err := ValidateDupcodeExecutionAuthority(ctx)
+	err := ValidateDupcodeExecutionAuthority(ctx, verifierauthority.OperationVerify)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -65,7 +66,7 @@ func TestDupcodeAuthorityIsDupcodeErrorInterface(t *testing.T) {
 		WorktreeClean:   true,
 	}
 
-	err := ValidateDupcodeExecutionAuthority(ctx)
+	err := ValidateDupcodeExecutionAuthority(ctx, verifierauthority.OperationVerify)
 	if err == nil {
 		t.Fatal("expected error")
 	}

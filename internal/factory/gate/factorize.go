@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 // clock abstracts the time source used to measure check and total
@@ -34,7 +35,7 @@ func (systemClock) Now() time.Time { return time.Now() }
 func runCheck(
 	out io.Writer,
 	clk clock,
-	verifier Verifier,
+	verifier registry.Verifier,
 	metrics *MetricsCollectionV3,
 	ordinal int,
 	root string,
@@ -97,11 +98,11 @@ func runFactorize(
 	out io.Writer,
 	clk clock,
 	root string,
-	verifiers []Verifier,
+	verifiers []registry.Verifier,
 	metrics *MetricsCollectionV3,
 	sampler ResourceSampler,
 ) int {
-	sorted := make([]Verifier, len(verifiers))
+	sorted := make([]registry.Verifier, len(verifiers))
 	copy(sorted, verifiers)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Name < sorted[j].Name

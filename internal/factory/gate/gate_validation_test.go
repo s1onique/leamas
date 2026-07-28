@@ -5,11 +5,12 @@ import (
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 // TestValidateVerifier_EmptyName verifies validation fails for empty name.
 func TestValidateVerifier_EmptyName(t *testing.T) {
-	v := Verifier{Name: "", Run: func(string) []checks.Finding { return nil }, Lane: VerifierLaneFast}
+	v := registry.Verifier{Name: "", Run: func(string) []checks.Finding { return nil }, Lane: registry.VerifierLaneFast}
 	err := ValidateVerifier(v)
 	if err == nil {
 		t.Error("expected error for empty name")
@@ -18,7 +19,7 @@ func TestValidateVerifier_EmptyName(t *testing.T) {
 
 // TestValidateVerifier_NilRun verifies validation fails for nil Run.
 func TestValidateVerifier_NilRun(t *testing.T) {
-	v := Verifier{Name: "test", Run: nil, Lane: VerifierLaneFast}
+	v := registry.Verifier{Name: "test", Run: nil, Lane: registry.VerifierLaneFast}
 	err := ValidateVerifier(v)
 	if err == nil {
 		t.Error("expected error for nil Run")
@@ -27,12 +28,12 @@ func TestValidateVerifier_NilRun(t *testing.T) {
 
 // TestValidateVerifier_InvalidLane verifies validation fails for invalid lane.
 func TestValidateVerifier_InvalidLane(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
 		Lane: "unknown",
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 		},
 	}
@@ -44,11 +45,11 @@ func TestValidateVerifier_InvalidLane(t *testing.T) {
 
 // TestValidateVerifier_InvalidKind verifies validation fails for invalid kind.
 func TestValidateVerifier_InvalidKind(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
 			Kind:             "invalid",
 			ImplementationID: "test",
 		},
@@ -61,12 +62,12 @@ func TestValidateVerifier_InvalidKind(t *testing.T) {
 
 // TestValidateVerifier_EmptyImplID verifies validation fails for empty ImplementationID.
 func TestValidateVerifier_EmptyImplID(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "",
 		},
 	}
@@ -78,17 +79,17 @@ func TestValidateVerifier_EmptyImplID(t *testing.T) {
 
 // TestValidateVerifier_InvalidGoBuildCache verifies validation fails for invalid GoBuildCache.
 func TestValidateVerifier_InvalidGoBuildCache(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 		},
-		Cache: CacheSemantics{
+		Cache: registry.CacheSemantics{
 			GoBuildCache:      "invalid",
-			GoTestResultCache: CacheModeNA,
+			GoTestResultCache: registry.CacheModeNA,
 		},
 	}
 	err := ValidateVerifier(v)
@@ -99,16 +100,16 @@ func TestValidateVerifier_InvalidGoBuildCache(t *testing.T) {
 
 // TestValidateVerifier_InvalidGoTestResultCache verifies validation fails for invalid GoTestResultCache.
 func TestValidateVerifier_InvalidGoTestResultCache(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 		},
-		Cache: CacheSemantics{
-			GoBuildCache:      CacheNotApplicable,
+		Cache: registry.CacheSemantics{
+			GoBuildCache:      registry.CacheNotApplicable,
 			GoTestResultCache: "invalid",
 		},
 	}
@@ -120,12 +121,12 @@ func TestValidateVerifier_InvalidGoTestResultCache(t *testing.T) {
 
 // TestValidateVerifier_DuplicateEnvKey verifies validation fails for duplicate env keys.
 func TestValidateVerifier_DuplicateEnvKey(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 			EnvVars:          []string{"GOFLAGS", "GOFLAGS"},
 		},
@@ -138,12 +139,12 @@ func TestValidateVerifier_DuplicateEnvKey(t *testing.T) {
 
 // TestValidateVerifier_MalformedEnvKeyWithEquals verifies validation fails for env key with =.
 func TestValidateVerifier_MalformedEnvKeyWithEquals(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 			EnvVars:          []string{"GOFLAGS=value"},
 		},
@@ -156,12 +157,12 @@ func TestValidateVerifier_MalformedEnvKeyWithEquals(t *testing.T) {
 
 // TestValidateVerifier_MalformedEnvKeyWithWhitespace verifies validation fails for env key with whitespace.
 func TestValidateVerifier_MalformedEnvKeyWithWhitespace(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 			EnvVars:          []string{" GOFLAGS"},
 		},
@@ -174,12 +175,12 @@ func TestValidateVerifier_MalformedEnvKeyWithWhitespace(t *testing.T) {
 
 // TestValidateVerifier_MalformedEnvKeyInvalidName verifies validation fails for invalid env key name.
 func TestValidateVerifier_MalformedEnvKeyInvalidName(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 			EnvVars:          []string{"123INVALID"},
 		},
@@ -192,18 +193,18 @@ func TestValidateVerifier_MalformedEnvKeyInvalidName(t *testing.T) {
 
 // TestValidateVerifier_ValidEmptyEnvVars verifies validation passes for empty env vars.
 func TestValidateVerifier_ValidEmptyEnvVars(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 			EnvVars:          []string{},
 		},
-		Cache: CacheSemantics{
-			GoBuildCache:      CacheNotApplicable,
-			GoTestResultCache: CacheModeNA,
+		Cache: registry.CacheSemantics{
+			GoBuildCache:      registry.CacheNotApplicable,
+			GoTestResultCache: registry.CacheModeNA,
 		},
 	}
 	err := ValidateVerifier(v)
@@ -214,16 +215,16 @@ func TestValidateVerifier_ValidEmptyEnvVars(t *testing.T) {
 
 // TestValidateVerifiers_NoDuplicates verifies validation fails for duplicate names.
 func TestValidateVerifiers_NoDuplicates(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 		},
 	}
-	verifiers := []Verifier{v, v}
+	verifiers := []registry.Verifier{v, v}
 	err := ValidateVerifiers(verifiers)
 	if err == nil {
 		t.Error("expected error for duplicate names")
@@ -251,12 +252,12 @@ func TestPartitionVerifiers(t *testing.T) {
 			len(fast), len(dupcode), len(fast)+len(dupcode), len(all))
 	}
 	for _, v := range fast {
-		if v.Lane != VerifierLaneFast {
+		if v.Lane != registry.VerifierLaneFast {
 			t.Errorf("fast verifier %q has lane %q", v.Name, v.Lane)
 		}
 	}
 	for _, v := range dupcode {
-		if v.Lane != VerifierLaneDupcode {
+		if v.Lane != registry.VerifierLaneDupcode {
 			t.Errorf("dupcode verifier %q has lane %q", v.Name, v.Lane)
 		}
 	}
@@ -264,16 +265,16 @@ func TestPartitionVerifiers(t *testing.T) {
 
 // TestPartitionVerifiers_InvalidLane verifies partition fails for unknown lane.
 func TestPartitionVerifiers_InvalidLane(t *testing.T) {
-	v := Verifier{
+	v := registry.Verifier{
 		Name: "test",
 		Run:  func(string) []checks.Finding { return nil },
 		Lane: "invalid",
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "test",
 		},
 	}
-	_, _, err := PartitionVerifiers([]Verifier{v})
+	_, _, err := PartitionVerifiers([]registry.Verifier{v})
 	if err == nil {
 		t.Error("expected error for invalid lane")
 	}

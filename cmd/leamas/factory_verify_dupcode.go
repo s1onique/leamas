@@ -2,12 +2,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 
+	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
+	"github.com/s1onique/leamas/internal/factory/gate"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
 // Default thresholds for the quality gate
@@ -35,14 +39,11 @@ func handleFactoryVerifyDupcode() {
 	jsonOutput := flag.Bool("json", false, "Output results as JSON")
 
 	// Parse only the arguments after "dupcode"
-	// os.Args = ["leamas", "factory", "verify", "dupcode", "--update-baseline", ...]
-	// We want to parse ["dupcode", "--update-baseline", ...]
 	args := os.Args[4:] // Skip "leamas factory verify"
 	if err := flag.CommandLine.Parse(args); err != nil {
 		if err == flag.ErrHelp {
 			os.Exit(0)
 		}
-		// Flag parse error - report and exit
 		if *jsonOutput {
 			fmt.Printf(`{"error": "flag parse error: %v"}`, err)
 		} else {
@@ -65,39 +66,77 @@ func handleFactoryVerifyDupcode() {
 }
 
 func handleUpdateBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bool) {
-	// Scan repo
-	report, err := dupcode.CheckReport(".", cfg)
-	if err != nil {
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("scan failed: %v", err)})
-		} else {
-			fmt.Fprintf(os.Stderr, "Error scanning repository: %v\n", err)
+	// Route through the central dispatcher with OperationUpdateBaseline.
+	// Authority validation happens BEFORE any expensive operations.
+	ctx := context.Background()
+
+	// Create runner factory - invoked ONLY after authority validation passes
+	runnerFactory := func() func(root string) []checks.Finding {
+		return func(root string) []checks.Finding {
+			report, err := dupcode.CheckReport(root, cfg)
+			if err != nil {
+				return []checks.Finding{
+					{
+						Path:     "dupcode",
+						Kind:     "error",
+						Message:  fmt.Sprintf("scan failed: %v", err),
+						Severity: checks.SeverityError,
+					},
+				}
+			}
+
+			// Write baseline inside the runner factory
+			if err := dupcode.WriteBaseline(baselinePath, report); err != nil {
+				return []checks.Finding{
+					{
+						Path:     "dupcode",
+						Kind:     "error",
+						Message:  fmt.Sprintf("failed to write baseline: %v", err),
+						Severity: checks.SeverityError,
+					},
+				}
+			}
+
+			return nil // Success
 		}
-		os.Exit(2)
 	}
 
-	// Write baseline
-	if err := dupcode.WriteBaseline(baselinePath, report); err != nil {
+	result := gate.DispatchDupcodeUpdateBaseline(ctx, ".", runnerFactory)
+
+	// Handle authority denial or runner errors
+	if len(result.Findings) > 0 {
+		f := result.Findings[0]
 		if jsonOutput {
 			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("failed to write baseline: %v", err)})
+			enc.Encode(map[string]interface{}{
+				"error": f.Message,
+				"kind":  f.Kind,
+			})
 		} else {
-			fmt.Fprintf(os.Stderr, "Error writing baseline: %v\n", err)
+			fmt.Fprintf(os.Stderr, "dupcode: %v\n", f.Message)
 		}
-		os.Exit(2)
+		os.Exit(1)
+	}
+
+	if result.Error != nil {
+		if jsonOutput {
+			enc := json.NewEncoder(os.Stdout)
+			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Error)})
+		} else {
+			fmt.Fprintf(os.Stderr, "dupcode: %v\n", result.Error)
+		}
+		os.Exit(1)
 	}
 
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
 		enc.Encode(map[string]interface{}{
 			"baseline":   baselinePath,
-			"findings":   len(report.Findings),
+			"findings":   0,
 			"thresholds": map[string]int{"min_lines": cfg.MinLines, "min_tokens": cfg.MinTokens},
 		})
 	} else {
 		fmt.Printf("Baseline written to: %s\n", baselinePath)
-		fmt.Printf("Findings: %d\n", len(report.Findings))
 		fmt.Printf("Thresholds: min_lines=%d, min_tokens=%d\n", cfg.MinLines, cfg.MinTokens)
 	}
 
@@ -105,62 +144,110 @@ func handleUpdateBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bo
 }
 
 func handleVerifyBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bool) {
-	// Check if baseline exists
-	if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
+	// Route through the central dispatcher with OperationVerify.
+	// Authority validation happens BEFORE any expensive operations.
+	ctx := context.Background()
+
+	// Create runner factory - invoked ONLY after authority validation passes
+	runnerFactory := func() func(root string) []checks.Finding {
+		return func(root string) []checks.Finding {
+			// Load baseline inside the runner factory
+			baseline, err := dupcode.LoadBaseline(baselinePath)
+			if err != nil {
+				return []checks.Finding{
+					{
+						Path:     "dupcode",
+						Kind:     "error",
+						Message:  fmt.Sprintf("failed to load baseline: %v", err),
+						Severity: checks.SeverityError,
+					},
+				}
+			}
+
+			report, err := dupcode.CheckReport(root, cfg)
+			if err != nil {
+				return []checks.Finding{
+					{
+						Path:     "dupcode",
+						Kind:     "error",
+						Message:  fmt.Sprintf("scan failed: %v", err),
+						Severity: checks.SeverityError,
+					},
+				}
+			}
+
+			compareResult := dupcode.CompareToBaseline(report, baseline)
+
+			// Convert to findings
+			var findings []checks.Finding
+			if compareResult.HasChanges {
+				for _, f := range compareResult.NewFindings {
+					findings = append(findings, checks.Finding{
+						Path:     "dupcode",
+						Kind:     "new_duplicate",
+						Message:  fmt.Sprintf("new duplicate (fingerprint: %s, tokens: %d)", f.Fingerprint, f.TokenCount),
+						Severity: checks.SeverityError,
+					})
+				}
+				for _, f := range compareResult.WorsenedFindings {
+					findings = append(findings, checks.Finding{
+						Path:     "dupcode",
+						Kind:     "worsened_duplicate",
+						Message:  fmt.Sprintf("worsened duplicate (fingerprint: %s)", f.Fingerprint),
+						Severity: checks.SeverityError,
+					})
+				}
+			}
+
+			return findings
+		}
+	}
+
+	result := gate.DispatchDupcodeVerify(ctx, ".", runnerFactory)
+
+	// Handle authority denial
+	if len(result.Findings) > 0 {
+		f := result.Findings[0]
 		if jsonOutput {
 			enc := json.NewEncoder(os.Stdout)
 			enc.Encode(map[string]interface{}{
-				"error": "baseline not found",
-				"hint":  "run with --update-baseline to create baseline",
+				"error": f.Message,
+				"kind":  f.Kind,
 			})
 		} else {
-			fmt.Fprintf(os.Stderr, "Baseline file not found: %s\n", baselinePath)
-			fmt.Fprintf(os.Stderr, "Run 'leamas factory verify dupcode --update-baseline' to create a baseline.\n")
+			fmt.Fprintf(os.Stderr, "dupcode: %v\n", f.Message)
 		}
-		os.Exit(2)
+		os.Exit(1)
 	}
 
-	// Load baseline
-	baseline, err := dupcode.LoadBaseline(baselinePath)
-	if err != nil {
+	if result.Error != nil {
 		if jsonOutput {
 			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("failed to load baseline: %v", err)})
+			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Error)})
 		} else {
-			fmt.Fprintf(os.Stderr, "Error loading baseline: %v\n", err)
+			fmt.Fprintf(os.Stderr, "dupcode: %v\n", result.Error)
 		}
-		os.Exit(2)
+		os.Exit(1)
 	}
 
-	// Scan repo
-	report, err := dupcode.CheckReport(".", cfg)
-	if err != nil {
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("scan failed: %v", err)})
-		} else {
-			fmt.Fprintf(os.Stderr, "Error scanning repository: %v\n", err)
-		}
-		os.Exit(2)
-	}
-
-	// Compare with baseline
-	result := dupcode.CompareToBaseline(report, baseline)
-
+	// Success
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
-		if result.HasChanges {
-			enc.Encode(map[string]interface{}{
-				"new_findings":      len(result.NewFindings),
-				"worsened_findings": len(result.WorsenedFindings),
-				"has_changes":       true,
-			})
-		} else {
-			enc.Encode(map[string]interface{}{"has_changes": false})
-		}
+		enc.Encode(map[string]interface{}{"has_changes": false})
 	} else {
-		dupcode.PrintCompareResult(result)
+		fmt.Printf("No duplicate code violations found.\n")
 	}
 
-	os.Exit(dupcode.ExitCodeFromCompareResult(result))
+	os.Exit(0)
+}
+
+// ValidateDupcodeAuthorityWithOperation validates dupcode authority for a specific operation.
+// This is used by handlers that need direct authority validation.
+func ValidateDupcodeAuthorityWithOperation(operation verifierauthority.VerifierOperation) error {
+	ctx := context.Background()
+	ec, err := gate.DetectDupcodeExecutionContext(ctx, ".")
+	if err != nil {
+		return err
+	}
+	return gate.ValidateDupcodeExecutionAuthority(ec, operation)
 }

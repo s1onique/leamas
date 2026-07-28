@@ -19,64 +19,66 @@ import (
 	"github.com/s1onique/leamas/internal/factory/language"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
 	"github.com/s1onique/leamas/internal/factory/longtestpolicy"
+	"github.com/s1onique/leamas/internal/factory/registry"
 	"github.com/s1onique/leamas/internal/factory/staticbinary"
 	"github.com/s1onique/leamas/internal/factory/tooling"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
 // AllVerifiers returns all Factory policy verifiers (for factorize).
 // This function uses independent dupcode verifiers and is used for
 // direct commands like `leamas factory verify dupcode` and `leamas factory verify dupcode-baseline`.
 // For factorize, use FactorizeVerifiersWithDupcodeContext instead.
-func AllVerifiers() []Verifier {
-	return []Verifier{
-		{Name: "agent-context", Run: agentContextVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.agentContextVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "doctrine", Run: doctrine.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "doctrine-agent-contracts", Run: doctrine.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "docs", Run: docs.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/docs.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "domain-boundaries", Run: boundary.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/boundary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "dupcode-baseline", Run: dupcodeBaselineVerifier, Lane: VerifierLaneDupcode, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.dupcodeBaselineVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "dupcode", Run: dupCodeVerifier, Lane: VerifierLaneDupcode, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.dupCodeVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "exec-gate", Run: execgate.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/execgate.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "executable-contract-first", Run: doctrine.CheckExecutableContractFirst, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckExecutableContractFirst", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "forbidden-patterns", Run: forbidden.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/forbidden.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "git-hooks", Run: gitHooksVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.gitHooksVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "language", Run: language.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/language.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "llm-friendly", Run: llmFriendlyVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/gate.llmFriendlyVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "static-binary", Run: staticbinary.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/staticbinary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED", "GOCACHE"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheRelevant, GoTestResultCache: CacheModeNA}},
-		{Name: "tooling-boundaries", Run: tooling.CheckRepo, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/tooling.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
-		{Name: "long-test-policy", Run: longTestPolicyVerifier, Lane: VerifierLaneFast, Execution: ExecutionDefinition{
-			Kind: ExecutionInProcess, ImplementationID: "internal/factory/longtestpolicy.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
-		}, Cache: CacheSemantics{GoBuildCache: CacheNotApplicable, GoTestResultCache: CacheModeNA}},
+func AllVerifiers() []registry.Verifier {
+	return []registry.Verifier{
+		{Name: "agent-context", Run: agentContextVerifier, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.agentContextVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "doctrine", Run: doctrine.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "doctrine-agent-contracts", Run: doctrine.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "docs", Run: docs.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/docs.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "domain-boundaries", Run: boundary.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/boundary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "dupcode-baseline", Run: dupcodeBaselineVerifier, Lane: registry.VerifierLaneDupcode, Authority: verifierauthority.AuthorityCIExactCheckout, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.dupcodeBaselineVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "dupcode", Run: dupCodeVerifier, Lane: registry.VerifierLaneDupcode, Authority: verifierauthority.AuthorityCIExactCheckout, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.dupCodeVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "exec-gate", Run: execgate.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/execgate.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "executable-contract-first", Run: doctrine.CheckExecutableContractFirst, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckExecutableContractFirst", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "forbidden-patterns", Run: forbidden.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/forbidden.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "git-hooks", Run: gitHooksVerifier, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.gitHooksVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "language", Run: language.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/language.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "llm-friendly", Run: llmFriendlyVerifier, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.llmFriendlyVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "static-binary", Run: staticbinary.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/staticbinary.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED", "GOCACHE"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheRelevant, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "tooling-boundaries", Run: tooling.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/tooling.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "long-test-policy", Run: longTestPolicyVerifier, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/longtestpolicy.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
 	}
 }
 
@@ -85,19 +87,19 @@ func AllVerifiers() []Verifier {
 // analysis context so only one repository scan is performed.
 //
 // This function derives from AllVerifiers() and only replaces the Run functions
-// for dupcode and dupcode-baseline. This ensures metadata (name, lane, execution,
+// for dupcode and dupcode-baseline. This ensures metadata (name, lane, authority, execution,
 // cache, environment) stays in sync with the canonical registry.
 //
 // This function is used by RunFactorize. For direct commands like
 // `leamas factory verify dupcode`, use AllVerifiers instead which performs
 // independent scans per verifier.
-func FactorizeVerifiersWithDupcodeContext(root string) ([]Verifier, error) {
+func FactorizeVerifiersWithDupcodeContext(root string) ([]registry.Verifier, error) {
 	return factorizeVerifiersWithDupcodeAnalyzer(root, nil)
 }
 
 // factorizeVerifiersWithDupcodeAnalyzer is the internal constructor that accepts an optional
 // injected analyzer for testing the production registry wiring.
-func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer) ([]Verifier, error) {
+func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer) ([]registry.Verifier, error) {
 	// Determine the effective dupcode thresholds from the baseline (if it exists)
 	minLines := dupcode.PolicyMinLines
 	minTokens := dupcode.PolicyMinTokens
@@ -141,10 +143,10 @@ func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer
 // respect to its inputs and is therefore the testable unit for the
 // fail-closed registry replacement invariant.
 func replaceDupcodeVerifierRuns(
-	verifiers []Verifier,
+	verifiers []registry.Verifier,
 	dupcodeRun func(string) []checks.Finding,
 	baselineRun func(string) []checks.Finding,
-) ([]Verifier, error) {
+) ([]registry.Verifier, error) {
 	dupcodeIndex := -1
 	baselineIndex := -1
 
@@ -167,7 +169,7 @@ func replaceDupcodeVerifierRuns(
 
 	// Failure-atomic: copy the input slice before mutating so the
 	// caller's input slice is never observable as partially replaced.
-	out := append([]Verifier(nil), verifiers...)
+	out := append([]registry.Verifier(nil), verifiers...)
 	out[dupcodeIndex].Run = dupcodeRun
 	out[baselineIndex].Run = baselineRun
 	return out, nil

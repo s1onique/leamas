@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"sort"
 	"testing"
+
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 const canonicalVerifierCount = 16
@@ -32,10 +34,10 @@ func TestCacheSemantics_DupcodeUsesNACache(t *testing.T) {
 
 	for _, v := range verifiers {
 		if v.Name == "dupcode" || v.Name == "dupcode-baseline" {
-			if v.Cache.GoBuildCache != CacheNotApplicable {
+			if v.Cache.GoBuildCache != registry.CacheNotApplicable {
 				t.Errorf("verifier %q should have GoBuildCache=not-applicable, got %s", v.Name, v.Cache.GoBuildCache)
 			}
-			if v.Cache.GoTestResultCache != CacheModeNA {
+			if v.Cache.GoTestResultCache != registry.CacheModeNA {
 				t.Errorf("verifier %q should have GoTestResultCache=not-applicable, got %s", v.Name, v.Cache.GoTestResultCache)
 			}
 		}
@@ -48,7 +50,7 @@ func TestCacheSemantics_StaticBinaryUsesBuildCache(t *testing.T) {
 
 	for _, v := range verifiers {
 		if v.Name == "static-binary" {
-			if v.Cache.GoBuildCache != CacheRelevant {
+			if v.Cache.GoBuildCache != registry.CacheRelevant {
 				t.Errorf("verifier %q should have GoBuildCache=relevant, got %s", v.Name, v.Cache.GoBuildCache)
 			}
 		}
@@ -60,22 +62,22 @@ func TestCacheSemantics_AllInProcess(t *testing.T) {
 	verifiers := AllVerifiers()
 
 	for _, v := range verifiers {
-		if v.Execution.Kind != ExecutionInProcess {
-			t.Errorf("verifier %q should be ExecutionInProcess, got %s", v.Name, v.Execution.Kind)
+		if v.Execution.Kind != registry.ExecutionInProcess {
+			t.Errorf("verifier %q should be registry.ExecutionInProcess, got %s", v.Name, v.Execution.Kind)
 		}
 	}
 }
 
 // TestCacheSemantics_JsonSerialization verifies JSON serialization uses schema field names.
 func TestCacheSemantics_JsonSerialization(t *testing.T) {
-	cache := CacheSemantics{
-		GoBuildCache:      CacheRelevant,
-		GoTestResultCache: CacheModeDisabled,
+	cache := registry.CacheSemantics{
+		GoBuildCache:      registry.CacheRelevant,
+		GoTestResultCache: registry.CacheModeDisabled,
 	}
 
 	data, err := json.Marshal(cache)
 	if err != nil {
-		t.Fatalf("failed to marshal CacheSemantics: %v", err)
+		t.Fatalf("failed to marshal registry.CacheSemantics: %v", err)
 	}
 
 	var parsed map[string]string
@@ -91,8 +93,8 @@ func TestCacheSemantics_JsonSerialization(t *testing.T) {
 	}
 }
 
-// verifierNames extracts just the names from a Verifier slice.
-func verifierNames(verifiers []Verifier) []string {
+// verifierNames extracts just the names from a registry.Verifier slice.
+func verifierNames(verifiers []registry.Verifier) []string {
 	names := make([]string, len(verifiers))
 	for i, v := range verifiers {
 		names[i] = v.Name
@@ -137,37 +139,37 @@ func TestVerifierNames_MatchesCanonicalList(t *testing.T) {
 
 // TestExecutionKind_ValidValues verifies execution kind constants.
 func TestExecutionKind_ValidValues(t *testing.T) {
-	if ExecutionInProcess != "in-process" {
-		t.Errorf("ExecutionInProcess = %q, expected %q", ExecutionInProcess, "in-process")
+	if registry.ExecutionInProcess != "in-process" {
+		t.Errorf("registry.ExecutionInProcess = %q, expected %q", registry.ExecutionInProcess, "in-process")
 	}
-	if ExecutionChild != "child-process" {
-		t.Errorf("ExecutionChild = %q, expected %q", ExecutionChild, "child-process")
+	if registry.ExecutionChild != "child-process" {
+		t.Errorf("registry.ExecutionChild = %q, expected %q", registry.ExecutionChild, "child-process")
 	}
 }
 
 // TestCacheRelevance_ValidValues verifies cache relevance constants.
 func TestCacheRelevance_ValidValues(t *testing.T) {
-	if CacheRelevant != "relevant" {
-		t.Errorf("CacheRelevant = %q", CacheRelevant)
+	if registry.CacheRelevant != "relevant" {
+		t.Errorf("registry.CacheRelevant = %q", registry.CacheRelevant)
 	}
-	if CacheNotRelevant != "not-relevant" {
-		t.Errorf("CacheNotRelevant = %q", CacheNotRelevant)
+	if registry.CacheNotRelevant != "not-relevant" {
+		t.Errorf("registry.CacheNotRelevant = %q", registry.CacheNotRelevant)
 	}
-	if CacheNotApplicable != "not-applicable" {
-		t.Errorf("CacheNotApplicable = %q", CacheNotApplicable)
+	if registry.CacheNotApplicable != "not-applicable" {
+		t.Errorf("registry.CacheNotApplicable = %q", registry.CacheNotApplicable)
 	}
 }
 
 // TestTestResultCacheMode_ValidValues verifies cache mode constants.
 func TestTestResultCacheMode_ValidValues(t *testing.T) {
-	if CacheModeEnabled != "enabled" {
-		t.Errorf("CacheModeEnabled = %q", CacheModeEnabled)
+	if registry.CacheModeEnabled != "enabled" {
+		t.Errorf("registry.CacheModeEnabled = %q", registry.CacheModeEnabled)
 	}
-	if CacheModeDisabled != "disabled" {
-		t.Errorf("CacheModeDisabled = %q", CacheModeDisabled)
+	if registry.CacheModeDisabled != "disabled" {
+		t.Errorf("registry.CacheModeDisabled = %q", registry.CacheModeDisabled)
 	}
-	if CacheModeNA != "not-applicable" {
-		t.Errorf("CacheModeNA = %q", CacheModeNA)
+	if registry.CacheModeNA != "not-applicable" {
+		t.Errorf("registry.CacheModeNA = %q", registry.CacheModeNA)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 // sentinelFinding produces a sentinel Finding that the test can
@@ -15,7 +16,7 @@ func sentinelFinding(kind string) []checks.Finding {
 	return []checks.Finding{{Path: "/sentinel", Kind: kind, Message: "sentinel", Severity: checks.SeverityError}}
 }
 
-func findVerifierByName(verifiers []Verifier, name string) *Verifier {
+func findVerifierByName(verifiers []registry.Verifier, name string) *registry.Verifier {
 	for i := range verifiers {
 		if verifiers[i].Name == name {
 			return &verifiers[i]
@@ -34,7 +35,7 @@ func TestReplaceDupcodeVerifierRuns_BothReplaced(t *testing.T) {
 	dupcodeOrig := func(string) []checks.Finding { return sentinelFinding("dupcode-original") }
 	baselineOrig := func(string) []checks.Finding { return sentinelFinding("baseline-original") }
 
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		{Name: "agent-context", Run: func(string) []checks.Finding { return nil }},
 		{Name: "dupcode", Run: dupcodeOrig},
 		{Name: "dupcode-baseline", Run: baselineOrig},
@@ -76,7 +77,7 @@ func TestReplaceDupcodeVerifierRuns_BothReplaced(t *testing.T) {
 // caller's input slice must remain unchanged.
 func TestReplaceDupcodeVerifierRuns_MissingDupcode(t *testing.T) {
 	baselineOrig := func(string) []checks.Finding { return sentinelFinding("baseline-original") }
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		{Name: "dupcode-baseline", Run: baselineOrig},
 		{Name: "agent-context", Run: func(string) []checks.Finding { return nil }},
 	}
@@ -106,7 +107,7 @@ func TestReplaceDupcodeVerifierRuns_MissingDupcode(t *testing.T) {
 // The caller's input slice must remain unchanged.
 func TestReplaceDupcodeVerifierRuns_MissingBaseline(t *testing.T) {
 	dupcodeOrig := func(string) []checks.Finding { return sentinelFinding("dupcode-original") }
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		{Name: "dupcode", Run: dupcodeOrig},
 		{Name: "agent-context", Run: func(string) []checks.Finding { return nil }},
 	}
@@ -136,7 +137,7 @@ func TestReplaceDupcodeVerifierRuns_MissingBaseline(t *testing.T) {
 // caller's input slice must remain unchanged.
 func TestReplaceDupcodeVerifierRuns_MissingBoth(t *testing.T) {
 	agentOrig := func(string) []checks.Finding { return sentinelFinding("agent-original") }
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		{Name: "agent-context", Run: agentOrig},
 	}
 
@@ -161,7 +162,7 @@ func TestReplaceDupcodeVerifierRuns_MissingBoth(t *testing.T) {
 // behaviour when the registry is empty. The function must not panic
 // and must not mutate the (empty) input slice.
 func TestReplaceDupcodeVerifierRuns_EmptyRegistry(t *testing.T) {
-	verifiers := []Verifier{}
+	verifiers := []registry.Verifier{}
 
 	dupcodeNew := func(string) []checks.Finding { return sentinelFinding("dupcode-replaced") }
 	baselineNew := func(string) []checks.Finding { return sentinelFinding("baseline-replaced") }
@@ -185,7 +186,7 @@ func TestReplaceDupcodeVerifierRuns_InputUnchangedOnSuccess(t *testing.T) {
 	dupcodeOrig := func(string) []checks.Finding { return sentinelFinding("dupcode-original") }
 	baselineOrig := func(string) []checks.Finding { return sentinelFinding("baseline-original") }
 
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		{Name: "agent-context", Run: func(string) []checks.Finding { return nil }},
 		{Name: "dupcode", Run: dupcodeOrig},
 		{Name: "dupcode-baseline", Run: baselineOrig},

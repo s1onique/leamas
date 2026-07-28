@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/dupcode"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 // TestFactorizeRegistryWiringWithInjectedAnalyzer verifies that FactorizeVerifiersWithDupcodeContext
@@ -84,7 +85,7 @@ func TestFactorizeRegistryWiringWithInjectedAnalyzer(t *testing.T) {
 	}
 
 	// Verify dupcode and dupcode-baseline entries are present
-	var dupcodeVerifier, baselineVerifier *Verifier
+	var dupcodeVerifier, baselineVerifier *registry.Verifier
 	for i, v := range verifiers {
 		if v.Name == "dupcode" {
 			dupcodeVerifier = &verifiers[i]
@@ -207,7 +208,7 @@ func TestFactorizeRegistryWiringWithStaleBaseline(t *testing.T) {
 	}
 
 	// Find the baseline verifier
-	var baselineVerifier *Verifier
+	var baselineVerifier *registry.Verifier
 	for i, v := range verifiers {
 		if v.Name == "dupcode-baseline" {
 			baselineVerifier = &verifiers[i]

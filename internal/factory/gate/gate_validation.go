@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 // envKeyRegex validates environment variable names: [A-Za-z_][A-Za-z0-9_]*
@@ -18,7 +20,7 @@ var ErrInvalidLane = errors.New("invalid verifier lane")
 var ErrLanePartitionIncomplete = errors.New("verifier lane partition is incomplete")
 
 // ValidateVerifier checks that a verifier has all required metadata.
-func ValidateVerifier(v Verifier) error {
+func ValidateVerifier(v registry.Verifier) error {
 	if v.Name == "" {
 		return fmt.Errorf("verifier name is required")
 	}
@@ -27,13 +29,13 @@ func ValidateVerifier(v Verifier) error {
 	}
 	// Validate lane: only fast and dupcode are supported
 	switch v.Lane {
-	case VerifierLaneFast, VerifierLaneDupcode:
+	case registry.VerifierLaneFast, registry.VerifierLaneDupcode:
 		// valid
 	default:
 		return fmt.Errorf("%w: %q is not %q or %q",
-			ErrInvalidLane, v.Lane, VerifierLaneFast, VerifierLaneDupcode)
+			ErrInvalidLane, v.Lane, registry.VerifierLaneFast, registry.VerifierLaneDupcode)
 	}
-	if v.Execution.Kind != ExecutionInProcess && v.Execution.Kind != ExecutionChild {
+	if v.Execution.Kind != registry.ExecutionInProcess && v.Execution.Kind != registry.ExecutionChild {
 		return fmt.Errorf("verifier %q has invalid execution kind: %q", v.Name, v.Execution.Kind)
 	}
 	if v.Execution.ImplementationID == "" {
@@ -63,13 +65,13 @@ func ValidateVerifier(v Verifier) error {
 
 	// Check cache semantics validity
 	switch v.Cache.GoBuildCache {
-	case CacheRelevant, CacheNotRelevant, CacheNotApplicable:
+	case registry.CacheRelevant, registry.CacheNotRelevant, registry.CacheNotApplicable:
 		// valid
 	default:
 		return fmt.Errorf("verifier %q has invalid GoBuildCache: %q", v.Name, v.Cache.GoBuildCache)
 	}
 	switch v.Cache.GoTestResultCache {
-	case CacheModeEnabled, CacheModeDisabled, CacheModeNA:
+	case registry.CacheModeEnabled, registry.CacheModeDisabled, registry.CacheModeNA:
 		// valid
 	default:
 		return fmt.Errorf("verifier %q has invalid GoTestResultCache: %q", v.Name, v.Cache.GoTestResultCache)
@@ -78,7 +80,7 @@ func ValidateVerifier(v Verifier) error {
 }
 
 // ValidateVerifiers checks that all verifiers have valid metadata.
-func ValidateVerifiers(verifiers []Verifier) error {
+func ValidateVerifiers(verifiers []registry.Verifier) error {
 	seen := make(map[string]bool)
 	for _, v := range verifiers {
 		if err := ValidateVerifier(v); err != nil {
@@ -95,7 +97,7 @@ func ValidateVerifiers(verifiers []Verifier) error {
 // PartitionVerifiers partitions the verifier registry into fast and dupcode lanes.
 // It validates all verifiers before partitioning and fails closed if any verifier
 // has an invalid or unknown lane.
-func PartitionVerifiers(verifiers []Verifier) (fast, dupcode []Verifier, err error) {
+func PartitionVerifiers(verifiers []registry.Verifier) (fast, dupcode []registry.Verifier, err error) {
 	// Fail closed: validate ALL verifiers first
 	if err := ValidateVerifiers(verifiers); err != nil {
 		return nil, nil, fmt.Errorf("verifier registry validation failed: %w", err)
@@ -103,9 +105,9 @@ func PartitionVerifiers(verifiers []Verifier) (fast, dupcode []Verifier, err err
 
 	for _, v := range verifiers {
 		switch v.Lane {
-		case VerifierLaneFast:
+		case registry.VerifierLaneFast:
 			fast = append(fast, v)
-		case VerifierLaneDupcode:
+		case registry.VerifierLaneDupcode:
 			dupcode = append(dupcode, v)
 		default:
 			// This should be unreachable due to ValidateVerifiers, but defense in depth

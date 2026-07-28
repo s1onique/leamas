@@ -1,7 +1,11 @@
 // Package gate provides opt-in factorize metrics collection with v3 contract.
 package gate
 
-import "time"
+import (
+	"time"
+
+	"github.com/s1onique/leamas/internal/factory/registry"
+)
 
 // ResourceSnapshot captures a snapshot of resource usage.
 type ResourceSnapshot struct {
@@ -43,14 +47,14 @@ type ResourceObservation struct {
 
 // MetricsCheckV3 represents a single verifier check result in v3 format.
 type MetricsCheckV3 struct {
-	Ordinal            int                 `json:"ordinal"`
-	ID                 string              `json:"id"`
-	Status             string              `json:"status"`
-	ExitCode           int                 `json:"exit_code"`
-	DurationNs         int64               `json:"duration_ns"`
-	Resources          ResourceObservation `json:"resources"`
-	CommandFingerprint string              `json:"command_fingerprint"`
-	Cache              CacheSemantics      `json:"cache"`
+	Ordinal            int                     `json:"ordinal"`
+	ID                 string                  `json:"id"`
+	Status             string                  `json:"status"`
+	ExitCode           int                     `json:"exit_code"`
+	DurationNs         int64                   `json:"duration_ns"`
+	Resources          ResourceObservation     `json:"resources"`
+	CommandFingerprint string                  `json:"command_fingerprint"`
+	Cache              registry.CacheSemantics `json:"cache"`
 }
 
 // FactorizeMetricsV3 is the top-level metrics document for v3.

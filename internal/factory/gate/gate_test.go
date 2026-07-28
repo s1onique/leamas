@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 func TestAllVerifiers(t *testing.T) {
@@ -43,13 +44,13 @@ func TestVerifierLanes(t *testing.T) {
 	}
 
 	for _, v := range all {
-		if v.Lane == VerifierLaneFast && !fastNames[v.Name] {
+		if v.Lane == registry.VerifierLaneFast && !fastNames[v.Name] {
 			t.Errorf("verifier %q has Lane=fast but not in FastVerifiers()", v.Name)
 		}
-		if v.Lane == VerifierLaneDupcode && !dupcodeNames[v.Name] {
+		if v.Lane == registry.VerifierLaneDupcode && !dupcodeNames[v.Name] {
 			t.Errorf("verifier %q has Lane=dupcode but not in DupcodeVerifiers()", v.Name)
 		}
-		if v.Lane != VerifierLaneFast && v.Lane != VerifierLaneDupcode {
+		if v.Lane != registry.VerifierLaneFast && v.Lane != registry.VerifierLaneDupcode {
 			t.Errorf("verifier %q has unknown lane %q", v.Name, v.Lane)
 		}
 	}
@@ -94,19 +95,19 @@ func TestSelectVerifiers(t *testing.T) {
 }
 
 // fixtureVerifier creates a minimal test verifier.
-func fixtureVerifier(name string, findings []checks.Finding) Verifier {
-	return Verifier{
+func fixtureVerifier(name string, findings []checks.Finding) registry.Verifier {
+	return registry.Verifier{
 		Name: name,
 		Run:  func(string) []checks.Finding { return findings },
-		Lane: VerifierLaneFast,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Lane: registry.VerifierLaneFast,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "gate_test.fixtureVerifier",
 			EnvVars:          []string{},
 		},
-		Cache: CacheSemantics{
-			GoBuildCache:      CacheNotApplicable,
-			GoTestResultCache: CacheModeNA,
+		Cache: registry.CacheSemantics{
+			GoBuildCache:      registry.CacheNotApplicable,
+			GoTestResultCache: registry.CacheModeNA,
 		},
 	}
 }
@@ -115,7 +116,7 @@ func TestRunFactorizeFixtures(t *testing.T) {
 	// Use fixture verifiers instead of live AllVerifiers() to avoid
 	// nested full-registry execution. This test proves the ordering
 	// and failure-propagation behavior without scanning the repository.
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		fixtureVerifier("passing", nil),
 		fixtureVerifier("alpha", nil),
 		fixtureVerifier("beta", []checks.Finding{
@@ -130,6 +131,6 @@ func TestRunFactorizeFixtures(t *testing.T) {
 }
 
 // runFactorizeForTest wraps runFactorize with a fake clock for testing.
-func runFactorizeForTest(verifiers []Verifier) int {
+func runFactorizeForTest(verifiers []registry.Verifier) int {
 	return runFactorize(&bytes.Buffer{}, systemClock{}, ".", verifiers, nil, &noopSampler{})
 }
