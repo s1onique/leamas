@@ -23,7 +23,7 @@ func TestAuthorizeAndBindProfileDeniedFactoryNotCalled(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 	factoryCalled := false
-	factory := func([]registry.Verifier) ([]BoundProfileRunner, error) {
+	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
 		factoryCalled = true
 		return nil, nil
 	}
@@ -51,9 +51,9 @@ func TestAuthorizeAndBindProfileExecutesExactInventory(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 	var received []registry.Verifier
-	factory := func(authorized []registry.Verifier) ([]BoundProfileRunner, error) {
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
 		received = authorized
-		return []BoundProfileRunner{{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }}}, nil
+		return []FactoryRunner{{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
@@ -78,9 +78,9 @@ func TestAuthorizeAndBindProfileRejectsMissingRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]BoundProfileRunner, error) {
+	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
 		// Only return v1, missing v2
-		return []BoundProfileRunner{{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }}}, nil
+		return []FactoryRunner{{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{
@@ -104,10 +104,10 @@ func TestAuthorizeAndBindProfileRejectsExtraRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]BoundProfileRunner, error) {
-		return []BoundProfileRunner{
-			{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }},
-			{Verifier: registry.Verifier{Name: "v2"}, Run: func(root string) []checks.Finding { return nil }}, // extra
+	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{
+			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }},
+			{VerifierID: "v2", Run: func(root string) []checks.Finding { return nil }}, // extra
 		}, nil
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
@@ -128,10 +128,10 @@ func TestAuthorizeAndBindProfileRejectsDuplicateRunnerID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]BoundProfileRunner, error) {
-		return []BoundProfileRunner{
-			{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }},
-			{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }}, // duplicate
+	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{
+			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }},
+			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}, // duplicate
 		}, nil
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
@@ -154,8 +154,8 @@ func TestAuthorizeAndBindProfileRejectsNilRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]BoundProfileRunner, error) {
-		return []BoundProfileRunner{{Verifier: registry.Verifier{Name: "v1"}, Run: nil}}, nil
+	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{{VerifierID: "v1", Run: nil}}, nil
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
@@ -174,8 +174,8 @@ func TestAuthorizeAndBindProfileRejectsUnknownRunnerID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]BoundProfileRunner, error) {
-		return []BoundProfileRunner{{Verifier: registry.Verifier{Name: "unknown"}, Run: func(root string) []checks.Finding { return nil }}}, nil
+	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{{VerifierID: "unknown", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
@@ -194,7 +194,7 @@ func TestAuthorizeAndBindProfileFactoryErrorPropagated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]BoundProfileRunner, error) {
+	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
 		return nil, errors.New("baseline load failed")
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",

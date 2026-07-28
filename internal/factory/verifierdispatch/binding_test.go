@@ -29,10 +29,10 @@ func TestProfileBindingExecuteOnce(t *testing.T) {
 			{VerifierID: "v1", Operation: verifierauthority.OperationVerify},
 			{VerifierID: "v2", Operation: verifierauthority.OperationVerify},
 		}, nil,
-		func(authorized []registry.Verifier) ([]BoundProfileRunner, error) {
-			return []BoundProfileRunner{
-				{Verifier: authorized[0], Run: authorized[0].Run},
-				{Verifier: authorized[1], Run: authorized[1].Run},
+		func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+			return []FactoryRunner{
+				{VerifierID: authorized[0].Name, Run: authorized[0].Run},
+				{VerifierID: authorized[1].Name, Run: authorized[1].Run},
 			}, nil
 		})
 	if err != nil {
@@ -71,7 +71,7 @@ func TestDeniedBindingCannotExecute(t *testing.T) {
 // TestBindingDoesNotExposeExecutableRunners verifies Runners() doesn't leak Run functions.
 func TestBindingDoesNotExposeExecutableRunners(t *testing.T) {
 	runners := []BoundProfileRunner{
-		{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }},
+		{Metadata: VerifierMetadata{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }},
 	}
 	profile := &AuthorizedProfile{}
 	binding := &ProfileBinding{profile: profile, runners: runners}
@@ -80,9 +80,12 @@ func TestBindingDoesNotExposeExecutableRunners(t *testing.T) {
 	if len(meta) != 1 {
 		t.Fatalf("expected 1 metadata, got %d", len(meta))
 	}
-	if meta[0].Verifier.Name != "v1" {
-		t.Errorf("expected verifier name v1, got %s", meta[0].Verifier.Name)
+	if meta[0].Name != "v1" {
+		t.Errorf("expected verifier name v1, got %s", meta[0].Name)
 	}
+
+	// Verify no Run function is accessible through metadata
+	// The metadata type doesn't have a Run field, so this is a compile-time guarantee
 }
 
 // TestFactoryReceivesDefensiveVerifierCopies verifies factory receives value copies.
@@ -95,8 +98,8 @@ func TestFactoryReceivesDefensiveVerifierCopies(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]BoundProfileRunner, error) {
-		return []BoundProfileRunner{{Verifier: authorized[0], Run: func(root string) []checks.Finding { return nil }}}, nil
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{{VerifierID: authorized[0].Name, Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 
 	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
@@ -114,8 +117,8 @@ func TestFactoryReceivesDefensiveVerifierCopies(t *testing.T) {
 	}
 }
 
-// TestFactoryCannotForgeVerifierMetadata verifies factory cannot forge metadata.
-func TestFactoryCannotForgeVerifierMetadata(t *testing.T) {
+// TestFactoryCannotForgeMetadata verifies factory cannot forge metadata (only provides ID + Run).
+func TestFactoryCannotForgeMetadata(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
 	}
@@ -124,10 +127,9 @@ func TestFactoryCannotForgeVerifierMetadata(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]BoundProfileRunner, error) {
-		forged := authorized[0]
-		forged.Authority = verifierauthority.AuthorityCIExactCheckout
-		return []BoundProfileRunner{{Verifier: forged, Run: func(root string) []checks.Finding { return nil }}}, nil
+	// Factory only provides VerifierID + Run, not metadata
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{{VerifierID: authorized[0].Name, Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 
 	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
@@ -142,6 +144,11 @@ func TestFactoryCannotForgeVerifierMetadata(t *testing.T) {
 	}
 	if len(records) != 1 {
 		t.Errorf("expected 1 record, got %d", len(records))
+	}
+
+	// Metadata comes from dispatcher registry, not factory
+	if records[0].Metadata.Authority != verifierauthority.AuthorityLocalSafe {
+		t.Errorf("expected AuthorityLocalSafe, got %v", records[0].Metadata.Authority)
 	}
 }
 
@@ -157,10 +164,11 @@ func TestFactoryReversedOrderIsCanonicalized(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]BoundProfileRunner, error) {
-		reversed := make([]BoundProfileRunner, len(authorized))
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		// Return in reversed order
+		reversed := make([]FactoryRunner, len(authorized))
 		for i, v := range authorized {
-			reversed[len(authorized)-1-i] = BoundProfileRunner{Verifier: v, Run: v.Run}
+			reversed[len(authorized)-1-i] = FactoryRunner{VerifierID: v.Name, Run: v.Run}
 		}
 		return reversed, nil
 	}
@@ -182,8 +190,8 @@ func TestFactoryReversedOrderIsCanonicalized(t *testing.T) {
 
 	wantOrder := []string{"v1", "v2", "v3"}
 	for i, wantName := range wantOrder {
-		if records[i].Verifier.Name != wantName {
-			t.Errorf("order[%d] = %q, want %q", i, records[i].Verifier.Name, wantName)
+		if records[i].Metadata.Name != wantName {
+			t.Errorf("order[%d] = %q, want %q", i, records[i].Metadata.Name, wantName)
 		}
 	}
 }
@@ -200,8 +208,8 @@ func TestProfileBindingCannotBeForged(t *testing.T) {
 
 	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil,
-		func(authorized []registry.Verifier) ([]BoundProfileRunner, error) {
-			return []BoundProfileRunner{{Verifier: authorized[0], Run: func(root string) []checks.Finding { return nil }}}, nil
+		func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+			return []FactoryRunner{{VerifierID: authorized[0].Name, Run: func(root string) []checks.Finding { return nil }}}, nil
 		})
 	if err != nil {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
@@ -213,5 +221,100 @@ func TestProfileBindingCannotBeForged(t *testing.T) {
 	}
 	if len(records) != 1 {
 		t.Errorf("records count = %d, want 1", len(records))
+	}
+}
+
+// TestFactoryContractRejectsEmptyVerifierID verifies factory contract rejects empty verifier ID.
+func TestFactoryContractRejectsEmptyVerifierID(t *testing.T) {
+	verifiers := []registry.Verifier{
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+	}
+	d, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{{VerifierID: "", Run: func(root string) []checks.Finding { return nil }}}, nil
+	}
+
+	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
+		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
+	var contractErr *ErrProfileFactoryContract
+	if !errors.As(err, &contractErr) {
+		t.Errorf("expected ErrProfileFactoryContract, got %T: %v", err, err)
+	}
+}
+
+// TestFactoryContractRejectsNilRunFunction verifies factory contract rejects nil Run.
+func TestFactoryContractRejectsNilRunFunction(t *testing.T) {
+	verifiers := []registry.Verifier{
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+	}
+	d, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{{VerifierID: "v1", Run: nil}}, nil
+	}
+
+	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
+		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
+	var contractErr *ErrProfileFactoryContract
+	if !errors.As(err, &contractErr) {
+		t.Errorf("expected ErrProfileFactoryContract, got %T: %v", err, err)
+	}
+}
+
+// TestFactoryContractRejectsDuplicateVerifierID verifies factory contract rejects duplicate IDs.
+func TestFactoryContractRejectsDuplicateVerifierID(t *testing.T) {
+	verifiers := []registry.Verifier{
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+	}
+	d, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{
+			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }},
+			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}, // duplicate
+		}, nil
+	}
+
+	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
+		[]ProfileRequest{
+			{VerifierID: "v1", Operation: verifierauthority.OperationVerify},
+			{VerifierID: "v2", Operation: verifierauthority.OperationVerify},
+		}, nil, factory)
+	var contractErr *ErrProfileFactoryContract
+	if !errors.As(err, &contractErr) {
+		t.Errorf("expected ErrProfileFactoryContract, got %T: %v", err, err)
+	}
+}
+
+// TestFactoryContractRejectsUnknownVerifierID verifies factory contract rejects unknown IDs.
+func TestFactoryContractRejectsUnknownVerifierID(t *testing.T) {
+	verifiers := []registry.Verifier{
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+	}
+	d, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		return []FactoryRunner{{VerifierID: "unknown", Run: func(root string) []checks.Finding { return nil }}}, nil
+	}
+
+	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
+		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
+	var contractErr *ErrProfileFactoryContract
+	if !errors.As(err, &contractErr) {
+		t.Errorf("expected ErrProfileFactoryContract, got %T: %v", err, err)
 	}
 }

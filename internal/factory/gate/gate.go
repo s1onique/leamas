@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
@@ -180,7 +181,7 @@ func RunFactorize(root string) int {
 	// Phase 2: Authorize AND bind (factory creates shared context AFTER authorization passes)
 	// The factory is ONLY invoked after authorization succeeds.
 	binding, err := dispatcher.AuthorizeAndBindProfile(ctx, root, requests, observer,
-		func(authorized []registry.Verifier) ([]verifierdispatch.BoundProfileRunner, error) {
+		func(authorized []registry.Verifier) ([]verifierdispatch.FactoryRunner, error) {
 			// Create the shared dupcode context AFTER authorization
 			// This is the expensive operation that should only happen when authorized
 			factorizeVerifiers, err := FactorizeVerifiersWithDupcodeContext(root)
@@ -194,20 +195,19 @@ func RunFactorize(root string) int {
 				runMap[v.Name] = v.Run
 			}
 
-			// Build bound runners in canonical authorized-request order
-			// Use the complete registered verifier metadata for metrics
-			runners := make([]verifierdispatch.BoundProfileRunner, 0, len(authorized))
+			// Build factory runners: ID + Run only (metadata comes from dispatcher)
+			factoryRunners := make([]verifierdispatch.FactoryRunner, 0, len(authorized))
 			for _, v := range authorized {
 				run, ok := runMap[v.Name]
 				if !ok {
 					return nil, fmt.Errorf("factory: no run function for authorized verifier %s", v.Name)
 				}
-				runners = append(runners, verifierdispatch.BoundProfileRunner{
-					Verifier: v, // Complete metadata for metrics
-					Run:      run,
+				factoryRunners = append(factoryRunners, verifierdispatch.FactoryRunner{
+					VerifierID: v.Name,
+					Run:        run,
 				})
 			}
-			return runners, nil
+			return factoryRunners, nil
 		})
 
 	if err != nil {
@@ -274,7 +274,7 @@ func RunFactorize(root string) int {
 
 		// Bind expected verifier inventory for reconciliation
 		for _, meta := range binding.Runners() {
-			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, meta.Verifier.Name)
+			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, meta.Name)
 		}
 
 		sampler = NewPlatformSampler()
@@ -283,6 +283,9 @@ func RunFactorize(root string) int {
 		sampler = &noopSampler{}
 	}
 
+	// Track total factorize duration including verifier execution
+	totalStart := time.Now()
+
 	// Phase 3: Execute bound runners exactly once with real timing
 	records, err := binding.Execute()
 	if err != nil {
@@ -290,9 +293,11 @@ func RunFactorize(root string) int {
 		return 1
 	}
 
+	totalElapsed := time.Since(totalStart)
+
 	// Process execution records and print results with real timing
 	profile = binding.Profile()
-	exitCode := processExecutionRecords(os.Stdout, systemClock{}, profile, records, mc, sampler)
+	exitCode := processExecutionRecords(os.Stdout, profile, records, mc, sampler, totalElapsed)
 
 	// Fail-closed: metrics finalization errors cause factorize to fail
 	if mc != nil {

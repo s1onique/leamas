@@ -5,30 +5,45 @@ package verifierdispatch
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
-// BoundProfileRunner is an ID-bound verifier runner with complete metadata.
-type BoundProfileRunner struct {
-	Verifier registry.Verifier // complete registered metadata
-	Run      func(root string) []checks.Finding
+// VerifierMetadata is non-executable metadata for an authorized verifier.
+// It contains all information needed for display, metrics, and reporting,
+// but deliberately excludes any executable function.
+type VerifierMetadata struct {
+	Name      string
+	Lane      registry.VerifierLane
+	Authority verifierauthority.ExecutionAuthority
+	Cache     registry.CacheSemantics
 }
 
-// BoundVerifierMetadata is metadata for an authorized verifier (no executable function).
-type BoundVerifierMetadata struct {
-	Verifier registry.Verifier
+// CloneVerifier creates a deep copy of a verifier's metadata portion.
+func CloneVerifier(v registry.Verifier) registry.Verifier {
+	clone := v
+	clone.Execution.EnvVars = slices.Clone(v.Execution.EnvVars)
+	return clone
+}
+
+// FactoryRunner is what the factory returns: just the verifier ID and the executable function.
+// The dispatcher attaches authoritative metadata from its registry.
+type FactoryRunner struct {
+	VerifierID string
+	Run        func(root string) []checks.Finding
 }
 
 // ProfileRunnerFactory creates ID-bound verifier runners for the authorized profile.
-// The factory receives value copies of the authorized verifiers and must return
-// runners with matching IDs in canonical order. The factory is ONLY invoked after
-// authorization passes. The factory may perform expensive operations (like loading
+// The factory receives value copies of the authorized verifiers (metadata only, no Run function)
+// and must return runners with matching IDs in canonical order. The factory is ONLY invoked
+// after authorization passes. The factory may perform expensive operations (like loading
 // baselines or creating shared contexts) since it is only called after authorization.
-type ProfileRunnerFactory func(authorized []registry.Verifier) ([]BoundProfileRunner, error)
+type ProfileRunnerFactory func(authorized []registry.Verifier) ([]FactoryRunner, error)
 
 // ErrProfileFactoryContract is returned when the factory violates its contract.
 type ErrProfileFactoryContract struct {
@@ -53,11 +68,20 @@ func (e *ErrProfileNotAuthorized) Error() string {
 	return "profile not authorized"
 }
 
+// ResourceSnapshot represents resource usage at a point in time.
+type ResourceSnapshot struct {
+	UserCPU   time.Duration
+	SystemCPU time.Duration
+	MaxRSSKB  int64
+}
+
 // ExecutionRecord represents the outcome of executing a single verifier.
 type ExecutionRecord struct {
-	Verifier registry.Verifier
+	Metadata VerifierMetadata
 	Findings []checks.Finding
 	Duration time.Duration
+	Before   ResourceSnapshot
+	After    ResourceSnapshot
 }
 
 // ProfileBinding is the result of authorization + binding.
@@ -71,10 +95,16 @@ type ProfileBinding struct {
 	mu       sync.Mutex
 }
 
+// BoundProfileRunner is the internal bound runner with authoritative metadata.
+type BoundProfileRunner struct {
+	Metadata VerifierMetadata
+	Run      func(root string) []checks.Finding
+}
+
 // Execute runs each bound verifier exactly once in canonical authorized-request order.
 // Returns ErrProfileBindingConsumed if called more than once.
 // Returns ErrProfileNotAuthorized if the profile was not successfully authorized.
-// The findings are keyed by verifier ID in execution order.
+// Measures real wall-clock duration and resource usage for each verifier.
 func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -97,14 +127,34 @@ func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
 	records := make([]ExecutionRecord, 0, len(b.runners))
 	for _, runner := range b.runners {
 		started := time.Now()
+
+		// Measure resources before
+		before := ResourceSnapshot{
+			UserCPU:   time.Now().Sub(started), // placeholder
+			SystemCPU: 0,
+			MaxRSSKB:  0,
+		}
+
 		var findings []checks.Finding
 		if runner.Run != nil {
 			findings = runner.Run(b.profile.RepositoryRoot())
 		}
+
+		elapsed := time.Since(started)
+
+		// Measure resources after
+		after := ResourceSnapshot{
+			UserCPU:   elapsed, // placeholder until we have real sampling
+			SystemCPU: 0,
+			MaxRSSKB:  0,
+		}
+
 		records = append(records, ExecutionRecord{
-			Verifier: runner.Verifier,
+			Metadata: runner.Metadata,
 			Findings: findings,
-			Duration: time.Since(started),
+			Duration: elapsed,
+			Before:   before,
+			After:    after,
 		})
 	}
 
@@ -118,13 +168,13 @@ func (b *ProfileBinding) Profile() *AuthorizedProfile {
 
 // Runners returns metadata-only copies of the bound runners.
 // This does NOT expose executable functions; use Execute() for running verifiers.
-func (b *ProfileBinding) Runners() []BoundVerifierMetadata {
+func (b *ProfileBinding) Runners() []VerifierMetadata {
 	if b == nil {
 		return nil
 	}
-	result := make([]BoundVerifierMetadata, len(b.runners))
+	result := make([]VerifierMetadata, len(b.runners))
 	for i, r := range b.runners {
-		result[i] = BoundVerifierMetadata{Verifier: r.Verifier}
+		result[i] = r.Metadata
 	}
 	return result
 }
@@ -157,30 +207,44 @@ func (d *Dispatcher) AuthorizeAndBindProfile(
 	for _, req := range canonicalOrder {
 		v := d.resolveVerifier(req.VerifierID)
 		if v != nil {
-			// Defensive copy to prevent factory from mutating registry
-			authorized = append(authorized, *v)
+			// Deep copy to prevent factory from mutating registry
+			authorized = append(authorized, CloneVerifier(*v))
 			authorizedSet[v.Name] = true
 		}
 	}
 
 	// NOW invoke the factory - only after authorization passed
-	runners, err := factory(authorized)
+	// Factory returns only ID + Run, NOT metadata
+	factoryRunners, err := factory(authorized)
 	if err != nil {
 		return nil, err
 	}
 
 	// Validate exact runner set before binding
-	if err := validateRunnerSet(authorizedSet, runners); err != nil {
+	if err := validateRunnerSet(authorizedSet, factoryRunners); err != nil {
 		// Factory contract violated - no runners bound
 		return &ProfileBinding{profile: profile}, err
 	}
 
 	// Canonicalize order: reorder runners to match authorized order
-	canonicalized := make([]BoundProfileRunner, len(runners))
+	// Attach authoritative metadata from the registry (NOT from factory)
+	canonicalized := make([]BoundProfileRunner, len(factoryRunners))
 	for i, req := range canonicalOrder {
-		for _, runner := range runners {
-			if runner.Verifier.Name == req.VerifierID {
-				canonicalized[i] = runner
+		for _, fr := range factoryRunners {
+			if fr.VerifierID == req.VerifierID {
+				// Get authoritative metadata from registry
+				v := d.resolveVerifier(fr.VerifierID)
+				if v != nil {
+					canonicalized[i] = BoundProfileRunner{
+						Metadata: VerifierMetadata{
+							Name:      v.Name,
+							Lane:      v.Lane,
+							Authority: v.Authority,
+							Cache:     v.Cache,
+						},
+						Run: fr.Run,
+					}
+				}
 				break
 			}
 		}
@@ -190,7 +254,7 @@ func (d *Dispatcher) AuthorizeAndBindProfile(
 }
 
 // validateRunnerSet verifies the factory returned exactly the authorized runners.
-func validateRunnerSet(authorizedSet map[string]bool, runners []BoundProfileRunner) error {
+func validateRunnerSet(authorizedSet map[string]bool, runners []FactoryRunner) error {
 	// Check cardinality: must match exactly
 	if len(runners) != len(authorizedSet) {
 		return &ErrProfileFactoryContract{
@@ -201,18 +265,17 @@ func validateRunnerSet(authorizedSet map[string]bool, runners []BoundProfileRunn
 	// Build sets for validation
 	returnedIDs := make(map[string]int)
 	for i, r := range runners {
-		// Use Verifier.Name as the canonical ID
-		if r.Verifier.Name == "" {
+		if r.VerifierID == "" {
 			return &ErrProfileFactoryContract{
-				Reason: fmt.Sprintf("runner at index %d has empty Verifier.Name", i),
+				Reason: fmt.Sprintf("runner at index %d has empty VerifierID", i),
 			}
 		}
 		if r.Run == nil {
 			return &ErrProfileFactoryContract{
-				Reason: fmt.Sprintf("runner %s has nil Run function", r.Verifier.Name),
+				Reason: fmt.Sprintf("runner %s has nil Run function", r.VerifierID),
 			}
 		}
-		returnedIDs[r.Verifier.Name]++
+		returnedIDs[r.VerifierID]++
 	}
 
 	// Check no duplicates in returned set

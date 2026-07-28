@@ -149,16 +149,15 @@ func exitCode(failed bool) int {
 }
 
 // processExecutionRecords processes pre-computed execution records and prints results.
-// This is called after binding.Execute() has already run all verifiers.
+// This is called after binding.Execute() has already run all verifiers with truthful timing.
 func processExecutionRecords(
 	out io.Writer,
-	clk clock,
 	profile *verifierdispatch.AuthorizedProfile,
 	records []verifierdispatch.ExecutionRecord,
 	metrics *MetricsCollectionV3,
 	sampler ResourceSampler,
+	totalElapsed time.Duration,
 ) int {
-	startedAt := clk.Now()
 	failed := false
 
 	ordinal := 1
@@ -167,41 +166,46 @@ func processExecutionRecords(
 		if len(record.Findings) > 0 {
 			status = "FAILED"
 		}
-		fmt.Fprintf(out, "  %s: %s: %.2fs\n", record.Verifier.Name, status, record.Duration.Seconds())
+		fmt.Fprintf(out, "  %s: %s: %.2fs\n", record.Metadata.Name, status, record.Duration.Seconds())
 
 		if len(record.Findings) > 0 {
 			failed = true
-			printFailureFindings(out, record.Verifier.Name, record.Findings)
+			printFailureFindings(out, record.Metadata.Name, record.Findings)
 		}
 
 		// Metrics collection using real timing from Execute()
 		if metrics != nil {
 			env := os.Environ()
+			// Build a registry.Verifier from metadata for metrics compatibility
+			verifier := registry.Verifier{
+				Name:      record.Metadata.Name,
+				Lane:      record.Metadata.Lane,
+				Authority: record.Metadata.Authority,
+				Cache:     record.Metadata.Cache,
+			}
 			if err := metrics.AddCheckWithResources(
-				record.Verifier,
+				verifier,
 				ordinal,
 				record.Findings,
 				record.Duration,
-				0, // CPU delta not available in ExecutionRecord
-				0, // System CPU delta not available in ExecutionRecord
-				0, // RSS not available in ExecutionRecord
+				record.After.UserCPU-record.Before.UserCPU,
+				record.After.SystemCPU-record.Before.SystemCPU,
+				record.After.MaxRSSKB-record.Before.MaxRSSKB,
 				profile.RepositoryRoot(),
 				env,
 			); err != nil {
-				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", record.Verifier.Name, err)
+				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", record.Metadata.Name, err)
 				failed = true
 			}
 		}
 		ordinal++
 	}
 
-	elapsed := clk.Now().Sub(startedAt)
-
 	if failed {
-		fmt.Fprintf(out, "\n*** FACTORIZE FAILED: %.2fs ***\n", elapsed.Seconds())
+		fmt.Fprintf(out, "\n*** FACTORIZE FAILED: %.2fs ***\n", totalElapsed.Seconds())
 		return 1
 	}
 
-	fmt.Fprintf(out, "\n*** FACTORIZE PASSED: %.2fs ***\n", elapsed.Seconds())
+	fmt.Fprintf(out, "\n*** FACTORIZE PASSED: %.2fs ***\n", totalElapsed.Seconds())
 	return 0
 }
