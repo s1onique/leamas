@@ -149,9 +149,6 @@ func TestLookupVerifier(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
 	}
-	if v == nil {
-		t.Fatal("expected verifier, got nil")
-	}
 	if v.Name != "llm-friendly" {
 		t.Errorf("expected llm-friendly, got %s", v.Name)
 	}

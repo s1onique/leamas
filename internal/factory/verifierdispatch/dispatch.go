@@ -251,13 +251,13 @@ func (d *Dispatcher) resolveVerifier(id string) *registry.Verifier {
 	return nil
 }
 
-// LookupVerifier returns a verifier by ID or an error if not found.
-func (d *Dispatcher) LookupVerifier(id string) (*registry.Verifier, error) {
+// LookupVerifier returns a deep copy of a verifier by ID or an error if not found.
+func (d *Dispatcher) LookupVerifier(id string) (registry.Verifier, error) {
 	v := d.resolveVerifier(id)
 	if v == nil {
-		return nil, &ErrVerifierNotFound{VerifierID: id}
+		return registry.Verifier{}, &ErrVerifierNotFound{VerifierID: id}
 	}
-	return v, nil
+	return cloneRegistryVerifier(*v), nil
 }
 
 // GetVerifiers returns a deep copy of the verifier registry.
