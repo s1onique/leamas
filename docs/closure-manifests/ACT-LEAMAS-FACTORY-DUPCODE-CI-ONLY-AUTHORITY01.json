@@ -1,0 +1,73 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-DUPCODE-CI-ONLY-AUTHORITY01",
+  "plan": {
+    "sha256": "fa99d13a0197493d9b7ed83c575fea19c7c5b3d2920418cd42d4e1de197f5ec9",
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-DUPCODE-CI-ONLY-AUTHORITY01.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "76384e94e5550d33201fade89548810473323683",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-DUPCODE-CI-ONLY-AUTHORITY01.json",
+    "plan_blob_oid": "b7c61a4e96d24b78cca1762c7165e0316ae9c18b",
+    "plan_sha256": "fa99d13a0197493d9b7ed83c575fea19c7c5b3d2920418cd42d4e1de197f5ec9",
+    "subject_commit": "76384e94e5550d33201fade89548810473323683"
+  },
+  "subject": {
+    "commit_oid": "76384e94e5550d33201fade89548810473323683",
+    "tree_oid": "18b0133403e022835f78a962dc42888deb35bc05"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev.76384e94e555.20260728T060917Z",
+    "binary_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "vcs_revision": "76384e94e5550d33201fade89548810473323683",
+    "vcs_modified": true
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "76384e94e5550d33201fade89548810473323683",
+    "head_tree_oid": "18b0133403e022835f78a962dc42888deb35bc05",
+    "origin_main_commit_oid": "a71c0340dd08a821e66832488a83e665ba09f02c",
+    "ahead_by": 1,
+    "behind_by": 0,
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "checks": [
+    {
+      "check_id": "gate-fast",
+      "subject_tree_oid": "18b0133403e022835f78a962dc42888deb35bc05",
+      "argv": ["make", "gate-fast"],
+      "working_directory": ".",
+      "overridden_environment": ["CGO_ENABLED"],
+      "duration_ms": 0,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_byte_count": 0,
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    }
+  ],
+  "artifacts": [],
+  "detached_evidence": [],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [
+    {
+      "check_id": "dupcode",
+      "subject_tree_oid": "18b0133403e022835f78a962dc42888deb35bc05",
+      "reason": "dupcode is a CI-only verifier lane; local execution is prohibited by design"
+    }
+  ],
+  "verdict": "pass"
+}

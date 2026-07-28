@@ -1,0 +1,49 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-DUPCODE-CI-ONLY-AUTHORITY01",
+  "baseline": {
+    "commit_oid": "a71c0340dd08a821e66832488a83e665ba09f02c",
+    "tree_oid": "0e6ee266085f7b8f42f85c294a8b3948bab754b1"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "gate-fast",
+      "mode": "run",
+      "argv": ["make", "gate-fast"],
+      "environment": {"CGO_ENABLED": "0"},
+      "working_directory": ".",
+      "timeout_seconds": 600
+    },
+    {
+      "id": "go-test-count-1",
+      "mode": "run",
+      "argv": ["go", "test", "-count=1", "./internal/factory/gate/dupcodeauthority/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "working_directory": ".",
+      "timeout_seconds": 300
+    },
+    {
+      "id": "dupcode-cli-denial",
+      "mode": "run",
+      "argv": ["./bin/leamas", "factory", "gate", "--lane=dupcode"],
+      "environment": {},
+      "working_directory": ".",
+      "timeout_seconds": 60
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "dupcode is a CI-only verifier lane; local execution is prohibited by design"
+    }
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}

@@ -21,8 +21,21 @@ gate-fast: build
 	@./bin/leamas factory gate --lane=fast
 
 # gate-dupcode runs the dupcode verifier lane using --lane=dupcode
-# This executes only dupcode and dupcode-baseline verifiers.
+# Dupcode is a CI-only verifier lane. The Go binary enforces this policy
+# centrally; the Makefile provides an additional shell-level refusal.
+# Do NOT set LEAMAS_ALLOW_FULL_GATE=1 to bypass this.
 gate-dupcode: build
+	@# Local denial: dupcode is CI-only
+	@if [ -z "$$CI" ] || [ "$$CI" != "true" ]; then \
+		echo "dupcode: dupcode is a CI-only verifier lane; local execution is prohibited;" \
+			"push a branch or open a PR and use the Factory Dupcode status check" >&2; \
+		exit 1; \
+	fi
+	@if [ -z "$$GITHUB_ACTIONS" ] || [ "$$GITHUB_ACTIONS" != "true" ]; then \
+		echo "dupcode: dupcode is a CI-only verifier lane; local execution is prohibited;" \
+			"push a branch or open a PR and use the Factory Dupcode status check" >&2; \
+		exit 1; \
+	fi
 	@echo "Running quality gate (dupcode lane)..."
 	@./bin/leamas factory gate --lane=dupcode
 

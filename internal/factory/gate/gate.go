@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/gate/dupcodeauthority"
 )
 
 // ExecutionKind classifies how a verifier executes.
@@ -266,7 +267,16 @@ func RunGateFast(root string) int {
 }
 
 // RunGateDupcode runs the dupcode lane with exactly the duplicate-code verifiers.
+// Dupcode is a CI-only verifier lane. This function checks the central authority
+// before executing any dupcode verifier or scanning any source code.
 func RunGateDupcode(root string) int {
+	// Central authority check: deny locally before any verifier initialization
+	if err := ValidateDupcodeAuthorityForCLI(root); err != nil {
+		fmt.Fprintf(os.Stderr, "dupcode: %v\n", err)
+		fmt.Printf("\n*** GATE FAILED ***\n")
+		return 1
+	}
+
 	allVerifiers := AllVerifiers()
 	_, dupcodeVerifiers, err := PartitionVerifiers(allVerifiers)
 	if err != nil {
@@ -303,6 +313,14 @@ func RunGateDupcode(root string) int {
 
 	fmt.Printf("\n*** GATE PASSED ***\n")
 	return 0
+}
+
+// ValidateDupcodeAuthorityForCLI is the central authority check for CLI invocations.
+// It returns nil only when all required GitHub Actions markers are present and valid.
+// This is the single point of authority enforcement for all direct CLI dupcode access.
+func ValidateDupcodeAuthorityForCLI(root string) error {
+	ctx := dupcodeauthority.DetectDupcodeExecutionContext(root)
+	return dupcodeauthority.ValidateDupcodeExecutionAuthority(ctx)
 }
 
 // FastVerifiers returns verifiers that run in the fast lane.

@@ -58,6 +58,7 @@ var AllowedFiles = map[string]bool{
 	"internal/factory/gate/toolchain.go":                              true,
 	"internal/factory/gate/subject_identity.go":                       true,
 	"internal/factory/gate/platform_sampler.go":                       true,
+	"internal/factory/gate/dupcodeauthority/authority.go":             true,
 	"internal/factory/digest/git.go":                                  true,
 	"internal/factory/digest/digest_auto_test.go":                     true,
 	"internal/factory/digest/digest_auto_extra_test.go":               true,
