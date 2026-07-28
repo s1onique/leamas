@@ -1,0 +1,280 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package protectedverifier
+
+import (
+	"fmt"
+	"path/filepath"
+	"sync"
+
+	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/dupcode"
+)
+
+// NOTE: This file imports dupcode directly because it IS the protectedverifier adapter.
+// The dupcode import is the only exception - all other code must go through protectedverifier.
+
+// DupcodeAnalysisProvider manages a single-scan context for dupcode analysis.
+// This is the ONLY production entry point for shared dupcode analysis context.
+type DupcodeAnalysisProvider struct {
+	mu       sync.Mutex
+	state    providerState
+	input    DupcodeInput
+	analysis *DupcodeAnalysis
+	analyzer DupcodeAnalyzer
+}
+
+type providerState int
+
+const (
+	providerStateEmpty providerState = iota
+	providerStateConsuming
+	providerStateConsumed
+)
+
+// DupcodeInput represents the input configuration for a dupcode analysis.
+type DupcodeInput struct {
+	Root      string
+	MinLines  int
+	MinTokens int
+	Config    dupcode.Config
+}
+
+// DupcodeAnalysis represents the immutable result of a dupcode scan.
+type DupcodeAnalysis struct {
+	Findings    []dupcode.Finding
+	Occurrences []dupcode.Occurrence
+	Config      dupcode.Config
+}
+
+// NewDupcodeAnalysisProvider creates a provider with the given input and analyzer.
+// Production code should pass protectedverifier.Analyzer() as the analyzer.
+func NewDupcodeAnalysisProvider(input DupcodeInput, analyzer DupcodeAnalyzer) *DupcodeAnalysisProvider {
+	if analyzer == nil {
+		analyzer = Analyzer()
+	}
+	return &DupcodeAnalysisProvider{
+		state:    providerStateEmpty,
+		input:    input,
+		analyzer: analyzer,
+	}
+}
+
+// ConsumedBy performs the analysis and returns the result.
+// The analysis is performed exactly once, with subsequent calls returning the cached result.
+func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*DupcodeAnalysis, error) {
+	// Verify input matches
+	if input.Root != p.input.Root || input.MinLines != p.input.MinLines || input.MinTokens != p.input.MinTokens {
+		return nil, fmt.Errorf("dupcode analysis input mismatch for %s: "+
+			"got root=%s minLines=%d minTokens=%d, want root=%s minLines=%d minTokens=%d",
+			name, input.Root, input.MinLines, input.MinTokens,
+			p.input.Root, p.input.MinLines, p.input.MinTokens)
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	switch p.state {
+	case providerStateEmpty:
+		p.state = providerStateConsuming
+		// Perform the analysis
+		findings, err := p.analyzer(input.Root, input.Config)
+		if err != nil {
+			p.state = providerStateEmpty // Allow retry
+			return nil, err
+		}
+
+		// Collect occurrences from findings
+		var occurrences []dupcode.Occurrence
+		for _, f := range findings {
+			occurrences = append(occurrences, f.Occurrences...)
+		}
+
+		p.analysis = &DupcodeAnalysis{
+			Findings:    findings,
+			Occurrences: occurrences,
+			Config:      input.Config,
+		}
+		p.state = providerStateConsumed
+		return p.analysis, nil
+
+	case providerStateConsuming:
+		return nil, fmt.Errorf("dupcode analysis: concurrent scan detected (programming error)")
+
+	case providerStateConsumed:
+		return p.analysis, nil
+
+	default:
+		return nil, fmt.Errorf("dupcode analysis: unexpected state %v", p.state)
+	}
+}
+
+// DupcodeAnalysisContext provides the shared analysis context for factorize.
+type DupcodeAnalysisContext struct {
+	provider *DupcodeAnalysisProvider
+}
+
+// NewDupcodeAnalysisContext creates a new analysis context with the given provider.
+func NewDupcodeAnalysisContext(provider *DupcodeAnalysisProvider) *DupcodeAnalysisContext {
+	return &DupcodeAnalysisContext{provider: provider}
+}
+
+// Provider returns the underlying analysis provider.
+func (c *DupcodeAnalysisContext) Provider() *DupcodeAnalysisProvider {
+	return c.provider
+}
+
+// DupcodeVerifierFactory creates verifiers that share the analysis context.
+type DupcodeVerifierFactory struct {
+	context *DupcodeAnalysisContext
+}
+
+// NewDupcodeVerifierFactory creates a factory for dupcode verifiers.
+func NewDupcodeVerifierFactory(context *DupcodeAnalysisContext) *DupcodeVerifierFactory {
+	return &DupcodeVerifierFactory{context: context}
+}
+
+// SharedDupCodeVerifier returns a verifier function that uses the shared analysis context.
+// This is used for the "dupcode" verifier in factorize.
+func (f *DupcodeVerifierFactory) SharedDupCodeVerifier() func(string) []checks.Finding {
+	return func(root string) []checks.Finding {
+		baselinePath := ".factory/dupcode-baseline.json"
+		fullBaselinePath := baselinePath
+		if root != "." && root != "" {
+			fullBaselinePath = filepath.Join(root, baselinePath)
+		}
+
+		if !checks.FileExists(fullBaselinePath) {
+			return []checks.Finding{
+				{Path: baselinePath, Kind: "missing_baseline", Message: "baseline file not found. Run 'make dupcode-baseline' to create it.", Severity: checks.SeverityError},
+			}
+		}
+
+		baseline, err := dupcode.LoadBaseline(fullBaselinePath)
+		if err != nil {
+			return []checks.Finding{
+				{Path: baselinePath, Kind: "baseline_error", Message: fmt.Sprintf("failed to load baseline: %v", err), Severity: checks.SeverityError},
+			}
+		}
+
+		cfg := dupcode.DefaultConfig()
+		cfg.Root = root
+		cfg.MinLines = baseline.Thresholds.MinLines
+		cfg.MinTokens = baseline.Thresholds.MinTokens
+
+		input := DupcodeInput{
+			Root:      root,
+			MinLines:  cfg.MinLines,
+			MinTokens: cfg.MinTokens,
+			Config:    cfg,
+		}
+
+		analysis, err := f.context.Provider().ConsumedBy("dupcode", input)
+		if err != nil {
+			return []checks.Finding{
+				{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("duplicate code scan failed: %v", err), Severity: checks.SeverityError},
+			}
+		}
+
+		report := dupcode.Report{
+			Findings: analysis.Findings,
+			Thresholds: dupcode.BaselineThresholds{
+				MinLines:  cfg.MinLines,
+				MinTokens: cfg.MinTokens,
+			},
+		}
+
+		result := dupcode.CompareToBaseline(report, baseline)
+		return convertCompareResult(result)
+	}
+}
+
+// SharedDupcodeBaselineVerifier returns a verifier function that uses the shared analysis context.
+// This is used for the "dupcode-baseline" verifier in factorize.
+func (f *DupcodeVerifierFactory) SharedDupcodeBaselineVerifier() func(string) []checks.Finding {
+	return func(root string) []checks.Finding {
+		policy := dupcode.DefaultBaselinePolicy()
+		policy.Path = ".factory/dupcode-baseline.json"
+		if root != "." && root != "" {
+			policy.Path = filepath.Join(root, policy.Path)
+		}
+
+		validation, err := dupcode.ValidateBaselineArtifact(root, policy)
+		if err != nil {
+			return []checks.Finding{
+				{Path: "dupcode", Kind: "baseline_error", Message: fmt.Sprintf("baseline validation failed: %v", err), Severity: checks.SeverityError},
+			}
+		}
+
+		cfg := dupcode.DefaultConfig()
+		cfg.Root = root
+		cfg.MinLines = validation.Baseline.Thresholds.MinLines
+		cfg.MinTokens = validation.Baseline.Thresholds.MinTokens
+
+		input := DupcodeInput{
+			Root:      root,
+			MinLines:  cfg.MinLines,
+			MinTokens: cfg.MinTokens,
+			Config:    cfg,
+		}
+
+		analysis, err := f.context.Provider().ConsumedBy("dupcode-baseline", input)
+		if err != nil {
+			return []checks.Finding{
+				{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("duplicate code scan failed: %v", err), Severity: checks.SeverityError},
+			}
+		}
+
+		report := dupcode.Report{
+			Findings: analysis.Findings,
+			Thresholds: dupcode.BaselineThresholds{
+				MinLines:  cfg.MinLines,
+				MinTokens: cfg.MinTokens,
+			},
+		}
+
+		driftPolicy := dupcode.DefaultBaselinePolicy()
+		driftPolicy.Path = policy.Path
+		driftFindings := dupcode.CheckBaselineDriftFromReport(root, validation.Baseline, report, driftPolicy)
+
+		// Convert drift findings to checks findings
+		var findings []checks.Finding
+		for _, df := range driftFindings {
+			findings = append(findings, checks.Finding{
+				Path:     df.Path,
+				Kind:     df.Kind,
+				Message:  df.Message,
+				Severity: checks.SeverityError,
+			})
+		}
+		return findings
+	}
+}
+
+// convertCompareResult converts dupcode comparison results to gate findings.
+func convertCompareResult(result dupcode.CompareResult) []checks.Finding {
+	var findings []checks.Finding
+	if !result.HasChanges {
+		return findings
+	}
+
+	for _, f := range result.NewFindings {
+		findings = append(findings, checks.Finding{
+			Path:     "dupcode",
+			Kind:     "new_duplicate",
+			Message:  fmt.Sprintf("new duplicate block (tokens: %d)", f.TokenCount),
+			Severity: checks.SeverityError,
+		})
+	}
+
+	for range result.WorsenedFindings {
+		findings = append(findings, checks.Finding{
+			Path:     "dupcode",
+			Kind:     "worsened_duplicate",
+			Message:  fmt.Sprintf("worsened duplicate block"),
+			Severity: checks.SeverityError,
+		})
+	}
+
+	return findings
+}
