@@ -13,6 +13,9 @@ import (
 
 // authorizeFactorize performs batch authorization for factorize.
 // This is called BEFORE any expensive operations like shared context creation.
+//
+// The profile is all-or-nothing: if AuthorizationSucceeded is false,
+// the caller must NOT proceed with execution.
 func authorizeFactorize(ctx context.Context, root string) (*verifierdispatch.AuthorizedProfile, error) {
 	allVerifiers := AllVerifiers()
 
@@ -35,6 +38,20 @@ func authorizeFactorize(ctx context.Context, root string) (*verifierdispatch.Aut
 	profile, err := dispatcher.AuthorizeProfile(ctx, root, requests, observer)
 	if err != nil {
 		return nil, fmt.Errorf("authorization: %w", err)
+	}
+
+	// Authorization is all-or-nothing: check AuthorizationSucceeded
+	if !profile.AuthorizationSucceeded {
+		// Return profile with denials; caller must NOT proceed
+		return profile, nil
+	}
+
+	// Verify the profile bindings
+	if profile.RepositoryRoot == "" {
+		return nil, fmt.Errorf("authorization profile missing repository root")
+	}
+	if len(profile.VerifierIDs) == 0 {
+		return nil, fmt.Errorf("authorization profile has no authorized verifiers")
 	}
 
 	return profile, nil

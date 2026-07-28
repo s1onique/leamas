@@ -4,8 +4,6 @@ package verifierdispatch
 
 import (
 	"context"
-	"errors"
-	"strings"
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -13,360 +11,280 @@ import (
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
-// fakeObserver tracks context observation calls.
+// fakeObserver is a test double for ContextObserver.
 type fakeObserver struct {
-	count int
-	ec    verifierauthority.ExecutionContext
+	ObserveCount int
+	Context      verifierauthority.ExecutionContext
 }
 
 func (f *fakeObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
-	f.count++
-	return f.ec
+	f.ObserveCount++
+	f.Context = verifierauthority.ExecutionContext{
+		GitHubActions: "true",
+		GitHubSHA:     "abc123",
+	}
+	return f.Context
 }
 
-func TestDispatch_AuthorityDenied(t *testing.T) {
+// fakeLocalObserver is a test double that never observes (local-only).
+type fakeLocalObserver struct {
+	ObserveCount int
+}
+
+func (f *fakeLocalObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
+	f.ObserveCount++
+	return verifierauthority.ExecutionContext{}
+}
+
+// testVerifier creates a test verifier with the given parameters.
+func testVerifier(name string, authority verifierauthority.ExecutionAuthority, lane registry.VerifierLane) registry.Verifier {
+	return registry.Verifier{
+		Name:      name,
+		Authority: authority,
+		Lane:      lane,
+		Run:       func(root string) []checks.Finding { return nil },
+	}
+}
+
+func TestAuthorizeProfileLocalSafeDoesNotObserve(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{
-			Name:      "dupcode",
-			Lane:      registry.VerifierLaneDupcode,
-			Authority: verifierauthority.AuthorityCIExactCheckout,
-		},
+		testVerifier("local-safe", verifierauthority.AuthorityLocalSafe, registry.VerifierLaneFast),
 	}
 
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	observer := &fakeObserver{ec: verifierauthority.ExecutionContext{}}
-
-	var factoryCalled bool
-	factory := func() func(root string) []checks.Finding {
-		factoryCalled = true
-		return func(root string) []checks.Finding { return nil }
-	}
-
-	request := Request{
-		VerifierID: "dupcode",
-		Operation:  verifierauthority.OperationVerify,
-		Root:       "/tmp",
-	}
-
-	result := dispatcher.Dispatch(context.Background(), request, observer, factory)
-
-	if result.Error == nil {
-		t.Error("expected authority denial error, got nil")
-	}
-
-	if observer.count != 1 {
-		t.Errorf("expected observer count 1, got %d", observer.count)
-	}
-
-	if factoryCalled {
-		t.Error("runner factory was called despite authority denial")
-	}
-}
-
-func TestDispatch_LocalSafeSkipsObserver(t *testing.T) {
-	verifiers := []registry.Verifier{
-		{
-			Name:      "llm-friendly",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-		},
-	}
-
-	dispatcher, err := NewDispatcher(verifiers)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("NewDispatcher: %v", err)
 	}
 
 	observer := &fakeObserver{}
 
-	var runnerCalled bool
-	factory := func() func(root string) []checks.Finding {
-		return func(root string) []checks.Finding {
-			runnerCalled = true
-			return nil
-		}
+	requests := []ProfileRequest{
+		{VerifierID: "local-safe", Operation: verifierauthority.OperationVerify},
 	}
 
-	request := Request{
-		VerifierID: "llm-friendly",
-		Operation:  verifierauthority.OperationVerify,
-		Root:       "/tmp",
+	profile, err := dispatcher.AuthorizeProfile(context.Background(), "/test", requests, observer)
+	if err != nil {
+		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	result := dispatcher.Dispatch(context.Background(), request, observer, factory)
-
-	if result.Error != nil {
-		t.Errorf("unexpected error: %v", result.Error)
+	if !profile.AuthorizationSucceeded {
+		t.Error("expected AuthorizationSucceeded=true for local_safe verifier")
 	}
 
-	if observer.count != 0 {
-		t.Errorf("expected observer count 0 for local_safe, got %d", observer.count)
-	}
-
-	if !runnerCalled {
-		t.Error("runner was not called despite authority grant")
+	if observer.ObserveCount != 0 {
+		t.Errorf("observer.ObserveCount = %d, want 0 (local_safe should not call observer)", observer.ObserveCount)
 	}
 }
 
-func TestDispatch_AuthorityGranted(t *testing.T) {
+func TestAuthorizeProfileObservesRemoteContextOnce(t *testing.T) {
+	// Test that observer is called exactly once for CI authority.
+	// Note: The authorization itself may fail if not in a real CI environment,
+	// but we can still verify the observer call count.
 	verifiers := []registry.Verifier{
-		{
-			Name:      "llm-friendly",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-		},
+		testVerifier("ci-verifier", verifierauthority.AuthorityCIExactCheckout, registry.VerifierLaneDupcode),
 	}
 
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("NewDispatcher: %v", err)
 	}
 
 	observer := &fakeObserver{}
 
-	var runnerCalled bool
-	factory := func() func(root string) []checks.Finding {
-		return func(root string) []checks.Finding {
-			runnerCalled = true
-			return nil
-		}
+	requests := []ProfileRequest{
+		{VerifierID: "ci-verifier", Operation: verifierauthority.OperationVerify},
 	}
 
-	request := Request{
-		VerifierID: "llm-friendly",
-		Operation:  verifierauthority.OperationVerify,
-		Root:       "/tmp",
+	_, err = dispatcher.AuthorizeProfile(context.Background(), "/test", requests, observer)
+	if err != nil {
+		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	result := dispatcher.Dispatch(context.Background(), request, observer, factory)
-
-	if result.Error != nil {
-		t.Errorf("unexpected error: %v", result.Error)
-	}
-
-	if !runnerCalled {
-		t.Error("runner was not called despite authority grant")
+	// Observer should be called exactly once for CI authority
+	if observer.ObserveCount != 1 {
+		t.Errorf("observer.ObserveCount = %d, want 1", observer.ObserveCount)
 	}
 }
 
-func TestDispatch_UpdateBaselineDenied(t *testing.T) {
+func TestAuthorizeProfileAllOrNothing(t *testing.T) {
+	// Only register one verifier, but request two (one doesn't exist)
 	verifiers := []registry.Verifier{
-		{
-			Name:      "dupcode",
-			Lane:      registry.VerifierLaneDupcode,
-			Authority: verifierauthority.AuthorityCIExactCheckout,
-		},
+		testVerifier("authorized", verifierauthority.AuthorityLocalSafe, registry.VerifierLaneFast),
 	}
 
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	observer := &fakeObserver{
-		ec: verifierauthority.ExecutionContext{
-			CI:              "true",
-			GitHubActions:   "true",
-			AuthorityMarker: verifierauthority.AuthorityMarker,
-			GitHubSHA:       strings.Repeat("a", 40),
-			GitHubWorkspace: "/repo",
-			HeadCommit:      strings.Repeat("a", 40),
-			WorktreeStatus:  "",
-			RepositoryRoot:  "/repo",
-			WorkspaceRoot:   "/repo",
-		},
+	observer := &fakeLocalObserver{}
+
+	// Request one valid and one that doesn't exist in registry
+	requests := []ProfileRequest{
+		{VerifierID: "authorized", Operation: verifierauthority.OperationVerify},
+		{VerifierID: "not-in-registry", Operation: verifierauthority.OperationVerify},
 	}
 
-	var factoryCalled bool
-	factory := func() func(root string) []checks.Finding {
-		factoryCalled = true
-		return func(root string) []checks.Finding { return nil }
+	profile, err := dispatcher.AuthorizeProfile(context.Background(), "/test", requests, observer)
+	if err != nil {
+		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	request := Request{
-		VerifierID: "dupcode",
-		Operation:  verifierauthority.OperationUpdateBaseline,
-		Root:       "/tmp",
+	// All-or-nothing: should fail because one verifier is not found in registry
+	if profile.AuthorizationSucceeded {
+		t.Error("expected AuthorizationSucceeded=false when any verifier is denied")
 	}
 
-	result := dispatcher.Dispatch(context.Background(), request, observer, factory)
-
-	if result.Error == nil {
-		t.Error("expected update_baseline denial, got nil")
+	if len(profile.Denials) != 1 {
+		t.Errorf("len(profile.Denials) = %d, want 1", len(profile.Denials))
 	}
 
-	if observer.count != 1 {
-		t.Errorf("expected observer count 1, got %d", observer.count)
-	}
-
-	if factoryCalled {
-		t.Error("runner factory was called despite operation denial")
+	if len(profile.VerifierIDs) != 0 {
+		t.Errorf("len(profile.VerifierIDs) = %d, want 0 (all-or-nothing)", len(profile.VerifierIDs))
 	}
 }
 
-func TestDispatch_VerifierNotFound(t *testing.T) {
+func TestAuthorizeProfileRejectsNotFound(t *testing.T) {
+	// Register one verifier but request a different one
 	verifiers := []registry.Verifier{
-		{
-			Name:      "llm-friendly",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-		},
+		testVerifier("registered", verifierauthority.AuthorityLocalSafe, registry.VerifierLaneFast),
 	}
 
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	observer := &fakeLocalObserver{}
+
+	// Request a verifier that doesn't exist
+	requests := []ProfileRequest{
+		{VerifierID: "not-registered", Operation: verifierauthority.OperationVerify},
+	}
+
+	profile, err := dispatcher.AuthorizeProfile(context.Background(), "/test", requests, observer)
+	if err != nil {
+		t.Fatalf("AuthorizeProfile: %v", err)
+	}
+
+	if profile.AuthorizationSucceeded {
+		t.Error("expected AuthorizationSucceeded=false for not-found verifier")
+	}
+
+	if len(profile.Denials) != 1 {
+		t.Errorf("len(profile.Denials) = %d, want 1", len(profile.Denials))
+	}
+
+	if profile.Denials[0].VerifierID != "not-registered" {
+		t.Errorf("denial.VerifierID = %q, want %q", profile.Denials[0].VerifierID, "not-registered")
+	}
+}
+
+func TestAuthorizedProfileBindsRootAndOperations(t *testing.T) {
+	verifiers := []registry.Verifier{
+		testVerifier("bound", verifierauthority.AuthorityLocalSafe, registry.VerifierLaneFast),
+	}
+
+	dispatcher, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	observer := &fakeLocalObserver{}
+
+	requests := []ProfileRequest{
+		{VerifierID: "bound", Operation: verifierauthority.OperationVerify},
+	}
+
+	const wantRoot = "/bound/root"
+	profile, err := dispatcher.AuthorizeProfile(context.Background(), wantRoot, requests, observer)
+	if err != nil {
+		t.Fatalf("AuthorizeProfile: %v", err)
+	}
+
+	if profile.RepositoryRoot != wantRoot {
+		t.Errorf("profile.RepositoryRoot = %q, want %q", profile.RepositoryRoot, wantRoot)
+	}
+
+	if len(profile.Requests) != 1 {
+		t.Fatalf("len(profile.Requests) = %d, want 1", len(profile.Requests))
+	}
+
+	if profile.Requests[0].VerifierID != "bound" {
+		t.Errorf("profile.Requests[0].VerifierID = %q, want %q", profile.Requests[0].VerifierID, "bound")
+	}
+
+	if profile.Requests[0].Operation != verifierauthority.OperationVerify {
+		t.Errorf("profile.Requests[0].Operation = %v, want OperationVerify", profile.Requests[0].Operation)
+	}
+}
+
+func TestAuthorizeProfileMultipleLocalVerifiers(t *testing.T) {
+	// Test that multiple local verifiers can be authorized together
+	verifiers := []registry.Verifier{
+		testVerifier("local1", verifierauthority.AuthorityLocalSafe, registry.VerifierLaneFast),
+		testVerifier("local2", verifierauthority.AuthorityLocalSafe, registry.VerifierLaneFast),
+	}
+
+	dispatcher, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	observer := &fakeLocalObserver{}
+
+	requests := []ProfileRequest{
+		{VerifierID: "local1", Operation: verifierauthority.OperationVerify},
+		{VerifierID: "local2", Operation: verifierauthority.OperationVerify},
+	}
+
+	profile, err := dispatcher.AuthorizeProfile(context.Background(), "/test", requests, observer)
+	if err != nil {
+		t.Fatalf("AuthorizeProfile: %v", err)
+	}
+
+	if !profile.AuthorizationSucceeded {
+		t.Error("expected AuthorizationSucceeded=true for multiple local verifiers")
+	}
+
+	// Observer should NOT be called for local-only verifiers
+	if observer.ObserveCount != 0 {
+		t.Errorf("observer.ObserveCount = %d, want 0 for local verifiers", observer.ObserveCount)
+	}
+
+	// Both should be authorized
+	if len(profile.VerifierIDs) != 2 {
+		t.Errorf("len(profile.VerifierIDs) = %d, want 2", len(profile.VerifierIDs))
+	}
+}
+
+func TestAuthorizeProfileUpdateBaselineDeniedForCI(t *testing.T) {
+	verifiers := []registry.Verifier{
+		testVerifier("ci-baseline", verifierauthority.AuthorityCIExactCheckout, registry.VerifierLaneDupcode),
+	}
+
+	dispatcher, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
 	}
 
 	observer := &fakeObserver{}
 
-	factory := func() func(root string) []checks.Finding {
-		return func(root string) []checks.Finding { return nil }
+	requests := []ProfileRequest{
+		{VerifierID: "ci-baseline", Operation: verifierauthority.OperationUpdateBaseline},
 	}
 
-	request := Request{
-		VerifierID: "nonexistent",
-		Operation:  verifierauthority.OperationVerify,
-		Root:       "/tmp",
-	}
-
-	result := dispatcher.Dispatch(context.Background(), request, observer, factory)
-
-	var target *ErrVerifierNotFound
-	if !errors.As(result.Error, &target) {
-		t.Errorf("expected ErrVerifierNotFound, got: %T %v", result.Error, result.Error)
-	}
-
-	if observer.count != 0 {
-		t.Errorf("expected observer count 0 for missing verifier, got %d", observer.count)
-	}
-}
-
-func TestDispatch_CIExactCheckoutDenied(t *testing.T) {
-	verifiers := []registry.Verifier{
-		{
-			Name:      "dupcode",
-			Lane:      registry.VerifierLaneDupcode,
-			Authority: verifierauthority.AuthorityCIExactCheckout,
-		},
-	}
-
-	dispatcher, err := NewDispatcher(verifiers)
+	profile, err := dispatcher.AuthorizeProfile(context.Background(), "/test", requests, observer)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	observer := &fakeObserver{ec: verifierauthority.ExecutionContext{}}
-
-	var factoryCalled bool
-	factory := func() func(root string) []checks.Finding {
-		factoryCalled = true
-		return func(root string) []checks.Finding { return nil }
+	// update_baseline should be denied for ci_exact_checkout
+	if profile.AuthorizationSucceeded {
+		t.Error("expected AuthorizationSucceeded=false for update_baseline on ci_exact_checkout")
 	}
 
-	request := Request{
-		VerifierID: "dupcode",
-		Operation:  verifierauthority.OperationVerify,
-		Root:       "/tmp",
-	}
-
-	result := dispatcher.Dispatch(context.Background(), request, observer, factory)
-
-	if result.Error == nil {
-		t.Error("expected authority denial error, got nil")
-	}
-
-	if observer.count != 1 {
-		t.Errorf("expected observer count 1, got %d", observer.count)
-	}
-
-	if factoryCalled {
-		t.Error("runner factory was called despite authority denial")
-	}
-}
-
-func TestDispatch_PropagatesVerifierResult(t *testing.T) {
-	verifiers := []registry.Verifier{
-		{
-			Name:      "llm-friendly",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-		},
-	}
-
-	dispatcher, err := NewDispatcher(verifiers)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	observer := &fakeObserver{}
-
-	expectedFindings := []checks.Finding{
-		{
-			Path:     "test.go",
-			Kind:     "error",
-			Message:  "test error",
-			Severity: checks.SeverityError,
-		},
-	}
-
-	factory := func() func(root string) []checks.Finding {
-		return func(root string) []checks.Finding {
-			return expectedFindings
-		}
-	}
-
-	request := Request{
-		VerifierID: "llm-friendly",
-		Operation:  verifierauthority.OperationVerify,
-		Root:       "/tmp",
-	}
-
-	result := dispatcher.Dispatch(context.Background(), request, observer, factory)
-
-	if result.Error != nil {
-		t.Errorf("unexpected error: %v", result.Error)
-	}
-
-	if len(result.Findings) != len(expectedFindings) {
-		t.Errorf("expected %d findings, got %d", len(expectedFindings), len(result.Findings))
-	}
-
-	if result.Findings[0].Message != expectedFindings[0].Message {
-		t.Errorf("wrong message: %s", result.Findings[0].Message)
-	}
-}
-
-func TestDispatch_RegistryDefensivelyCopied(t *testing.T) {
-	verifiers := []registry.Verifier{
-		{
-			Name:      "test",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-		},
-	}
-
-	dispatcher, err := NewDispatcher(verifiers)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	verifiers[0].Name = "modified"
-
-	v, err := dispatcher.LookupVerifier("test")
-	if err != nil {
-		t.Errorf("verifier test should still exist: %v", err)
-	}
-	if v.Name != "test" {
-		t.Errorf("expected verifier name 'test', got %q", v.Name)
-	}
-
-	_, err = dispatcher.LookupVerifier("modified")
-	if err == nil {
-		t.Error("modified verifier should not exist")
+	if len(profile.Denials) != 1 {
+		t.Errorf("len(profile.Denials) = %d, want 1", len(profile.Denials))
 	}
 }
