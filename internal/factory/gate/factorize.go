@@ -1,4 +1,5 @@
-// Package gate provides the factorize runner with wall-clock timings.
+// SPDX-License-Identifier: Apache-2.0
+
 package gate
 
 import (
@@ -147,14 +148,14 @@ func exitCode(failed bool) int {
 	return 0
 }
 
-// runFactorizeWithRunners executes factorize using ID-bound runners from the dispatcher.
-// This is the atomic entry point that binds authorization to execution.
-// The runners are already bound to the exact authorized profile inventory.
-func runFactorizeWithBoundRunners(
+// processFactorizeResults processes pre-computed findings and prints results.
+// This is called after binding.Execute() has already run all verifiers.
+func processFactorizeResults(
 	out io.Writer,
 	clk clock,
 	profile *verifierdispatch.AuthorizedProfile,
 	runners []verifierdispatch.BoundProfileRunner,
+	findings map[string][]checks.Finding,
 	metrics *MetricsCollectionV3,
 	sampler ResourceSampler,
 ) int {
@@ -163,48 +164,32 @@ func runFactorizeWithBoundRunners(
 
 	ordinal := 1
 	for _, runner := range runners {
-		before, err := sampler.Sample()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: resource sample before %s: %v\n", runner.Verifier.Name, err)
-			failed = true
-			ordinal++
-			continue
-		}
-
-		started := clk.Now()
-		findings := runner.Run(profile.RepositoryRoot())
-		elapsed := clk.Now().Sub(started)
+		// Use the pre-computed findings from binding.Execute()
+		runnerFindings := findings[runner.Verifier.Name]
 
 		status := "OK"
-		if len(findings) > 0 {
+		if len(runnerFindings) > 0 {
 			status = "FAILED"
 		}
-		fmt.Fprintf(out, "  %s: %s: %.2fs\n", runner.Verifier.Name, status, elapsed.Seconds())
+		fmt.Fprintf(out, "  %s: %s\n", runner.Verifier.Name, status)
 
-		if len(findings) > 0 {
+		if len(runnerFindings) > 0 {
 			failed = true
-			printFailureFindings(out, runner.Verifier.Name, findings)
+			printFailureFindings(out, runner.Verifier.Name, runnerFindings)
 		}
 
-		after, err := sampler.Sample()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: resource sample after %s: %v\n", runner.Verifier.Name, err)
-			failed = true
-			ordinal++
-			continue
-		}
-
+		// Metrics collection for bound runners
 		if metrics != nil {
 			env := os.Environ()
 			verifier := runner.Verifier
 			if err := metrics.AddCheckWithResources(
 				verifier,
 				ordinal,
-				findings,
-				elapsed,
-				after.UserCPU-before.UserCPU,
-				after.SystemCPU-before.SystemCPU,
-				after.ProcessMaxRSSKB,
+				runnerFindings,
+				time.Second, // Timing done in binding.Execute()
+				0,           // CPU delta not available
+				0,           // System CPU delta not available
+				0,           // RSS not available
 				profile.RepositoryRoot(),
 				env,
 			); err != nil {

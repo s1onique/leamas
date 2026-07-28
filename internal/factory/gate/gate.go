@@ -211,13 +211,14 @@ func RunFactorize(root string) int {
 	}
 
 	// Print denials if any
-	if len(binding.Profile.Denials()) > 0 {
-		printAuthorizationDenials(binding.Profile.Denials())
+	profile := binding.Profile()
+	if len(profile.Denials()) > 0 {
+		printAuthorizationDenials(profile.Denials())
 		return 1
 	}
 
 	// Factory contract violation - no runners bound
-	if len(binding.Runners) == 0 {
+	if len(binding.Runners()) == 0 {
 		fmt.Fprintf(os.Stderr, "factory: no runners bound for authorized inventory\n")
 		return 1
 	}
@@ -267,7 +268,8 @@ func RunFactorize(root string) int {
 		)
 
 		// Bind expected verifier inventory for reconciliation
-		for _, runner := range binding.Runners {
+		runners := binding.Runners()
+		for _, runner := range runners {
 			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, runner.Verifier.Name)
 		}
 
@@ -278,15 +280,15 @@ func RunFactorize(root string) int {
 	}
 
 	// Phase 3: Execute bound runners exactly once with metrics
-	var exitCode int
-	err = binding.ExecuteBoundRunners(func(profile *verifierdispatch.AuthorizedProfile, runners []verifierdispatch.BoundProfileRunner) error {
-		exitCode = runFactorizeWithBoundRunners(os.Stdout, systemClock{}, profile, runners, mc, sampler)
-		return nil // Exit code handled below
-	})
+	findings, err := binding.Execute()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "factory execution: %v\n", err)
 		return 1
 	}
+
+	// Process findings and print results
+	profile = binding.Profile()
+	exitCode := processFactorizeResults(os.Stdout, systemClock{}, profile, binding.Runners(), findings, mc, sampler)
 
 	// Fail-closed: metrics finalization errors cause factorize to fail
 	if mc != nil {

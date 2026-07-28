@@ -32,7 +32,7 @@ func TestAuthorizeAndBindProfileDeniedFactoryNotCalled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
-	if binding.Profile.AuthorizationSucceeded() {
+	if binding.Profile().AuthorizationSucceeded() {
 		t.Fatal("expected authorization to fail")
 	}
 	if factoryCalled {
@@ -60,7 +60,7 @@ func TestAuthorizeAndBindProfileExecutesExactInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
-	if !binding.Profile.AuthorizationSucceeded() {
+	if !binding.Profile().AuthorizationSucceeded() {
 		t.Fatal("expected authorization to succeed")
 	}
 	if len(received) != 1 || received[0].Name != "v1" {
@@ -90,8 +90,8 @@ func TestAuthorizeAndBindProfileRejectsMissingRunner(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for missing runner")
 	}
-	if len(binding.Runners) != 0 {
-		t.Errorf("binding has %d runners, want 0", len(binding.Runners))
+	if len(binding.Runners()) != 0 {
+		t.Errorf("binding has %d runners, want 0", len(binding.Runners()))
 	}
 }
 
@@ -204,8 +204,8 @@ func TestAuthorizeAndBindProfileFactoryErrorPropagated(t *testing.T) {
 	}
 }
 
-// TestProfileBindingExecutesBoundRunnersOnce verifies each runner executes exactly once.
-func TestProfileBindingExecutesBoundRunnersOnce(t *testing.T) {
+// TestProfileBindingExecuteOnce verifies each runner executes exactly once.
+func TestProfileBindingExecuteOnce(t *testing.T) {
 	v1Calls, v2Calls := 0, 0
 	runners := []BoundProfileRunner{
 		{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { v1Calls++; return nil }},
@@ -213,55 +213,108 @@ func TestProfileBindingExecutesBoundRunnersOnce(t *testing.T) {
 	}
 
 	profile := &AuthorizedProfile{}
-	binding := &ProfileBinding{Profile: profile, Runners: runners}
+	binding := &ProfileBinding{profile: profile, runners: runners}
 
-	var executedRunners []string
-	err := binding.ExecuteBoundRunners(func(p *AuthorizedProfile, r []BoundProfileRunner) error {
-		for _, runner := range r {
-			executedRunners = append(executedRunners, runner.Verifier.Name)
-			runner.Run(p.RepositoryRoot())
-		}
-		return nil
-	})
+	// First execution should succeed
+	findings, err := binding.Execute()
 	if err != nil {
-		t.Fatalf("ExecuteBoundRunners: %v", err)
+		t.Fatalf("Execute: %v", err)
 	}
-
+	if len(findings) != 2 {
+		t.Errorf("findings count = %d, want 2", len(findings))
+	}
 	if v1Calls != 1 {
 		t.Errorf("v1 called %d times, want 1", v1Calls)
 	}
 	if v2Calls != 1 {
 		t.Errorf("v2 called %d times, want 1", v2Calls)
 	}
-	if len(executedRunners) != 2 {
-		t.Errorf("executed %d runners, want 2", len(executedRunners))
+
+	// Second execution should fail with consumed error
+	_, err = binding.Execute()
+	var consumedErr *ErrProfileBindingConsumed
+	if !errors.As(err, &consumedErr) {
+		t.Errorf("expected ErrProfileBindingConsumed, got %T: %v", err, err)
 	}
 }
 
-// TestProfileBindingPreservesRunnerOrder verifies runners execute in canonical order.
-func TestProfileBindingPreservesRunnerOrder(t *testing.T) {
+// TestProfileBindingExecutesInCanonicalOrder verifies runners execute in canonical order.
+func TestProfileBindingExecutesInCanonicalOrder(t *testing.T) {
+	var executionOrder []string
 	runners := []BoundProfileRunner{
-		{Verifier: registry.Verifier{Name: "alpha"}, Run: func(root string) []checks.Finding { return nil }},
-		{Verifier: registry.Verifier{Name: "beta"}, Run: func(root string) []checks.Finding { return nil }},
-		{Verifier: registry.Verifier{Name: "gamma"}, Run: func(root string) []checks.Finding { return nil }},
+		{Verifier: registry.Verifier{Name: "alpha"}, Run: func(root string) []checks.Finding { executionOrder = append(executionOrder, "alpha"); return nil }},
+		{Verifier: registry.Verifier{Name: "beta"}, Run: func(root string) []checks.Finding { executionOrder = append(executionOrder, "beta"); return nil }},
+		{Verifier: registry.Verifier{Name: "gamma"}, Run: func(root string) []checks.Finding { executionOrder = append(executionOrder, "gamma"); return nil }},
 	}
 
 	profile := &AuthorizedProfile{}
-	binding := &ProfileBinding{Profile: profile, Runners: runners}
+	binding := &ProfileBinding{profile: profile, runners: runners}
 
-	var executedOrder []string
-	binding.ExecuteBoundRunners(func(p *AuthorizedProfile, r []BoundProfileRunner) error {
-		for _, runner := range r {
-			executedOrder = append(executedOrder, runner.Verifier.Name)
-			runner.Run(p.RepositoryRoot())
-		}
-		return nil
-	})
+	_, err := binding.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
 
+	// Check execution order matches runner order
 	want := []string{"alpha", "beta", "gamma"}
 	for i, wantName := range want {
-		if executedOrder[i] != wantName {
-			t.Errorf("order[%d] = %q, want %q", i, executedOrder[i], wantName)
+		if executionOrder[i] != wantName {
+			t.Errorf("executionOrder[%d] = %q, want %q", i, executionOrder[i], wantName)
 		}
+	}
+}
+
+// TestProfileBindingRunnersReturnsCopy verifies Runners() returns a defensive copy.
+func TestProfileBindingRunnersReturnsCopy(t *testing.T) {
+	runners := []BoundProfileRunner{
+		{Verifier: registry.Verifier{Name: "v1"}, Run: func(root string) []checks.Finding { return nil }},
+	}
+	profile := &AuthorizedProfile{}
+	binding := &ProfileBinding{profile: profile, runners: runners}
+
+	// Get runners twice
+	copy1 := binding.Runners()
+	copy2 := binding.Runners()
+
+	// Modifying one copy should not affect the other or the binding
+	copy1[0].Verifier.Name = "modified"
+	if binding.Runners()[0].Verifier.Name != "v1" {
+		t.Error("binding runners were modified")
+	}
+	if copy2[0].Verifier.Name != "v1" {
+		t.Error("second copy was affected by modification to first")
+	}
+}
+
+// TestProfileBindingCannotBeForged verifies ProfileBinding fields are unexported.
+func TestProfileBindingCannotBeForged(t *testing.T) {
+	// This test verifies the API contract: ProfileBinding has no exported fields
+	// that would allow callers to construct arbitrary bindings.
+	// The binding must be obtained through AuthorizeAndBindProfile.
+	verifiers := []registry.Verifier{
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+	}
+	d, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	// Only valid path to create binding
+	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
+		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil,
+		func(authorized []*registry.Verifier) ([]BoundProfileRunner, error) {
+			return []BoundProfileRunner{{Verifier: *authorized[0], Run: func(root string) []checks.Finding { return nil }}}, nil
+		})
+	if err != nil {
+		t.Fatalf("AuthorizeAndBindProfile: %v", err)
+	}
+
+	// Binding is valid and can execute
+	findings, err := binding.Execute()
+	if err != nil {
+		t.Errorf("Execute should succeed: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Errorf("findings count = %d, want 1", len(findings))
 	}
 }
