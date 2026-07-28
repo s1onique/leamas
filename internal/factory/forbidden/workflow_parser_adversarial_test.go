@@ -3,16 +3,15 @@
 package forbidden
 
 import (
-	"strings"
 	"testing"
 )
 
-// TestParserRejectsSiblingJobSteps verifies parser stops at factory-long job boundary.
-func TestParserRejectsSiblingJobSteps(t *testing.T) {
+// TestContractRejectsWorkflowLevelAuthority verifies workflow-level authority is rejected.
+func TestContractRejectsWorkflowLevelAuthority(t *testing.T) {
 	yaml := `name: Factory CI
-on: [push, pull_request]
+on: [push]
 env:
-  GO111MODULE: "on"
+  LEAMAS_DUPCODE_AUTHORITY: github-actions
 jobs:
   factory-dupcode:
     name: Factory Dupcode
@@ -20,101 +19,75 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Dupcode CI preflight
-        run: |
-          test "$GITHUB_ACTIONS" = "true"
-          test "$(git rev-parse HEAD^{commit})" = "$GITHUB_SHA"
-  factory-long:
-    name: Factory Long
-    timeout-minutes: 120
-    steps:
-      - name: Long test step
-        run: echo "this must not be in factory-dupcode"
 `
-	job, err := parseFactoryJob([]byte(yaml))
-	if err != nil {
-		t.Fatalf("parser should not error: %v", err)
-	}
-	if len(job.Steps) != 2 {
-		t.Errorf("expected 2 steps, got %d", len(job.Steps))
-	}
-	for _, step := range job.Steps {
-		if step.Name == "Long test step" {
-			t.Error("parser must not absorb factory-long steps")
-		}
-	}
-}
-
-// TestParserCapturesDisplayName verifies parser captures display name for contract testing.
-func TestParserCapturesDisplayName(t *testing.T) {
-	yaml := `name: Factory CI
-on: [push]
-jobs:
-  factory-dupcode:
-    name: Wrong Name
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-`
-	job, _ := parseFactoryJob([]byte(yaml))
-	if job.DisplayName != "Wrong Name" {
-		t.Errorf("parser should capture display name, got %q", job.DisplayName)
-	}
-}
-
-// TestParserCapturesTimeout verifies parser captures timeout for contract testing.
-func TestParserCapturesTimeout(t *testing.T) {
-	yaml := `name: Factory CI
-on: [push]
-jobs:
-  factory-dupcode:
-    name: Factory Dupcode
-    timeout-minutes: 60
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-`
-	job, _ := parseFactoryJob([]byte(yaml))
-	if job.Timeout != "60" {
-		t.Errorf("parser should capture timeout, got %q", job.Timeout)
-	}
-}
-
-// TestParserCapturesCleanTreeAssertion verifies preflight captures clean tree check.
-func TestParserCapturesCleanTreeAssertion(t *testing.T) {
-	yaml := `name: Factory CI
-on: [push]
-jobs:
-  factory-dupcode:
-    name: Factory Dupcode
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Dupcode CI preflight
-        run: |
-          test "$GITHUB_ACTIONS" = "true"
-          test -z "$(git status --porcelain=v1)"
-`
-	job, _ := parseFactoryJob([]byte(yaml))
-	var preflight *WorkflowStep
-	for i := range job.Steps {
-		if job.Steps[i].Name == "Dupcode CI preflight" {
-			preflight = &job.Steps[i]
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationWorkflowAuthority {
+			found = true
 			break
 		}
 	}
-	if preflight == nil {
-		t.Fatal("parser should find preflight step")
-	}
-	if !strings.Contains(preflight.Run, "git status --porcelain=v1") {
-		t.Error("parser should capture clean tree assertion")
+	if !found {
+		t.Error("contract should reject workflow-level LEAMAS_DUPCODE_AUTHORITY")
 	}
 }
 
-// TestParserDetectsWrongAuthorityPlacement verifies parser detects authority on wrong step.
-func TestParserDetectsWrongAuthorityPlacement(t *testing.T) {
+// TestContractRejectsJobLevelAuthority verifies job-level authority is rejected.
+func TestContractRejectsJobLevelAuthority(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    env:
+      LEAMAS_DUPCODE_AUTHORITY: github-actions
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationJobAuthority {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contract should reject job-level LEAMAS_DUPCODE_AUTHORITY")
+	}
+}
+
+// TestContractRejectsJobContinueOnError verifies job-level continue-on-error is rejected.
+func TestContractRejectsJobContinueOnError(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationJobContinueOnError {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contract should reject job-level continue-on-error: true")
+	}
+}
+
+// TestContractRejectsWrongAuthorityStep verifies authority on wrong step is rejected.
+func TestContractRejectsWrongAuthorityStep(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 jobs:
@@ -124,32 +97,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Run gate-dupcode
         env:
           LEAMAS_DUPCODE_AUTHORITY: github-actions
-        run: make gate-dupcode
 `
-	job, _ := parseFactoryJob([]byte(yaml))
-	var authSteps []string
-	for _, step := range job.Steps {
-		if step.Env != nil {
-			if _, ok := step.Env["LEAMAS_DUPCODE_AUTHORITY"]; ok {
-				authSteps = append(authSteps, step.Name)
-			}
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationWrongAuthorityStep {
+			found = true
+			break
 		}
 	}
-	if len(authSteps) != 1 {
-		t.Errorf("expected 1 authority step, got %d: %v", len(authSteps), authSteps)
-	}
-	if len(authSteps) > 0 && authSteps[0] != "Run gate-dupcode" {
-		t.Errorf("authority should be on Run gate-dupcode, got %q", authSteps[0])
+	if !found {
+		t.Error("contract should reject authority on wrong step in canonical mode")
 	}
 }
 
-// TestAuthorityStepCommandVerified verifies the parser can verify the authority step command.
-// This test uses a fixture with wrong command to prove the verification works.
-func TestAuthorityStepCommandVerified(t *testing.T) {
-	// Fixture with wrong command: make build instead of make gate-dupcode
+// TestContractRejectsMissingGateDupcode verifies missing make gate-dupcode is rejected.
+func TestContractRejectsMissingGateDupcode(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 jobs:
@@ -164,56 +129,132 @@ jobs:
           LEAMAS_DUPCODE_AUTHORITY: github-actions
         run: make build
 `
-	job, _ := parseFactoryJob([]byte(yaml))
-	var authorityStep *WorkflowStep
-	for _, step := range job.Steps {
-		if step.Env != nil {
-			if _, ok := step.Env["LEAMAS_DUPCODE_AUTHORITY"]; ok {
-				authorityStep = &step
-				break
-			}
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), false)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationMissingGateDupcode {
+			found = true
+			break
 		}
 	}
-	if authorityStep == nil {
-		t.Fatal("parser should find authority step")
-	}
-	// Verify we can check the command - this proves the contract checker works
-	if authorityStep.Run != "make build" {
-		t.Errorf("expected authority step command 'make build', got %q", authorityStep.Run)
+	if !found {
+		t.Error("contract should reject missing make gate-dupcode command")
 	}
 }
 
-// TestParserDetectsJobLevelAuthority verifies parser detects job-level env.
-// This test asserts that job-level authority is detected and can be verified.
-func TestParserDetectsJobLevelAuthority(t *testing.T) {
+// TestContractRejectsSiblingLeakage verifies sibling job steps don't leak into factory-dupcode.
+func TestContractRejectsSiblingLeakage(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 jobs:
   factory-dupcode:
     name: Factory Dupcode
     timeout-minutes: 30
-    env:
-      LEAMAS_DUPCODE_AUTHORITY: github-actions
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Dupcode CI preflight
+        run: |
+          test "$GITHUB_ACTIONS" = "true"
+  factory-long:
+    name: Factory Long
+    timeout-minutes: 120
+    steps:
+      - name: Long test step
+        run: echo "this must not be in factory-dupcode"
 `
 	job, _ := parseFactoryJob([]byte(yaml))
-	if job.Env == nil {
-		t.Fatal("parser should capture job-level env")
+	if len(job.Steps) != 2 {
+		t.Errorf("expected 2 steps, got %d", len(job.Steps))
 	}
-	if _, ok := job.Env["LEAMAS_DUPCODE_AUTHORITY"]; !ok {
-		t.Error("parser should detect job-level LEAMAS_DUPCODE_AUTHORITY")
+	for _, step := range job.Steps {
+		if step.Name == "Long test step" {
+			t.Error("parser must not absorb factory-long steps")
+		}
 	}
 }
 
-// TestParserDetectsWorkflowLevelAuthority verifies parser detects workflow-level env.
-// This test asserts that workflow-level authority is detected and can be verified.
-func TestParserDetectsWorkflowLevelAuthority(t *testing.T) {
+// TestContractRejectsWrongDisplayName verifies wrong display name is rejected in canonical mode.
+func TestContractRejectsWrongDisplayName(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
-env:
-  LEAMAS_DUPCODE_AUTHORITY: github-actions
+jobs:
+  factory-dupcode:
+    name: Wrong Name
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationWrongJobName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contract should reject wrong display name in canonical mode")
+	}
+}
+
+// TestContractRejectsWrongTimeout verifies wrong timeout is rejected in canonical mode.
+func TestContractRejectsWrongTimeout(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationWrongTimeout {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contract should reject wrong timeout in canonical mode")
+	}
+}
+
+// TestContractRejectsMissingCheckout verifies missing checkout is rejected in canonical mode.
+func TestContractRejectsMissingCheckout(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    steps:
+      - name: Run gate-dupcode
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: make gate-dupcode
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationMissingCheckout {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contract should reject missing checkout in canonical mode")
+	}
+}
+
+// TestContractRejectsMissingPreflight verifies missing preflight is rejected in canonical mode.
+func TestContractRejectsMissingPreflight(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
 jobs:
   factory-dupcode:
     name: Factory Dupcode
@@ -221,31 +262,78 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Run gate-dupcode
+        env:
+          LEAMAS_DUPCODE_AUTHORITY: github-actions
+        run: make gate-dupcode
 `
-	we := parseWorkflowEnv([]byte(yaml))
-	if we == nil || we.Env == nil {
-		t.Fatal("parser should capture workflow-level env")
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationMissingPreflight {
+			found = true
+			break
+		}
 	}
-	if _, ok := we.Env["LEAMAS_DUPCODE_AUTHORITY"]; !ok {
-		t.Error("parser should detect workflow-level LEAMAS_DUPCODE_AUTHORITY")
+	if !found {
+		t.Error("contract should reject missing preflight in canonical mode")
 	}
 }
 
-// TestParserDetectsJobLevelContinueOnError verifies parser detects job-level continue-on-error.
-func TestParserDetectsJobLevelContinueOnError(t *testing.T) {
+// TestContractRejectsMissingSHAAssert verifies commented SHA assertion is rejected.
+func TestContractRejectsMissingSHAAssert(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 jobs:
   factory-dupcode:
     name: Factory Dupcode
     timeout-minutes: 30
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Dupcode CI preflight
+        run: |
+          test "$GITHUB_ACTIONS" = "true"
+          # test "$(git rev-parse HEAD^{commit})" = "$GITHUB_SHA"
 `
-	job, _ := parseFactoryJob([]byte(yaml))
-	if job.ContinueOnError != "true" {
-		t.Errorf("parser should detect job-level continue-on-error: true, got %q", job.ContinueOnError)
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationMissingSHAAssert {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contract should reject commented SHA assertion in canonical mode")
+	}
+}
+
+// TestContractRejectsMissingCleanTree verifies commented clean tree assertion is rejected.
+func TestContractRejectsMissingCleanTree(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Dupcode CI preflight
+        run: |
+          test "$GITHUB_ACTIONS" = "true"
+          # test -z "$(git status --porcelain=v1)"
+`
+	violations := validateFactoryDupcodeWorkflow([]byte(yaml), true)
+	var found bool
+	for _, v := range violations {
+		if v.Type == ViolationMissingCleanTree {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("contract should reject commented clean tree assertion in canonical mode")
 	}
 }
