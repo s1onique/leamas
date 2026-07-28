@@ -27,8 +27,15 @@ type VerifierMetadata struct {
 	Cache     registry.CacheSemantics
 }
 
-// CloneVerifier creates a deep copy of a verifier's metadata portion.
-func CloneVerifier(v registry.Verifier) registry.Verifier {
+// cloneVerifierMetadata creates a deep copy of verifier metadata.
+func cloneVerifierMetadata(m VerifierMetadata) VerifierMetadata {
+	clone := m
+	clone.EnvVars = slices.Clone(m.EnvVars)
+	return clone
+}
+
+// cloneVerifier creates a deep copy of a verifier's metadata portion.
+func cloneVerifier(v registry.Verifier) registry.Verifier {
 	clone := v
 	clone.Execution.EnvVars = slices.Clone(v.Execution.EnvVars)
 	return clone
@@ -71,11 +78,25 @@ func (e *ErrProfileNotAuthorized) Error() string {
 	return "profile not authorized"
 }
 
+// ResourceSnapshot represents resource usage at a point in time.
+type ResourceSnapshot struct {
+	UserCPU   time.Duration
+	SystemCPU time.Duration
+	MaxRSSKB  int64
+}
+
+// ResourceSampler samples resource usage.
+type ResourceSampler interface {
+	Sample() (ResourceSnapshot, error)
+}
+
 // ExecutionRecord represents the outcome of executing a single verifier.
 type ExecutionRecord struct {
 	Metadata VerifierMetadata
 	Findings []checks.Finding
 	Duration time.Duration
+	Before   ResourceSnapshot
+	After    ResourceSnapshot
 }
 
 // ProfileBinding is the result of authorization + binding.
@@ -98,8 +119,8 @@ type BoundProfileRunner struct {
 // Execute runs each bound verifier exactly once in canonical authorized-request order.
 // Returns ErrProfileBindingConsumed if called more than once.
 // Returns ErrProfileNotAuthorized if the profile was not successfully authorized.
-// Measures real wall-clock duration for each verifier.
-func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
+// Measures real wall-clock duration and resource usage for each verifier.
+func (b *ProfileBinding) Execute(sampler ResourceSampler) ([]ExecutionRecord, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -120,6 +141,16 @@ func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
 	// Execute in canonical order: profile.Requests() order
 	records := make([]ExecutionRecord, 0, len(b.runners))
 	for _, runner := range b.runners {
+		// Sample before execution
+		var before ResourceSnapshot
+		if sampler != nil {
+			var err error
+			before, err = sampler.Sample()
+			if err != nil {
+				return nil, fmt.Errorf("resource sample before %s: %w", runner.Metadata.Name, err)
+			}
+		}
+
 		started := time.Now()
 		var findings []checks.Finding
 		if runner.Run != nil {
@@ -127,10 +158,22 @@ func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
 		}
 		elapsed := time.Since(started)
 
+		// Sample after execution
+		var after ResourceSnapshot
+		if sampler != nil {
+			var err error
+			after, err = sampler.Sample()
+			if err != nil {
+				return nil, fmt.Errorf("resource sample after %s: %w", runner.Metadata.Name, err)
+			}
+		}
+
 		records = append(records, ExecutionRecord{
-			Metadata: runner.Metadata,
+			Metadata: cloneVerifierMetadata(runner.Metadata),
 			Findings: findings,
 			Duration: elapsed,
+			Before:   before,
+			After:    after,
 		})
 	}
 
@@ -150,7 +193,7 @@ func (b *ProfileBinding) Runners() []VerifierMetadata {
 	}
 	result := make([]VerifierMetadata, len(b.runners))
 	for i, r := range b.runners {
-		result[i] = r.Metadata
+		result[i] = cloneVerifierMetadata(r.Metadata)
 	}
 	return result
 }
@@ -183,16 +226,16 @@ func (d *Dispatcher) AuthorizeAndBindProfile(
 	for _, req := range canonicalOrder {
 		v := d.resolveVerifier(req.VerifierID)
 		if v != nil {
-			// Create non-executable metadata for factory (no Run function)
-			metadata := VerifierMetadata{
+			// Deep copy for factory input
+			metadata := cloneVerifierMetadata(VerifierMetadata{
 				Name:      v.Name,
 				Lane:      v.Lane,
 				Authority: v.Authority,
 				Kind:      v.Execution.Kind,
 				ImplID:    v.Execution.ImplementationID,
-				EnvVars:   slices.Clone(v.Execution.EnvVars),
+				EnvVars:   v.Execution.EnvVars,
 				Cache:     v.Cache,
-			}
+			})
 			authorized = append(authorized, metadata)
 			authorizedSet[v.Name] = true
 		}
@@ -221,15 +264,15 @@ func (d *Dispatcher) AuthorizeAndBindProfile(
 				v := d.resolveVerifier(fr.VerifierID)
 				if v != nil {
 					canonicalized[i] = BoundProfileRunner{
-						Metadata: VerifierMetadata{
+						Metadata: cloneVerifierMetadata(VerifierMetadata{
 							Name:      v.Name,
 							Lane:      v.Lane,
 							Authority: v.Authority,
 							Kind:      v.Execution.Kind,
 							ImplID:    v.Execution.ImplementationID,
-							EnvVars:   slices.Clone(v.Execution.EnvVars),
+							EnvVars:   v.Execution.EnvVars,
 							Cache:     v.Cache,
-						},
+						}),
 						Run: fr.Run,
 					}
 				}

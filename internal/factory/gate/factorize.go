@@ -174,7 +174,7 @@ func processExecutionRecords(
 			printFailureFindings(out, record.Metadata.Name, record.Findings)
 		}
 
-		// Metrics collection using real timing from Execute()
+		// Metrics collection using real timing and resource samples from Execute()
 		if metrics != nil {
 			env := os.Environ()
 			// Build a registry.Verifier from metadata for metrics compatibility
@@ -189,14 +189,19 @@ func processExecutionRecords(
 					EnvVars:          record.Metadata.EnvVars,
 				},
 			}
+			// Calculate resource deltas from pre/post samples
+			// Zero values indicate sampling was not performed (sampler was nil)
+			userCPUDelta := record.After.UserCPU - record.Before.UserCPU
+			systemCPUDelta := record.After.SystemCPU - record.Before.SystemCPU
+			rss := record.After.MaxRSSKB
 			if err := metrics.AddCheckWithResources(
 				verifier,
 				ordinal,
 				record.Findings,
 				record.Duration,
-				0, // CPU delta not available from binding.Execute()
-				0, // System CPU delta not available
-				0, // RSS not available
+				userCPUDelta,
+				systemCPUDelta,
+				rss,
 				profile.RepositoryRoot(),
 				env,
 			); err != nil {

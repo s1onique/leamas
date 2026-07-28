@@ -38,7 +38,7 @@ func TestProfileBindingExecuteOnce(t *testing.T) {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
 
-	records, err := binding.Execute()
+	records, err := binding.Execute(nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestProfileBindingExecuteOnce(t *testing.T) {
 		t.Errorf("records count = %d, want 2", len(records))
 	}
 
-	_, err = binding.Execute()
+	_, err = binding.Execute(nil)
 	var consumedErr *ErrProfileBindingConsumed
 	if !errors.As(err, &consumedErr) {
 		t.Errorf("expected ErrProfileBindingConsumed, got %T: %v", err, err)
@@ -58,7 +58,7 @@ func TestDeniedBindingCannotExecute(t *testing.T) {
 	profile := &AuthorizedProfile{}
 	binding := &ProfileBinding{profile: profile, runners: nil}
 
-	_, err := binding.Execute()
+	_, err := binding.Execute(nil)
 	var notAuthErr *ErrProfileNotAuthorized
 	if !errors.As(err, &notAuthErr) {
 		t.Errorf("expected ErrProfileNotAuthorized, got %T: %v", err, err)
@@ -111,7 +111,7 @@ func TestFactoryReceivesNonExecutableMetadata(t *testing.T) {
 		t.Errorf("expected name v1, got %s", received[0].Name)
 	}
 
-	records, err := binding.Execute()
+	records, err := binding.Execute(nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestFactoryCannotForgeMetadata(t *testing.T) {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
 
-	records, err := binding.Execute()
+	records, err := binding.Execute(nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -183,7 +183,7 @@ func TestFactoryReversedOrderIsCanonicalized(t *testing.T) {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
 
-	records, err := binding.Execute()
+	records, err := binding.Execute(nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -215,7 +215,7 @@ func TestProfileBindingCannotBeForged(t *testing.T) {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
 
-	records, err := binding.Execute()
+	records, err := binding.Execute(nil)
 	if err != nil {
 		t.Errorf("Execute should succeed: %v", err)
 	}
@@ -348,7 +348,7 @@ func TestExecutionRecordHasCompleteMetadata(t *testing.T) {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
 
-	records, err := binding.Execute()
+	records, err := binding.Execute(nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

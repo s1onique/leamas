@@ -130,7 +130,14 @@ func TestRunFactorizeFixtures(t *testing.T) {
 	}
 }
 
+// testNoopSampler implements gate's ResourceSampler for tests.
+type testNoopSampler struct{}
+
+func (s *testNoopSampler) Sample() (ResourceSnapshot, error) {
+	return ResourceSnapshot{}, nil
+}
+
 // runFactorizeForTest wraps runFactorize with a fake clock for testing.
 func runFactorizeForTest(verifiers []registry.Verifier) int {
-	return runFactorize(&bytes.Buffer{}, systemClock{}, ".", verifiers, nil, &noopSampler{})
+	return runFactorize(&bytes.Buffer{}, systemClock{}, ".", verifiers, nil, &testNoopSampler{})
 }

@@ -233,7 +233,7 @@ func TestFactoryInputMetadataHasNoRun(t *testing.T) {
 	}
 
 	// Execute to prove binding works
-	records, err := binding.Execute()
+	records, err := binding.Execute(nil)
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

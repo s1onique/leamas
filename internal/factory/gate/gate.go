@@ -17,8 +17,25 @@ import (
 // noopSampler is a sampler that always succeeds with zero values.
 type noopSampler struct{}
 
-func (n *noopSampler) Sample() (ResourceSnapshot, error) {
-	return ResourceSnapshot{}, nil
+func (n *noopSampler) Sample() (verifierdispatch.ResourceSnapshot, error) {
+	return verifierdispatch.ResourceSnapshot{}, nil
+}
+
+// platformSamplerAdapter wraps gate's PlatformSampler to implement verifierdispatch.ResourceSampler.
+type platformSamplerAdapter struct {
+	inner ResourceSampler
+}
+
+func (a *platformSamplerAdapter) Sample() (verifierdispatch.ResourceSnapshot, error) {
+	snap, err := a.inner.Sample()
+	if err != nil {
+		return verifierdispatch.ResourceSnapshot{}, err
+	}
+	return verifierdispatch.ResourceSnapshot{
+		UserCPU:   snap.UserCPU,
+		SystemCPU: snap.SystemCPU,
+		MaxRSSKB:  snap.ProcessMaxRSSKB,
+	}, nil
 }
 
 // FastVerifiers returns verifiers that run in the fast lane.
@@ -229,6 +246,7 @@ func RunFactorize(root string) int {
 	}
 
 	var mc *MetricsCollectionV3
+	var sampler verifierdispatch.ResourceSampler
 
 	// Metrics collection is enabled when the destination path is set
 	if shouldCollectMetrics() {
@@ -275,13 +293,18 @@ func RunFactorize(root string) int {
 		for _, meta := range binding.Runners() {
 			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, meta.Name)
 		}
+
+		sampler = &platformSamplerAdapter{inner: NewPlatformSampler()}
+	} else {
+		// Use a no-op sampler when metrics are disabled
+		sampler = &noopSampler{}
 	}
 
 	// Track total factorize duration including verifier execution
 	totalStart := time.Now()
 
-	// Phase 3: Execute bound runners exactly once with real timing
-	records, err := binding.Execute()
+	// Phase 3: Execute bound runners exactly once with real timing and resource sampling
+	records, err := binding.Execute(sampler)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "factory execution: %v\n", err)
 		return 1
