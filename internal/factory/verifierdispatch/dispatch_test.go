@@ -67,7 +67,7 @@ func TestAuthorizeProfileLocalSafeDoesNotObserve(t *testing.T) {
 		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	if !profile.AuthorizationSucceeded {
+	if !profile.AuthorizationSucceeded() {
 		t.Error("expected AuthorizationSucceeded=true for local_safe verifier")
 	}
 
@@ -131,16 +131,16 @@ func TestAuthorizeProfileAllOrNothing(t *testing.T) {
 	}
 
 	// All-or-nothing: should fail because one verifier is not found in registry
-	if profile.AuthorizationSucceeded {
+	if profile.AuthorizationSucceeded() {
 		t.Error("expected AuthorizationSucceeded=false when any verifier is denied")
 	}
 
-	if len(profile.Denials) != 1 {
-		t.Errorf("len(profile.Denials) = %d, want 1", len(profile.Denials))
+	if len(profile.Denials()) != 1 {
+		t.Errorf("len(profile.Denials()) = %d, want 1", len(profile.Denials()))
 	}
 
-	if len(profile.VerifierIDs) != 0 {
-		t.Errorf("len(profile.VerifierIDs) = %d, want 0 (all-or-nothing)", len(profile.VerifierIDs))
+	if len(profile.VerifierIDs()) != 0 {
+		t.Errorf("len(profile.VerifierIDs()) = %d, want 0 (all-or-nothing)", len(profile.VerifierIDs()))
 	}
 }
 
@@ -167,16 +167,16 @@ func TestAuthorizeProfileRejectsNotFound(t *testing.T) {
 		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	if profile.AuthorizationSucceeded {
+	if profile.AuthorizationSucceeded() {
 		t.Error("expected AuthorizationSucceeded=false for not-found verifier")
 	}
 
-	if len(profile.Denials) != 1 {
-		t.Errorf("len(profile.Denials) = %d, want 1", len(profile.Denials))
+	if len(profile.Denials()) != 1 {
+		t.Errorf("len(profile.Denials()) = %d, want 1", len(profile.Denials()))
 	}
 
-	if profile.Denials[0].VerifierID != "not-registered" {
-		t.Errorf("denial.VerifierID = %q, want %q", profile.Denials[0].VerifierID, "not-registered")
+	if profile.Denials()[0].VerifierID != "not-registered" {
+		t.Errorf("denial.VerifierID = %q, want %q", profile.Denials()[0].VerifierID, "not-registered")
 	}
 }
 
@@ -202,20 +202,20 @@ func TestAuthorizedProfileBindsRootAndOperations(t *testing.T) {
 		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	if profile.RepositoryRoot != wantRoot {
-		t.Errorf("profile.RepositoryRoot = %q, want %q", profile.RepositoryRoot, wantRoot)
+	if profile.RepositoryRoot() != wantRoot {
+		t.Errorf("profile.RepositoryRoot() = %q, want %q", profile.RepositoryRoot(), wantRoot)
 	}
 
-	if len(profile.Requests) != 1 {
-		t.Fatalf("len(profile.Requests) = %d, want 1", len(profile.Requests))
+	if len(profile.Requests()) != 1 {
+		t.Fatalf("len(profile.Requests()) = %d, want 1", len(profile.Requests()))
 	}
 
-	if profile.Requests[0].VerifierID != "bound" {
-		t.Errorf("profile.Requests[0].VerifierID = %q, want %q", profile.Requests[0].VerifierID, "bound")
+	if profile.Requests()[0].VerifierID != "bound" {
+		t.Errorf("profile.Requests()[0].VerifierID = %q, want %q", profile.Requests()[0].VerifierID, "bound")
 	}
 
-	if profile.Requests[0].Operation != verifierauthority.OperationVerify {
-		t.Errorf("profile.Requests[0].Operation = %v, want OperationVerify", profile.Requests[0].Operation)
+	if profile.Requests()[0].Operation != verifierauthority.OperationVerify {
+		t.Errorf("profile.Requests()[0].Operation = %v, want OperationVerify", profile.Requests()[0].Operation)
 	}
 }
 
@@ -243,7 +243,7 @@ func TestAuthorizeProfileMultipleLocalVerifiers(t *testing.T) {
 		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 
-	if !profile.AuthorizationSucceeded {
+	if !profile.AuthorizationSucceeded() {
 		t.Error("expected AuthorizationSucceeded=true for multiple local verifiers")
 	}
 
@@ -253,8 +253,8 @@ func TestAuthorizeProfileMultipleLocalVerifiers(t *testing.T) {
 	}
 
 	// Both should be authorized
-	if len(profile.VerifierIDs) != 2 {
-		t.Errorf("len(profile.VerifierIDs) = %d, want 2", len(profile.VerifierIDs))
+	if len(profile.VerifierIDs()) != 2 {
+		t.Errorf("len(profile.VerifierIDs()) = %d, want 2", len(profile.VerifierIDs()))
 	}
 }
 
@@ -280,11 +280,11 @@ func TestAuthorizeProfileUpdateBaselineDeniedForCI(t *testing.T) {
 	}
 
 	// update_baseline should be denied for ci_exact_checkout
-	if profile.AuthorizationSucceeded {
+	if profile.AuthorizationSucceeded() {
 		t.Error("expected AuthorizationSucceeded=false for update_baseline on ci_exact_checkout")
 	}
 
-	if len(profile.Denials) != 1 {
-		t.Errorf("len(profile.Denials) = %d, want 1", len(profile.Denials))
+	if len(profile.Denials()) != 1 {
+		t.Errorf("len(profile.Denials()) = %d, want 1", len(profile.Denials()))
 	}
 }

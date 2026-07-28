@@ -150,8 +150,8 @@ func RunFactorize(root string) int {
 		return 1
 	}
 
-	if len(profile.Denials) > 0 {
-		printAuthorizationDenials(profile.Denials)
+	if len(profile.Denials()) > 0 {
+		printAuthorizationDenials(profile.Denials())
 		return 1
 	}
 

@@ -41,16 +41,16 @@ func authorizeFactorize(ctx context.Context, root string) (*verifierdispatch.Aut
 	}
 
 	// Authorization is all-or-nothing: check AuthorizationSucceeded
-	if !profile.AuthorizationSucceeded {
+	if !profile.AuthorizationSucceeded() {
 		// Return profile with denials; caller must NOT proceed
 		return profile, nil
 	}
 
 	// Verify the profile bindings
-	if profile.RepositoryRoot == "" {
+	if profile.RepositoryRoot() == "" {
 		return nil, fmt.Errorf("authorization profile missing repository root")
 	}
-	if len(profile.VerifierIDs) == 0 {
+	if len(profile.VerifierIDs()) == 0 {
 		return nil, fmt.Errorf("authorization profile has no authorized verifiers")
 	}
 
