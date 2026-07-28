@@ -11,6 +11,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/gate"
+	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
@@ -70,10 +71,13 @@ func handleUpdateBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bo
 	// Authority validation happens BEFORE any expensive operations.
 	ctx := context.Background()
 
+	// Create runner using the protectedverifier adapter
+	runner := protectedverifier.NewDupcodeRunner()
+
 	// Create runner factory - invoked ONLY after authority validation passes
 	runnerFactory := func() func(root string) []checks.Finding {
 		return func(root string) []checks.Finding {
-			report, err := dupcode.CheckReport(root, cfg)
+			report, err := runner.RunCheckReport(root, cfg)
 			if err != nil {
 				return []checks.Finding{
 					{
@@ -86,7 +90,7 @@ func handleUpdateBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bo
 			}
 
 			// Write baseline inside the runner factory
-			if err := dupcode.WriteBaseline(baselinePath, report); err != nil {
+			if err := runner.WriteBaseline(baselinePath, report); err != nil {
 				return []checks.Finding{
 					{
 						Path:     "dupcode",
@@ -148,11 +152,14 @@ func handleVerifyBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bo
 	// Authority validation happens BEFORE any expensive operations.
 	ctx := context.Background()
 
+	// Create runner using the protectedverifier adapter
+	runner := protectedverifier.NewDupcodeRunner()
+
 	// Create runner factory - invoked ONLY after authority validation passes
 	runnerFactory := func() func(root string) []checks.Finding {
 		return func(root string) []checks.Finding {
 			// Load baseline inside the runner factory
-			baseline, err := dupcode.LoadBaseline(baselinePath)
+			baseline, err := runner.LoadBaseline(baselinePath)
 			if err != nil {
 				return []checks.Finding{
 					{
@@ -164,7 +171,7 @@ func handleVerifyBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bo
 				}
 			}
 
-			report, err := dupcode.CheckReport(root, cfg)
+			report, err := runner.RunCheckReport(root, cfg)
 			if err != nil {
 				return []checks.Finding{
 					{
@@ -176,7 +183,7 @@ func handleVerifyBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bo
 				}
 			}
 
-			compareResult := dupcode.CompareToBaseline(report, baseline)
+			compareResult := runner.CompareToBaseline(report, baseline)
 
 			// Convert to findings
 			var findings []checks.Finding

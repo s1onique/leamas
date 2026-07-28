@@ -2,12 +2,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 
+	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
+	"github.com/s1onique/leamas/internal/factory/gate"
 )
 
 // Default thresholds for the baseline policy
@@ -69,7 +72,50 @@ func handleFactoryVerifyDupcodeBaseline() {
 		MinTokens: *minTokens,
 	}
 
-	// Run verification
+	// Run verification through dispatcher
+	ctx := context.Background()
+
+	runnerFactory := func() func(root string) []checks.Finding {
+		return func(root string) []checks.Finding {
+			findings, err := dupcode.VerifyBaseline(root, policy)
+			if err != nil {
+				return []checks.Finding{
+					{
+						Path:     "dupcode",
+						Kind:     "error",
+						Message:  fmt.Sprintf("baseline verification error: %v", err),
+						Severity: checks.SeverityError,
+					},
+				}
+			}
+			return findings
+		}
+	}
+
+	// Use the dispatcher for baseline verification
+	result := gate.DispatchDupcodeBaselineVerify(ctx, ".", runnerFactory)
+
+	// Handle authority denial or runner errors
+	if len(result.Findings) > 0 {
+		f := result.Findings[0]
+		if *jsonOutput {
+			printJSONAndExit(jsonError{Error: f.Message}, 1)
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", f.Message)
+			os.Exit(1)
+		}
+	}
+
+	if result.Error != nil {
+		if *jsonOutput {
+			printJSONAndExit(jsonError{Error: fmt.Sprintf("runner error: %v", result.Error)}, 1)
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
+			os.Exit(1)
+		}
+	}
+
+	// Run verification directly to get findings
 	findings, err := dupcode.VerifyBaseline(".", policy)
 	if err != nil {
 		if *jsonOutput {

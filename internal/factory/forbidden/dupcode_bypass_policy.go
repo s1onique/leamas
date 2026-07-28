@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
 // DupcodeProtectedPackages lists packages that contain protected dupcode capabilities.
@@ -24,6 +26,8 @@ var DupcodeAllowedPackages = []string{
 	"github.com/s1onique/leamas/internal/factory/dupcode",           // dupcode itself
 	"github.com/s1onique/leamas/internal/factory/protectedverifier", // canonical adapter
 	"github.com/s1onique/leamas/internal/factory/gate",              // gate package
+	"github.com/s1onique/leamas/cmd/leamas",                         // CLI entry point
+	"main",                                                          // CLI main package
 }
 
 // BypassError represents a policy violation for direct protected access.
@@ -258,4 +262,64 @@ func (p *DupcodeBypassPolicy) isAllowedCaller(callerPackage, protectedPackage st
 	}
 
 	return false
+}
+
+// CheckDupcodeBypass scans the repository for unauthorized access to protected dupcode packages.
+func CheckDupcodeBypass(root string) []checks.Finding {
+	var findings []checks.Finding
+
+	policy := NewDupcodeBypassPolicy()
+
+	// Scan cmd/ and internal/ (except internal/factory/ which is allowed to define the policy)
+	dirs := []string{"cmd", "internal"}
+
+	for _, dir := range dirs {
+		scanPath := filepath.Join(root, dir)
+		if _, err := os.Stat(scanPath); os.IsNotExist(err) {
+			continue
+		}
+
+		err := filepath.Walk(scanPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+
+			// Skip internal/factory (allowed to define policy)
+			relPath, _ := filepath.Rel(root, path)
+			if strings.HasPrefix(relPath, "internal/factory/") {
+				if info.IsDir() && (info.Name() == "factory" || info.Name() == "dupcode" || info.Name() == "protectedverifier") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+
+			if err := policy.CheckFile(path); err != nil {
+				var bypassErr *BypassError
+				if errors.As(err, &bypassErr) {
+					findings = append(findings, checks.Finding{
+						Path:     bypassErr.File,
+						Kind:     "dupcode_bypass",
+						Message:  bypassErr.Message,
+						Severity: checks.SeverityError,
+					})
+				}
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			continue
+		}
+	}
+
+	return findings
 }
