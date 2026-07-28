@@ -8,7 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"io"
+	"hash"
 	"slices"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -332,7 +332,7 @@ func (d *Dispatcher) computeRegistryDigest(requests []ProfileRequest, resolved [
 }
 
 // writeString writes a length-prefixed string to the hash using streaming writes.
-func writeString(h io.Writer, s string) {
+func writeString(h hash.Hash, s string) {
 	var length [4]byte
 	binary.LittleEndian.PutUint32(length[:], uint32(len(s)))
 	h.Write(length[:])
