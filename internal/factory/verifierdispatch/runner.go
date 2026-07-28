@@ -4,22 +4,38 @@ package verifierdispatch
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
-// ProfileRunnerFactory creates verifier runners bound to the authorized profile.
+// BoundProfileRunner is an ID-bound verifier runner.
+type BoundProfileRunner struct {
+	VerifierID string
+	Run        func(root string) []checks.Finding
+}
+
+// ProfileRunnerFactory creates ID-bound verifier runners for the authorized profile.
 // The factory receives the exact authorized verifier entries and must return
-// runners in the same order. The factory is ONLY invoked after authorization passes.
-type ProfileRunnerFactory func(authorized []*registry.Verifier) []func(root string) []checks.Finding
+// runners with matching IDs in canonical order. The factory is ONLY invoked after
+// authorization passes.
+type ProfileRunnerFactory func(authorized []*registry.Verifier) ([]BoundProfileRunner, error)
+
+// ErrProfileFactoryContract is returned when the factory violates its contract.
+type ErrProfileFactoryContract struct {
+	Reason string
+}
+
+func (e *ErrProfileFactoryContract) Error() string {
+	return "profile factory contract violated: " + e.Reason
+}
 
 // ProfileResult represents the outcome of profile-authorized execution.
 type ProfileResult struct {
 	Profile  *AuthorizedProfile
-	Results  [][]checks.Finding
-	Errors   []error
-	AllFound bool // true if all verifiers produced results
+	Findings map[string][]checks.Finding // keyed by verifier ID
+	AllRun   bool                        // true only if all authorized runners executed
 }
 
 // AuthorizeAndRunProfile performs batch authorization and executes ONLY the authorized verifiers.
@@ -29,9 +45,10 @@ type ProfileResult struct {
 //   - resolve exact registry entries
 //   - observe once when needed
 //   - authorize all requests
-//   - on any denial: factory count remains zero, results are empty
+//   - on any denial: factory is not called, results are empty
 //   - invoke factory with the exact resolved entries
-//   - run only those entries
+//   - validate returned runners match exactly
+//   - execute in canonical authorized-request order
 //
 // This ensures RunFactorize cannot authorize inventory A and execute inventory B.
 func (d *Dispatcher) AuthorizeAndRunProfile(
@@ -48,18 +65,16 @@ func (d *Dispatcher) AuthorizeAndRunProfile(
 
 	result := &ProfileResult{
 		Profile:  profile,
-		Results:  nil,
-		Errors:   nil,
-		AllFound: false,
+		Findings: nil,
+		AllRun:   false,
 	}
 
-	// If authorization failed, return early with empty results
-	// Factory was NOT called - this is the key invariant
+	// If authorization failed, return early - factory was NOT called
 	if !profile.AuthorizationSucceeded() {
 		return result, nil
 	}
 
-	// Build the exact authorized verifier list
+	// Build the exact authorized verifier list in canonical request order
 	authorized := make([]*registry.Verifier, 0, len(profile.VerifierIDs()))
 	seenIDs := make(map[string]bool)
 	for _, id := range profile.VerifierIDs() {
@@ -75,21 +90,85 @@ func (d *Dispatcher) AuthorizeAndRunProfile(
 	}
 
 	// NOW invoke the factory - only after authorization passed
-	runners := factory(authorized)
+	runners, err := factory(authorized)
+	if err != nil {
+		return nil, err
+	}
 
-	// Execute only the authorized verifiers
-	result.Results = make([][]checks.Finding, len(runners))
-	result.Errors = make([]error, len(runners))
-	result.AllFound = true
+	// Validate exact runner set before executing anything
+	if err := validateRunnerSet(authorized, runners); err != nil {
+		// Factory contract violated - no runners execute
+		return result, err
+	}
 
-	for i, runner := range runners {
-		if runner != nil {
-			result.Results[i] = runner(profile.RepositoryRoot())
+	// Execute in canonical authorized-request order
+	result.Findings = make(map[string][]checks.Finding, len(runners))
+	for _, runner := range runners {
+		if runner.Run != nil {
+			result.Findings[runner.VerifierID] = runner.Run(profile.RepositoryRoot())
 		} else {
-			result.Results[i] = nil
-			result.AllFound = false
+			result.Findings[runner.VerifierID] = nil
+		}
+	}
+	result.AllRun = true
+
+	return result, nil
+}
+
+// validateRunnerSet verifies the factory returned exactly the authorized runners.
+func validateRunnerSet(authorized []*registry.Verifier, runners []BoundProfileRunner) error {
+	// Check cardinality: must match exactly
+	if len(runners) != len(authorized) {
+		return &ErrProfileFactoryContract{
+			Reason: fmt.Sprintf("runner count mismatch: got %d, want %d", len(runners), len(authorized)),
 		}
 	}
 
-	return result, nil
+	// Build sets for validation
+	returnedIDs := make(map[string]int)
+	for i, r := range runners {
+		if r.VerifierID == "" {
+			return &ErrProfileFactoryContract{
+				Reason: fmt.Sprintf("runner at index %d has empty VerifierID", i),
+			}
+		}
+		if r.Run == nil {
+			return &ErrProfileFactoryContract{
+				Reason: fmt.Sprintf("runner %s has nil Run function", r.VerifierID),
+			}
+		}
+		returnedIDs[r.VerifierID]++
+	}
+
+	// Check no duplicates in returned set
+	for id, count := range returnedIDs {
+		if count > 1 {
+			return &ErrProfileFactoryContract{
+				Reason: fmt.Sprintf("duplicate runner ID: %s (count=%d)", id, count),
+			}
+		}
+	}
+
+	// Check exact set equality
+	authorizedSet := make(map[string]bool)
+	for _, v := range authorized {
+		authorizedSet[v.Name] = true
+	}
+
+	for id := range returnedIDs {
+		if !authorizedSet[id] {
+			return &ErrProfileFactoryContract{
+				Reason: fmt.Sprintf("unexpected runner ID: %s", id),
+			}
+		}
+	}
+	for id := range authorizedSet {
+		if _, ok := returnedIDs[id]; !ok {
+			return &ErrProfileFactoryContract{
+				Reason: fmt.Sprintf("missing runner for authorized ID: %s", id),
+			}
+		}
+	}
+
+	return nil
 }
