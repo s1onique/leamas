@@ -245,6 +245,9 @@ func TestFactoryDupcodeWorkflowExactCheckoutContract(t *testing.T) {
 	if job.Timeout != "30" {
 		t.Errorf("expected timeout '30', got %q", job.Timeout)
 	}
+	if job.ContinueOnError == "true" {
+		t.Fatal("factory-dupcode job must not use continue-on-error: true")
+	}
 
 	var preflight *WorkflowStep
 	for i := range job.Steps {

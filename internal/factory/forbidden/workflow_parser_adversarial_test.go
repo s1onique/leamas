@@ -33,14 +33,14 @@ jobs:
 `
 	job, err := parseFactoryJob([]byte(yaml))
 	if err != nil {
-		t.Fatalf("parser should not error on valid workflow: %v", err)
+		t.Fatalf("parser should not error: %v", err)
 	}
 	if len(job.Steps) != 2 {
-		t.Errorf("expected exactly 2 steps, got %d", len(job.Steps))
+		t.Errorf("expected 2 steps, got %d", len(job.Steps))
 	}
 	for _, step := range job.Steps {
 		if step.Name == "Long test step" {
-			t.Error("parser must not absorb steps from factory-long job")
+			t.Error("parser must not absorb factory-long steps")
 		}
 	}
 }
@@ -114,9 +114,7 @@ jobs:
 }
 
 // TestParserDetectsWrongAuthorityPlacement verifies parser detects authority on wrong step.
-// This restricted parser only handles same-line step fields, so we test with inline env.
 func TestParserDetectsWrongAuthorityPlacement(t *testing.T) {
-	// Test that the authority test correctly finds multiple authority-bearing steps
 	yaml := `name: Factory CI
 on: [push]
 jobs:
@@ -141,15 +139,17 @@ jobs:
 		}
 	}
 	if len(authSteps) != 1 {
-		t.Errorf("expected exactly 1 authority step, got %d: %v", len(authSteps), authSteps)
+		t.Errorf("expected 1 authority step, got %d: %v", len(authSteps), authSteps)
 	}
 	if len(authSteps) > 0 && authSteps[0] != "Run gate-dupcode" {
 		t.Errorf("authority should be on Run gate-dupcode, got %q", authSteps[0])
 	}
 }
 
-// TestParserCapturesMissingMakeGateDupcode verifies parser captures wrong run command.
-func TestParserCapturesMissingMakeGateDupcode(t *testing.T) {
+// TestAuthorityStepCommandVerified verifies the parser can verify the authority step command.
+// This test uses a fixture with wrong command to prove the verification works.
+func TestAuthorityStepCommandVerified(t *testing.T) {
+	// Fixture with wrong command: make build instead of make gate-dupcode
 	yaml := `name: Factory CI
 on: [push]
 jobs:
@@ -174,13 +174,18 @@ jobs:
 			}
 		}
 	}
-	if authorityStep != nil && !strings.Contains(authorityStep.Run, "make gate-dupcode") {
-		t.Logf("correctly detected missing make gate-dupcode in: %q", authorityStep.Run)
+	if authorityStep == nil {
+		t.Fatal("parser should find authority step")
+	}
+	// Verify we can check the command - this proves the contract checker works
+	if authorityStep.Run != "make build" {
+		t.Errorf("expected authority step command 'make build', got %q", authorityStep.Run)
 	}
 }
 
-// TestParserCapturesJobLevelAuthority verifies parser captures job-level env.
-func TestParserCapturesJobLevelAuthority(t *testing.T) {
+// TestParserDetectsJobLevelAuthority verifies parser detects job-level env.
+// This test asserts that job-level authority is detected and can be verified.
+func TestParserDetectsJobLevelAuthority(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 jobs:
@@ -194,15 +199,17 @@ jobs:
         uses: actions/checkout@v4
 `
 	job, _ := parseFactoryJob([]byte(yaml))
-	if job.Env != nil {
-		if _, ok := job.Env["LEAMAS_DUPCODE_AUTHORITY"]; ok {
-			t.Log("correctly detected job-level authority")
-		}
+	if job.Env == nil {
+		t.Fatal("parser should capture job-level env")
+	}
+	if _, ok := job.Env["LEAMAS_DUPCODE_AUTHORITY"]; !ok {
+		t.Error("parser should detect job-level LEAMAS_DUPCODE_AUTHORITY")
 	}
 }
 
-// TestParserCapturesWorkflowLevelAuthority verifies parser captures workflow-level env.
-func TestParserCapturesWorkflowLevelAuthority(t *testing.T) {
+// TestParserDetectsWorkflowLevelAuthority verifies parser detects workflow-level env.
+// This test asserts that workflow-level authority is detected and can be verified.
+func TestParserDetectsWorkflowLevelAuthority(t *testing.T) {
 	yaml := `name: Factory CI
 on: [push]
 env:
@@ -216,9 +223,29 @@ jobs:
         uses: actions/checkout@v4
 `
 	we := parseWorkflowEnv([]byte(yaml))
-	if we != nil && we.Env != nil {
-		if _, ok := we.Env["LEAMAS_DUPCODE_AUTHORITY"]; ok {
-			t.Log("correctly detected workflow-level authority")
-		}
+	if we == nil || we.Env == nil {
+		t.Fatal("parser should capture workflow-level env")
+	}
+	if _, ok := we.Env["LEAMAS_DUPCODE_AUTHORITY"]; !ok {
+		t.Error("parser should detect workflow-level LEAMAS_DUPCODE_AUTHORITY")
+	}
+}
+
+// TestParserDetectsJobLevelContinueOnError verifies parser detects job-level continue-on-error.
+func TestParserDetectsJobLevelContinueOnError(t *testing.T) {
+	yaml := `name: Factory CI
+on: [push]
+jobs:
+  factory-dupcode:
+    name: Factory Dupcode
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+`
+	job, _ := parseFactoryJob([]byte(yaml))
+	if job.ContinueOnError != "true" {
+		t.Errorf("parser should detect job-level continue-on-error: true, got %q", job.ContinueOnError)
 	}
 }
