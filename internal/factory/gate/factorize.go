@@ -150,7 +150,7 @@ func exitCode(failed bool) int {
 // runFactorizeWithRunners executes factorize using ID-bound runners from the dispatcher.
 // This is the atomic entry point that binds authorization to execution.
 // The runners are already bound to the exact authorized profile inventory.
-func runFactorizeWithRunners(
+func runFactorizeWithBoundRunners(
 	out io.Writer,
 	clk clock,
 	profile *verifierdispatch.AuthorizedProfile,
@@ -165,7 +165,7 @@ func runFactorizeWithRunners(
 	for _, runner := range runners {
 		before, err := sampler.Sample()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: resource sample before %s: %v\n", runner.VerifierID, err)
+			fmt.Fprintf(os.Stderr, "error: resource sample before %s: %v\n", runner.Verifier.Name, err)
 			failed = true
 			ordinal++
 			continue
@@ -179,16 +179,16 @@ func runFactorizeWithRunners(
 		if len(findings) > 0 {
 			status = "FAILED"
 		}
-		fmt.Fprintf(out, "  %s: %s: %.2fs\n", runner.VerifierID, status, elapsed.Seconds())
+		fmt.Fprintf(out, "  %s: %s: %.2fs\n", runner.Verifier.Name, status, elapsed.Seconds())
 
 		if len(findings) > 0 {
 			failed = true
-			printFailureFindings(out, runner.VerifierID, findings)
+			printFailureFindings(out, runner.Verifier.Name, findings)
 		}
 
 		after, err := sampler.Sample()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error: resource sample after %s: %v\n", runner.VerifierID, err)
+			fmt.Fprintf(os.Stderr, "error: resource sample after %s: %v\n", runner.Verifier.Name, err)
 			failed = true
 			ordinal++
 			continue
@@ -196,7 +196,7 @@ func runFactorizeWithRunners(
 
 		if metrics != nil {
 			env := os.Environ()
-			verifier := registry.Verifier{Name: runner.VerifierID}
+			verifier := runner.Verifier
 			if err := metrics.AddCheckWithResources(
 				verifier,
 				ordinal,
@@ -208,7 +208,7 @@ func runFactorizeWithRunners(
 				profile.RepositoryRoot(),
 				env,
 			); err != nil {
-				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", runner.VerifierID, err)
+				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", runner.Verifier.Name, err)
 				failed = true
 			}
 		}

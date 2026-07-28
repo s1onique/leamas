@@ -139,18 +139,13 @@ func RunGate(root string) int {
 // "dupcode" and "dupcode-baseline" verifiers perform only one scan of the
 // repository during a single factorize invocation.
 //
-// All verifier execution is routed through AuthorizeAndRunProfile which binds
-// authorization to execution: the factory is ONLY invoked after authorization passes,
-// and the returned runners must match exactly the authorized inventory.
+// Authorization and execution are bound: the factory creates the shared context
+// ONLY after authorization passes, and all runners execute exactly once.
 func RunFactorize(root string) int {
-	// Phase 1: Build verifier registry with shared dupcode context
-	// This must happen BEFORE creating the dispatcher so the Run functions
-	// are bound to the shared context (not the independent ones from AllVerifiers).
-	verifiers, err := FactorizeVerifiersWithDupcodeContext(root)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
-		return 1
-	}
+	// Phase 1: Build the base verifier registry for authorization
+	// This provides metadata for authorization but Run functions are NOT used here.
+	// The factory creates the actual Run functions with shared context AFTER authorization.
+	verifiers := AllVerifiers()
 
 	// Fail closed if registry has invalid metadata
 	if err := ValidateVerifiers(verifiers); err != nil {
@@ -158,13 +153,7 @@ func RunFactorize(root string) int {
 		return 1
 	}
 
-	// Build map for quick lookup of Run functions
-	runMap := make(map[string]func(string) []checks.Finding)
-	for _, v := range verifiers {
-		runMap[v.Name] = v.Run
-	}
-
-	// Phase 2: Create dispatcher and authorize the exact verifier inventory
+	// Create dispatcher
 	dispatcher, err := verifierdispatch.NewDispatcher(verifiers)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
@@ -176,49 +165,60 @@ func RunFactorize(root string) int {
 
 	// Build ProfileRequests for exactly the authorized verifiers
 	requests := make([]verifierdispatch.ProfileRequest, 0, len(verifiers))
-	authorizedIDs := make([]string, 0, len(verifiers))
 	for _, v := range verifiers {
 		requests = append(requests, verifierdispatch.ProfileRequest{
 			VerifierID: v.Name,
 			Operation:  verifierauthority.OperationVerify,
 		})
-		authorizedIDs = append(authorizedIDs, v.Name)
 	}
 
-	// The factory is ONLY invoked after authorization passes.
-	// It creates bound runners for the exact authorized inventory.
-	factory := func(authorized []*registry.Verifier) ([]verifierdispatch.BoundProfileRunner, error) {
-		// Build bound runners in canonical authorized-request order
-		runners := make([]verifierdispatch.BoundProfileRunner, 0, len(authorized))
-		for _, v := range authorized {
-			run, ok := runMap[v.Name]
-			if !ok {
-				// Should not happen if registry is consistent
-				return nil, fmt.Errorf("factory: no run function for authorized verifier %s", v.Name)
+	// Phase 2: Authorize AND bind (factory creates shared context AFTER authorization passes)
+	// The factory is ONLY invoked after authorization succeeds.
+	binding, err := dispatcher.AuthorizeAndBindProfile(ctx, root, requests, observer,
+		func(authorized []*registry.Verifier) ([]verifierdispatch.BoundProfileRunner, error) {
+			// Create the shared dupcode context AFTER authorization
+			// This is the expensive operation that should only happen when authorized
+			factorizeVerifiers, err := FactorizeVerifiersWithDupcodeContext(root)
+			if err != nil {
+				return nil, err
 			}
-			runners = append(runners, verifierdispatch.BoundProfileRunner{
-				VerifierID: v.Name,
-				Run:        run,
-			})
-		}
-		return runners, nil
-	}
 
-	result, err := dispatcher.AuthorizeAndRunProfile(ctx, root, requests, observer, factory)
+			// Build a map of Run functions from the factorize verifiers
+			runMap := make(map[string]func(string) []checks.Finding)
+			for _, v := range factorizeVerifiers {
+				runMap[v.Name] = v.Run
+			}
+
+			// Build bound runners in canonical authorized-request order
+			// Use the complete registered verifier metadata for metrics
+			runners := make([]verifierdispatch.BoundProfileRunner, 0, len(authorized))
+			for _, v := range authorized {
+				run, ok := runMap[v.Name]
+				if !ok {
+					return nil, fmt.Errorf("factory: no run function for authorized verifier %s", v.Name)
+				}
+				runners = append(runners, verifierdispatch.BoundProfileRunner{
+					Verifier: *v, // Complete metadata for metrics
+					Run:      run,
+				})
+			}
+			return runners, nil
+		})
+
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "factory authorization: %v\n", err)
 		return 1
 	}
 
 	// Print denials if any
-	if len(result.Profile.Denials()) > 0 {
-		printAuthorizationDenials(result.Profile.Denials())
+	if len(binding.Profile.Denials()) > 0 {
+		printAuthorizationDenials(binding.Profile.Denials())
 		return 1
 	}
 
-	// Factory contract violation - no runners executed
-	if !result.AllRun {
-		fmt.Fprintf(os.Stderr, "factory: runner set did not match authorized inventory\n")
+	// Factory contract violation - no runners bound
+	if len(binding.Runners) == 0 {
+		fmt.Fprintf(os.Stderr, "factory: no runners bound for authorized inventory\n")
 		return 1
 	}
 
@@ -267,8 +267,8 @@ func RunFactorize(root string) int {
 		)
 
 		// Bind expected verifier inventory for reconciliation
-		for _, id := range authorizedIDs {
-			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, id)
+		for _, runner := range binding.Runners {
+			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, runner.Verifier.Name)
 		}
 
 		sampler = NewPlatformSampler()
@@ -277,18 +277,16 @@ func RunFactorize(root string) int {
 		sampler = &noopSampler{}
 	}
 
-	// Extract runners from result for execution
-	runners := make([]verifierdispatch.BoundProfileRunner, 0, len(result.Findings))
-	for id, _ := range result.Findings {
-		if run, ok := runMap[id]; ok {
-			runners = append(runners, verifierdispatch.BoundProfileRunner{
-				VerifierID: id,
-				Run:        run,
-			})
-		}
+	// Phase 3: Execute bound runners exactly once with metrics
+	var exitCode int
+	err = binding.ExecuteBoundRunners(func(profile *verifierdispatch.AuthorizedProfile, runners []verifierdispatch.BoundProfileRunner) error {
+		exitCode = runFactorizeWithBoundRunners(os.Stdout, systemClock{}, profile, runners, mc, sampler)
+		return nil // Exit code handled below
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "factory execution: %v\n", err)
+		return 1
 	}
-
-	exitCode := runFactorizeWithRunners(os.Stdout, systemClock{}, result.Profile, runners, mc, sampler)
 
 	// Fail-closed: metrics finalization errors cause factorize to fail
 	if mc != nil {

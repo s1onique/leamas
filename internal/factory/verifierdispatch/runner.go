@@ -10,16 +10,17 @@ import (
 	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
-// BoundProfileRunner is an ID-bound verifier runner.
+// BoundProfileRunner is an ID-bound verifier runner with complete metadata.
 type BoundProfileRunner struct {
-	VerifierID string
-	Run        func(root string) []checks.Finding
+	Verifier registry.Verifier // complete registered metadata
+	Run      func(root string) []checks.Finding
 }
 
 // ProfileRunnerFactory creates ID-bound verifier runners for the authorized profile.
 // The factory receives the exact authorized verifier entries and must return
 // runners with matching IDs in canonical order. The factory is ONLY invoked after
-// authorization passes.
+// authorization passes. The factory may perform expensive operations (like loading
+// baselines or creating shared contexts) since it is only called after authorization.
 type ProfileRunnerFactory func(authorized []*registry.Verifier) ([]BoundProfileRunner, error)
 
 // ErrProfileFactoryContract is returned when the factory violates its contract.
@@ -31,6 +32,25 @@ func (e *ErrProfileFactoryContract) Error() string {
 	return "profile factory contract violated: " + e.Reason
 }
 
+// ProfileBinding is the result of authorization + binding.
+// It contains the authorized profile and bound runners, but does NOT execute them.
+// Call ExecuteBoundRunners to execute.
+type ProfileBinding struct {
+	Profile *AuthorizedProfile
+	Runners []BoundProfileRunner // in canonical authorized-request order
+}
+
+// ExecuteBoundRunners executes the bound runners with the given executor.
+// This separates authorization from execution, ensuring exactly one execution pass.
+func (b *ProfileBinding) ExecuteBoundRunners(
+	executor func(profile *AuthorizedProfile, runners []BoundProfileRunner) error,
+) error {
+	if b == nil || b.Profile == nil {
+		return fmt.Errorf("binding is nil")
+	}
+	return executor(b.Profile, b.Runners)
+}
+
 // ProfileResult represents the outcome of profile-authorized execution.
 type ProfileResult struct {
 	Profile  *AuthorizedProfile
@@ -38,40 +58,24 @@ type ProfileResult struct {
 	AllRun   bool                        // true only if all authorized runners executed
 }
 
-// AuthorizeAndRunProfile performs batch authorization and executes ONLY the authorized verifiers.
-// This is the atomic entry point that binds authorization to execution.
-//
-// Ordering guarantee:
-//   - resolve exact registry entries
-//   - observe once when needed
-//   - authorize all requests
-//   - on any denial: factory is not called, results are empty
-//   - invoke factory with the exact resolved entries
-//   - validate returned runners match exactly
-//   - execute in canonical authorized-request order
-//
-// This ensures RunFactorize cannot authorize inventory A and execute inventory B.
-func (d *Dispatcher) AuthorizeAndRunProfile(
+// AuthorizeAndBindProfile performs batch authorization and binds runners.
+// This does NOT execute the runners - call ExecuteBoundRunners separately.
+// This is the atomic entry point that binds authorization to runner creation.
+func (d *Dispatcher) AuthorizeAndBindProfile(
 	ctx context.Context,
 	root string,
 	requests []ProfileRequest,
 	observer ContextObserver,
 	factory ProfileRunnerFactory,
-) (*ProfileResult, error) {
+) (*ProfileBinding, error) {
 	profile, err := d.AuthorizeProfile(ctx, root, requests, observer)
 	if err != nil {
 		return nil, err
 	}
 
-	result := &ProfileResult{
-		Profile:  profile,
-		Findings: nil,
-		AllRun:   false,
-	}
-
 	// If authorization failed, return early - factory was NOT called
 	if !profile.AuthorizationSucceeded() {
-		return result, nil
+		return &ProfileBinding{Profile: profile}, nil
 	}
 
 	// Build the exact authorized verifier list in canonical request order
@@ -98,21 +102,11 @@ func (d *Dispatcher) AuthorizeAndRunProfile(
 	// Validate exact runner set before executing anything
 	if err := validateRunnerSet(authorized, runners); err != nil {
 		// Factory contract violated - no runners execute
-		return result, err
+		return &ProfileBinding{Profile: profile}, err
 	}
 
-	// Execute in canonical authorized-request order
-	result.Findings = make(map[string][]checks.Finding, len(runners))
-	for _, runner := range runners {
-		if runner.Run != nil {
-			result.Findings[runner.VerifierID] = runner.Run(profile.RepositoryRoot())
-		} else {
-			result.Findings[runner.VerifierID] = nil
-		}
-	}
-	result.AllRun = true
-
-	return result, nil
+	// Runners are already in canonical order from factory (validated above)
+	return &ProfileBinding{Profile: profile, Runners: runners}, nil
 }
 
 // validateRunnerSet verifies the factory returned exactly the authorized runners.
@@ -127,17 +121,18 @@ func validateRunnerSet(authorized []*registry.Verifier, runners []BoundProfileRu
 	// Build sets for validation
 	returnedIDs := make(map[string]int)
 	for i, r := range runners {
-		if r.VerifierID == "" {
+		// Use Verifier.Name as the canonical ID
+		if r.Verifier.Name == "" {
 			return &ErrProfileFactoryContract{
-				Reason: fmt.Sprintf("runner at index %d has empty VerifierID", i),
+				Reason: fmt.Sprintf("runner at index %d has empty Verifier.Name", i),
 			}
 		}
 		if r.Run == nil {
 			return &ErrProfileFactoryContract{
-				Reason: fmt.Sprintf("runner %s has nil Run function", r.VerifierID),
+				Reason: fmt.Sprintf("runner %s has nil Run function", r.Verifier.Name),
 			}
 		}
-		returnedIDs[r.VerifierID]++
+		returnedIDs[r.Verifier.Name]++
 	}
 
 	// Check no duplicates in returned set
