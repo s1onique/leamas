@@ -181,7 +181,7 @@ func RunFactorize(root string) int {
 	// Phase 2: Authorize AND bind (factory creates shared context AFTER authorization passes)
 	// The factory is ONLY invoked after authorization succeeds.
 	binding, err := dispatcher.AuthorizeAndBindProfile(ctx, root, requests, observer,
-		func(authorized []registry.Verifier) ([]verifierdispatch.FactoryRunner, error) {
+		func(authorized []verifierdispatch.VerifierMetadata) ([]verifierdispatch.FactoryRunner, error) {
 			// Create the shared dupcode context AFTER authorization
 			// This is the expensive operation that should only happen when authorized
 			factorizeVerifiers, err := FactorizeVerifiersWithDupcodeContext(root)
@@ -229,7 +229,6 @@ func RunFactorize(root string) int {
 	}
 
 	var mc *MetricsCollectionV3
-	var sampler ResourceSampler
 
 	// Metrics collection is enabled when the destination path is set
 	if shouldCollectMetrics() {
@@ -276,11 +275,6 @@ func RunFactorize(root string) int {
 		for _, meta := range binding.Runners() {
 			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, meta.Name)
 		}
-
-		sampler = NewPlatformSampler()
-	} else {
-		// Use a no-op sampler when metrics are disabled
-		sampler = &noopSampler{}
 	}
 
 	// Track total factorize duration including verifier execution
@@ -297,7 +291,7 @@ func RunFactorize(root string) int {
 
 	// Process execution records and print results with real timing
 	profile = binding.Profile()
-	exitCode := processExecutionRecords(os.Stdout, profile, records, mc, sampler, totalElapsed)
+	exitCode := processExecutionRecords(os.Stdout, profile, records, mc, totalElapsed)
 
 	// Fail-closed: metrics finalization errors cause factorize to fail
 	if mc != nil {

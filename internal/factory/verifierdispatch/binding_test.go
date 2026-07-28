@@ -23,23 +23,21 @@ func TestProfileBindingExecuteOnce(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	// Use the proper API to create an authorized binding
 	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{
 			{VerifierID: "v1", Operation: verifierauthority.OperationVerify},
 			{VerifierID: "v2", Operation: verifierauthority.OperationVerify},
 		}, nil,
-		func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 			return []FactoryRunner{
-				{VerifierID: authorized[0].Name, Run: authorized[0].Run},
-				{VerifierID: authorized[1].Name, Run: authorized[1].Run},
+				{VerifierID: authorized[0].Name, Run: verifiers[0].Run},
+				{VerifierID: authorized[1].Name, Run: verifiers[1].Run},
 			}, nil
 		})
 	if err != nil {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
 	}
 
-	// First execution should succeed
 	records, err := binding.Execute()
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
@@ -48,7 +46,6 @@ func TestProfileBindingExecuteOnce(t *testing.T) {
 		t.Errorf("records count = %d, want 2", len(records))
 	}
 
-	// Second execution should fail with consumed error
 	_, err = binding.Execute()
 	var consumedErr *ErrProfileBindingConsumed
 	if !errors.As(err, &consumedErr) {
@@ -58,7 +55,7 @@ func TestProfileBindingExecuteOnce(t *testing.T) {
 
 // TestDeniedBindingCannotExecute verifies denied bindings cannot execute.
 func TestDeniedBindingCannotExecute(t *testing.T) {
-	profile := &AuthorizedProfile{} // unauthorized
+	profile := &AuthorizedProfile{}
 	binding := &ProfileBinding{profile: profile, runners: nil}
 
 	_, err := binding.Execute()
@@ -83,13 +80,10 @@ func TestBindingDoesNotExposeExecutableRunners(t *testing.T) {
 	if meta[0].Name != "v1" {
 		t.Errorf("expected verifier name v1, got %s", meta[0].Name)
 	}
-
-	// Verify no Run function is accessible through metadata
-	// The metadata type doesn't have a Run field, so this is a compile-time guarantee
 }
 
-// TestFactoryReceivesDefensiveVerifierCopies verifies factory receives value copies.
-func TestFactoryReceivesDefensiveVerifierCopies(t *testing.T) {
+// TestFactoryReceivesNonExecutableMetadata verifies factory receives VerifierMetadata.
+func TestFactoryReceivesNonExecutableMetadata(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
 	}
@@ -98,7 +92,9 @@ func TestFactoryReceivesDefensiveVerifierCopies(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+	var received []VerifierMetadata
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
+		received = authorized
 		return []FactoryRunner{{VerifierID: authorized[0].Name, Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 
@@ -106,6 +102,13 @@ func TestFactoryReceivesDefensiveVerifierCopies(t *testing.T) {
 		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
 	if err != nil {
 		t.Fatalf("AuthorizeAndBindProfile: %v", err)
+	}
+
+	if len(received) != 1 {
+		t.Fatalf("expected 1 metadata, got %d", len(received))
+	}
+	if received[0].Name != "v1" {
+		t.Errorf("expected name v1, got %s", received[0].Name)
 	}
 
 	records, err := binding.Execute()
@@ -127,8 +130,7 @@ func TestFactoryCannotForgeMetadata(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	// Factory only provides VerifierID + Run, not metadata
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{{VerifierID: authorized[0].Name, Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 
@@ -146,7 +148,6 @@ func TestFactoryCannotForgeMetadata(t *testing.T) {
 		t.Errorf("expected 1 record, got %d", len(records))
 	}
 
-	// Metadata comes from dispatcher registry, not factory
 	if records[0].Metadata.Authority != verifierauthority.AuthorityLocalSafe {
 		t.Errorf("expected AuthorityLocalSafe, got %v", records[0].Metadata.Authority)
 	}
@@ -164,11 +165,10 @@ func TestFactoryReversedOrderIsCanonicalized(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
-		// Return in reversed order
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 		reversed := make([]FactoryRunner, len(authorized))
 		for i, v := range authorized {
-			reversed[len(authorized)-1-i] = FactoryRunner{VerifierID: v.Name, Run: v.Run}
+			reversed[len(authorized)-1-i] = FactoryRunner{VerifierID: v.Name, Run: verifiers[len(authorized)-1-i].Run}
 		}
 		return reversed, nil
 	}
@@ -208,7 +208,7 @@ func TestProfileBindingCannotBeForged(t *testing.T) {
 
 	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil,
-		func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+		func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 			return []FactoryRunner{{VerifierID: authorized[0].Name, Run: func(root string) []checks.Finding { return nil }}}, nil
 		})
 	if err != nil {
@@ -234,7 +234,7 @@ func TestFactoryContractRejectsEmptyVerifierID(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{{VerifierID: "", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 
@@ -256,7 +256,7 @@ func TestFactoryContractRejectsNilRunFunction(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{{VerifierID: "v1", Run: nil}}, nil
 	}
 
@@ -279,10 +279,10 @@ func TestFactoryContractRejectsDuplicateVerifierID(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{
 			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }},
-			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}, // duplicate
+			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }},
 		}, nil
 	}
 
@@ -307,7 +307,7 @@ func TestFactoryContractRejectsUnknownVerifierID(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{{VerifierID: "unknown", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 
@@ -316,5 +316,53 @@ func TestFactoryContractRejectsUnknownVerifierID(t *testing.T) {
 	var contractErr *ErrProfileFactoryContract
 	if !errors.As(err, &contractErr) {
 		t.Errorf("expected ErrProfileFactoryContract, got %T: %v", err, err)
+	}
+}
+
+// TestExecutionRecordHasCompleteMetadata verifies ExecutionRecord has complete metadata.
+func TestExecutionRecordHasCompleteMetadata(t *testing.T) {
+	verifiers := []registry.Verifier{
+		{
+			Name:      "v1",
+			Authority: verifierauthority.AuthorityLocalSafe,
+			Lane:      registry.VerifierLaneFast,
+			Execution: registry.ExecutionDefinition{
+				Kind:             registry.ExecutionInProcess,
+				ImplementationID: "test-impl",
+				EnvVars:          []string{"TEST=1"},
+			},
+			Run: func(root string) []checks.Finding { return nil },
+		},
+	}
+	d, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
+		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil,
+		func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
+			return []FactoryRunner{{VerifierID: authorized[0].Name, Run: verifiers[0].Run}}, nil
+		})
+	if err != nil {
+		t.Fatalf("AuthorizeAndBindProfile: %v", err)
+	}
+
+	records, err := binding.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if records[0].Metadata.Name != "v1" {
+		t.Errorf("expected Name=v1, got %s", records[0].Metadata.Name)
+	}
+	if records[0].Metadata.Kind != registry.ExecutionInProcess {
+		t.Errorf("expected Kind=ExecutionInProcess, got %s", records[0].Metadata.Kind)
+	}
+	if records[0].Metadata.ImplID != "test-impl" {
+		t.Errorf("expected ImplID=test-impl, got %s", records[0].Metadata.ImplID)
+	}
+	if len(records[0].Metadata.EnvVars) != 1 || records[0].Metadata.EnvVars[0] != "TEST=1" {
+		t.Errorf("expected EnvVars=[TEST=1], got %v", records[0].Metadata.EnvVars)
 	}
 }

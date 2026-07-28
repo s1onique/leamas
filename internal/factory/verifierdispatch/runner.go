@@ -21,6 +21,9 @@ type VerifierMetadata struct {
 	Name      string
 	Lane      registry.VerifierLane
 	Authority verifierauthority.ExecutionAuthority
+	Kind      registry.ExecutionKind
+	ImplID    string
+	EnvVars   []string
 	Cache     registry.CacheSemantics
 }
 
@@ -39,11 +42,11 @@ type FactoryRunner struct {
 }
 
 // ProfileRunnerFactory creates ID-bound verifier runners for the authorized profile.
-// The factory receives value copies of the authorized verifiers (metadata only, no Run function)
-// and must return runners with matching IDs in canonical order. The factory is ONLY invoked
-// after authorization passes. The factory may perform expensive operations (like loading
+// The factory receives non-executable authorized verifier metadata and must return
+// runners with matching IDs in canonical order. The factory is ONLY invoked after
+// authorization passes. The factory may perform expensive operations (like loading
 // baselines or creating shared contexts) since it is only called after authorization.
-type ProfileRunnerFactory func(authorized []registry.Verifier) ([]FactoryRunner, error)
+type ProfileRunnerFactory func(authorized []VerifierMetadata) ([]FactoryRunner, error)
 
 // ErrProfileFactoryContract is returned when the factory violates its contract.
 type ErrProfileFactoryContract struct {
@@ -68,20 +71,11 @@ func (e *ErrProfileNotAuthorized) Error() string {
 	return "profile not authorized"
 }
 
-// ResourceSnapshot represents resource usage at a point in time.
-type ResourceSnapshot struct {
-	UserCPU   time.Duration
-	SystemCPU time.Duration
-	MaxRSSKB  int64
-}
-
 // ExecutionRecord represents the outcome of executing a single verifier.
 type ExecutionRecord struct {
 	Metadata VerifierMetadata
 	Findings []checks.Finding
 	Duration time.Duration
-	Before   ResourceSnapshot
-	After    ResourceSnapshot
 }
 
 // ProfileBinding is the result of authorization + binding.
@@ -104,7 +98,7 @@ type BoundProfileRunner struct {
 // Execute runs each bound verifier exactly once in canonical authorized-request order.
 // Returns ErrProfileBindingConsumed if called more than once.
 // Returns ErrProfileNotAuthorized if the profile was not successfully authorized.
-// Measures real wall-clock duration and resource usage for each verifier.
+// Measures real wall-clock duration for each verifier.
 func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -127,34 +121,16 @@ func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
 	records := make([]ExecutionRecord, 0, len(b.runners))
 	for _, runner := range b.runners {
 		started := time.Now()
-
-		// Measure resources before
-		before := ResourceSnapshot{
-			UserCPU:   time.Now().Sub(started), // placeholder
-			SystemCPU: 0,
-			MaxRSSKB:  0,
-		}
-
 		var findings []checks.Finding
 		if runner.Run != nil {
 			findings = runner.Run(b.profile.RepositoryRoot())
 		}
-
 		elapsed := time.Since(started)
-
-		// Measure resources after
-		after := ResourceSnapshot{
-			UserCPU:   elapsed, // placeholder until we have real sampling
-			SystemCPU: 0,
-			MaxRSSKB:  0,
-		}
 
 		records = append(records, ExecutionRecord{
 			Metadata: runner.Metadata,
 			Findings: findings,
 			Duration: elapsed,
-			Before:   before,
-			After:    after,
 		})
 	}
 
@@ -199,22 +175,31 @@ func (d *Dispatcher) AuthorizeAndBindProfile(
 		return &ProfileBinding{profile: profile}, nil
 	}
 
-	// Build the exact authorized verifier list in canonical request order
+	// Build the exact authorized verifier metadata list in canonical request order
 	// Use profile.Requests() for immutable order after authorization
 	canonicalOrder := profile.Requests()
-	authorized := make([]registry.Verifier, 0, len(canonicalOrder))
+	authorized := make([]VerifierMetadata, 0, len(canonicalOrder))
 	authorizedSet := make(map[string]bool)
 	for _, req := range canonicalOrder {
 		v := d.resolveVerifier(req.VerifierID)
 		if v != nil {
-			// Deep copy to prevent factory from mutating registry
-			authorized = append(authorized, CloneVerifier(*v))
+			// Create non-executable metadata for factory (no Run function)
+			metadata := VerifierMetadata{
+				Name:      v.Name,
+				Lane:      v.Lane,
+				Authority: v.Authority,
+				Kind:      v.Execution.Kind,
+				ImplID:    v.Execution.ImplementationID,
+				EnvVars:   slices.Clone(v.Execution.EnvVars),
+				Cache:     v.Cache,
+			}
+			authorized = append(authorized, metadata)
 			authorizedSet[v.Name] = true
 		}
 	}
 
 	// NOW invoke the factory - only after authorization passed
-	// Factory returns only ID + Run, NOT metadata
+	// Factory receives non-executable metadata and returns ID + Run only
 	factoryRunners, err := factory(authorized)
 	if err != nil {
 		return nil, err
@@ -240,6 +225,9 @@ func (d *Dispatcher) AuthorizeAndBindProfile(
 							Name:      v.Name,
 							Lane:      v.Lane,
 							Authority: v.Authority,
+							Kind:      v.Execution.Kind,
+							ImplID:    v.Execution.ImplementationID,
+							EnvVars:   slices.Clone(v.Execution.EnvVars),
 							Cache:     v.Cache,
 						},
 						Run: fr.Run,

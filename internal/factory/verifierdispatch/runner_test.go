@@ -23,7 +23,7 @@ func TestAuthorizeAndBindProfileDeniedFactoryNotCalled(t *testing.T) {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
 	factoryCalled := false
-	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+	factory := func([]VerifierMetadata) ([]FactoryRunner, error) {
 		factoryCalled = true
 		return nil, nil
 	}
@@ -50,8 +50,8 @@ func TestAuthorizeAndBindProfileExecutesExactInventory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	var received []registry.Verifier
-	factory := func(authorized []registry.Verifier) ([]FactoryRunner, error) {
+	var received []VerifierMetadata
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
 		received = authorized
 		return []FactoryRunner{{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
@@ -78,7 +78,7 @@ func TestAuthorizeAndBindProfileRejectsMissingRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+	factory := func([]VerifierMetadata) ([]FactoryRunner, error) {
 		// Only return v1, missing v2
 		return []FactoryRunner{{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
@@ -104,7 +104,7 @@ func TestAuthorizeAndBindProfileRejectsExtraRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+	factory := func([]VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{
 			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }},
 			{VerifierID: "v2", Run: func(root string) []checks.Finding { return nil }}, // extra
@@ -128,7 +128,7 @@ func TestAuthorizeAndBindProfileRejectsDuplicateRunnerID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+	factory := func([]VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{
 			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }},
 			{VerifierID: "v1", Run: func(root string) []checks.Finding { return nil }}, // duplicate
@@ -154,7 +154,7 @@ func TestAuthorizeAndBindProfileRejectsNilRunner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+	factory := func([]VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{{VerifierID: "v1", Run: nil}}, nil
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
@@ -174,7 +174,7 @@ func TestAuthorizeAndBindProfileRejectsUnknownRunnerID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+	factory := func([]VerifierMetadata) ([]FactoryRunner, error) {
 		return []FactoryRunner{{VerifierID: "unknown", Run: func(root string) []checks.Finding { return nil }}}, nil
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
@@ -194,12 +194,50 @@ func TestAuthorizeAndBindProfileFactoryErrorPropagated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	factory := func([]registry.Verifier) ([]FactoryRunner, error) {
+	factory := func([]VerifierMetadata) ([]FactoryRunner, error) {
 		return nil, errors.New("baseline load failed")
 	}
 	_, err = d.AuthorizeAndBindProfile(context.Background(), "/test",
 		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
 	if err == nil {
 		t.Error("expected factory error to propagate")
+	}
+}
+
+// TestFactoryInputMetadataHasNoRun verifies factory receives VerifierMetadata with no Run.
+func TestFactoryInputMetadataHasNoRun(t *testing.T) {
+	verifiers := []registry.Verifier{
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+	}
+	d, err := NewDispatcher(verifiers)
+	if err != nil {
+		t.Fatalf("NewDispatcher: %v", err)
+	}
+
+	// Capture what factory receives
+	var received []VerifierMetadata
+	factory := func(authorized []VerifierMetadata) ([]FactoryRunner, error) {
+		received = authorized
+		return []FactoryRunner{{VerifierID: "v1", Run: verifiers[0].Run}}, nil
+	}
+
+	binding, err := d.AuthorizeAndBindProfile(context.Background(), "/test",
+		[]ProfileRequest{{VerifierID: "v1", Operation: verifierauthority.OperationVerify}}, nil, factory)
+	if err != nil {
+		t.Fatalf("AuthorizeAndBindProfile: %v", err)
+	}
+
+	// Verify the factory received metadata (VerifierMetadata type has no Run field)
+	if len(received) != 1 {
+		t.Fatalf("expected 1 metadata, got %d", len(received))
+	}
+
+	// Execute to prove binding works
+	records, err := binding.Execute()
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(records) != 1 {
+		t.Errorf("expected 1 record, got %d", len(records))
 	}
 }

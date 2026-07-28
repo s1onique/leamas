@@ -27,13 +27,10 @@ type systemClock struct{}
 func (systemClock) Now() time.Time { return time.Now() }
 
 // runCheck executes a single verifier check, measures its wall-clock
-// duration, and writes one status line to out:
+// duration, and writes one status line to out.
 //
-//	"name: OK: 0.14s"
-//	"name: FAILED: 0.91s"
-//
-// Resource usage is sampled before and after the verifier to cover
-// execution. Both samples must succeed or the check fails.
+// Resource usage is sampled before and after the verifier when a sampler is provided.
+// Both samples must succeed or the check fails.
 func runCheck(
 	out io.Writer,
 	clk clock,
@@ -43,10 +40,14 @@ func runCheck(
 	root string,
 	sampler ResourceSampler,
 ) ([]checks.Finding, error) {
-	// Sample before verifier execution
-	before, err := sampler.Sample()
-	if err != nil {
-		return nil, fmt.Errorf("resource sample before %s: %w", verifier.Name, err)
+	// Sample before verifier execution if sampler provided
+	var before ResourceSnapshot
+	if sampler != nil {
+		var err error
+		before, err = sampler.Sample()
+		if err != nil {
+			return nil, fmt.Errorf("resource sample before %s: %w", verifier.Name, err)
+		}
 	}
 
 	started := clk.Now()
@@ -60,27 +61,28 @@ func runCheck(
 
 	fmt.Fprintf(out, "  %s: %s: %.2fs\n", verifier.Name, status, elapsed.Seconds())
 
-	// Sample after verifier execution
-	after, err := sampler.Sample()
-	if err != nil {
-		return findings, fmt.Errorf("resource sample after %s: %w", verifier.Name, err)
-	}
+	// Sample after verifier execution if sampler provided
+	if sampler != nil {
+		after, err := sampler.Sample()
+		if err != nil {
+			return findings, fmt.Errorf("resource sample after %s: %w", verifier.Name, err)
+		}
 
-	if metrics != nil {
-		env := os.Environ()
-
-		if err := metrics.AddCheckWithResources(
-			verifier,
-			ordinal,
-			findings,
-			elapsed,
-			after.UserCPU-before.UserCPU,
-			after.SystemCPU-before.SystemCPU,
-			after.ProcessMaxRSSKB,
-			root,
-			env,
-		); err != nil {
-			return findings, fmt.Errorf("metrics collection for %s: %w", verifier.Name, err)
+		if metrics != nil {
+			env := os.Environ()
+			if err := metrics.AddCheckWithResources(
+				verifier,
+				ordinal,
+				findings,
+				elapsed,
+				after.UserCPU-before.UserCPU,
+				after.SystemCPU-before.SystemCPU,
+				after.ProcessMaxRSSKB,
+				root,
+				env,
+			); err != nil {
+				return findings, fmt.Errorf("metrics collection for %s: %w", verifier.Name, err)
+			}
 		}
 	}
 
@@ -155,7 +157,6 @@ func processExecutionRecords(
 	profile *verifierdispatch.AuthorizedProfile,
 	records []verifierdispatch.ExecutionRecord,
 	metrics *MetricsCollectionV3,
-	sampler ResourceSampler,
 	totalElapsed time.Duration,
 ) int {
 	failed := false
@@ -182,15 +183,20 @@ func processExecutionRecords(
 				Lane:      record.Metadata.Lane,
 				Authority: record.Metadata.Authority,
 				Cache:     record.Metadata.Cache,
+				Execution: registry.ExecutionDefinition{
+					Kind:             record.Metadata.Kind,
+					ImplementationID: record.Metadata.ImplID,
+					EnvVars:          record.Metadata.EnvVars,
+				},
 			}
 			if err := metrics.AddCheckWithResources(
 				verifier,
 				ordinal,
 				record.Findings,
 				record.Duration,
-				record.After.UserCPU-record.Before.UserCPU,
-				record.After.SystemCPU-record.Before.SystemCPU,
-				record.After.MaxRSSKB-record.Before.MaxRSSKB,
+				0, // CPU delta not available from binding.Execute()
+				0, // System CPU delta not available
+				0, // RSS not available
 				profile.RepositoryRoot(),
 				env,
 			); err != nil {
