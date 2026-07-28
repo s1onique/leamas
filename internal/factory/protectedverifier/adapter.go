@@ -88,6 +88,41 @@ type BaselinePolicy = dupcode.BaselinePolicy
 // Config represents dupcode configuration.
 type Config = dupcode.Config
 
+// Report represents a dupcode report.
+type Report = dupcode.Report
+
+// Baseline represents a dupcode baseline.
+type Baseline = dupcode.Baseline
+
+// CompareResult represents a dupcode comparison result.
+type CompareResult = dupcode.CompareResult
+
+// Finding represents a dupcode finding.
+type Finding = dupcode.Finding
+
+// Occurrence represents a dupcode occurrence.
+type Occurrence = dupcode.Occurrence
+
+// BaselineThresholds represents baseline thresholds.
+type BaselineThresholds = dupcode.BaselineThresholds
+
+// BaselineFinding represents a baseline finding.
+type BaselineFinding = dupcode.BaselineFinding
+
+// BaselineOccurrence represents a baseline occurrence.
+type BaselineOccurrence = dupcode.BaselineOccurrence
+
+// PolicyMinLines is the default minimum lines threshold.
+const PolicyMinLines = dupcode.PolicyMinLines
+
+// PolicyMinTokens is the default minimum tokens threshold.
+const PolicyMinTokens = dupcode.PolicyMinTokens
+
+// LoadBaseline loads a baseline from the given path.
+func LoadBaseline(path string) (dupcode.Baseline, error) {
+	return dupcode.LoadBaseline(path)
+}
+
 // PrintBaselineVerifyResult prints the baseline verification result.
 func PrintBaselineVerifyResult(label string, findings []checks.Finding) int {
 	return dupcode.PrintBaselineVerifyResult(label, findings)

@@ -11,7 +11,6 @@ import (
 	"github.com/s1onique/leamas/internal/factory/coverage"
 	"github.com/s1onique/leamas/internal/factory/docs"
 	"github.com/s1onique/leamas/internal/factory/doctrine"
-	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/execgate"
 	"github.com/s1onique/leamas/internal/factory/forbidden"
 	"github.com/s1onique/leamas/internal/factory/githooks"
@@ -19,6 +18,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/language"
 	"github.com/s1onique/leamas/internal/factory/llmfriendly"
 	"github.com/s1onique/leamas/internal/factory/longtestpolicy"
+	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 	"github.com/s1onique/leamas/internal/factory/registry"
 	"github.com/s1onique/leamas/internal/factory/staticbinary"
 	"github.com/s1onique/leamas/internal/factory/tooling"
@@ -99,10 +99,11 @@ func FactorizeVerifiersWithDupcodeContext(root string) ([]registry.Verifier, err
 
 // factorizeVerifiersWithDupcodeAnalyzer is the internal constructor that accepts an optional
 // injected analyzer for testing the production registry wiring.
-func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer) ([]registry.Verifier, error) {
+func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer protectedverifier.DupcodeAnalyzer) ([]registry.Verifier, error) {
 	// Determine the effective dupcode thresholds from the baseline (if it exists)
-	minLines := dupcode.PolicyMinLines
-	minTokens := dupcode.PolicyMinTokens
+	// This is a lightweight metadata read, not the expensive scan
+	minLines := protectedverifier.PolicyMinLines
+	minTokens := protectedverifier.PolicyMinTokens
 
 	baselinePath := ".factory/dupcode-baseline.json"
 	if root != "." && root != "" {
@@ -111,21 +112,29 @@ func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer DupcodeAnalyzer
 
 	// Try to load baseline thresholds if baseline exists
 	if checks.FileExists(baselinePath) {
-		if baseline, err := dupcode.LoadBaseline(baselinePath); err == nil {
+		if baseline, err := protectedverifier.LoadBaseline(baselinePath); err == nil {
 			minLines = baseline.Thresholds.MinLines
 			minTokens = baseline.Thresholds.MinTokens
 		}
 	}
 
 	// Create shared analysis context with complete config
-	cfg := dupcode.DefaultConfig()
+	// The expensive scan only happens when the verifier actually runs (after authorization)
+	cfg := protectedverifier.DefaultConfig()
 	cfg.Root = root
 	cfg.MinLines = minLines
 	cfg.MinTokens = minTokens
-	provider := NewDupcodeAnalysisProvider(newDupcodeInput(cfg), analyzer)
 
-	ctx := NewDupcodeAnalysisContext(provider)
-	factory := NewDupcodeVerifierFactory(ctx)
+	input := protectedverifier.DupcodeInput{
+		Root:      root,
+		MinLines:  minLines,
+		MinTokens: minTokens,
+		Config:    cfg,
+	}
+
+	provider := protectedverifier.NewDupcodeAnalysisProvider(input, analyzer)
+	ctx := protectedverifier.NewDupcodeAnalysisContext(provider)
+	factory := protectedverifier.NewDupcodeVerifierFactory(ctx)
 
 	// Create shared dupcode verifiers
 	sharedDupcodeVerifier := factory.SharedDupCodeVerifier()
@@ -259,4 +268,92 @@ func coverageVerifier(root string) []checks.Finding {
 // all RequireLongTest calls have registered baseline entries.
 func longTestPolicyVerifier(root string) []checks.Finding {
 	return longtestpolicy.CheckRepo(root)
+}
+
+// dupCodeVerifier is the verifier for dupcode baseline comparison.
+// This is used in AllVerifiers for direct commands and as fallback.
+func dupCodeVerifier(root string) []checks.Finding {
+	runner := protectedverifier.NewDupcodeRunner()
+	cfg := protectedverifier.DefaultConfig()
+
+	baselinePath := ".factory/dupcode-baseline.json"
+	fullBaselinePath := baselinePath
+	if root != "." && root != "" {
+		fullBaselinePath = filepath.Join(root, baselinePath)
+	}
+
+	if !checks.FileExists(fullBaselinePath) {
+		return []checks.Finding{
+			{Path: baselinePath, Kind: "missing_baseline", Message: "baseline file not found. Run 'make dupcode-baseline' to create it.", Severity: checks.SeverityError},
+		}
+	}
+
+	baseline, err := runner.LoadBaseline(fullBaselinePath)
+	if err != nil {
+		return []checks.Finding{
+			{Path: baselinePath, Kind: "baseline_error", Message: fmt.Sprintf("failed to load baseline: %v", err), Severity: checks.SeverityError},
+		}
+	}
+
+	cfg.Root = root
+	cfg.MinLines = baseline.Thresholds.MinLines
+	cfg.MinTokens = baseline.Thresholds.MinTokens
+
+	report, err := runner.RunCheckReport(root, cfg)
+	if err != nil {
+		return []checks.Finding{
+			{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("duplicate code scan failed: %v", err), Severity: checks.SeverityError},
+		}
+	}
+
+	result := runner.CompareToBaseline(report, baseline)
+	return convertDupcodeCompareResult(result)
+}
+
+// dupcodeBaselineVerifier is the verifier for dupcode baseline verification.
+// This is used in AllVerifiers for direct commands and as fallback.
+func dupcodeBaselineVerifier(root string) []checks.Finding {
+	runner := protectedverifier.NewDupcodeRunner()
+	policy := protectedverifier.BaselinePolicy{
+		Path: ".factory/dupcode-baseline.json",
+	}
+	if root != "." && root != "" {
+		policy.Path = filepath.Join(root, policy.Path)
+	}
+
+	findings, err := runner.VerifyBaseline(root, policy)
+	if err != nil {
+		return []checks.Finding{
+			{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("baseline verification failed: %v", err), Severity: checks.SeverityError},
+		}
+	}
+	return findings
+}
+
+// convertDupcodeCompareResult converts dupcode comparison results to gate findings.
+func convertDupcodeCompareResult(result protectedverifier.CompareResult) []checks.Finding {
+	var findings []checks.Finding
+	if !result.HasChanges {
+		return findings
+	}
+
+	for _, f := range result.NewFindings {
+		findings = append(findings, checks.Finding{
+			Path:     "dupcode",
+			Kind:     "new_duplicate",
+			Message:  fmt.Sprintf("new duplicate block (tokens: %d)", f.TokenCount),
+			Severity: checks.SeverityError,
+		})
+	}
+
+	for range result.WorsenedFindings {
+		findings = append(findings, checks.Finding{
+			Path:     "dupcode",
+			Kind:     "worsened_duplicate",
+			Message:  fmt.Sprintf("worsened duplicate block"),
+			Severity: checks.SeverityError,
+		})
+	}
+
+	return findings
 }

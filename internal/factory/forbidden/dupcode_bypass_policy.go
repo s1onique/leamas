@@ -26,12 +26,10 @@ const CanonicalAdapterPath = "github.com/s1onique/leamas/internal/factory/protec
 
 // DupcodeAllowedPaths are the canonical paths allowed to call protected dupcode packages.
 // Only these specific paths may import dupcode; no wildcard matches.
-// NOTE: This is the single source of truth for enforcement in isAllowedCaller.
+// NOTE: This is the single source of truth for enforcement.
 var DupcodeAllowedPaths = []string{
 	"github.com/s1onique/leamas/internal/factory/dupcode",           // dupcode itself
 	"github.com/s1onique/leamas/internal/factory/protectedverifier", // canonical adapter (ONLY production entry point)
-	"github.com/s1onique/leamas/internal/factory/gate",              // gate orchestration (internal infrastructure)
-	"github.com/s1onique/leamas/internal/factory/forbidden",         // bypass policy enforcement
 }
 
 // BypassError represents a policy violation for direct protected access.
@@ -215,7 +213,7 @@ func (p *DupcodeBypassPolicy) isProtectedPackage(path string) bool {
 }
 
 // isAllowedCaller checks if the file at the given path is allowed to call the protected package.
-// Authorization is based on the canonical repository-relative directory path.
+// Authorization is based on the canonical import path derived from the repository structure.
 // Only DupcodeAllowedPaths are permitted - this is the single source of truth.
 func (p *DupcodeBypassPolicy) isAllowedCaller(filePath, protectedPackage string) bool {
 	// Get the repository-relative directory
@@ -224,25 +222,27 @@ func (p *DupcodeBypassPolicy) isAllowedCaller(filePath, protectedPackage string)
 	// Normalize to forward slashes for consistent comparison
 	relDir = filepath.ToSlash(relDir)
 
-	// Check against allowed paths from DupcodeAllowedPaths
-	// Only these specific directories may import dupcode
-	allowedDirs := []struct {
-		path        string
-		description string
-	}{
-		{"internal/factory/protectedverifier", "canonical adapter"},
-		{"internal/factory/dupcode", "dupcode itself"},
-		{"internal/factory/gate", "gate orchestration (internal infrastructure)"},
+	// Convert directory path to import path
+	// e.g., "internal/factory/protectedverifier" -> "github.com/s1onique/leamas/internal/factory/protectedverifier"
+	importPath := p.dirToImportPath(relDir)
+	if importPath == "" {
+		return false
 	}
 
-	for _, allowed := range allowedDirs {
-		if relDir == allowed.path || strings.HasPrefix(relDir, allowed.path+"/") {
-			return true
-		}
-	}
+	// Check against the single source of truth (allowedPaths map from DupcodeAllowedPaths)
+	return p.allowedPaths[importPath]
+}
 
-	// No other paths are allowed - fail closed
-	return false
+// dirToImportPath converts a repository-relative directory path to an import path.
+// Returns empty string if the directory is not within the expected prefix.
+func (p *DupcodeBypassPolicy) dirToImportPath(dir string) string {
+	// Handle the case where repoRoot is set
+	if p.repoRoot != "" {
+		// dir is already relative, prepend the base module path
+		return "github.com/s1onique/leamas/" + dir
+	}
+	// Fallback
+	return "github.com/s1onique/leamas/" + dir
 }
 
 // CheckDupcodeBypass scans the repository for unauthorized access to protected dupcode packages.
