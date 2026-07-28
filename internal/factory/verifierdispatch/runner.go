@@ -34,13 +34,6 @@ func cloneVerifierMetadata(m VerifierMetadata) VerifierMetadata {
 	return clone
 }
 
-// cloneVerifier creates a deep copy of a verifier's metadata portion.
-func cloneVerifier(v registry.Verifier) registry.Verifier {
-	clone := v
-	clone.Execution.EnvVars = slices.Clone(v.Execution.EnvVars)
-	return clone
-}
-
 // FactoryRunner is what the factory returns: just the verifier ID and the executable function.
 // The dispatcher attaches authoritative metadata from its registry.
 type FactoryRunner struct {

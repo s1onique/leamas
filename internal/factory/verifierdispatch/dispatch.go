@@ -81,18 +81,22 @@ type Dispatcher struct {
 //   - No dupcode lane with local_safe
 //   - No fast lane with ci_exact_checkout
 //
-// The registry is copied defensively; caller may modify original after construction.
+// The registry is deeply copied; caller may modify original after construction.
+// Each verifier's EnvVars slice is cloned to prevent mutation.
 func NewDispatcher(verifiers []registry.Verifier) (*Dispatcher, error) {
 	if len(verifiers) == 0 {
 		return nil, errors.New("verifiers slice is empty")
 	}
 
-	// Copy to prevent caller mutation
-	verifiers = slices.Clone(verifiers)
+	// Deep copy: clone outer slice and each verifier's EnvVars
+	copied := make([]registry.Verifier, len(verifiers))
+	for i, v := range verifiers {
+		copied[i] = cloneRegistryVerifier(v)
+	}
 
 	seen := make(map[string]bool)
 
-	for i, v := range verifiers {
+	for i, v := range copied {
 		// Check for empty verifier ID
 		if v.Name == "" {
 			return nil, &RegistryValidationError{
@@ -130,7 +134,14 @@ func NewDispatcher(verifiers []registry.Verifier) (*Dispatcher, error) {
 		}
 	}
 
-	return &Dispatcher{verifiers: verifiers}, nil
+	return &Dispatcher{verifiers: copied}, nil
+}
+
+// cloneRegistryVerifier creates a deep copy of a registry verifier.
+func cloneRegistryVerifier(v registry.Verifier) registry.Verifier {
+	clone := v
+	clone.Execution.EnvVars = slices.Clone(v.Execution.EnvVars)
+	return clone
 }
 
 // RegistryValidationError represents a dispatcher construction validation failure.
@@ -249,7 +260,11 @@ func (d *Dispatcher) LookupVerifier(id string) (*registry.Verifier, error) {
 	return v, nil
 }
 
-// GetVerifiers returns a copy of the verifier registry.
+// GetVerifiers returns a deep copy of the verifier registry.
 func (d *Dispatcher) GetVerifiers() []registry.Verifier {
-	return slices.Clone(d.verifiers)
+	result := make([]registry.Verifier, len(d.verifiers))
+	for i, v := range d.verifiers {
+		result[i] = cloneRegistryVerifier(v)
+	}
+	return result
 }
