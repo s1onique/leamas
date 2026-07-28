@@ -24,11 +24,12 @@ func workflowPath(t *testing.T) string {
 }
 
 type WorkflowJob struct {
-	ID          string
-	DisplayName string
-	Steps       []WorkflowStep
-	Timeout     string
-	Env         map[string]string
+	ID              string
+	DisplayName     string
+	Steps           []WorkflowStep
+	Timeout         string
+	Env             map[string]string
+	ContinueOnError string
 }
 
 type WorkflowStep struct {
@@ -44,20 +45,24 @@ type WorkflowEnv struct {
 }
 
 // parseWorkflowEnv extracts top-level env block from workflow content.
+// Only considers env: at indent 0 (no leading spaces).
 func parseWorkflowEnv(content []byte) *WorkflowEnv {
 	lines := strings.Split(string(content), "\n")
 	we := &WorkflowEnv{Env: make(map[string]string)}
 
 	for i := 0; i < len(lines); i++ {
-		trimmed := strings.TrimLeft(lines[i], " \t")
+		line, trimmed := lines[i], strings.TrimLeft(lines[i], " \t")
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
-		if strings.TrimSpace(trimmed) == "env:" {
+		// Track indentation: env: must be at indent 0
+		indent := len(line) - len(trimmed)
+		if strings.TrimSpace(trimmed) == "env:" && indent == 0 {
 			we.Env = parseEnvBlock(lines, i+1, 0)
 			break
 		}
-		if strings.Contains(trimmed, ":") && !strings.HasPrefix(trimmed, " ") {
+		// Stop at jobs: key (start of job definitions)
+		if strings.TrimSpace(trimmed) == "jobs:" {
 			break
 		}
 	}
@@ -104,6 +109,12 @@ func parseFactoryJob(content []byte) (*WorkflowJob, error) {
 		if strings.Contains(trimmed, "timeout-minutes:") && !inSteps {
 			if p := strings.SplitN(trimmed, ":", 2); len(p) == 2 {
 				job.Timeout = strings.TrimSpace(p[1])
+			}
+		}
+
+		if strings.Contains(trimmed, "continue-on-error:") && !inSteps {
+			if p := strings.SplitN(trimmed, ":", 2); len(p) == 2 {
+				job.ContinueOnError = strings.TrimSpace(p[1])
 			}
 		}
 
