@@ -147,6 +147,11 @@ func RunFactorize(root string) int {
 	// The factory creates the actual Run functions with shared context AFTER authorization.
 	verifiers := AllVerifiers()
 
+	// Sort by name for alphabetical order (preserving established factorize contract)
+	sort.Slice(verifiers, func(i, j int) bool {
+		return verifiers[i].Name < verifiers[j].Name
+	})
+
 	// Fail closed if registry has invalid metadata
 	if err := ValidateVerifiers(verifiers); err != nil {
 		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
@@ -163,7 +168,7 @@ func RunFactorize(root string) int {
 	ctx := context.Background()
 	observer := &verifierdispatch.DefaultContextObserver{}
 
-	// Build ProfileRequests for exactly the authorized verifiers
+	// Build ProfileRequests for exactly the authorized verifiers (alphabetical order)
 	requests := make([]verifierdispatch.ProfileRequest, 0, len(verifiers))
 	for _, v := range verifiers {
 		requests = append(requests, verifierdispatch.ProfileRequest{
@@ -175,7 +180,7 @@ func RunFactorize(root string) int {
 	// Phase 2: Authorize AND bind (factory creates shared context AFTER authorization passes)
 	// The factory is ONLY invoked after authorization succeeds.
 	binding, err := dispatcher.AuthorizeAndBindProfile(ctx, root, requests, observer,
-		func(authorized []*registry.Verifier) ([]verifierdispatch.BoundProfileRunner, error) {
+		func(authorized []registry.Verifier) ([]verifierdispatch.BoundProfileRunner, error) {
 			// Create the shared dupcode context AFTER authorization
 			// This is the expensive operation that should only happen when authorized
 			factorizeVerifiers, err := FactorizeVerifiersWithDupcodeContext(root)
@@ -198,7 +203,7 @@ func RunFactorize(root string) int {
 					return nil, fmt.Errorf("factory: no run function for authorized verifier %s", v.Name)
 				}
 				runners = append(runners, verifierdispatch.BoundProfileRunner{
-					Verifier: *v, // Complete metadata for metrics
+					Verifier: v, // Complete metadata for metrics
 					Run:      run,
 				})
 			}
@@ -268,9 +273,8 @@ func RunFactorize(root string) int {
 		)
 
 		// Bind expected verifier inventory for reconciliation
-		runners := binding.Runners()
-		for _, runner := range runners {
-			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, runner.Verifier.Name)
+		for _, meta := range binding.Runners() {
+			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, meta.Verifier.Name)
 		}
 
 		sampler = NewPlatformSampler()
@@ -279,16 +283,16 @@ func RunFactorize(root string) int {
 		sampler = &noopSampler{}
 	}
 
-	// Phase 3: Execute bound runners exactly once with metrics
-	findings, err := binding.Execute()
+	// Phase 3: Execute bound runners exactly once with real timing
+	records, err := binding.Execute()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "factory execution: %v\n", err)
 		return 1
 	}
 
-	// Process findings and print results
+	// Process execution records and print results with real timing
 	profile = binding.Profile()
-	exitCode := processFactorizeResults(os.Stdout, systemClock{}, profile, binding.Runners(), findings, mc, sampler)
+	exitCode := processExecutionRecords(os.Stdout, systemClock{}, profile, records, mc, sampler)
 
 	// Fail-closed: metrics finalization errors cause factorize to fail
 	if mc != nil {

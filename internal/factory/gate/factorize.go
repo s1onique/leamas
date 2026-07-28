@@ -148,14 +148,13 @@ func exitCode(failed bool) int {
 	return 0
 }
 
-// processFactorizeResults processes pre-computed findings and prints results.
+// processExecutionRecords processes pre-computed execution records and prints results.
 // This is called after binding.Execute() has already run all verifiers.
-func processFactorizeResults(
+func processExecutionRecords(
 	out io.Writer,
 	clk clock,
 	profile *verifierdispatch.AuthorizedProfile,
-	runners []verifierdispatch.BoundProfileRunner,
-	findings map[string][]checks.Finding,
+	records []verifierdispatch.ExecutionRecord,
 	metrics *MetricsCollectionV3,
 	sampler ResourceSampler,
 ) int {
@@ -163,37 +162,33 @@ func processFactorizeResults(
 	failed := false
 
 	ordinal := 1
-	for _, runner := range runners {
-		// Use the pre-computed findings from binding.Execute()
-		runnerFindings := findings[runner.Verifier.Name]
-
+	for _, record := range records {
 		status := "OK"
-		if len(runnerFindings) > 0 {
+		if len(record.Findings) > 0 {
 			status = "FAILED"
 		}
-		fmt.Fprintf(out, "  %s: %s\n", runner.Verifier.Name, status)
+		fmt.Fprintf(out, "  %s: %s: %.2fs\n", record.Verifier.Name, status, record.Duration.Seconds())
 
-		if len(runnerFindings) > 0 {
+		if len(record.Findings) > 0 {
 			failed = true
-			printFailureFindings(out, runner.Verifier.Name, runnerFindings)
+			printFailureFindings(out, record.Verifier.Name, record.Findings)
 		}
 
-		// Metrics collection for bound runners
+		// Metrics collection using real timing from Execute()
 		if metrics != nil {
 			env := os.Environ()
-			verifier := runner.Verifier
 			if err := metrics.AddCheckWithResources(
-				verifier,
+				record.Verifier,
 				ordinal,
-				runnerFindings,
-				time.Second, // Timing done in binding.Execute()
-				0,           // CPU delta not available
-				0,           // System CPU delta not available
-				0,           // RSS not available
+				record.Findings,
+				record.Duration,
+				0, // CPU delta not available in ExecutionRecord
+				0, // System CPU delta not available in ExecutionRecord
+				0, // RSS not available in ExecutionRecord
 				profile.RepositoryRoot(),
 				env,
 			); err != nil {
-				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", runner.Verifier.Name, err)
+				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", record.Verifier.Name, err)
 				failed = true
 			}
 		}

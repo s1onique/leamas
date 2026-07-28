@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
@@ -17,12 +18,17 @@ type BoundProfileRunner struct {
 	Run      func(root string) []checks.Finding
 }
 
+// BoundVerifierMetadata is metadata for an authorized verifier (no executable function).
+type BoundVerifierMetadata struct {
+	Verifier registry.Verifier
+}
+
 // ProfileRunnerFactory creates ID-bound verifier runners for the authorized profile.
-// The factory receives the exact authorized verifier entries and must return
+// The factory receives value copies of the authorized verifiers and must return
 // runners with matching IDs in canonical order. The factory is ONLY invoked after
 // authorization passes. The factory may perform expensive operations (like loading
 // baselines or creating shared contexts) since it is only called after authorization.
-type ProfileRunnerFactory func(authorized []*registry.Verifier) ([]BoundProfileRunner, error)
+type ProfileRunnerFactory func(authorized []registry.Verifier) ([]BoundProfileRunner, error)
 
 // ErrProfileFactoryContract is returned when the factory violates its contract.
 type ErrProfileFactoryContract struct {
@@ -40,6 +46,20 @@ func (e *ErrProfileBindingConsumed) Error() string {
 	return "profile binding already consumed"
 }
 
+// ErrProfileNotAuthorized is returned when attempting to execute a binding with a denied profile.
+type ErrProfileNotAuthorized struct{}
+
+func (e *ErrProfileNotAuthorized) Error() string {
+	return "profile not authorized"
+}
+
+// ExecutionRecord represents the outcome of executing a single verifier.
+type ExecutionRecord struct {
+	Verifier registry.Verifier
+	Findings []checks.Finding
+	Duration time.Duration
+}
+
 // ProfileBinding is the result of authorization + binding.
 // It contains the authorized profile and bound runners, but does NOT execute them.
 // Call Execute to run the bound verifiers exactly once.
@@ -53,8 +73,9 @@ type ProfileBinding struct {
 
 // Execute runs each bound verifier exactly once in canonical authorized-request order.
 // Returns ErrProfileBindingConsumed if called more than once.
+// Returns ErrProfileNotAuthorized if the profile was not successfully authorized.
 // The findings are keyed by verifier ID in execution order.
-func (b *ProfileBinding) Execute() (map[string][]checks.Finding, error) {
+func (b *ProfileBinding) Execute() ([]ExecutionRecord, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -67,17 +88,27 @@ func (b *ProfileBinding) Execute() (map[string][]checks.Finding, error) {
 		return nil, fmt.Errorf("binding has nil profile")
 	}
 
-	// Execute in canonical order: profile.Requests() order
-	findings := make(map[string][]checks.Finding, len(b.runners))
-	for _, runner := range b.runners {
-		if runner.Run != nil {
-			findings[runner.Verifier.Name] = runner.Run(b.profile.RepositoryRoot())
-		} else {
-			findings[runner.Verifier.Name] = nil
-		}
+	// Check authorization succeeded
+	if !b.profile.AuthorizationSucceeded() {
+		return nil, &ErrProfileNotAuthorized{}
 	}
 
-	return findings, nil
+	// Execute in canonical order: profile.Requests() order
+	records := make([]ExecutionRecord, 0, len(b.runners))
+	for _, runner := range b.runners {
+		started := time.Now()
+		var findings []checks.Finding
+		if runner.Run != nil {
+			findings = runner.Run(b.profile.RepositoryRoot())
+		}
+		records = append(records, ExecutionRecord{
+			Verifier: runner.Verifier,
+			Findings: findings,
+			Duration: time.Since(started),
+		})
+	}
+
+	return records, nil
 }
 
 // Profile returns the authorized profile for this binding.
@@ -85,13 +116,16 @@ func (b *ProfileBinding) Profile() *AuthorizedProfile {
 	return b.profile
 }
 
-// Runners returns a copy of the bound runners in canonical order.
-func (b *ProfileBinding) Runners() []BoundProfileRunner {
+// Runners returns metadata-only copies of the bound runners.
+// This does NOT expose executable functions; use Execute() for running verifiers.
+func (b *ProfileBinding) Runners() []BoundVerifierMetadata {
 	if b == nil {
 		return nil
 	}
-	result := make([]BoundProfileRunner, len(b.runners))
-	copy(result, b.runners)
+	result := make([]BoundVerifierMetadata, len(b.runners))
+	for i, r := range b.runners {
+		result[i] = BoundVerifierMetadata{Verifier: r.Verifier}
+	}
 	return result
 }
 
@@ -118,12 +152,13 @@ func (d *Dispatcher) AuthorizeAndBindProfile(
 	// Build the exact authorized verifier list in canonical request order
 	// Use profile.Requests() for immutable order after authorization
 	canonicalOrder := profile.Requests()
-	authorized := make([]*registry.Verifier, 0, len(canonicalOrder))
+	authorized := make([]registry.Verifier, 0, len(canonicalOrder))
 	authorizedSet := make(map[string]bool)
 	for _, req := range canonicalOrder {
 		v := d.resolveVerifier(req.VerifierID)
 		if v != nil {
-			authorized = append(authorized, v)
+			// Defensive copy to prevent factory from mutating registry
+			authorized = append(authorized, *v)
 			authorizedSet[v.Name] = true
 		}
 	}
