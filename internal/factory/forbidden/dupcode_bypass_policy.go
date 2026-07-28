@@ -16,18 +16,21 @@ import (
 	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
-// DupcodeProtectedPackages lists packages that contain protected dupcode capabilities.
-var DupcodeProtectedPackages = []string{
+// DupcodeProtectedPrefixes are import path prefixes for protected dupcode packages.
+var DupcodeProtectedPrefixes = []string{
 	"github.com/s1onique/leamas/internal/factory/dupcode",
 }
 
-// DupcodeAllowedPackages lists packages that are allowed to call protected dupcode packages.
-var DupcodeAllowedPackages = []string{
+// CanonicalAdapterPath is the ONLY package allowed to call protected dupcode packages.
+const CanonicalAdapterPath = "github.com/s1onique/leamas/internal/factory/protectedverifier"
+
+// DupcodeAllowedPaths are the canonical paths allowed to call protected dupcode packages.
+// Only these specific paths may import dupcode; no wildcard matches.
+var DupcodeAllowedPaths = []string{
 	"github.com/s1onique/leamas/internal/factory/dupcode",           // dupcode itself
 	"github.com/s1onique/leamas/internal/factory/protectedverifier", // canonical adapter
-	"github.com/s1onique/leamas/internal/factory/gate",              // gate package
-	"github.com/s1onique/leamas/cmd/leamas",                         // CLI entry point
-	"main",                                                          // CLI main package
+	"github.com/s1onique/leamas/internal/factory/gate",              // gate package (for testing integration)
+	"github.com/s1onique/leamas/cmd",                                // cmd package (verifier adapters)
 }
 
 // BypassError represents a policy violation for direct protected access.
@@ -47,24 +50,48 @@ func (e *BypassError) Error() string {
 // DupcodeBypassPolicy checks that production code does not directly call
 // protected dupcode capabilities outside the canonical adapter.
 type DupcodeBypassPolicy struct {
-	allowedPackages map[string]bool
+	allowedPaths map[string]bool
+	repoRoot     string
 }
 
-// NewDupcodeBypassPolicy creates a policy with default allowed packages.
+// NewDupcodeBypassPolicy creates a policy with default allowed paths.
 func NewDupcodeBypassPolicy() *DupcodeBypassPolicy {
 	allowed := make(map[string]bool)
-	for _, pkg := range DupcodeAllowedPackages {
-		allowed[pkg] = true
+	for _, path := range DupcodeAllowedPaths {
+		allowed[path] = true
 	}
-	return &DupcodeBypassPolicy{allowedPackages: allowed}
+
+	// Get the current working directory as repo root
+	cwd, _ := os.Getwd()
+	return &DupcodeBypassPolicy{
+		allowedPaths: allowed,
+		repoRoot:     cwd,
+	}
+}
+
+// NewDupcodeBypassPolicyWithRoot creates a policy with a specific repo root.
+func NewDupcodeBypassPolicyWithRoot(repoRoot string) *DupcodeBypassPolicy {
+	allowed := make(map[string]bool)
+	for _, path := range DupcodeAllowedPaths {
+		allowed[path] = true
+	}
+	return &DupcodeBypassPolicy{
+		allowedPaths: allowed,
+		repoRoot:     repoRoot,
+	}
 }
 
 // CheckFile analyzes a single Go source file for policy violations.
+// Returns a BypassError if unauthorized access is found.
+// Returns nil if the file is not subject to bypass checking or has no violations.
 func (p *DupcodeBypassPolicy) CheckFile(filename string) error {
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filename, nil, parser.AllErrors)
 	if err != nil {
-		return fmt.Errorf("parse error in %s: %w", filename, err)
+		return &BypassError{
+			File:    filename,
+			Message: fmt.Sprintf("parse error: %v", err),
+		}
 	}
 
 	// Check for dot imports
@@ -81,14 +108,11 @@ func (p *DupcodeBypassPolicy) CheckFile(filename string) error {
 	// Build import path -> alias map
 	importAliases := make(map[string]string)
 	for _, imp := range node.Imports {
+		path := strings.Trim(imp.Path.Value, "\"")
 		if imp.Name != nil && imp.Name.Name != "" {
-			// Named import (alias)
-			path := strings.Trim(imp.Path.Value, "\"")
 			importAliases[imp.Name.Name] = path
 		} else {
-			// Default import
-			path := strings.Trim(imp.Path.Value, "\"")
-			// Extract last element of path as potential alias
+			// Default import - use last path segment as alias
 			parts := strings.Split(path, "/")
 			alias := parts[len(parts)-1]
 			importAliases[alias] = path
@@ -103,13 +127,13 @@ func (p *DupcodeBypassPolicy) CheckFile(filename string) error {
 		}
 
 		// This import is to a protected package
-		// Check if this file's package is allowed to use it
-		if !p.isAllowedCaller(node.Name.Name, path) {
+		// Check if this file's directory is allowed to use it
+		if !p.isAllowedCaller(filename, path) {
 			return &BypassError{
 				File:       filename,
 				Line:       fset.Position(imp.Pos()).Line,
 				ImportPath: path,
-				Message:    fmt.Sprintf("package %s is not allowed to import protected package %s", node.Name.Name, path),
+				Message:    fmt.Sprintf("file in %s is not allowed to import protected package %s", p.getFileDirectory(filename), path),
 			}
 		}
 	}
@@ -143,14 +167,14 @@ func (p *DupcodeBypassPolicy) CheckFile(filename string) error {
 			return true
 		}
 
-		// Check if the file's package is allowed to call this selector
-		if !p.isAllowedCaller(node.Name.Name, importPath) {
+		// Check if the file's directory is allowed to call this selector
+		if !p.isAllowedCaller(filename, importPath) {
 			foundErr = &BypassError{
 				File:       filename,
 				Line:       fset.Position(sel.Pos()).Line,
 				ImportPath: importPath,
 				Selector:   sel.Sel.Name,
-				Message:    fmt.Sprintf("unauthorized call to protected selector %s.%s from package %s", importPath, sel.Sel.Name, node.Name.Name),
+				Message:    fmt.Sprintf("file in %s is not allowed to call protected selector %s.%s", p.getFileDirectory(filename), importPath, sel.Sel.Name),
 			}
 			return false
 		}
@@ -161,153 +185,153 @@ func (p *DupcodeBypassPolicy) CheckFile(filename string) error {
 	return foundErr
 }
 
-// CheckPackageDir analyzes all Go files in a directory.
-func (p *DupcodeBypassPolicy) CheckPackageDir(dir string) error {
-	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+func (p *DupcodeBypassPolicy) getFileDirectory(filename string) string {
+	dir := filepath.Dir(filename)
+
+	// If repo root is set, compute relative path
+	if p.repoRoot != "" {
+		rel, err := filepath.Rel(p.repoRoot, dir)
+		if err == nil {
+			return rel
 		}
+	}
 
-		if info.IsDir() {
-			return nil
-		}
-
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-
-		// Skip test files
-		if strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-
-		if err := p.CheckFile(path); err != nil {
-			return err
-		}
-
-		return nil
-	})
-}
-
-// CheckRepository scans the repository for policy violations.
-func (p *DupcodeBypassPolicy) CheckRepository(root string) error {
-	// Check internal/factory directory, excluding tests and the allowed packages
-	return filepath.Walk(filepath.Join(root, "internal", "factory"), func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			// Skip allowed packages
-			base := filepath.Base(path)
-			if base == "dupcode" || base == "protectedverifier" || base == "forbidden" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-
-		// Skip test files
-		if strings.HasSuffix(path, "_test.go") {
-			return nil
-		}
-
-		// Skip non-production files
-		if strings.Contains(path, "_test") {
-			return nil
-		}
-
-		if err := p.CheckFile(path); err != nil {
-			var bypassErr *BypassError
-			if errors.As(err, &bypassErr) {
-				return bypassErr
-			}
-			return err
-		}
-
-		return nil
-	})
+	// Fallback: try to compute relative to current working directory
+	rel, err := filepath.Rel(".", dir)
+	if err != nil {
+		return dir
+	}
+	return rel
 }
 
 func (p *DupcodeBypassPolicy) isProtectedPackage(path string) bool {
-	for _, protected := range DupcodeProtectedPackages {
-		if path == protected || strings.HasPrefix(path, protected+"/") {
+	for _, prefix := range DupcodeProtectedPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
 			return true
 		}
 	}
 	return false
 }
 
-func (p *DupcodeBypassPolicy) isAllowedCaller(callerPackage, protectedPackage string) bool {
-	// The protected package itself is always allowed
-	if callerPackage == "dupcode" {
+// isAllowedCaller checks if the file at the given path is allowed to call the protected package.
+// Authorization is based on the canonical repository-relative directory path, not package name.
+func (p *DupcodeBypassPolicy) isAllowedCaller(filePath, protectedPackage string) bool {
+	// Get the repository-relative directory
+	relDir := p.getFileDirectory(filePath)
+
+	// Normalize to forward slashes for consistent comparison
+	relDir = filepath.ToSlash(relDir)
+
+	// Check if the file is in the canonical adapter directory
+	if relDir == "internal/factory/protectedverifier" || strings.HasPrefix(relDir, "internal/factory/protectedverifier/") {
 		return true
 	}
 
-	// Check allowed packages - both full path and package name
-	if p.allowedPackages[callerPackage] {
+	// Check if the file is in the dupcode directory (dupcode can use itself)
+	if relDir == "internal/factory/dupcode" || strings.HasPrefix(relDir, "internal/factory/dupcode/") {
 		return true
 	}
 
-	// Also check by package name (last segment of import path)
-	for _, allowed := range DupcodeAllowedPackages {
-		parts := strings.Split(allowed, "/")
-		pkgName := parts[len(parts)-1]
-		if pkgName == callerPackage {
-			return true
-		}
+	// Check if the file is in the gate directory (for testing integration)
+	if relDir == "internal/factory/gate" || strings.HasPrefix(relDir, "internal/factory/gate/") {
+		return true
 	}
 
+	// Check if the file is in the cmd directory (verifier adapters)
+	if relDir == "cmd" || strings.HasPrefix(relDir, "cmd/") {
+		return true
+	}
+
+	// No other paths are allowed
 	return false
 }
 
 // CheckDupcodeBypass scans the repository for unauthorized access to protected dupcode packages.
+// This is a fail-closed policy: any scan error produces a finding.
 func CheckDupcodeBypass(root string) []checks.Finding {
 	var findings []checks.Finding
 
-	policy := NewDupcodeBypassPolicy()
+	// Get absolute path to root
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		findings = append(findings, checks.Finding{
+			Path:     root,
+			Kind:     "dupcode_bypass_scan_error",
+			Message:  fmt.Sprintf("failed to resolve root path: %v", err),
+			Severity: checks.SeverityError,
+		})
+		return findings
+	}
 
-	// Scan cmd/ and internal/ (except internal/factory/ which is allowed to define the policy)
-	dirs := []string{"cmd", "internal"}
+	policy := NewDupcodeBypassPolicyWithRoot(absRoot)
 
-	for _, dir := range dirs {
-		scanPath := filepath.Join(root, dir)
-		if _, err := os.Stat(scanPath); os.IsNotExist(err) {
+	// Scan production Go files in cmd/ and internal/
+	// This does NOT skip internal/factory - we need to verify it only contains allowed calls
+	scanDirs := []string{"cmd", "internal"}
+
+	for _, dir := range scanDirs {
+		scanPath := filepath.Join(absRoot, dir)
+		info, err := os.Stat(scanPath)
+		if err != nil {
+			// Directory doesn't exist - skip silently (OK for partial checkouts/tests)
+			if os.IsNotExist(err) {
+				continue
+			}
+			// Inaccessible directory - fail closed
+			findings = append(findings, checks.Finding{
+				Path:     dir,
+				Kind:     "dupcode_bypass_scan_error",
+				Message:  fmt.Sprintf("failed to scan %s: %v", dir, err),
+				Severity: checks.SeverityError,
+			})
+			continue
+		}
+		if !info.IsDir() {
+			// Not a directory - skip
 			continue
 		}
 
-		err := filepath.Walk(scanPath, func(path string, info os.FileInfo, err error) error {
+		filepath.Walk(scanPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return nil
-			}
-
-			// Skip internal/factory (allowed to define policy)
-			relPath, _ := filepath.Rel(root, path)
-			if strings.HasPrefix(relPath, "internal/factory/") {
-				if info.IsDir() && (info.Name() == "factory" || info.Name() == "dupcode" || info.Name() == "protectedverifier") {
-					return filepath.SkipDir
-				}
-				return nil
+				// Fail closed: walk error
+				relPath, _ := filepath.Rel(absRoot, path)
+				findings = append(findings, checks.Finding{
+					Path:     relPath,
+					Kind:     "dupcode_bypass_walk_error",
+					Message:  fmt.Sprintf("walk error: %v", err),
+					Severity: checks.SeverityError,
+				})
+				return nil // Continue scanning other files
 			}
 
 			if info.IsDir() {
 				return nil
 			}
 
+			// Only scan production Go files
 			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
 
-			if err := policy.CheckFile(path); err != nil {
+			// Check this file for bypass violations
+			checkErr := policy.CheckFile(path)
+			if checkErr != nil {
 				var bypassErr *BypassError
-				if errors.As(err, &bypassErr) {
+				if errors.As(checkErr, &bypassErr) {
+					relPath, _ := filepath.Rel(absRoot, bypassErr.File)
 					findings = append(findings, checks.Finding{
-						Path:     bypassErr.File,
+						Path:     relPath,
 						Kind:     "dupcode_bypass",
 						Message:  bypassErr.Message,
+						Severity: checks.SeverityError,
+					})
+				} else {
+					// Other error - treat as scan failure
+					relPath, _ := filepath.Rel(absRoot, path)
+					findings = append(findings, checks.Finding{
+						Path:     relPath,
+						Kind:     "dupcode_bypass_scan_error",
+						Message:  fmt.Sprintf("scan error: %v", checkErr),
 						Severity: checks.SeverityError,
 					})
 				}
@@ -317,7 +341,13 @@ func CheckDupcodeBypass(root string) []checks.Finding {
 		})
 
 		if err != nil {
-			continue
+			// Walk failed completely
+			findings = append(findings, checks.Finding{
+				Path:     dir,
+				Kind:     "dupcode_bypass_walk_error",
+				Message:  fmt.Sprintf("directory walk failed: %v", err),
+				Severity: checks.SeverityError,
+			})
 		}
 	}
 

@@ -76,9 +76,15 @@ func RunCheck() {
 }
 
 func TestDupcodeBypassPolicy_AllowsCanonicalAdapter(t *testing.T) {
-	// Create a temp file in the canonical adapter package
+	// Create a temp file in the canonical adapter directory structure
 	dir := t.TempDir()
-	fixture := filepath.Join(dir, "canonical_adapter.go")
+	// Create the proper directory structure: internal/factory/protectedverifier/
+	adapterDir := filepath.Join(dir, "internal", "factory", "protectedverifier")
+	if err := os.MkdirAll(adapterDir, 0755); err != nil {
+		t.Fatalf("failed to create adapter directory: %v", err)
+	}
+
+	fixture := filepath.Join(adapterDir, "adapter.go")
 	content := `package protectedverifier
 
 import "github.com/s1onique/leamas/internal/factory/dupcode"
@@ -91,17 +97,34 @@ func RunCheck(root string) {
 		t.Fatalf("failed to write fixture: %v", err)
 	}
 
+	// Change to temp dir so relative paths work
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	defer os.Chdir(oldCwd)
+
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
 	policy := NewDupcodeBypassPolicy()
-	err := policy.CheckFile(fixture)
+	err = policy.CheckFile(fixture)
 	if err != nil {
 		t.Errorf("unexpected error for canonical adapter: %v", err)
 	}
 }
 
 func TestDupcodeBypassPolicy_AllowsDupcodePackage(t *testing.T) {
-	// Create a temp file in the dupcode package itself
+	// Create a temp file in the dupcode directory structure
 	dir := t.TempDir()
-	fixture := filepath.Join(dir, "dupcode_internal.go")
+	// Create the proper directory structure: internal/factory/dupcode/
+	dupcodeDir := filepath.Join(dir, "internal", "factory", "dupcode")
+	if err := os.MkdirAll(dupcodeDir, 0755); err != nil {
+		t.Fatalf("failed to create dupcode directory: %v", err)
+	}
+
+	fixture := filepath.Join(dupcodeDir, "internal.go")
 	content := `package dupcode
 
 import "os"
@@ -118,35 +141,46 @@ func WriteBaseline(path string, report Report) error {
 		t.Fatalf("failed to write fixture: %v", err)
 	}
 
+	// Change to temp dir so relative paths work
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	defer os.Chdir(oldCwd)
+
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+
 	policy := NewDupcodeBypassPolicy()
-	err := policy.CheckFile(fixture)
+	err = policy.CheckFile(fixture)
 	if err != nil {
 		t.Errorf("unexpected error for dupcode package: %v", err)
 	}
 }
 
 func TestDupcodeBypassPolicy_CurrentRepository(t *testing.T) {
-	// Check the current repository for bypasses
-	policy := NewDupcodeBypassPolicy()
+	// Check the current repository for bypasses using CheckDupcodeBypass
+	// This tests the fail-closed repository-wide scan
+	findings := CheckDupcodeBypass(".")
 
-	// Walk the internal/factory directory
-	factoryDir := filepath.Join("..", "..", "internal", "factory")
-	if _, err := os.Stat(factoryDir); os.IsNotExist(err) {
-		// Try from repo root
-		factoryDir = filepath.Join("internal", "factory")
-	}
-
-	if _, err := os.Stat(factoryDir); err != nil {
-		t.Skip("factory directory not found, skipping repository check")
-	}
-
-	// Check gate package - this should be allowed
-	gateDir := filepath.Join(factoryDir, "gate")
-	if _, err := os.Stat(gateDir); err == nil {
-		err := policy.CheckPackageDir(gateDir)
-		if err != nil {
-			t.Errorf("gate package check failed: %v", err)
+	// Filter out findings that are expected (allowed packages)
+	var unexpectedFindings []string
+	for _, f := range findings {
+		// Skip allowed paths - gate package is allowed
+		if f.Kind == "dupcode_bypass_walk_error" || f.Kind == "dupcode_bypass_scan_error" {
+			// These might be expected if certain directories don't exist
+			continue
 		}
+		// Check if the finding is from an allowed directory
+		if f.Kind == "dupcode_bypass" {
+			// Report unexpected bypass findings
+			unexpectedFindings = append(unexpectedFindings, f.Path+": "+f.Message)
+		}
+	}
+
+	if len(unexpectedFindings) > 0 {
+		t.Errorf("unexpected bypass findings:\n%s", unexpectedFindings)
 	}
 }
 

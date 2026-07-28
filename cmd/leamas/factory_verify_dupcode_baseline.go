@@ -50,8 +50,6 @@ func handleFactoryVerifyDupcodeBaseline() {
 	jsonOutput := flag.Bool("json", false, "Output results as JSON")
 
 	// Parse only the arguments after "dupcode-baseline"
-	// os.Args = ["leamas", "factory", "verify", "dupcode-baseline", ...]
-	// We want to parse ["dupcode-baseline", ...]
 	args := os.Args[4:] // Skip "leamas factory verify"
 	if err := flag.CommandLine.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -72,13 +70,14 @@ func handleFactoryVerifyDupcodeBaseline() {
 		MinTokens: *minTokens,
 	}
 
-	// Run verification through dispatcher
+	// Run verification through dispatcher - captures findings in result
 	ctx := context.Background()
 
 	runnerFactory := func() func(root string) []checks.Finding {
 		return func(root string) []checks.Finding {
 			findings, err := dupcode.VerifyBaseline(root, policy)
 			if err != nil {
+				// Convert error to findings - errors are handled within the runner
 				return []checks.Finding{
 					{
 						Path:     "dupcode",
@@ -92,7 +91,7 @@ func handleFactoryVerifyDupcodeBaseline() {
 		}
 	}
 
-	// Use the dispatcher for baseline verification
+	// Use the dispatcher for baseline verification - captures typed findings
 	result := gate.DispatchDupcodeBaselineVerify(ctx, ".", runnerFactory)
 
 	// Handle authority denial or runner errors
@@ -115,16 +114,8 @@ func handleFactoryVerifyDupcodeBaseline() {
 		}
 	}
 
-	// Run verification directly to get findings
-	findings, err := dupcode.VerifyBaseline(".", policy)
-	if err != nil {
-		if *jsonOutput {
-			printJSONAndExit(jsonError{Error: fmt.Sprintf("baseline verification error: %v", err)}, 2)
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(2)
-		}
-	}
+	// Use findings captured from the dispatcher result
+	findings := result.Findings
 
 	// Print results
 	if *jsonOutput {
