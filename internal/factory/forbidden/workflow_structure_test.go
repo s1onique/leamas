@@ -43,7 +43,37 @@ type WorkflowStep struct {
 	ContinueOnError string
 }
 
+// WorkflowEnv represents top-level workflow environment variables.
+type WorkflowEnv struct {
+	Env map[string]string
+}
+
+// parseWorkflowEnv extracts top-level env block from workflow content.
+// This is a restricted parser for the frozen canonical workflow shape.
+func parseWorkflowEnv(content []byte) *WorkflowEnv {
+	lines := strings.Split(string(content), "\n")
+	we := &WorkflowEnv{Env: make(map[string]string)}
+
+	for i := 0; i < len(lines); i++ {
+		trimmed := strings.TrimLeft(lines[i], " \t")
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		// Top-level env block has no indentation
+		if strings.TrimSpace(trimmed) == "env:" {
+			we.Env = parseEnvBlock(lines, i+1, 0)
+			break
+		}
+		// Stop at first job (jobs are at 2-space indent)
+		if strings.Contains(trimmed, ":") && !strings.HasPrefix(trimmed, " ") {
+			break
+		}
+	}
+	return we
+}
+
 // parseFactoryJob extracts the factory-dupcode job from workflow content.
+// This is a restricted parser for the frozen canonical workflow shape.
 func parseFactoryJob(content []byte) (*WorkflowJob, error) {
 	lines := strings.Split(string(content), "\n")
 	job := &WorkflowJob{}
@@ -156,7 +186,7 @@ func parseFactoryJob(content []byte) (*WorkflowJob, error) {
 	return job, nil
 }
 
-// parseEnvBlock parses a YAML env block.
+// parseEnvBlock parses a YAML env block at the given indentation level.
 func parseEnvBlock(lines []string, startIdx, baseIndent int) map[string]string {
 	env := make(map[string]string)
 	for i := startIdx; i < len(lines); i++ {
@@ -177,6 +207,7 @@ func parseEnvBlock(lines []string, startIdx, baseIndent int) map[string]string {
 }
 
 // TestFactoryDupcodeWorkflowExactCheckoutContract verifies the factory-dupcode job structure.
+// This includes exact preflight command verification for remote authority binding.
 func TestFactoryDupcodeWorkflowExactCheckoutContract(t *testing.T) {
 	path := workflowPath(t)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -186,6 +217,15 @@ func TestFactoryDupcodeWorkflowExactCheckoutContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read workflow: %v", err)
 	}
+
+	// Verify workflow-level env has no LEAMAS_DUPCODE_AUTHORITY
+	we := parseWorkflowEnv(content)
+	if we != nil && we.Env != nil {
+		if _, ok := we.Env["LEAMAS_DUPCODE_AUTHORITY"]; ok {
+			t.Error("LEAMAS_DUPCODE_AUTHORITY must not be set at workflow level")
+		}
+	}
+
 	job, err := parseFactoryJob(content)
 	if err != nil {
 		t.Fatalf("failed to parse workflow: %v", err)
@@ -196,9 +236,48 @@ func TestFactoryDupcodeWorkflowExactCheckoutContract(t *testing.T) {
 	if job.ID != "factory-dupcode" {
 		t.Errorf("expected job ID 'factory-dupcode', got %q", job.ID)
 	}
-	if job.DisplayName == "" {
-		t.Error("job display name is empty")
+
+	// P0: exact display name required
+	if job.DisplayName != "Factory Dupcode" {
+		t.Errorf("expected job display name 'Factory Dupcode', got %q", job.DisplayName)
 	}
+
+	// P0: exact timeout required
+	if job.Timeout != "30" {
+		t.Errorf("expected job timeout '30', got %q", job.Timeout)
+	}
+
+	// P0: verify preflight step with exact-SHA authority assertions
+	var preflightStep *WorkflowStep
+	for i := range job.Steps {
+		if job.Steps[i].Name == "Dupcode CI preflight" {
+			preflightStep = &job.Steps[i]
+			break
+		}
+	}
+	if preflightStep == nil {
+		t.Fatal("workflow must have 'Dupcode CI preflight' step")
+	}
+
+	// P0: exact preflight command inventory for remote authority binding
+	preflight := preflightStep.Run
+	required := []string{
+		`test "$GITHUB_ACTIONS" = "true"`,                       // CI context assertion
+		`test "$CI" = "true"`,                                   // CI flag assertion
+		`test -n "$GITHUB_SHA"`,                                 // SHA non-empty assertion
+		`git rev-parse HEAD^{commit}`,                           // exact HEAD SHA
+		`test "$(git rev-parse HEAD^{commit})" = "$GITHUB_SHA"`, // SHA binding
+		`git status --porcelain=v1`,                             // clean tree assertion
+		`test -z "$(git status --porcelain=v1)"`,                // worktree clean check
+		`git rev-parse HEAD^{tree}`,                             // tree OID emission
+	}
+	for _, cmd := range required {
+		if !strings.Contains(preflight, cmd) {
+			t.Errorf("preflight step must contain: %s", cmd)
+		}
+	}
+
+	// Checkout step exists
 	hasCheckout := false
 	for _, step := range job.Steps {
 		if step.Uses != "" && strings.Contains(step.Uses, "actions/checkout") {
@@ -209,6 +288,8 @@ func TestFactoryDupcodeWorkflowExactCheckoutContract(t *testing.T) {
 	if !hasCheckout {
 		t.Error("workflow must have checkout step with actions/checkout")
 	}
+
+	// No continue-on-error on any step
 	for i, step := range job.Steps {
 		if step.ContinueOnError == "true" {
 			t.Errorf("step %d must not have continue-on-error: true", i)
@@ -226,6 +307,15 @@ func TestFactoryDupcodeWorkflowNoGlobalEnvAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read workflow: %v", err)
 	}
+
+	// P0: check workflow-level env
+	we := parseWorkflowEnv(content)
+	if we != nil && we.Env != nil {
+		if _, ok := we.Env["LEAMAS_DUPCODE_AUTHORITY"]; ok {
+			t.Error("LEAMAS_DUPCODE_AUTHORITY must not be at workflow level")
+		}
+	}
+
 	job, err := parseFactoryJob(content)
 	if err != nil {
 		t.Fatalf("failed to parse workflow: %v", err)
@@ -233,6 +323,8 @@ func TestFactoryDupcodeWorkflowNoGlobalEnvAuthority(t *testing.T) {
 	if job == nil {
 		t.Fatal("factory-dupcode job not found")
 	}
+
+	// P0: check job-level env
 	if job.Env != nil {
 		if _, ok := job.Env["LEAMAS_DUPCODE_AUTHORITY"]; ok {
 			t.Error("LEAMAS_DUPCODE_AUTHORITY must not be at job level")
