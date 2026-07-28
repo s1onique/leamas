@@ -28,7 +28,7 @@ func TestAuditVerifyEntryPointOperationMapping(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := dispatchDupcodeVerifyWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
+	result := DispatchDupcodeVerifyWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
 
 	// In valid CI context, verify should succeed
 	if result.Error != nil {
@@ -82,7 +82,7 @@ func TestAuditUpdateEntryPointOperationMapping(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := dispatchDupcodeUpdateBaselineWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
+	result := DispatchDupcodeUpdateBaselineWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
 
 	// Should be denied under CI authority
 	if result.Error == nil && len(result.Findings) == 0 {
@@ -120,7 +120,7 @@ func TestAuditVerifyEntryPointCallsDispatcherOnce(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := dispatchDupcodeVerifyWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
+	result := DispatchDupcodeVerifyWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
 
 	if result.Error != nil {
 		t.Fatalf("verify should succeed: %v", result.Error)
@@ -149,7 +149,7 @@ func TestAuditUpdateEntryPointDeniedBeforeRunner(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := dispatchDupcodeUpdateBaselineWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
+	result := DispatchDupcodeUpdateBaselineWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
 
 	// Should be denied
 	if result.Error == nil && len(result.Findings) == 0 {
@@ -184,7 +184,7 @@ func TestAuditVerifyNeverReachesMutation(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := dispatchDupcodeVerifyWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
+	result := DispatchDupcodeVerifyWithObserver(ctx, ".", runnerFactory, &fakeValidCIObserver{})
 
 	if result.Error != nil {
 		t.Fatalf("verify should succeed: %v", result.Error)

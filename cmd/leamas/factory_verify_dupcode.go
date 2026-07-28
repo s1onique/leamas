@@ -14,6 +14,14 @@ import (
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
+// DupcodeVerifyDispatcher is the injectable dispatch function for verify.
+// Production default calls gate.DispatchDupcodeVerify.
+var DupcodeVerifyDispatcher gate.DispatchFunc = gate.DispatchDupcodeVerify
+
+// DupcodeUpdateBaselineDispatcher is the injectable dispatch function for update.
+// Production default calls gate.DispatchDupcodeUpdateBaseline.
+var DupcodeUpdateBaselineDispatcher gate.DispatchFunc = gate.DispatchDupcodeUpdateBaseline
+
 // Default thresholds for the quality gate
 const (
 	DefaultMinLines  = 40
@@ -110,7 +118,7 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		}
 	}
 
-	result := gate.DispatchDupcodeUpdateBaseline(ctx, ".", runnerFactory)
+	result := DupcodeUpdateBaselineDispatcher(ctx, ".", runnerFactory)
 
 	// Handle authority denial or runner errors
 	if len(result.Findings) > 0 {
@@ -226,7 +234,7 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		}
 	}
 
-	result := gate.DispatchDupcodeVerify(ctx, ".", runnerFactory)
+	result := DupcodeVerifyDispatcher(ctx, ".", runnerFactory)
 
 	// Handle authority denial
 	if len(result.Findings) > 0 {

@@ -9,6 +9,15 @@ import (
 	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
 
+// DispatchResult is the result returned by dispatch functions.
+type DispatchResult = verifierdispatch.Result
+
+// RunnerFactory is a function that creates a runner function.
+type RunnerFactory = verifierdispatch.RunnerFactory
+
+// DispatchFunc is the function signature for dispatch functions.
+type DispatchFunc func(context.Context, string, RunnerFactory) DispatchResult
+
 // DispatcherForVerifier creates a dispatcher configured for a specific verifier.
 // This is used by production entry points that need to route through the central
 // authority check.
@@ -30,12 +39,12 @@ func DispatcherForVerifier(verifierName string) (*verifierdispatch.Dispatcher, b
 // This is the canonical entry point for `factory verify dupcode`.
 // The RunnerFactory is invoked only after authority validation passes.
 func DispatchDupcodeVerify(ctx context.Context, root string, factory verifierdispatch.RunnerFactory) verifierdispatch.Result {
-	return dispatchDupcodeVerifyWithObserver(ctx, root, factory, &verifierdispatch.DefaultContextObserver{})
+	return DispatchDupcodeVerifyWithObserver(ctx, root, factory, &verifierdispatch.DefaultContextObserver{})
 }
 
-// dispatchDupcodeVerifyWithObserver is the internal variant that accepts an injectable observer.
+// DispatchDupcodeVerifyWithObserver is the exported variant that accepts an injectable observer.
 // This enables testing without real environment variables.
-func dispatchDupcodeVerifyWithObserver(ctx context.Context, root string, factory verifierdispatch.RunnerFactory, observer verifierdispatch.ContextObserver) verifierdispatch.Result {
+func DispatchDupcodeVerifyWithObserver(ctx context.Context, root string, factory verifierdispatch.RunnerFactory, observer verifierdispatch.ContextObserver) verifierdispatch.Result {
 	dispatcher, ok := DispatcherForVerifier("dupcode")
 	if !ok {
 		return verifierdispatch.Result{
@@ -78,12 +87,12 @@ func DispatchDupcodeBaselineVerify(ctx context.Context, root string, factory ver
 // This is the canonical entry point for `factory verify dupcode --update-baseline`.
 // The RunnerFactory is invoked only after authority validation passes.
 func DispatchDupcodeUpdateBaseline(ctx context.Context, root string, factory verifierdispatch.RunnerFactory) verifierdispatch.Result {
-	return dispatchDupcodeUpdateBaselineWithObserver(ctx, root, factory, &verifierdispatch.DefaultContextObserver{})
+	return DispatchDupcodeUpdateBaselineWithObserver(ctx, root, factory, &verifierdispatch.DefaultContextObserver{})
 }
 
-// dispatchDupcodeUpdateBaselineWithObserver is the internal variant that accepts an injectable observer.
+// DispatchDupcodeUpdateBaselineWithObserver is the exported variant that accepts an injectable observer.
 // This enables testing without real environment variables.
-func dispatchDupcodeUpdateBaselineWithObserver(ctx context.Context, root string, factory verifierdispatch.RunnerFactory, observer verifierdispatch.ContextObserver) verifierdispatch.Result {
+func DispatchDupcodeUpdateBaselineWithObserver(ctx context.Context, root string, factory verifierdispatch.RunnerFactory, observer verifierdispatch.ContextObserver) verifierdispatch.Result {
 	dispatcher, ok := DispatcherForVerifier("dupcode")
 	if !ok {
 		return verifierdispatch.Result{
