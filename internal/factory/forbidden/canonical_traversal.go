@@ -123,10 +123,9 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 			if !ok {
 				return true
 			}
-			// Same-package internal calls are not a policy bypass.
-			if caller.PackagePath == callee.PackagePath {
-				return true
-			}
+			// Same-package skip REMOVED. Every legitimate same-package
+			// protected use must be approved via an exact edge in
+			// ApprovedCallers / AdapterApprovedCallers.
 			if IsApprovedCaller(caller, callee) {
 				return true
 			}
@@ -142,10 +141,14 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 					caller.PackagePath, caller.Function),
 				Severity: checks.SeverityError,
 			})
+			// Mark the entire CallExpr.Fun subtree as belonging to this
+			// direct call, so children are not reclassified as function
+			// values. Do NOT prune call arguments.
+			markDirectCalleeSubtree(pkg.Fset, node)
 			return true
 
 		case *ast.SelectorExpr, *ast.Ident:
-			if isCalleeOfCallExpr(node, ancestors) {
+			if isInsideDirectCalleeSubtree(pkg, node) {
 				return true
 			}
 			caller := callerIdentity(pkg.PkgPath, ancestors, pkg.Fset)
@@ -162,10 +165,6 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 
 			callee, ok := p.resolveProtectedUse(pkg, node.(ast.Expr), class)
 			if !ok {
-				return true
-			}
-			// Same-package internal references are not a policy bypass.
-			if caller.PackagePath == callee.PackagePath {
 				return true
 			}
 			if IsApprovedCaller(caller, callee) {
@@ -190,17 +189,58 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 	return findings
 }
 
-// isCalleeOfCallExpr reports whether the node is the Fun expression of an
-// enclosing CallExpr in the ancestors stack. Used to suppress duplicate
-// function-value findings for the callee of a direct call already reported.
-func isCalleeOfCallExpr(node ast.Node, ancestors []ast.Node) bool {
-	for i := len(ancestors) - 1; i >= 0; i-- {
-		if ce, ok := ancestors[i].(*ast.CallExpr); ok {
-			if ce.Fun == node {
-				return true
-			}
-			return false
+// directCalleeRange represents the byte range of a CallExpr.Fun subtree.
+type directCalleeRange struct {
+	start token.Pos
+	end   token.Pos
+}
+
+// perFileSetCalleeRanges tracks direct-callee ranges per FileSet.
+type perFileSetCalleeRanges struct {
+	ranges []directCalleeRange
+}
+
+func (d *perFileSetCalleeRanges) contains(p token.Pos) bool {
+	for _, r := range d.ranges {
+		if p >= r.start && p <= r.end {
+			return true
 		}
 	}
 	return false
+}
+
+// packageDirectCalleeRanges stores per-package direct-callee ranges,
+// keyed by *token.FileSet (a pointer comparable type).
+var packageDirectCalleeRanges = map[*token.FileSet]*perFileSetCalleeRanges{}
+
+func markDirectCalleeSubtree(fset *token.FileSet, call *ast.CallExpr) {
+	if fset == nil || call == nil || call.Fun == nil {
+		return
+	}
+	d, ok := packageDirectCalleeRanges[fset]
+	if !ok {
+		d = &perFileSetCalleeRanges{}
+		packageDirectCalleeRanges[fset] = d
+	}
+	d.ranges = append(d.ranges, directCalleeRange{
+		start: call.Fun.Pos(),
+		end:   call.Fun.End(),
+	})
+}
+
+func isInsideDirectCalleeSubtree(pkg *packages.Package, n ast.Node) bool {
+	if pkg == nil || pkg.Fset == nil || n == nil {
+		return false
+	}
+	d, ok := packageDirectCalleeRanges[pkg.Fset]
+	if !ok {
+		return false
+	}
+	return d.contains(n.Pos())
+}
+
+// resetDirectCalleeRanges clears the per-file-set ranges. Tests may call this
+// between scans to keep state isolated.
+func resetDirectCalleeRanges() {
+	packageDirectCalleeRanges = map[*token.FileSet]*perFileSetCalleeRanges{}
 }

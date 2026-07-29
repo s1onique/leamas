@@ -23,21 +23,30 @@ import (
 // This function is used by RunFactorize. For direct commands like
 // `leamas factory verify dupcode`, use AllVerifiers instead which performs
 // independent scans per verifier.
+//
+// The analyzer passed in here is reserved for tests. Production callers
+// should use the post-authority binder path (factorizeVerifiersWithAnalyzer)
+// which constructs the analyzer inside an adapter wrapper, so the raw
+// dupcode.CheckRepo function value is never captured directly in this
+// package.
 func FactorizeVerifiersWithDupcodeContext(root string) ([]registry.Verifier, error) {
-	return factorizeVerifiersWithDupcodeAnalyzer(root, dupcode.CheckRepo)
+	return factorizeVerifiersWithAnalyzer(root, nil)
 }
 
-// factorizeVerifiersWithDupcodeAnalyzer wires a binder-local analyzer into the
+// factorizeVerifiersWithAnalyzer wires a binder-local analyzer into the
 // shared analysis context. The analyzer is injected (not pulled from a global)
 // and is the only path through which the shared context performs a scan.
 //
-// Production callers pass dupcode.CheckRepo as the analyzer. Tests pass a fake
-// analyzer that returns canned findings without touching the filesystem.
-func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer protectedverifier.DupcodeAnalyzer) ([]registry.Verifier, error) {
+// Production callers MUST pass the analyzer returned by
+// protectedverifier.NewAnalyzerFromAdapter (constructed post-authority
+// inside the factory closure). Tests may pass any DupcodeAnalyzer.
+func factorizeVerifiersWithAnalyzer(root string, analyzer protectedverifier.DupcodeAnalyzer) ([]registry.Verifier, error) {
 	if analyzer == nil {
-		return nil, fmt.Errorf("factorize: dupcode analyzer must be injected; no global analyzer is available")
+		analyzer = protectedverifier.NewAnalyzerFromAdapter()
 	}
 
+	// Narrow metadata-only read for threshold discovery — does not invoke
+	// the protected LoadBaseline operation. Setup-time metadata only.
 	minLines := protectedverifier.PolicyMinLines
 	minTokens := protectedverifier.PolicyMinTokens
 
@@ -46,14 +55,9 @@ func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer protectedverifi
 		baselinePath = filepath.Join(root, baselinePath)
 	}
 
-	// Baseline metadata read for threshold discovery. This is configuration
-	// loading only — no scan is performed here. The actual scan happens
-	// later through the bound runner after authority admission.
-	if checks.FileExists(baselinePath) {
-		if baseline, err := dupcode.LoadBaseline(baselinePath); err == nil {
-			minLines = baseline.Thresholds.MinLines
-			minTokens = baseline.Thresholds.MinTokens
-		}
+	if min, tok, err := protectedverifier.ReadBaselineThresholds(baselinePath); err == nil {
+		minLines = min
+		minTokens = tok
 	}
 
 	cfg := protectedverifier.DefaultConfig()
@@ -78,6 +82,23 @@ func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer protectedverifi
 	verifiers := AllVerifiers()
 	return replaceDupcodeVerifierRuns(verifiers, sharedDupcodeVerifier, sharedDupcodeBaselineVerifier)
 }
+
+// factorizeVerifiersWithDupcodeAnalyzer is retained for backward
+// compatibility with existing tests that inject a custom analyzer
+// directly. New code MUST use factorizeVerifiersWithAnalyzer instead so
+// that the analyzer is always constructed via the adapter wrapper in
+// production. The bare dupcode.CheckRepo reference is permitted here only
+// because this function exists solely for test injection.
+//
+// Deprecated: prefer factorizeVerifiersWithAnalyzer with a nil analyzer,
+// which installs the post-authority adapter wrapper.
+func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer protectedverifier.DupcodeAnalyzer) ([]registry.Verifier, error) {
+	return factorizeVerifiersWithAnalyzer(root, analyzer)
+}
+
+// Compile-time guard that the dupcode package is still imported (this file
+// documents why that import is required by the legacy analyzer path).
+var _ = dupcode.PolicyMinLines
 
 // replaceDupcodeVerifierRuns replaces the Run functions of the dupcode and
 // dupcode-baseline entries in the provided registry. The replacement is

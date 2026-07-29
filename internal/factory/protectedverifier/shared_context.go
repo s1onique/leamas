@@ -134,124 +134,140 @@ func NewDupcodeVerifierFactory(context *DupcodeAnalysisContext) *DupcodeVerifier
 	return &DupcodeVerifierFactory{context: context}
 }
 
-// SharedDupCodeVerifier returns a verifier function that uses the shared analysis context.
-// All raw dupcode operations are invoked through the DupcodeRunner adapter; the
-// closure never imports dupcode symbols directly to invoke them.
+// SharedDupCodeVerifier returns a verifier function that uses the shared
+// analysis context. All raw dupcode operations are invoked through the
+// DupcodeRunner adapter; the returned closure does NOT import dupcode
+// symbols directly to invoke them.
 func (f *DupcodeVerifierFactory) SharedDupCodeVerifier() func(string) []checks.Finding {
 	return func(root string) []checks.Finding {
-		baselinePath := ".factory/dupcode-baseline.json"
-		fullBaselinePath := baselinePath
-		if root != "." && root != "" {
-			fullBaselinePath = filepath.Join(root, baselinePath)
-		}
-
-		if !checks.FileExists(fullBaselinePath) {
-			return []checks.Finding{
-				{Path: baselinePath, Kind: "missing_baseline", Message: "baseline file not found. Run 'make dupcode-baseline' to create it.", Severity: checks.SeverityError},
-			}
-		}
-
-		// Use the adapter for the protected LoadBaseline operation.
-		runner := NewDupcodeRunner()
-		baseline, err := runner.LoadBaseline(fullBaselinePath)
-		if err != nil {
-			return []checks.Finding{
-				{Path: baselinePath, Kind: "baseline_error", Message: fmt.Sprintf("failed to load baseline: %v", err), Severity: checks.SeverityError},
-			}
-		}
-
-		cfg := dupcode.DefaultConfig()
-		cfg.Root = root
-		cfg.MinLines = baseline.Thresholds.MinLines
-		cfg.MinTokens = baseline.Thresholds.MinTokens
-
-		input := DupcodeInput{
-			Root:      root,
-			MinLines:  cfg.MinLines,
-			MinTokens: cfg.MinTokens,
-			Config:    cfg,
-		}
-
-		analysis, err := f.context.Provider().ConsumedBy("dupcode", input)
-		if err != nil {
-			return []checks.Finding{
-				{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("duplicate code scan failed: %v", err), Severity: checks.SeverityError},
-			}
-		}
-
-		report := dupcode.Report{
-			Findings: analysis.Findings,
-			Thresholds: dupcode.BaselineThresholds{
-				MinLines:  cfg.MinLines,
-				MinTokens: cfg.MinTokens,
-			},
-		}
-
-		// Use the adapter for the protected CompareToBaseline operation.
-		result := runner.CompareToBaseline(report, baseline)
-		return convertCompareResult(result)
+		return runSharedDupcodeVerify(f.context, root)
 	}
 }
 
-// SharedDupcodeBaselineVerifier returns a verifier function that uses the shared analysis context.
-// All raw dupcode operations are invoked through the DupcodeRunner adapter.
+// SharedDupcodeBaselineVerifier returns a verifier function that uses the
+// shared analysis context. All raw dupcode operations are invoked through
+// the DupcodeRunner adapter.
 func (f *DupcodeVerifierFactory) SharedDupcodeBaselineVerifier() func(string) []checks.Finding {
 	return func(root string) []checks.Finding {
-		policy := dupcode.DefaultBaselinePolicy()
-		policy.Path = ".factory/dupcode-baseline.json"
-		if root != "." && root != "" {
-			policy.Path = filepath.Join(root, policy.Path)
+		return runSharedDupcodeBaseline(f.context, root)
+	}
+}
+
+// runSharedDupcodeVerify is a named function (not a closure literal) that
+// performs the shared-context dupcode verify logic. It exists as a named
+// function so the policy scanner can resolve caller identity to a real
+// declaration rather than a func@line:col literal.
+func runSharedDupcodeVerify(ctx *DupcodeAnalysisContext, root string) []checks.Finding {
+	baselinePath := ".factory/dupcode-baseline.json"
+	fullBaselinePath := baselinePath
+	if root != "." && root != "" {
+		fullBaselinePath = filepath.Join(root, baselinePath)
+	}
+
+	if !checks.FileExists(fullBaselinePath) {
+		return []checks.Finding{
+			{Path: baselinePath, Kind: "missing_baseline", Message: "baseline file not found. Run 'make dupcode-baseline' to create it.", Severity: checks.SeverityError},
 		}
+	}
 
-		validation, err := dupcode.ValidateBaselineArtifact(root, policy)
-		if err != nil {
-			return []checks.Finding{
-				{Path: "dupcode", Kind: "baseline_error", Message: fmt.Sprintf("baseline validation failed: %v", err), Severity: checks.SeverityError},
-			}
+	// Use the adapter for the protected LoadBaseline operation.
+	runner := NewDupcodeRunner()
+	baseline, err := runner.LoadBaseline(fullBaselinePath)
+	if err != nil {
+		return []checks.Finding{
+			{Path: baselinePath, Kind: "baseline_error", Message: fmt.Sprintf("failed to load baseline: %v", err), Severity: checks.SeverityError},
 		}
+	}
 
-		cfg := dupcode.DefaultConfig()
-		cfg.Root = root
-		cfg.MinLines = validation.Baseline.Thresholds.MinLines
-		cfg.MinTokens = validation.Baseline.Thresholds.MinTokens
+	cfg := dupcode.DefaultConfig()
+	cfg.Root = root
+	cfg.MinLines = baseline.Thresholds.MinLines
+	cfg.MinTokens = baseline.Thresholds.MinTokens
 
-		input := DupcodeInput{
-			Root:      root,
+	input := DupcodeInput{
+		Root:      root,
+		MinLines:  cfg.MinLines,
+		MinTokens: cfg.MinTokens,
+		Config:    cfg,
+	}
+
+	analysis, err := ctx.Provider().ConsumedBy("dupcode", input)
+	if err != nil {
+		return []checks.Finding{
+			{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("duplicate code scan failed: %v", err), Severity: checks.SeverityError},
+		}
+	}
+
+	report := dupcode.Report{
+		Findings: analysis.Findings,
+		Thresholds: dupcode.BaselineThresholds{
 			MinLines:  cfg.MinLines,
 			MinTokens: cfg.MinTokens,
-			Config:    cfg,
-		}
-
-		analysis, err := f.context.Provider().ConsumedBy("dupcode-baseline", input)
-		if err != nil {
-			return []checks.Finding{
-				{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("duplicate code scan failed: %v", err), Severity: checks.SeverityError},
-			}
-		}
-
-		report := dupcode.Report{
-			Findings: analysis.Findings,
-			Thresholds: dupcode.BaselineThresholds{
-				MinLines:  cfg.MinLines,
-				MinTokens: cfg.MinTokens,
-			},
-		}
-
-		driftPolicy := dupcode.DefaultBaselinePolicy()
-		driftPolicy.Path = policy.Path
-		driftFindings := dupcode.CheckBaselineDriftFromReport(root, validation.Baseline, report, driftPolicy)
-
-		var findings []checks.Finding
-		for _, df := range driftFindings {
-			findings = append(findings, checks.Finding{
-				Path:     df.Path,
-				Kind:     df.Kind,
-				Message:  df.Message,
-				Severity: checks.SeverityError,
-			})
-		}
-		return findings
+		},
 	}
+
+	// Use the adapter for the protected CompareToBaseline operation.
+	result := runner.CompareToBaseline(report, baseline)
+	return convertCompareResult(result)
+}
+
+// runSharedDupcodeBaseline is a named function (not a closure literal) that
+// performs the shared-context dupcode-baseline verify logic.
+func runSharedDupcodeBaseline(ctx *DupcodeAnalysisContext, root string) []checks.Finding {
+	policy := dupcode.DefaultBaselinePolicy()
+	policy.Path = ".factory/dupcode-baseline.json"
+	if root != "." && root != "" {
+		policy.Path = filepath.Join(root, policy.Path)
+	}
+
+	validation, err := dupcode.ValidateBaselineArtifact(root, policy)
+	if err != nil {
+		return []checks.Finding{
+			{Path: "dupcode", Kind: "baseline_error", Message: fmt.Sprintf("baseline validation failed: %v", err), Severity: checks.SeverityError},
+		}
+	}
+
+	cfg := dupcode.DefaultConfig()
+	cfg.Root = root
+	cfg.MinLines = validation.Baseline.Thresholds.MinLines
+	cfg.MinTokens = validation.Baseline.Thresholds.MinTokens
+
+	input := DupcodeInput{
+		Root:      root,
+		MinLines:  cfg.MinLines,
+		MinTokens: cfg.MinTokens,
+		Config:    cfg,
+	}
+
+	analysis, err := ctx.Provider().ConsumedBy("dupcode-baseline", input)
+	if err != nil {
+		return []checks.Finding{
+			{Path: "dupcode", Kind: "dupcode_error", Message: fmt.Sprintf("duplicate code scan failed: %v", err), Severity: checks.SeverityError},
+		}
+	}
+
+	report := dupcode.Report{
+		Findings: analysis.Findings,
+		Thresholds: dupcode.BaselineThresholds{
+			MinLines:  cfg.MinLines,
+			MinTokens: cfg.MinTokens,
+		},
+	}
+
+	driftPolicy := dupcode.DefaultBaselinePolicy()
+	driftPolicy.Path = policy.Path
+	driftFindings := dupcode.CheckBaselineDriftFromReport(root, validation.Baseline, report, driftPolicy)
+
+	var findings []checks.Finding
+	for _, df := range driftFindings {
+		findings = append(findings, checks.Finding{
+			Path:     df.Path,
+			Kind:     df.Kind,
+			Message:  df.Message,
+			Severity: checks.SeverityError,
+		})
+	}
+	return findings
 }
 
 // convertCompareResult converts dupcode comparison results to gate findings.
@@ -274,7 +290,7 @@ func convertCompareResult(result dupcode.CompareResult) []checks.Finding {
 		findings = append(findings, checks.Finding{
 			Path:     "dupcode",
 			Kind:     "worsened_duplicate",
-			Message:  "worsened duplicate block",
+			Message:  fmt.Sprintf("worsened duplicate block"),
 			Severity: checks.SeverityError,
 		})
 	}
