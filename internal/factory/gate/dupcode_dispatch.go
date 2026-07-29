@@ -36,17 +36,57 @@ type DupcodeUpdateBaselineSpec struct {
 	MinTokens    int
 }
 
-// DupcodeVerifyBinder is the named post-authority binder for the dupcode verify
-// lane. It carries the typed dispatch result AND the typed scan/comparison
-// payload across the data-only boundary so the cmd layer never sees
-// protectedverifier types or executable factories.
-type DupcodeVerifyBinder struct {
-	spec DupcodeVerifySpec
+// dupcodeRunner is the invocation-local runner interface. The binder
+// receives a deps function that produces a fresh runner; production
+// dependencies construct a *protectedverifier.DupcodeRunner, tests
+// supply counting fakes.
+type dupcodeRunner interface {
+	LoadBaseline(string) (dupcode.Baseline, error)
+	RunCheckRepo(string, dupcode.Config) ([]dupcode.Finding, error)
+	RunCheckReport(string, dupcode.Config) (dupcode.Report, error)
+	VerifyBaseline(string, dupcode.BaselinePolicy) ([]checks.Finding, error)
+	WriteBaseline(string, dupcode.Report) error
+	CompareToBaseline(dupcode.Report, dupcode.Baseline) dupcode.CompareResult
 }
 
-// NewDupcodeVerifyBinder creates a binder for the given spec.
+// dupcodeBinderDeps is the invocation-local dependency bundle. The
+// production default constructs a real *protectedverifier.DupcodeRunner.
+// Tests supply counting fakes by overriding NewRunner.
+type dupcodeBinderDeps struct {
+	NewRunner func() dupcodeRunner
+}
+
+// productionDupcodeBinderDeps returns the production default deps. The
+// returned struct is invocation-local; no package-global state.
+func productionDupcodeBinderDeps() dupcodeBinderDeps {
+	return dupcodeBinderDeps{
+		NewRunner: func() dupcodeRunner {
+			return protectedverifier.NewDupcodeRunner()
+		},
+	}
+}
+
+// DupcodeVerifyBinder is the named post-authority binder for the dupcode
+// verify lane. It owns an invocation-local payload cell so the typed
+// outcome can be read after Dispatch returns, without re-executing the
+// protected work.
+type DupcodeVerifyBinder struct {
+	spec DupcodeVerifySpec
+	deps dupcodeBinderDeps
+
+	ran     bool
+	report  dupcode.Report
+	compRes dupcode.CompareResult
+}
+
+// NewDupcodeVerifyBinder creates a binder for the given spec with
+// production deps.
 func NewDupcodeVerifyBinder(spec DupcodeVerifySpec) *DupcodeVerifyBinder {
-	return &DupcodeVerifyBinder{spec: spec}
+	return newDupcodeVerifyBinderWithDeps(spec, productionDupcodeBinderDeps())
+}
+
+func newDupcodeVerifyBinderWithDeps(spec DupcodeVerifySpec, deps dupcodeBinderDeps) *DupcodeVerifyBinder {
+	return &DupcodeVerifyBinder{spec: spec, deps: deps}
 }
 
 // Spec returns the bound spec (read-only).
@@ -54,16 +94,25 @@ func (b *DupcodeVerifyBinder) Spec() DupcodeVerifySpec {
 	return b.spec
 }
 
-// BindRunner returns the dispatcher-compatible RunnerFactory that produces
-// the bound DupcodeVerifyOutcome after authority passes.
+// BindRunner returns the dispatcher-compatible RunnerFactory.
 func (b *DupcodeVerifyBinder) BindRunner() verifierdispatch.RunnerFactory {
 	return func() func(root string) []checks.Finding {
 		return b.run
 	}
 }
 
+// run is the named bound runner. It executes the protected work AT MOST
+// ONCE per binder instance and stores the typed payload for later
+// retrieval by the typed dispatch entry point.
 func (b *DupcodeVerifyBinder) run(root string) []checks.Finding {
-	runner := protectedverifier.NewDupcodeRunner()
+	if b.ran {
+		// Defensive: should not happen because the dispatcher invokes the
+		// factory exactly once. Returning nil keeps the contract.
+		return nil
+	}
+	b.ran = true
+
+	runner := b.deps.NewRunner()
 
 	baselinePath := b.spec.BaselinePath
 	fullBaselinePath := baselinePath
@@ -100,18 +149,39 @@ func (b *DupcodeVerifyBinder) run(root string) []checks.Finding {
 		}
 	}
 
-	result := runner.CompareToBaseline(report, baseline)
-	return convertCompareResult(result)
+	b.report = report
+	b.compRes = runner.CompareToBaseline(report, baseline)
+	return convertCompareResult(b.compRes)
 }
 
-// DupcodeBaselineBinder is the named post-authority binder for the dupcode-baseline lane.
+// Report returns the exact dupcode.Report captured during the authorized
+// invocation, or a zero-value if the runner was not admitted.
+func (b *DupcodeVerifyBinder) Report() dupcode.Report {
+	return b.report
+}
+
+// CompareResult returns the exact dupcode.CompareResult captured during
+// the authorized invocation, or a zero-value if the runner was not admitted.
+func (b *DupcodeVerifyBinder) CompareResult() dupcode.CompareResult {
+	return b.compRes
+}
+
+// DupcodeBaselineBinder is the named post-authority binder for the
+// dupcode-baseline lane.
 type DupcodeBaselineBinder struct {
-	spec DupcodeBaselineSpec
+	spec     DupcodeBaselineSpec
+	deps     dupcodeBinderDeps
+	ran      bool
+	findings []checks.Finding
 }
 
 // NewDupcodeBaselineBinder creates a binder for the given spec.
 func NewDupcodeBaselineBinder(spec DupcodeBaselineSpec) *DupcodeBaselineBinder {
-	return &DupcodeBaselineBinder{spec: spec}
+	return newDupcodeBaselineBinderWithDeps(spec, productionDupcodeBinderDeps())
+}
+
+func newDupcodeBaselineBinderWithDeps(spec DupcodeBaselineSpec, deps dupcodeBinderDeps) *DupcodeBaselineBinder {
+	return &DupcodeBaselineBinder{spec: spec, deps: deps}
 }
 
 // Spec returns the bound spec (read-only).
@@ -127,7 +197,12 @@ func (b *DupcodeBaselineBinder) BindRunner() verifierdispatch.RunnerFactory {
 }
 
 func (b *DupcodeBaselineBinder) run(root string) []checks.Finding {
-	runner := protectedverifier.NewDupcodeRunner()
+	if b.ran {
+		return nil
+	}
+	b.ran = true
+
+	runner := b.deps.NewRunner()
 	policy := dupcode.BaselinePolicy{
 		Path:      b.spec.BaselinePath,
 		MinLines:  b.spec.MinLines,
@@ -144,18 +219,33 @@ func (b *DupcodeBaselineBinder) run(root string) []checks.Finding {
 				Severity: checks.SeverityError},
 		}
 	}
+	b.findings = findings
 	return findings
+}
+
+// Findings returns the typed findings captured during the authorized
+// invocation, or nil if the runner was not admitted.
+func (b *DupcodeBaselineBinder) Findings() []checks.Finding {
+	return b.findings
 }
 
 // DupcodeUpdateBaselineBinder is the named post-authority binder for the
 // dupcode update-baseline lane.
 type DupcodeUpdateBaselineBinder struct {
-	spec DupcodeUpdateBaselineSpec
+	spec    DupcodeUpdateBaselineSpec
+	deps    dupcodeBinderDeps
+	ran     bool
+	report  dupcode.Report
+	written bool
 }
 
 // NewDupcodeUpdateBaselineBinder creates a binder for the given spec.
 func NewDupcodeUpdateBaselineBinder(spec DupcodeUpdateBaselineSpec) *DupcodeUpdateBaselineBinder {
-	return &DupcodeUpdateBaselineBinder{spec: spec}
+	return newDupcodeUpdateBaselineBinderWithDeps(spec, productionDupcodeBinderDeps())
+}
+
+func newDupcodeUpdateBaselineBinderWithDeps(spec DupcodeUpdateBaselineSpec, deps dupcodeBinderDeps) *DupcodeUpdateBaselineBinder {
+	return &DupcodeUpdateBaselineBinder{spec: spec, deps: deps}
 }
 
 // Spec returns the bound spec (read-only).
@@ -171,7 +261,12 @@ func (b *DupcodeUpdateBaselineBinder) BindRunner() verifierdispatch.RunnerFactor
 }
 
 func (b *DupcodeUpdateBaselineBinder) run(root string) []checks.Finding {
-	runner := protectedverifier.NewDupcodeRunner()
+	if b.ran {
+		return nil
+	}
+	b.ran = true
+
+	runner := b.deps.NewRunner()
 	cfg := dupcode.DefaultConfig()
 	cfg.Root = root
 	cfg.MinLines = b.spec.MinLines
@@ -192,12 +287,34 @@ func (b *DupcodeUpdateBaselineBinder) run(root string) []checks.Finding {
 				Severity: checks.SeverityError},
 		}
 	}
+	b.report = report
+	b.written = true
 	return nil
 }
 
-// DispatchDupcodeVerifyTyped is the data-only dispatch entry point for the
-// dupcode verify lane. The cmd layer holds only the spec.
-func DispatchDupcodeVerifyTyped(ctx context.Context, root string, spec DupcodeVerifySpec) DupcodeVerifyOutcome {
+// Report returns the exact dupcode.Report written to the baseline, or a
+// zero-value if the runner was not admitted.
+func (b *DupcodeUpdateBaselineBinder) Report() dupcode.Report {
+	return b.report
+}
+
+// Written reports whether the baseline file was successfully written.
+func (b *DupcodeUpdateBaselineBinder) Written() bool {
+	return b.written
+}
+
+// dispatchDupcodeVerifyTypedWith is the testable typed dispatch entry
+// point for the dupcode verify lane. It accepts a custom authority
+// observer and binder deps for dynamic test injection. The binder is
+// invoked AT MOST ONCE inside Dispatch; the typed outcome reads from
+// the binder's invocation-local payload cell.
+func dispatchDupcodeVerifyTypedWith(
+	ctx context.Context,
+	root string,
+	spec DupcodeVerifySpec,
+	observer verifierdispatch.ContextObserver,
+	deps dupcodeBinderDeps,
+) DupcodeVerifyOutcome {
 	dispatcher, ok := DispatcherForVerifier("dupcode")
 	if !ok {
 		return DupcodeVerifyOutcome{
@@ -211,26 +328,35 @@ func DispatchDupcodeVerifyTyped(ctx context.Context, root string, spec DupcodeVe
 		Operation:  verifierauthority.OperationVerify,
 		Root:       root,
 	}
-	binder := NewDupcodeVerifyBinder(spec)
+	binder := newDupcodeVerifyBinderWithDeps(spec, deps)
 
-	outcome := DupcodeVerifyOutcome{}
-	dispatchResult := dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
-	outcome.Dispatch = dispatchResult
+	outcome := DupcodeVerifyOutcome{
+		Dispatch: dispatcher.Dispatch(ctx, request, observer, binder.BindRunner()),
+	}
 
-	// The bound runner ran the scan and produced findings through the
-	// dispatcher. We rebuild the typed payload here for the outcome by
-	// invoking the runner once with the bound spec. The adapter is
-	// constructed once per dispatch and not retained.
-	binder2 := NewDupcodeVerifyBinder(spec)
-	findings := binder2.run(root)
-	outcome.Report = findingsToReport(findings, spec)
-	outcome.Comparison = findingsToComparison(findings)
+	// Read the typed payload from the binder's invocation-local cell.
+	// Do NOT execute the protected work again. The report and compare
+	// result are zero-valued if the runner was not admitted (denial path).
+	outcome.Report = reportToDTO(binder.Report(), spec)
+	outcome.Comparison = compareResultToDTO(binder.CompareResult())
 	return outcome
 }
 
-// DispatchDupcodeBaselineVerifyTyped is the data-only dispatch entry point
-// for the dupcode-baseline lane.
-func DispatchDupcodeBaselineVerifyTyped(ctx context.Context, root string, spec DupcodeBaselineSpec) DupcodeBaselineOutcome {
+// DispatchDupcodeVerifyTyped is the production typed dispatch entry
+// point for the dupcode verify lane. The cmd layer holds only the spec.
+func DispatchDupcodeVerifyTyped(ctx context.Context, root string, spec DupcodeVerifySpec) DupcodeVerifyOutcome {
+	return dispatchDupcodeVerifyTypedWith(ctx, root, spec, &verifierdispatch.DefaultContextObserver{}, productionDupcodeBinderDeps())
+}
+
+// dispatchDupcodeBaselineVerifyTypedWith is the testable typed dispatch
+// entry point for the dupcode-baseline lane.
+func dispatchDupcodeBaselineVerifyTypedWith(
+	ctx context.Context,
+	root string,
+	spec DupcodeBaselineSpec,
+	observer verifierdispatch.ContextObserver,
+	deps dupcodeBinderDeps,
+) DupcodeBaselineOutcome {
 	dispatcher, ok := DispatcherForVerifier("dupcode-baseline")
 	if !ok {
 		return DupcodeBaselineOutcome{
@@ -244,21 +370,33 @@ func DispatchDupcodeBaselineVerifyTyped(ctx context.Context, root string, spec D
 		Operation:  verifierauthority.OperationVerify,
 		Root:       root,
 	}
-	binder := NewDupcodeBaselineBinder(spec)
+	binder := newDupcodeBaselineBinderWithDeps(spec, deps)
 
-	outcome := DupcodeBaselineOutcome{}
-	dispatchResult := dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
-	outcome.Dispatch = dispatchResult
+	outcome := DupcodeBaselineOutcome{
+		Dispatch: dispatcher.Dispatch(ctx, request, observer, binder.BindRunner()),
+	}
 
-	// The bound runner already ran via the dispatcher; extract findings.
-	binder2 := NewDupcodeBaselineBinder(spec)
-	outcome.Findings = binder2.run(root)
+	// Read findings from the binder's invocation-local cell. Do NOT
+	// re-execute the runner.
+	outcome.Findings = binder.Findings()
 	return outcome
 }
 
-// DispatchDupcodeUpdateBaselineTyped is the data-only dispatch entry point
-// for the dupcode update-baseline lane.
-func DispatchDupcodeUpdateBaselineTyped(ctx context.Context, root string, spec DupcodeUpdateBaselineSpec) DupcodeUpdateBaselineOutcome {
+// DispatchDupcodeBaselineVerifyTyped is the production typed dispatch
+// entry point for the dupcode-baseline lane.
+func DispatchDupcodeBaselineVerifyTyped(ctx context.Context, root string, spec DupcodeBaselineSpec) DupcodeBaselineOutcome {
+	return dispatchDupcodeBaselineVerifyTypedWith(ctx, root, spec, &verifierdispatch.DefaultContextObserver{}, productionDupcodeBinderDeps())
+}
+
+// dispatchDupcodeUpdateBaselineTypedWith is the testable typed dispatch
+// entry point for the dupcode update-baseline lane.
+func dispatchDupcodeUpdateBaselineTypedWith(
+	ctx context.Context,
+	root string,
+	spec DupcodeUpdateBaselineSpec,
+	observer verifierdispatch.ContextObserver,
+	deps dupcodeBinderDeps,
+) DupcodeUpdateBaselineOutcome {
 	dispatcher, ok := DispatcherForVerifier("dupcode")
 	if !ok {
 		return DupcodeUpdateBaselineOutcome{
@@ -272,20 +410,27 @@ func DispatchDupcodeUpdateBaselineTyped(ctx context.Context, root string, spec D
 		Operation:  verifierauthority.OperationUpdateBaseline,
 		Root:       root,
 	}
-	binder := NewDupcodeUpdateBaselineBinder(spec)
+	binder := newDupcodeUpdateBaselineBinderWithDeps(spec, deps)
 
-	outcome := DupcodeUpdateBaselineOutcome{}
-	dispatchResult := dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
-	outcome.Dispatch = dispatchResult
+	outcome := DupcodeUpdateBaselineOutcome{
+		Dispatch: dispatcher.Dispatch(ctx, request, observer, binder.BindRunner()),
+	}
 
-	// Rebuild the typed report from the bound runner.
-	binder2 := NewDupcodeUpdateBaselineBinder(spec)
-	_ = binder2.run(root) // baseline write already happened in dispatcher
+	// Read the typed report from the binder's invocation-local cell.
+	outcome.Report = reportToDTO(binder.Report(), DupcodeVerifySpec{
+		MinLines:  spec.MinLines,
+		MinTokens: spec.MinTokens,
+	})
 	return outcome
 }
 
-// DupcodeBaselinePrintResult is the data-only print/export helper that the
-// command layer calls after a successful dispatch.
+// DispatchDupcodeUpdateBaselineTyped is the production typed dispatch
+// entry point for the dupcode update-baseline lane.
+func DispatchDupcodeUpdateBaselineTyped(ctx context.Context, root string, spec DupcodeUpdateBaselineSpec) DupcodeUpdateBaselineOutcome {
+	return dispatchDupcodeUpdateBaselineTypedWith(ctx, root, spec, &verifierdispatch.DefaultContextObserver{}, productionDupcodeBinderDeps())
+}
+
+// DupcodeBaselinePrintResult is the data-only print/export helper.
 func DupcodeBaselinePrintResult(label string, findings []checks.Finding) int {
 	return dupcode.PrintBaselineVerifyResult(label, findings)
 }
