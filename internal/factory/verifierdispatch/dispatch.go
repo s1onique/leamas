@@ -160,8 +160,10 @@ func (e *RegistryValidationError) Error() string {
 // if authority is denied. The RunnerFactory is never invoked unless authority
 // validation passes.
 //
-// For local_safe verifiers, the ContextObserver is NOT called.
-// For ci_exact_checkout verifiers, the ContextObserver is called exactly once.
+// Authorization is fail-closed: the explicit execution-environment
+// classification drives every mutation decision. The ContextObserver is
+// always invoked (cheap zero-cost observer for local_safe verifiers is the
+// trust boundary that sets the LocalTrust sentinel).
 func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer ContextObserver, factory RunnerFactory) Result {
 	// Step 1: Resolve verifier metadata from registry
 	v := d.resolveVerifier(request.VerifierID)
@@ -171,18 +173,21 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 2: Get execution context. The observer is called once for the
-	// actual context; the operation policy below consults BOTH the verifier's
-	// declared authority AND the actual context authority so a CI context
-	// cannot drive a mutation even through a local-safe verifier.
+	// Step 2: Get execution context from the observer. The observer is the
+	// only trust boundary permitted to set LocalTrust.
 	ec := observer.Observe(ctx, request.Root)
 
-	// Step 3: Validate operation against authority policy. The effective
-	// authority is the more restrictive of the verifier's declared authority
-	// and the actual context authority, so a CI context cannot drive a
-	// local-safe update operation.
-	effectiveAuthority := effectiveAuthorityFor(v.Authority, ec)
-	if err := validateOperation(effectiveAuthority, request.Operation); err != nil {
+	// Step 3: Classify the environment explicitly. Any classification other
+	// than EnvironmentLocal denies a local_safe mutation, regardless of how
+	// permissive the declared authority is.
+	environment := verifierauthority.ClassifyExecutionEnvironment(ec)
+
+	// Step 4: Validate the operation against BOTH the declared authority
+	// and the classified environment. This is the fail-closed mutation
+	// gate: a local_safe update is admitted only when the environment is
+	// EnvironmentLocal; any CI / GitHub Actions / unknown environment
+	// denies the mutation.
+	if err := verifierauthority.ValidateOperationInContext(v.Authority, request.Operation, environment); err != nil {
 		findings := []checks.Finding{
 			{
 				Path:     v.Name,
@@ -197,7 +202,9 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 4: Validate authority
+	// Step 5: Validate declared authority against the observed context.
+	// This is the historical per-context acceptance check (CI exact
+	// checkout markers, SHA validity, etc.).
 	if err := verifierauthority.ValidateAuthority(ec, v.Authority, request.Operation); err != nil {
 		findings := []checks.Finding{
 			{
@@ -213,7 +220,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 5: Authority passed - invoke factory
+	// Step 6: Authority passed - invoke factory
 	runner := factory()
 	return Result{
 		Findings: runner(request.Root),
@@ -224,35 +231,6 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 // production context observer. For testing, prefer Dispatch with a fake observer.
 func (d *Dispatcher) DispatchWithDefaultObserver(ctx context.Context, request Request, factory RunnerFactory) Result {
 	return d.Dispatch(ctx, request, &DefaultContextObserver{}, factory)
-}
-
-// effectiveAuthorityFor returns the more restrictive of the declared
-// verifier authority and the actual context authority. If the actual
-// execution context is a CI-exact-checkout (CI == "true" && GITHUB_ACTIONS
-// == "true" && authority marker matches the configured value), the
-// effective authority is CI-exact-checkout even if the verifier is declared
-// local-safe; this prevents CI environments from driving a baseline
-// mutation through a local-safe verifier.
-func effectiveAuthorityFor(declared verifierauthority.ExecutionAuthority, ec verifierauthority.ExecutionContext) verifierauthority.ExecutionAuthority {
-	if ec.CI == "true" && ec.GitHubActions == "true" && ec.AuthorityMarker == verifierauthority.AuthorityMarker {
-		return verifierauthority.AuthorityCIExactCheckout
-	}
-	return declared
-}
-
-// validateOperation checks if the operation is allowed for the authority.
-// Returns error if the operation is not permitted.
-func validateOperation(authority verifierauthority.ExecutionAuthority, operation verifierauthority.VerifierOperation) error {
-	// OperationUpdateBaseline is denied for ci_exact_checkout
-	if authority == verifierauthority.AuthorityCIExactCheckout && operation == verifierauthority.OperationUpdateBaseline {
-		return &verifierauthority.AuthorityError{
-			RequiredAuthority: authority,
-			Operation:         operation,
-			ReasonCode:        verifierauthority.ReasonCodeOperationDenied,
-			Message:           "update_baseline operation is not permitted under ci_exact_checkout authority",
-		}
-	}
-	return nil
 }
 
 // resolveVerifier looks up a verifier by ID in the registry.

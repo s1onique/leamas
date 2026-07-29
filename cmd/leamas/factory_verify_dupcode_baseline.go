@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
@@ -33,8 +35,10 @@ type jsonError struct {
 	Error string `json:"error"`
 }
 
-// writeJSON marshals v as JSON to the supplied writer. It never terminates
-// the process. Errors are reported via the return value.
+// writeJSON marshals v as JSON to the supplied writer. It returns the
+// encoding/write error so callers can handle bounded failures
+// explicitly. The function never terminates the process; it never
+// reports success classification when the write fails.
 func writeJSON(output io.Writer, value any) error {
 	enc := json.NewEncoder(output)
 	return enc.Encode(value)
@@ -44,6 +48,14 @@ func writeJSON(output io.Writer, value any) error {
 // dupcode-baseline request, and writes the human or JSON output to the
 // supplied writers. It returns the exit code but never terminates the
 // process. Only the outer production wrapper may call os.Exit.
+//
+// Output contract:
+//   - Human success: only "dupcode baseline: OK\n" on supplied stdout.
+//   - Human failure: "dupcode baseline: FAILED\n" plus findings on
+//     supplied stdout.
+//   - JSON: the JSON object is written to supplied stdout. A write
+//     failure exits 2 with a diagnostic on supplied stderr; no success
+//     classification is emitted.
 func runFactoryVerifyDupcodeBaseline(
 	args []string,
 	stdout io.Writer,
@@ -51,10 +63,20 @@ func runFactoryVerifyDupcodeBaseline(
 	dispatch dupcodeBaselineTypedDispatcher,
 ) int {
 	fs := flag.NewFlagSet("dupcode-baseline", flag.ContinueOnError)
+	// Discard flag-set-level error output during parsing so we can
+	// route diagnostics through the supplied stderr instead.
 	fs.SetOutput(io.Discard)
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "Usage: leamas factory verify dupcode-baseline [options]\n")
+		// Render usage through the supplied stderr while temporarily
+		// directing the FlagSet output there for the duration of
+		// PrintDefaults. This restores the help emission that the
+		// previous contract required: all flags visible on stderr,
+		// nothing on stdout.
+		previous := fs.Output()
+		fs.SetOutput(stderr)
+		fmt.Fprintln(stderr, "Usage: leamas factory verify dupcode-baseline [options]")
 		fs.PrintDefaults()
+		fs.SetOutput(previous)
 	}
 
 	baselinePath := fs.String("baseline", ".factory/dupcode-baseline.json", "Path to baseline file")
@@ -63,13 +85,17 @@ func runFactoryVerifyDupcodeBaseline(
 	jsonOutput := fs.Bool("json", false, "Output results as JSON")
 
 	if err := fs.Parse(args); err != nil {
-		_ = err
 		if err == flag.ErrHelp {
 			fs.Usage()
 			return 0
 		}
+		// FlagSet-level error reporting is suppressed (io.Discard);
+		// emit the diagnostic through the supplied writers only.
 		if *jsonOutput {
-			_ = writeJSON(stdout, jsonError{Error: fmt.Sprintf("flag parse error: %v", err)})
+			if jerr := writeJSON(stdout, jsonError{Error: fmt.Sprintf("flag parse error: %v", err)}); jerr != nil {
+				fmt.Fprintf(stderr, "json write failure: %v\n", jerr)
+				return 2
+			}
 		} else {
 			fmt.Fprintf(stderr, "Error: %v\n", err)
 		}
@@ -78,7 +104,10 @@ func runFactoryVerifyDupcodeBaseline(
 
 	if fs.NArg() > 0 {
 		if *jsonOutput {
-			_ = writeJSON(stdout, jsonError{Error: fmt.Sprintf("unexpected positional argument: %s", fs.Arg(0))})
+			if jerr := writeJSON(stdout, jsonError{Error: fmt.Sprintf("unexpected positional argument: %s", fs.Arg(0))}); jerr != nil {
+				fmt.Fprintf(stderr, "json write failure: %v\n", jerr)
+				return 2
+			}
 		} else {
 			fmt.Fprintf(stderr, "Error: unexpected positional argument: %s\n", fs.Arg(0))
 		}
@@ -127,9 +156,15 @@ func runFactoryVerifyDupcodeBaseline(
 		} else {
 			result.Status = "failed"
 		}
-		_ = writeJSON(stdout, result)
+		if jerr := writeJSON(stdout, result); jerr != nil {
+			fmt.Fprintf(stderr, "json write failure: %v\n", jerr)
+			return 2
+		}
 	} else {
-		code := gate.DupcodeBaselinePrintResult("dupcode baseline", findings)
+		// Writer-aware human rendering. Nothing is written to process
+		// stdout directly; the supplied stdout carries the success or
+		// failure payload exclusively.
+		code := dupcode.PrintBaselineVerifyResultTo(stdout, "dupcode baseline", findings)
 		return code
 	}
 
@@ -139,14 +174,24 @@ func runFactoryVerifyDupcodeBaseline(
 	return 0
 }
 
+// isAuthorityDenialFinding reports whether a finding originates from
+// the dispatcher's authority-denied channel. The dispatcher attaches
+// findings of this kind when authority is denied; all other findings
+// are normal verification failures and flow through the success path.
+func isAuthorityDenialFinding(f checks.Finding) bool {
+	return f.Kind == "verifier_execution_authority_denied"
+}
+
 // renderDupcodeBaselineDispatchFailure evaluates dispatcher failure
 // channels. The order is:
 //  1. Dispatch.Error
-//  2. Dispatch.Findings
+//  2. Dispatch.Findings carrying an authority-denial kind
 //
 // Returns (exitCode, failed=true) when a failure channel was rendered.
 // Never terminates the process and never writes to os.Stdout / os.Stderr
-// directly; all output goes through the supplied writers.
+// directly; all output goes through the supplied writers. JSON write
+// failures during failure-channel rendering return exit code 2 with a
+// diagnostic on supplied stderr.
 func renderDupcodeBaselineDispatchFailure(
 	result verifierdispatch.Result,
 	jsonOutput bool,
@@ -155,20 +200,26 @@ func renderDupcodeBaselineDispatchFailure(
 ) (int, bool) {
 	if result.Error != nil {
 		if jsonOutput {
-			_ = writeJSON(stdout, jsonError{Error: fmt.Sprintf("dispatcher error: %v", result.Error)})
+			if jerr := writeJSON(stdout, jsonError{Error: fmt.Sprintf("dispatcher error: %v", result.Error)}); jerr != nil {
+				fmt.Fprintf(stderr, "json write failure: %v\n", jerr)
+				return 2, true
+			}
 		} else {
 			fmt.Fprintf(stderr, "Error: %v\n", result.Error)
 		}
 		return 1, true
 	}
-	if len(result.Findings) > 0 {
+	if len(result.Findings) > 0 && isAuthorityDenialFinding(result.Findings[0]) {
 		f := result.Findings[0]
 		if jsonOutput {
 			type findingError struct {
 				Error string `json:"error"`
 				Kind  string `json:"kind"`
 			}
-			_ = writeJSON(stdout, findingError{Error: f.Message, Kind: f.Kind})
+			if jerr := writeJSON(stdout, findingError{Error: f.Message, Kind: f.Kind}); jerr != nil {
+				fmt.Fprintf(stderr, "json write failure: %v\n", jerr)
+				return 2, true
+			}
 		} else {
 			fmt.Fprintf(stderr, "Error: %s\n", f.Message)
 		}
@@ -188,3 +239,7 @@ func handleFactoryVerifyDupcodeBaseline() {
 		gate.DispatchDupcodeBaselineVerifyTyped,
 	))
 }
+
+// _ ensures the runtime slice alias keeps the checks import live when
+// the file is built in isolation.
+var _ = checks.FileExists

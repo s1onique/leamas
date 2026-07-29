@@ -16,6 +16,8 @@ func TestNewDispatcher_ValidRegistry(t *testing.T) {
 			Name:      "llm-friendly",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
+			Run:       func(root string) []checks.Finding { return nil },
 		},
 	}
 
@@ -58,11 +60,13 @@ func TestNewDispatcher_DuplicateID(t *testing.T) {
 			Name:      "test",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
 		},
 		{
 			Name:      "test",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
 		},
 	}
 
@@ -108,6 +112,7 @@ func TestNewDispatcher_DupcodeLocalSafe(t *testing.T) {
 			Name:      "dupcode",
 			Lane:      registry.VerifierLaneDupcode,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
 		},
 	}
 
@@ -123,6 +128,7 @@ func TestNewDispatcher_FastCIExactCheckout(t *testing.T) {
 			Name:      "test",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityCIExactCheckout,
+			Scope:     registry.InvocationGate,
 		},
 	}
 
@@ -138,6 +144,8 @@ func TestLookupVerifierMetadata(t *testing.T) {
 			Name:      "llm-friendly",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
+			Run:       func(root string) []checks.Finding { return nil },
 		},
 	}
 
@@ -166,14 +174,18 @@ func TestGetVerifierMetadata(t *testing.T) {
 			Name:      "llm-friendly",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
 			Execution: registry.ExecutionDefinition{
 				EnvVars: []string{"ORIGINAL"},
 			},
+			Run: func(root string) []checks.Finding { return nil },
 		},
 		{
 			Name:      "tooling-boundaries",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
+			Run:       func(root string) []checks.Finding { return nil },
 		},
 	}
 
@@ -203,6 +215,7 @@ func TestVerifierMetadataContainsNoRun(t *testing.T) {
 			Name:      "test",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
 			Run:       func(root string) []checks.Finding { return nil },
 		},
 	}
@@ -232,9 +245,11 @@ func TestInputMutationDoesNotAffectDispatcher(t *testing.T) {
 			Name:      "test",
 			Lane:      registry.VerifierLaneFast,
 			Authority: verifierauthority.AuthorityLocalSafe,
+			Scope:     registry.InvocationGate,
 			Execution: registry.ExecutionDefinition{
 				EnvVars: originalEnvVars,
 			},
+			Run: func(root string) []checks.Finding { return nil },
 		},
 	}
 

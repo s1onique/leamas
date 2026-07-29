@@ -16,10 +16,17 @@ import (
 // protectedCallNames is the set of symbol names that must NOT appear in the
 // post-Dispatch region of any typed entry-point function. They map to
 // method calls or factory invocations that would re-execute protected work.
+//
+// Names are compared against the LAST selector segment of the call (the
+// method name on a SelectorExpr, or the bare identifier on a plain
+// function call). For example, "binder.run" matches the bare
+// identifier "binder.run" only when the receiver is itself named that
+// way; in production code the relevant calls are dispatched through a
+// receiver (e.g. binder.run() appears as SelectorExpr {Sel: "run"}).
 var protectedCallNames = []string{
-	"binder.run",
+	"run",
 	"BindRunner",
-	"deps.NewRunner",
+	"NewRunner",
 	"NewDupcodeRunner",
 	"LoadBaseline",
 	"RunCheckReport",
@@ -48,14 +55,68 @@ var typedEntryPointPublic = []string{
 	"DispatchDupcodeUpdateBaselineTyped",
 }
 
+// dispatchCallInfo records the precise location of a single
+// dispatcher.Dispatch call. The token interval is the exclusive
+// boundary inside which the dispatch call executes; any protected
+// call observed at a position overlapping that interval is a
+// structural violation.
+type dispatchCallInfo struct {
+	pos       token.Pos
+	end       token.Pos
+	stmtStart token.Pos
+}
+
+// inspectDispatchCalls walks every *ast.CallExpr in fn and returns the
+// slice of dispatchCallInfo records for dispatcher.Dispatch calls.
+// The receiver must be the bare identifier "dispatcher"; this is the
+// canonical local variable name used by every typed entry point.
+func inspectDispatchCalls(fn *ast.FuncDecl) []dispatchCallInfo {
+	var out []dispatchCallInfo
+	if fn.Body == nil {
+		return out
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "Dispatch" {
+			return true
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok || ident.Name != "dispatcher" {
+			return true
+		}
+		out = append(out, dispatchCallInfo{
+			pos:       call.Pos(),
+			end:       call.End(),
+			stmtStart: n.Pos(),
+		})
+		return true
+	})
+	return out
+}
+
+// findStmtForPos returns the index of the top-level statement in
+// body.List whose token range contains pos, or -1 when no enclosing
+// statement is found.
+func findStmtForPos(body *ast.BlockStmt, pos token.Pos) int {
+	for i, s := range body.List {
+		if pos >= s.Pos() && pos <= s.End() {
+			return i
+		}
+	}
+	return -1
+}
+
 // TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls is a fail-closed
 // structural guard over the typed dispatch entry points. The test parses
 // every production Go file in the gate package with go/parser, locates
-// each expected entry-point declaration (FAIL on missing or duplicate),
-// walks its body to find the dispatcher.Dispatch statement, and asserts
-// that no protected call appears in any subsequent top-level statement.
-// Public wrappers are also required to delegate to the matching
-// internal *With function and to contain no direct protected call.
+// each expected entry-point declaration (FAIL on missing, duplicate, or
+// nil body), counts ALL dispatcher.Dispatch calls (FAIL if not exactly
+// one), and asserts that no protected call overlaps the dispatch call's
+// token interval. Public wrappers must delegate exactly once.
 func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 	root, err := findModuleRootForGateTest()
 	if err != nil {
@@ -91,6 +152,7 @@ func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 
 	type declHit struct {
 		file string
+		fset *token.FileSet
 		pos  token.Pos
 		body *ast.BlockStmt
 	}
@@ -103,6 +165,7 @@ func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 			}
 			hits[fn.Name.Name] = append(hits[fn.Name.Name], declHit{
 				file: fname,
+				fset: p.fset,
 				pos:  fn.Pos(),
 				body: fn.Body,
 			})
@@ -121,32 +184,84 @@ func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 				name, len(found), found[0].file)
 			return declHit{}
 		}
+		if found[0].body == nil {
+			t.Errorf("required declaration %q has nil body", name)
+			return declHit{}
+		}
 		return found[0]
 	}
 
 	// Internal *With entry points: must own exactly one
-	// dispatcher.Dispatch statement and contain no protected call in
-	// any subsequent top-level statement.
+	// dispatcher.Dispatch call (count ALL such calls, not just the
+	// first). Any second dispatch call fails. Any protected call whose
+	// position overlaps the unique dispatch call's token interval
+	// (including the SAME statement, a return expression, a deferred
+	// call, a nested closure, or a branch following the dispatch) is
+	// a structural violation.
 	for _, name := range typedEntryPointInternal {
 		hit := checkExactlyOne(name)
 		if hit.body == nil {
 			continue
 		}
-		// Find the statement that calls dispatcher.Dispatch(...).
-		dispatchStmtIdx := -1
-		for i, stmt := range hit.body.List {
-			if stmtHasDispatchCall(stmt) {
-				dispatchStmtIdx = i
-				break
-			}
+		tuple := declHitTuple{
+			file: hit.file,
+			fset: hit.fset,
+			pos:  hit.pos,
+			body: hit.body,
 		}
-		if dispatchStmtIdx < 0 {
+		calls := inspectDispatchCalls(fnFromDecl(name, tuple))
+		if len(calls) == 0 {
 			t.Errorf("%s: dispatcher.Dispatch call not found", name)
 			continue
 		}
-		// Walk all SUBSEQUENT top-level statements. Anything inside the
-		// dispatcher.Dispatch call (e.g. argument sub-expressions) is
-		// excluded because the dispatch statement itself is the boundary.
+		if len(calls) > 1 {
+			t.Errorf("%s: dispatcher.Dispatch called %d times, want exactly 1", name, len(calls))
+			continue
+		}
+		dispatchCall := calls[0]
+		// Reject any protected call whose position is strictly AFTER
+		// the dispatch call's end position. Argument-list calls
+		// (e.g. binder.BindRunner() inside dispatcher.Dispatch(...))
+		// are syntactically nested INSIDE the dispatch call, so their
+		// Pos() is <= dispatch.end. Those are legitimate production
+		// patterns and must not be flagged here.
+		ast.Inspect(hit.body, func(n ast.Node) bool {
+			if n == nil {
+				return true
+			}
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			// Skip the dispatch call itself.
+			if call.Pos() == dispatchCall.pos {
+				return true
+			}
+			// Calls inside the dispatch argument list have Pos()
+			// strictly less than dispatch.end. We only flag calls
+			// AFTER dispatch.end. Anything inside dispatch(...):
+			// executed before dispatch returns.
+			if call.Pos() < dispatchCall.end {
+				return true
+			}
+			for _, bad := range protectedCallNames {
+				if callContains(call, bad) {
+					pos := hit.fset.Position(call.Pos())
+					t.Errorf("%s: protected call %q at line %d column %d occurs after dispatch call end",
+						name, bad, pos.Line, pos.Column)
+				}
+			}
+			return true
+		})
+		// Additionally: require no protected call in any top-level
+		// statement that begins at or after the dispatch call's
+		// enclosing statement. This catches protected calls that come
+		// after the dispatch even when they don't overlap the same
+		// line (i.e. on a later statement).
+		dispatchStmtIdx := findStmtForPos(hit.body, dispatchCall.pos)
+		if dispatchStmtIdx < 0 {
+			continue
+		}
 		for j := dispatchStmtIdx + 1; j < len(hit.body.List); j++ {
 			ast.Inspect(hit.body.List[j], func(n ast.Node) bool {
 				if n == nil {
@@ -168,8 +283,8 @@ func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 	}
 
 	// Public wrappers: must delegate exactly once to the matching
-	// internal *With function and contain no direct call to a protected
-	// operation anywhere in the wrapper body.
+	// internal *With function and contain no direct call to a
+	// protected operation anywhere in the wrapper body.
 	for i, name := range typedEntryPointPublic {
 		hit := checkExactlyOne(name)
 		if hit.body == nil {
@@ -216,35 +331,25 @@ func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 	}
 }
 
-// stmtHasDispatchCall reports whether the top-level statement contains a
-// call to dispatcher.Dispatch(...). The call may be the statement's
-// expression, or be embedded in an assignment like
-//
-//	Dispatch: dispatcher.Dispatch(...)
-func stmtHasDispatchCall(stmt ast.Stmt) bool {
-	found := false
-	ast.Inspect(stmt, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok || sel.Sel.Name != "Dispatch" {
-			return true
-		}
-		// Bound receiver is "dispatcher" (the local variable in the
-		// typed entry points).
-		ident, ok := sel.X.(*ast.Ident)
-		if !ok {
-			return true
-		}
-		if ident.Name == "dispatcher" {
-			found = true
-			return false
-		}
-		return true
-	})
-	return found
+// declHitTuple is a serializable representation of a typed-entry-point
+// declaration. It mirrors the local type in the test function but is
+// hoisted to package scope so fnFromDecl can use it.
+type declHitTuple struct {
+	file string
+	fset *token.FileSet
+	pos  token.Pos
+	body *ast.BlockStmt
+}
+
+// fnFromDecl reconstructs an *ast.FuncDecl from the gathered declHit
+// (which holds only the body). It is used by the dispatcher-call
+// inspector. The reconstruction is local to this file and never
+// escapes.
+func fnFromDecl(name string, hit declHitTuple) *ast.FuncDecl {
+	return &ast.FuncDecl{
+		Name: &ast.Ident{NamePos: hit.pos, Name: name},
+		Body: hit.body,
+	}
 }
 
 func callContains(call *ast.CallExpr, name string) bool {

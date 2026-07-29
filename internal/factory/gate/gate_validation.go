@@ -20,11 +20,15 @@ var ErrInvalidLane = errors.New("invalid verifier lane")
 var ErrLanePartitionIncomplete = errors.New("verifier lane partition is incomplete")
 
 // ValidateVerifier checks that a verifier has all required metadata.
+//
+// Command-only verifiers are accepted with a nil Run function: the typed
+// binder is their only execution path, and registry.Validate enforces
+// that gate-scoped verifiers must have a non-nil Run function.
 func ValidateVerifier(v registry.Verifier) error {
 	if v.Name == "" {
 		return fmt.Errorf("verifier name is required")
 	}
-	if v.Run == nil {
+	if v.Run == nil && v.Scope != registry.InvocationCommandOnly {
 		return fmt.Errorf("verifier %q has nil Run function", v.Name)
 	}
 	// Validate lane: only fast and dupcode are supported
@@ -97,13 +101,27 @@ func ValidateVerifiers(verifiers []registry.Verifier) error {
 // PartitionVerifiers partitions the verifier registry into fast and dupcode lanes.
 // It validates all verifiers before partitioning and fails closed if any verifier
 // has an invalid or unknown lane.
+//
+// Command-only definitions are excluded from the partitioned lanes and from
+// the partition completeness check. They are reachable via
+// DispatcherForVerifier only.
 func PartitionVerifiers(verifiers []registry.Verifier) (fast, dupcode []registry.Verifier, err error) {
-	// Fail closed: validate ALL verifiers first
-	if err := ValidateVerifiers(verifiers); err != nil {
+	// Filter out command-only entries before validation so the
+	// gate-scoped validation rules (Run required) do not apply to them.
+	eligible := make([]registry.Verifier, 0, len(verifiers))
+	for _, v := range verifiers {
+		if v.Scope == registry.InvocationCommandOnly {
+			continue
+		}
+		eligible = append(eligible, v)
+	}
+
+	// Fail closed: validate ALL eligible verifiers first
+	if err := ValidateVerifiers(eligible); err != nil {
 		return nil, nil, fmt.Errorf("verifier registry validation failed: %w", err)
 	}
 
-	for _, v := range verifiers {
+	for _, v := range eligible {
 		switch v.Lane {
 		case registry.VerifierLaneFast:
 			fast = append(fast, v)
@@ -116,8 +134,8 @@ func PartitionVerifiers(verifiers []registry.Verifier) (fast, dupcode []registry
 		}
 	}
 
-	// Fail closed: verify no verifier was dropped
-	if len(fast)+len(dupcode) != len(verifiers) {
+	// Fail closed: verify no eligible verifier was dropped
+	if len(fast)+len(dupcode) != len(eligible) {
 		return nil, nil, ErrLanePartitionIncomplete
 	}
 

@@ -247,9 +247,17 @@ func TestPartitionVerifiers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PartitionVerifiers failed: %v", err)
 	}
-	if len(fast)+len(dupcode) != len(all) {
-		t.Errorf("partition incomplete: got %d fast + %d dupcode = %d, want %d",
-			len(fast), len(dupcode), len(fast)+len(dupcode), len(all))
+	// PartitionVerifiers excludes the command-only dupcode-update-baseline
+	// from the partitioned lanes; the partition count therefore equals
+	// the gate-scoped subset of AllVerifiers, not the full set.
+	if len(fast)+len(dupcode) != len(GateVerifiers()) {
+		t.Errorf("partition size mismatch: got %d fast + %d dupcode = %d, want %d (gate-scoped count)",
+			len(fast), len(dupcode), len(fast)+len(dupcode), len(GateVerifiers()))
+	}
+	// And every gate-scoped entry must land in exactly one lane.
+	if len(fast)+len(dupcode) >= len(all) {
+		t.Errorf("partition must not include command-only entries (got %d, want %d)",
+			len(fast)+len(dupcode), len(all))
 	}
 	for _, v := range fast {
 		if v.Lane != registry.VerifierLaneFast {

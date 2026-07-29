@@ -16,6 +16,29 @@ const (
 	VerifierLaneDupcode VerifierLane = "dupcode"
 )
 
+// InvocationScope classifies whether a verifier participates in ordinary
+// gate / factorize selection or is reachable only through typed command
+// dispatch.
+//
+// The canonical registry model is the single source of truth for both
+// scopes. Command-only definitions are absent from gate / factorize
+// selection and from any registry.Run execution; they are resolved by
+// the typed dispatcher only.
+type InvocationScope string
+
+const (
+	// InvocationGate selects the verifier for ordinary gate / factorize
+	// execution. It requires a non-nil Run function; the typed dispatcher
+	// may also resolve it.
+	InvocationGate InvocationScope = "gate"
+
+	// InvocationCommandOnly excludes the verifier from gate / factorize
+	// selection. A command-only definition must NOT supply a Run
+	// function (the typed binder is the only execution path). This
+	// prevents a fake no-op verifier from polluting the gate registry.
+	InvocationCommandOnly InvocationScope = "command_only"
+)
+
 // ExecutionKind classifies how a verifier executes.
 type ExecutionKind string
 
@@ -56,21 +79,30 @@ type CacheSemantics struct {
 }
 
 // Verifier represents a Factory verifier with its authoritative metadata.
+//
+// Scope selects between ordinary gate / factorize selection (InvocationGate)
+// and typed command dispatch only (InvocationCommandOnly). The Scope field
+// is the single source of truth for both registration and selection; there
+// is no parallel manual registry to maintain.
 type Verifier struct {
 	Name      string
 	Run       func(root string) []checks.Finding
 	Lane      VerifierLane
 	Authority verifierauthority.ExecutionAuthority
+	Scope     InvocationScope
 	Execution ExecutionDefinition
 	Cache     CacheSemantics
 }
 
 // Validate verifies the registry metadata for a verifier.
 // Returns an error if:
-// - Authority is empty
-// - Authority is unknown
-// - Dupcode lane is marked local-safe (contradiction)
-// - Fast lane is marked remote-only
+//   - Authority is empty
+//   - Authority is unknown
+//   - Dupcode lane is marked local-safe (contradiction)
+//   - Fast lane is marked ci_exact_checkout
+//   - Scope is empty (must be explicit)
+//   - Gate-scoped verifier has nil Run
+//   - Command-only verifier has non-nil Run
 func (v *Verifier) Validate() error {
 	// Check for empty authority
 	if v.Authority == "" {
@@ -94,10 +126,46 @@ func (v *Verifier) Validate() error {
 		}
 	}
 
+	// Scope is required and must be explicit. There is no implicit default.
+	if v.Scope == "" {
+		return &ValidationError{
+			Verifier: v.Name,
+			Field:    "Scope",
+			Reason:   "invocation scope is required (use InvocationGate or InvocationCommandOnly)",
+		}
+	}
+
+	// Gate-scoped verifiers MUST have a Run function; command-only
+	// verifiers MUST NOT (the typed binder is the only execution path).
+	switch v.Scope {
+	case InvocationGate:
+		if v.Run == nil {
+			return &ValidationError{
+				Verifier: v.Name,
+				Field:    "Run",
+				Reason:   "gate-scoped verifier requires a Run function",
+			}
+		}
+	case InvocationCommandOnly:
+		if v.Run != nil {
+			return &ValidationError{
+				Verifier: v.Name,
+				Field:    "Run",
+				Reason:   "command-only verifier must not supply a Run function (typed binder is the only execution path)",
+			}
+		}
+	default:
+		return &ValidationError{
+			Verifier: v.Name,
+			Field:    "Scope",
+			Reason:   "unknown invocation scope: " + string(v.Scope),
+		}
+	}
+
 	// Check for dupcode/local_safe contradiction. The dupcode-update-baseline
-	// entry is a distinct internal registry identity for baseline mutation
-	// that runs only under local-safe authority; all other dupcode-lane
-	// entries (notably the "dupcode" verification entry) remain CI-only.
+	// entry is a distinct command-only internal registry identity for
+	// baseline mutation that runs only under local-safe authority; all
+	// other dupcode-lane entries remain CI-only.
 	if v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Name != "dupcode-update-baseline" {
 		return &ValidationError{
 			Verifier: v.Name,

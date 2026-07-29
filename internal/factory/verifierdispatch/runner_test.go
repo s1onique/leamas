@@ -16,7 +16,7 @@ import (
 func TestAuthorizeAndBindProfileDeniedFactoryNotCalled(t *testing.T) {
 	verifiers := []registry.Verifier{{
 		Name: "local", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast,
-		Run: func(root string) []checks.Finding { return nil },
+		Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -43,8 +43,8 @@ func TestAuthorizeAndBindProfileDeniedFactoryNotCalled(t *testing.T) {
 // TestAuthorizeAndBindProfileExecutesExactInventory verifies factory receives exact authorized verifiers.
 func TestAuthorizeAndBindProfileExecutesExactInventory(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
-		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
+		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -71,8 +71,8 @@ func TestAuthorizeAndBindProfileExecutesExactInventory(t *testing.T) {
 // TestAuthorizeAndBindProfileRejectsMissingRunner verifies contract rejects missing runner.
 func TestAuthorizeAndBindProfileRejectsMissingRunner(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
-		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
+		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -98,7 +98,7 @@ func TestAuthorizeAndBindProfileRejectsMissingRunner(t *testing.T) {
 // TestAuthorizeAndBindProfileRejectsExtraRunner verifies contract rejects extra runner.
 func TestAuthorizeAndBindProfileRejectsExtraRunner(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -121,8 +121,8 @@ func TestAuthorizeAndBindProfileRejectsExtraRunner(t *testing.T) {
 // TestAuthorizeAndBindProfileRejectsDuplicateRunnerID verifies contract rejects duplicate IDs.
 func TestAuthorizeAndBindProfileRejectsDuplicateRunnerID(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
-		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
+		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -148,7 +148,7 @@ func TestAuthorizeAndBindProfileRejectsDuplicateRunnerID(t *testing.T) {
 // TestAuthorizeAndBindProfileRejectsNilRunner verifies contract rejects nil Run function.
 func TestAuthorizeAndBindProfileRejectsNilRunner(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -168,7 +168,7 @@ func TestAuthorizeAndBindProfileRejectsNilRunner(t *testing.T) {
 // TestAuthorizeAndBindProfileRejectsUnknownRunnerID verifies contract rejects unknown IDs.
 func TestAuthorizeAndBindProfileRejectsUnknownRunnerID(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -188,7 +188,7 @@ func TestAuthorizeAndBindProfileRejectsUnknownRunnerID(t *testing.T) {
 // TestAuthorizeAndBindProfileFactoryErrorPropagated verifies factory errors propagate.
 func TestAuthorizeAndBindProfileFactoryErrorPropagated(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -207,7 +207,7 @@ func TestAuthorizeAndBindProfileFactoryErrorPropagated(t *testing.T) {
 // TestFactoryInputMetadataHasNoRun verifies factory receives VerifierMetadata with no Run.
 func TestFactoryInputMetadataHasNoRun(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {

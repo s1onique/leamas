@@ -36,6 +36,14 @@ func dupcodeCommandArgs(argv []string) ([]string, bool) {
 	return argv[4:], true
 }
 
+// writeJSONEnc encodes value to the supplied writer. The encoder
+// failure is returned so the caller can route the diagnostic to the
+// supplied stderr without reporting success classification.
+func writeJSONEnc(output io.Writer, value any) error {
+	enc := json.NewEncoder(output)
+	return enc.Encode(value)
+}
+
 func printDupcodeUsage(fs *flag.FlagSet, output io.Writer) {
 	fmt.Fprintln(output, "Usage: leamas factory verify dupcode [options]")
 	previous := fs.Output()

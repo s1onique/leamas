@@ -105,15 +105,3 @@ func convertDupcodeCompareResult(result protectedverifier.CompareResult) []check
 
 	return findings
 }
-
-// dupCodeUpdateBaselineVerifier is the named post-authority bound runner
-// for the dupcode-update-baseline lane when used through the AllVerifiers
-// registry (direct commands). The typed dispatch path uses
-// dispatchDupcodeUpdateBaselineTypedWith and binder.BindRunner instead of
-// invoking this Run directly. This stub returns nil findings to satisfy the
-// registry signature; the real work is performed by the binder inside the
-// typed dispatcher.
-func dupCodeUpdateBaselineVerifier(root string) []checks.Finding {
-	_ = root
-	return nil
-}

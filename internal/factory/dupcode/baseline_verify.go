@@ -3,6 +3,8 @@ package dupcode
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
@@ -257,16 +259,29 @@ func findingEqual(a, b BaselineFinding) bool {
 	return true
 }
 
-// PrintBaselineVerifyResult prints the result of baseline verification.
+// PrintBaselineVerifyResult prints the result of baseline verification to
+// process stdout. It is a compatibility wrapper around
+// PrintBaselineVerifyResultTo and is preserved for legacy call sites
+// only. New callers should use the writer-aware form directly.
 func PrintBaselineVerifyResult(name string, findings []checks.Finding) int {
+	return PrintBaselineVerifyResultTo(os.Stdout, name, findings)
+}
+
+// PrintBaselineVerifyResultTo renders the baseline verification result
+// to the supplied writer. The function uses only fmt.Fprintf to the
+// supplied writer; nothing is written to process stdout or stderr
+// directly. The return value is the canonical exit code (0 = OK,
+// 1 = verification failed) that callers may pass through to the
+// process exit or render path.
+func PrintBaselineVerifyResultTo(output io.Writer, name string, findings []checks.Finding) int {
 	if len(findings) == 0 {
-		fmt.Printf("%s: OK\n", name)
+		fmt.Fprintf(output, "%s: OK\n", name)
 		return 0
 	}
 
-	fmt.Printf("%s: FAILED\n", name)
+	fmt.Fprintf(output, "%s: FAILED\n", name)
 	for _, f := range findings {
-		fmt.Printf("  %s: %s: %s\n", f.Path, f.Kind, f.Message)
+		fmt.Fprintf(output, "  %s: %s: %s\n", f.Path, f.Kind, f.Message)
 	}
 	return 1
 }

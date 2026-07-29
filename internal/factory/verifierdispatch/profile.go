@@ -220,8 +220,16 @@ func (d *Dispatcher) AuthorizeProfile(
 			ec = *verifierauthority.NewLocalOnlyContext()
 		}
 
-		// Validate operation
-		if err := validateOperation(v.Authority, req.Operation); err != nil {
+		// Classify the environment explicitly for fail-closed mutation
+		// gating. local_safe verifiers with the trusted local observer
+		// produce EnvironmentLocal; everything else falls through to a
+		// deny-kind classification.
+		environment := verifierauthority.ClassifyExecutionEnvironment(ec)
+
+		// Validate operation against declared authority and classified
+		// environment. This replaces the legacy validateOperation check
+		// with the fail-closed mutation gate.
+		if err := verifierauthority.ValidateOperationInContext(v.Authority, req.Operation, environment); err != nil {
 			profile.authorizationSucceeded = false
 			profile.denials = append(profile.denials, ProfileDenial{
 				VerifierID: v.Name,

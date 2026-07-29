@@ -42,6 +42,7 @@ func testVerifier(name string, authority verifierauthority.ExecutionAuthority, l
 		Name:      name,
 		Authority: authority,
 		Lane:      lane,
+		Scope:     registry.InvocationGate,
 		Run:       func(root string) []checks.Finding { return nil },
 	}
 }

@@ -15,8 +15,8 @@ import (
 // TestProfileBindingExecuteOnce verifies each runner executes exactly once with authorized profile.
 func TestProfileBindingExecuteOnce(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
-		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
+		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestBindingDoesNotExposeExecutableRunners(t *testing.T) {
 // TestFactoryReceivesNonExecutableMetadata verifies factory receives VerifierMetadata.
 func TestFactoryReceivesNonExecutableMetadata(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -123,7 +123,7 @@ func TestFactoryReceivesNonExecutableMetadata(t *testing.T) {
 // TestFactoryCannotForgeMetadata verifies factory cannot forge metadata (only provides ID + Run).
 func TestFactoryCannotForgeMetadata(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -156,9 +156,9 @@ func TestFactoryCannotForgeMetadata(t *testing.T) {
 // TestFactoryReversedOrderIsCanonicalized verifies factory can return reversed order.
 func TestFactoryReversedOrderIsCanonicalized(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
-		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
-		{Name: "v3", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
+		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
+		{Name: "v3", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -199,7 +199,7 @@ func TestFactoryReversedOrderIsCanonicalized(t *testing.T) {
 // TestProfileBindingCannotBeForged verifies ProfileBinding fields are unexported.
 func TestProfileBindingCannotBeForged(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -227,7 +227,7 @@ func TestProfileBindingCannotBeForged(t *testing.T) {
 // TestFactoryContractRejectsEmptyVerifierID verifies factory contract rejects empty verifier ID.
 func TestFactoryContractRejectsEmptyVerifierID(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -249,7 +249,7 @@ func TestFactoryContractRejectsEmptyVerifierID(t *testing.T) {
 // TestFactoryContractRejectsNilRunFunction verifies factory contract rejects nil Run.
 func TestFactoryContractRejectsNilRunFunction(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -271,8 +271,8 @@ func TestFactoryContractRejectsNilRunFunction(t *testing.T) {
 // TestFactoryContractRejectsDuplicateVerifierID verifies factory contract rejects duplicate IDs.
 func TestFactoryContractRejectsDuplicateVerifierID(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
-		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
+		{Name: "v2", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -300,7 +300,7 @@ func TestFactoryContractRejectsDuplicateVerifierID(t *testing.T) {
 // TestFactoryContractRejectsUnknownVerifierID verifies factory contract rejects unknown IDs.
 func TestFactoryContractRejectsUnknownVerifierID(t *testing.T) {
 	verifiers := []registry.Verifier{
-		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }},
+		{Name: "v1", Authority: verifierauthority.AuthorityLocalSafe, Lane: registry.VerifierLaneFast, Run: func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate},
 	}
 	d, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -326,6 +326,7 @@ func TestExecutionRecordHasCompleteMetadata(t *testing.T) {
 			Name:      "v1",
 			Authority: verifierauthority.AuthorityLocalSafe,
 			Lane:      registry.VerifierLaneFast,
+			Scope:     registry.InvocationGate,
 			Execution: registry.ExecutionDefinition{
 				Kind:             registry.ExecutionInProcess,
 				ImplementationID: "test-impl",

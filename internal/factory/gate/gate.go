@@ -42,7 +42,7 @@ func (a *platformSamplerAdapter) Sample() (verifierdispatch.ResourceSnapshot, er
 func FastVerifiers() []registry.Verifier {
 	var result []registry.Verifier
 	for _, v := range AllVerifiers() {
-		if v.Lane == registry.VerifierLaneFast {
+		if v.Lane == registry.VerifierLaneFast && v.Scope == registry.InvocationGate {
 			result = append(result, v)
 		}
 	}
@@ -50,10 +50,12 @@ func FastVerifiers() []registry.Verifier {
 }
 
 // DupcodeVerifiers returns verifiers that run in the dupcode lane.
+// Command-only definitions are excluded so they cannot leak into gate /
+// factorize selection.
 func DupcodeVerifiers() []registry.Verifier {
 	var result []registry.Verifier
 	for _, v := range AllVerifiers() {
-		if v.Lane == registry.VerifierLaneDupcode {
+		if v.Lane == registry.VerifierLaneDupcode && v.Scope == registry.InvocationGate {
 			result = append(result, v)
 		}
 	}
@@ -79,8 +81,11 @@ func shouldCollectMetrics() bool {
 // RunGate runs all verifiers and Go toolchain checks.
 // All verifier execution is routed through the central dispatcher which performs
 // authority validation before invoking the verifier.
+//
+// Command-only definitions (e.g. dupcode-update-baseline) are excluded from
+// RunGate discovery; they are reachable only via typed command dispatch.
 func RunGate(root string) int {
-	verifiers := AllVerifiers()
+	verifiers := GateVerifiers()
 
 	if err := ValidateVerifiers(verifiers); err != nil {
 		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
@@ -160,10 +165,10 @@ func RunGate(root string) int {
 // Authorization and execution are bound: the factory creates the shared context
 // ONLY after authorization passes, and all runners execute exactly once.
 func RunFactorize(root string) int {
-	// Phase 1: Build the base verifier registry for authorization
-	// This provides metadata for authorization but Run functions are NOT used here.
-	// The factory creates the actual Run functions with shared context AFTER authorization.
-	verifiers := AllVerifiers()
+	// Phase 1: Build the base verifier registry for authorization.
+	// Command-only definitions are excluded from factorize selection; they
+	// are reachable only via typed command dispatch.
+	verifiers := GateVerifiers()
 
 	// Sort by name for alphabetical order (preserving established factorize contract)
 	sort.Slice(verifiers, func(i, j int) bool {

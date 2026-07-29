@@ -14,8 +14,9 @@ import (
 )
 
 // RunGateDupcode runs the dupcode lane with exactly the duplicate-code verifiers.
+// Command-only definitions are excluded from lane selection.
 func RunGateDupcode(root string) int {
-	allVerifiers := AllVerifiers()
+	allVerifiers := GateVerifiers()
 	_, dupcodeVerifiers, err := PartitionVerifiers(allVerifiers)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)

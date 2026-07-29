@@ -82,14 +82,14 @@ func TestDupcodeBaselineErrorJSON(t *testing.T) {
 }
 
 // TestDupcodeBaselineFindingHuman proves a Dispatch.Findings outcome
-// surfaces as a stderr message in human mode and never reaches success
-// rendering.
+// carrying an authority-denial kind surfaces as a stderr message in
+// human mode and never reaches success rendering.
 func TestDupcodeBaselineFindingHuman(t *testing.T) {
 	d := &countingBaselineDispatcher{out: gate.DupcodeBaselineOutcome{
 		Dispatch: verifierdispatch.Result{
 			Findings: []checks.Finding{{
 				Path:    "dupcode-baseline",
-				Kind:    "sentinel-authority-kind",
+				Kind:    "verifier_execution_authority_denied",
 				Message: "sentinel baseline authority denial",
 			}},
 		},
@@ -110,13 +110,14 @@ func TestDupcodeBaselineFindingHuman(t *testing.T) {
 }
 
 // TestDupcodeBaselineFindingJSON proves a Dispatch.Findings outcome in
-// JSON mode is encoded as {"error":..., "kind":...} with empty stderr.
+// JSON mode is encoded as {"error":..., "kind":...} with empty stderr
+// when the finding is an authority-denial finding.
 func TestDupcodeBaselineFindingJSON(t *testing.T) {
 	d := &countingBaselineDispatcher{out: gate.DupcodeBaselineOutcome{
 		Dispatch: verifierdispatch.Result{
 			Findings: []checks.Finding{{
 				Path:    "dupcode-baseline",
-				Kind:    "sentinel-authority-kind",
+				Kind:    "verifier_execution_authority_denied",
 				Message: "sentinel baseline authority denial",
 			}},
 		},
@@ -135,7 +136,7 @@ func TestDupcodeBaselineFindingJSON(t *testing.T) {
 	if got, want := decoded["error"], "sentinel baseline authority denial"; got != want {
 		t.Errorf("error = %v, want %v", got, want)
 	}
-	if got, want := decoded["kind"], "sentinel-authority-kind"; got != want {
+	if got, want := decoded["kind"], "verifier_execution_authority_denied"; got != want {
 		t.Errorf("kind = %v, want %v", got, want)
 	}
 	if stderr.Len() > 0 {

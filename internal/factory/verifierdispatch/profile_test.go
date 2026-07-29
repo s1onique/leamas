@@ -17,7 +17,7 @@ func TestAuthorizedProfileRequestsAreDefensivelyCopied(t *testing.T) {
 		Name:      "fast-local",
 		Authority: verifierauthority.AuthorityLocalSafe,
 		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -46,7 +46,7 @@ func TestAuthorizedProfileVerifierIDsAreDefensivelyCopied(t *testing.T) {
 		Name:      "fast-local-ids",
 		Authority: verifierauthority.AuthorityLocalSafe,
 		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestAuthorizedProfileDenialsAreDeepCopied(t *testing.T) {
 		Name:      "ci-fast",
 		Authority: verifierauthority.AuthorityCIExactCheckout,
 		Lane:      registry.VerifierLaneDupcode,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestAuthorizedProfileContextIsCloned(t *testing.T) {
 		Name:      "local-safe",
 		Authority: verifierauthority.AuthorityLocalSafe,
 		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestProfileDigestChangesOnOperationDrift(t *testing.T) {
 		Name:      "local-test",
 		Authority: verifierauthority.AuthorityLocalSafe,
 		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -165,6 +165,7 @@ func TestProfileDigestChangesOnImplementationDrift(t *testing.T) {
 		Name:      "verifier",
 		Authority: verifierauthority.AuthorityLocalSafe,
 		Lane:      registry.VerifierLaneFast,
+		Scope:     registry.InvocationGate,
 		Execution: registry.ExecutionDefinition{
 			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "impl-v1",
@@ -199,6 +200,7 @@ func TestProfileDigestHasNoFixedSizePanic(t *testing.T) {
 			Name:      fmt.Sprintf("verifier-stress-%03d", i),
 			Authority: verifierauthority.AuthorityLocalSafe,
 			Lane:      registry.VerifierLaneFast,
+			Scope:     registry.InvocationGate,
 			Execution: registry.ExecutionDefinition{
 				Kind:             registry.ExecutionInProcess,
 				ImplementationID: "impl-with-very-long-name-that-adds-bytes",
@@ -231,7 +233,7 @@ func TestAuthorizeProfileRejectsNilObserverForRemoteAuthority(t *testing.T) {
 		Name:      "ci-only",
 		Authority: verifierauthority.AuthorityCIExactCheckout,
 		Lane:      registry.VerifierLaneDupcode,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -249,7 +251,7 @@ func TestAuthorizeProfileRejectsDuplicateRequests(t *testing.T) {
 		Name:      "local-test",
 		Authority: verifierauthority.AuthorityLocalSafe,
 		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -270,7 +272,7 @@ func TestAuthorizeProfileRejectsEmptyRoot(t *testing.T) {
 		Name:      "local-test",
 		Authority: verifierauthority.AuthorityLocalSafe,
 		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil },
+		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {

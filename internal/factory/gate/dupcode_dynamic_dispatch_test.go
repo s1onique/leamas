@@ -118,23 +118,18 @@ func (a *admittingObserver) Observe(ctx context.Context, root string) verifierau
 	}
 }
 
-// localSafeObserver returns a non-CI execution context so the dispatch
-// flow sees a local-safe effective authority for the dupcode-update-baseline
-// entry. CI fields are explicitly empty so effectiveAuthorityFor does not
-// upgrade the effective authority to ci_exact_checkout.
+// localSafeObserver returns an explicitly classified local execution
+// context. It is the trusted observer pattern: the only way to obtain
+// EnvironmentLocal is via the LocalTrust sentinel, never via implicit
+// "all environment strings empty == local". This observer sets the
+// sentinel so ClassifyExecutionEnvironment produces EnvironmentLocal.
 type localSafeObserver struct{}
 
 func (l *localSafeObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
 	return verifierauthority.ExecutionContext{
-		CI:              "",
-		GitHubActions:   "",
-		AuthorityMarker: "",
-		GitHubSHA:       "",
-		GitHubWorkspace: root,
-		HeadCommit:      "",
-		WorktreeStatus:  "",
-		RepositoryRoot:  root,
-		WorkspaceRoot:   root,
+		LocalTrust:     verifierauthority.LocalTrustSentinel,
+		RepositoryRoot: root,
+		WorkspaceRoot:  root,
 	}
 }
 
