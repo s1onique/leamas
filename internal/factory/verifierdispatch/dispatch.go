@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sync/atomic"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
@@ -63,23 +62,6 @@ type ContextObserver interface {
 	Observe(ctx context.Context, root string) verifierauthority.ExecutionContext
 }
 
-// CountingObserver wraps a ContextObserver and counts how many times
-// Observe is invoked. It is used by tests that prove the cheap
-// local-safe verification path.
-type CountingObserver struct {
-	ContextObserver
-	count atomic.Int64
-}
-
-// Observe records an observation and increments the count.
-func (c *CountingObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
-	c.count.Add(1)
-	return c.ContextObserver.Observe(ctx, root)
-}
-
-// Count returns the current observation count.
-func (c *CountingObserver) Count() int64 { return c.count.Load() }
-
 // DefaultContextObserver is the production context observer using DetectExecutionContext.
 type DefaultContextObserver struct{}
 
@@ -87,16 +69,6 @@ type DefaultContextObserver struct{}
 // subprocess round-trip exactly once.
 func (d *DefaultContextObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
 	return verifierauthority.DetectExecutionContext(ctx, root)
-}
-
-// CheapLocalSafeObserver is the production observer used for local-safe
-// verify operations. It classifies the environment as EnvironmentLocal
-// without performing any Git observation.
-type CheapLocalSafeObserver struct{}
-
-// Observe returns a NewLocalOnlyContext without invoking Git.
-func (c *CheapLocalSafeObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
-	return *verifierauthority.NewLocalOnlyContext()
 }
 
 // Dispatcher is the central production dispatcher for verifier execution.
@@ -267,21 +239,13 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 	}
 }
 
-// DispatchWithDefaultObserver is a convenience wrapper that uses the default
-// production context observer. For testing, prefer Dispatch with a fake observer.
+// DispatchWithDefaultObserver is a convenience wrapper that uses the
+// default production context observer. Dispatch itself owns the
+// cheap-path decision: a local_safe + verify invocation performs
+// zero full Git observations even when DefaultContextObserver is
+// supplied. For testing, prefer Dispatch with a fake observer.
 func (d *Dispatcher) DispatchWithDefaultObserver(ctx context.Context, request Request, factory RunnerFactory) Result {
-	obs := selectObserver(verifierauthority.AuthorityLocalSafe, verifierauthority.OperationVerify)
-	return d.Dispatch(ctx, request, obs, factory)
-}
-
-// selectObserver returns the cheap local-safe observer for verify
-// operations and the full default observer otherwise. This preserves
-// the cheap local-safe verify path.
-func selectObserver(authority verifierauthority.ExecutionAuthority, operation verifierauthority.VerifierOperation) ContextObserver {
-	if operation == verifierauthority.OperationVerify && authority == verifierauthority.AuthorityLocalSafe {
-		return &CheapLocalSafeObserver{}
-	}
-	return &DefaultContextObserver{}
+	return d.Dispatch(ctx, request, &DefaultContextObserver{}, factory)
 }
 
 // resolveVerifier looks up a verifier by ID in the registry.

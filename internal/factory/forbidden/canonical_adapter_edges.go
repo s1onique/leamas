@@ -157,7 +157,7 @@ var AdapterApprovedCallers = []ApprovedCaller{
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
 		Function:    "LoadBaseline",
-		Receiver:    "dupcodeRunnerAdapter",
+		Receiver:    "protectedDupcodeRunnerAdapter",
 		Callee: ProtectedSymbol{
 			Layer:       AuthorityLayerAdapter,
 			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
@@ -166,8 +166,28 @@ var AdapterApprovedCallers = []ApprovedCaller{
 	},
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "RunCheckRepo",
+		Receiver:    "protectedDupcodeRunnerAdapter",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "RunCheckRepo", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "newProtectedDupcodeRunner",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "NewDupcodeRunner", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
 		Function:    "RunCheckReport",
-		Receiver:    "dupcodeRunnerAdapter",
+		Receiver:    "protectedDupcodeRunnerAdapter",
 		Callee: ProtectedSymbol{
 			Layer:       AuthorityLayerAdapter,
 			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
@@ -177,7 +197,7 @@ var AdapterApprovedCallers = []ApprovedCaller{
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
 		Function:    "VerifyBaseline",
-		Receiver:    "dupcodeRunnerAdapter",
+		Receiver:    "protectedDupcodeRunnerAdapter",
 		Callee: ProtectedSymbol{
 			Layer:       AuthorityLayerAdapter,
 			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
@@ -187,7 +207,7 @@ var AdapterApprovedCallers = []ApprovedCaller{
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
 		Function:    "WriteBaseline",
-		Receiver:    "dupcodeRunnerAdapter",
+		Receiver:    "protectedDupcodeRunnerAdapter",
 		Callee: ProtectedSymbol{
 			Layer:       AuthorityLayerAdapter,
 			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
@@ -197,7 +217,7 @@ var AdapterApprovedCallers = []ApprovedCaller{
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
 		Function:    "CompareToBaseline",
-		Receiver:    "dupcodeRunnerAdapter",
+		Receiver:    "protectedDupcodeRunnerAdapter",
 		Callee: ProtectedSymbol{
 			Layer:       AuthorityLayerAdapter,
 			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",

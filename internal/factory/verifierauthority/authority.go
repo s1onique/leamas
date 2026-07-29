@@ -146,8 +146,15 @@ const AuthorityMarker = "github-actions"
 
 // positiveTruthy returns true only when value is the canonical truthy
 // string. Empty, "false", or any other value is not positive.
+// Malformed values are never positive.
 func positiveTruthy(value string) bool {
 	return value == "true"
+}
+
+// validBooleanValue reports whether value is empty, "true", or "false".
+// Any other non-empty string is a malformed boolean.
+func validBooleanValue(value string) bool {
+	return value == "" || value == "true" || value == "false"
 }
 
 // hasPositiveCISignal returns true when the context carries a positive
@@ -157,14 +164,34 @@ func (ec ExecutionContext) hasPositiveCISignal() bool {
 	return positiveTruthy(ec.CI) || positiveTruthy(ec.GitHubActions)
 }
 
+// hasPartialGitHubMetadata reports whether any GitHub-only signal is
+// set without GITHUB_ACTIONS=true. Such a state is contradictory and
+// must not classify as EnvironmentLocal.
+func (ec ExecutionContext) hasPartialGitHubMetadata() bool {
+	if positiveTruthy(ec.GitHubActions) {
+		return false
+	}
+	return ec.AuthorityMarker != "" || ec.GitHubSHA != "" || ec.GitHubWorkspace != ""
+}
+
 // isWellFormedEnv returns true when the marker / SHA / workspace fields
-// are either empty (absent) or syntactically valid. A malformed value
-// disqualifies a local classification.
+// are either empty (absent) or syntactically valid. Any malformed boolean,
+// malformed SHA, or partial GitHub metadata disqualifies a local
+// classification.
 func (ec ExecutionContext) isWellFormedEnv() bool {
+	if !validBooleanValue(ec.CI) {
+		return false
+	}
+	if !validBooleanValue(ec.GitHubActions) {
+		return false
+	}
 	if ec.AuthorityMarker != "" && ec.AuthorityMarker != AuthorityMarker {
 		return false
 	}
 	if ec.GitHubSHA != "" && !fullCommitOIDRegex.MatchString(ec.GitHubSHA) {
+		return false
+	}
+	if ec.hasPartialGitHubMetadata() {
 		return false
 	}
 	return true

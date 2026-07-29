@@ -181,6 +181,18 @@ func (v *Verifier) Validate() error {
 		}
 	}
 
+	// Check for exact dupcode-update-baseline identity. The only
+	// permitted local-safe dupcode command-only entry has the exact
+	// name "dupcode-update-baseline" so arbitrary command-only dupcode
+	// definitions cannot smuggle a mutation into the registry.
+	if v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Scope == InvocationCommandOnly && v.Name != "dupcode-update-baseline" {
+		return &ValidationError{
+			Verifier: v.Name,
+			Field:    "Name",
+			Reason:   "command-only dupcode local_safe must be named exactly \"dupcode-update-baseline\"",
+		}
+	}
+
 	// Check for fast/remote_only contradiction
 	if v.Lane == VerifierLaneFast && v.Authority == verifierauthority.AuthorityCIExactCheckout {
 		return &ValidationError{

@@ -230,9 +230,27 @@ func (d *Dispatcher) AuthorizeProfile(
 			ec = *profile.context
 		} else {
 			// Cheap local-safe verify path: a non-mutating local_safe
-			// verifier does not need an observation. Classify a
-			// synthetic local context.
-			ec = *verifierauthority.NewLocalOnlyContext()
+			// verifier does not need an observation. Authorize directly
+			// without synthesizing a locally observed context.
+			if req.Operation == verifierauthority.OperationVerify &&
+				v.Authority == verifierauthority.AuthorityLocalSafe {
+				profile.verifierIDs = append(profile.verifierIDs, v.Name)
+				continue
+			}
+			// Otherwise the dispatcher must observe. This is a
+			// programming error in the caller: needsObservation was
+			// false yet a non-cheap verifier reached this loop.
+			profile.authorizationSucceeded = false
+			profile.denials = append(profile.denials, ProfileDenial{
+				VerifierID: v.Name,
+				Findings: []checks.Finding{{
+					Path:     v.Name,
+					Kind:     "verifier_observation_required",
+					Message:  "AuthorityProfile requires observation for this operation",
+					Severity: checks.SeverityError,
+				}},
+			})
+			continue
 		}
 
 		// Classify the environment explicitly for fail-closed mutation
