@@ -48,10 +48,13 @@ type DupcodeAnalysis struct {
 }
 
 // NewDupcodeAnalysisProvider creates a provider with the given input and analyzer.
-// Production code should pass protectedverifier.Analyzer() as the analyzer.
+// The analyzer must be supplied explicitly; the package holds no global
+// analyzer state and never falls back to a default. The same analyzer is
+// bound to this provider's lifetime and is not visible to other providers.
 func NewDupcodeAnalysisProvider(input DupcodeInput, analyzer DupcodeAnalyzer) *DupcodeAnalysisProvider {
 	if analyzer == nil {
-		analyzer = Analyzer()
+		// Fail closed: no global analyzer may be used.
+		panic("protectedverifier: DupcodeAnalyzer must be injected; no global analyzer is available")
 	}
 	return &DupcodeAnalysisProvider{
 		state:    providerStateEmpty,
@@ -63,7 +66,6 @@ func NewDupcodeAnalysisProvider(input DupcodeInput, analyzer DupcodeAnalyzer) *D
 // ConsumedBy performs the analysis and returns the result.
 // The analysis is performed exactly once, with subsequent calls returning the cached result.
 func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*DupcodeAnalysis, error) {
-	// Verify input matches
 	if input.Root != p.input.Root || input.MinLines != p.input.MinLines || input.MinTokens != p.input.MinTokens {
 		return nil, fmt.Errorf("dupcode analysis input mismatch for %s: "+
 			"got root=%s minLines=%d minTokens=%d, want root=%s minLines=%d minTokens=%d",
@@ -77,14 +79,12 @@ func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*
 	switch p.state {
 	case providerStateEmpty:
 		p.state = providerStateConsuming
-		// Perform the analysis
 		findings, err := p.analyzer(input.Root, input.Config)
 		if err != nil {
-			p.state = providerStateEmpty // Allow retry
+			p.state = providerStateEmpty
 			return nil, err
 		}
 
-		// Collect occurrences from findings
 		var occurrences []dupcode.Occurrence
 		for _, f := range findings {
 			occurrences = append(occurrences, f.Occurrences...)
@@ -135,7 +135,8 @@ func NewDupcodeVerifierFactory(context *DupcodeAnalysisContext) *DupcodeVerifier
 }
 
 // SharedDupCodeVerifier returns a verifier function that uses the shared analysis context.
-// This is used for the "dupcode" verifier in factorize.
+// All raw dupcode operations are invoked through the DupcodeRunner adapter; the
+// closure never imports dupcode symbols directly to invoke them.
 func (f *DupcodeVerifierFactory) SharedDupCodeVerifier() func(string) []checks.Finding {
 	return func(root string) []checks.Finding {
 		baselinePath := ".factory/dupcode-baseline.json"
@@ -150,7 +151,9 @@ func (f *DupcodeVerifierFactory) SharedDupCodeVerifier() func(string) []checks.F
 			}
 		}
 
-		baseline, err := dupcode.LoadBaseline(fullBaselinePath)
+		// Use the adapter for the protected LoadBaseline operation.
+		runner := NewDupcodeRunner()
+		baseline, err := runner.LoadBaseline(fullBaselinePath)
 		if err != nil {
 			return []checks.Finding{
 				{Path: baselinePath, Kind: "baseline_error", Message: fmt.Sprintf("failed to load baseline: %v", err), Severity: checks.SeverityError},
@@ -184,13 +187,14 @@ func (f *DupcodeVerifierFactory) SharedDupCodeVerifier() func(string) []checks.F
 			},
 		}
 
-		result := dupcode.CompareToBaseline(report, baseline)
+		// Use the adapter for the protected CompareToBaseline operation.
+		result := runner.CompareToBaseline(report, baseline)
 		return convertCompareResult(result)
 	}
 }
 
 // SharedDupcodeBaselineVerifier returns a verifier function that uses the shared analysis context.
-// This is used for the "dupcode-baseline" verifier in factorize.
+// All raw dupcode operations are invoked through the DupcodeRunner adapter.
 func (f *DupcodeVerifierFactory) SharedDupcodeBaselineVerifier() func(string) []checks.Finding {
 	return func(root string) []checks.Finding {
 		policy := dupcode.DefaultBaselinePolicy()
@@ -237,7 +241,6 @@ func (f *DupcodeVerifierFactory) SharedDupcodeBaselineVerifier() func(string) []
 		driftPolicy.Path = policy.Path
 		driftFindings := dupcode.CheckBaselineDriftFromReport(root, validation.Baseline, report, driftPolicy)
 
-		// Convert drift findings to checks findings
 		var findings []checks.Finding
 		for _, df := range driftFindings {
 			findings = append(findings, checks.Finding{
@@ -271,7 +274,7 @@ func convertCompareResult(result dupcode.CompareResult) []checks.Finding {
 		findings = append(findings, checks.Finding{
 			Path:     "dupcode",
 			Kind:     "worsened_duplicate",
-			Message:  fmt.Sprintf("worsened duplicate block"),
+			Message:  "worsened duplicate block",
 			Severity: checks.SeverityError,
 		})
 	}

@@ -8,9 +8,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/gate"
-	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 )
 
 // Default thresholds for the baseline policy
@@ -63,38 +61,17 @@ func handleFactoryVerifyDupcodeBaseline() {
 		}
 	}
 
-	// Build policy
-	policy := protectedverifier.BaselinePolicy{
-		Path:      *baselinePath,
-		MinLines:  *minLines,
-		MinTokens: *minTokens,
+	// Construct the data-only spec; no executable closures are built.
+	spec := gate.DupcodeBaselineSpec{
+		BaselinePath: *baselinePath,
+		MinLines:     *minLines,
+		MinTokens:    *minTokens,
 	}
 
-	// Run verification through dispatcher using protectedverifier adapter
+	// Run verification through the typed dispatch entry point. The command
+	// layer never sees the adapter or any executable surface.
 	ctx := context.Background()
-
-	runnerFactory := func() func(root string) []checks.Finding {
-		return func(root string) []checks.Finding {
-			// Use the protectedverifier adapter - the ONLY authorized entry point
-			runner := protectedverifier.NewDupcodeRunner()
-			findings, err := runner.VerifyBaseline(root, policy)
-			if err != nil {
-				// Convert error to findings - errors are handled within the runner
-				return []checks.Finding{
-					{
-						Path:     "dupcode",
-						Kind:     "error",
-						Message:  fmt.Sprintf("baseline verification error: %v", err),
-						Severity: checks.SeverityError,
-					},
-				}
-			}
-			return findings
-		}
-	}
-
-	// Use the dispatcher for baseline verification - captures typed findings
-	result := gate.DispatchDupcodeBaselineVerify(ctx, ".", runnerFactory)
+	result := gate.DispatchDupcodeBaselineVerifyTyped(ctx, ".", spec)
 
 	// Handle authority denial or runner errors (infrastructure failures only)
 	if result.Error != nil {
@@ -148,6 +125,6 @@ func handleFactoryVerifyDupcodeBaseline() {
 		printJSONAndExit(result, code)
 	}
 
-	code := protectedverifier.PrintBaselineVerifyResult("dupcode baseline", findings)
+	code := gate.DupcodeBaselinePrintResult("dupcode baseline", findings)
 	os.Exit(code)
 }

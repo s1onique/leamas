@@ -62,20 +62,9 @@ func (r *DupcodeRunner) CompareToBaseline(report dupcode.Report, baseline dupcod
 }
 
 // DupcodeAnalyzer is the function type for authorized dupcode analysis.
+// Analyzer instances are injected by the calling binder; the package holds
+// no global analyzer state.
 type DupcodeAnalyzer func(root string, cfg dupcode.Config) ([]dupcode.Finding, error)
-
-// DefaultAnalyzer is the production dupcode analyzer.
-var DefaultAnalyzer DupcodeAnalyzer = dupcode.CheckRepo
-
-// Analyzer returns the authorized dupcode analyzer.
-func Analyzer() DupcodeAnalyzer {
-	return DefaultAnalyzer
-}
-
-// SetAnalyzer sets the analyzer (for testing only).
-func SetAnalyzer(a DupcodeAnalyzer) {
-	DefaultAnalyzer = a
-}
 
 // DefaultConfig returns the default dupcode configuration.
 func DefaultConfig() dupcode.Config {
@@ -117,11 +106,6 @@ const PolicyMinLines = dupcode.PolicyMinLines
 
 // PolicyMinTokens is the default minimum tokens threshold.
 const PolicyMinTokens = dupcode.PolicyMinTokens
-
-// LoadBaseline loads a baseline from the given path.
-func LoadBaseline(path string) (dupcode.Baseline, error) {
-	return dupcode.LoadBaseline(path)
-}
 
 // PrintBaselineVerifyResult prints the baseline verification result.
 func PrintBaselineVerifyResult(label string, findings []checks.Finding) int {

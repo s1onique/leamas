@@ -23,19 +23,11 @@ var AdapterProtectedSymbols = []ProtectedSymbol{
 	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "VerifyBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
 	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "WriteBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
 	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "CompareToBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
-	// Global analyzer escape - explicitly protected (not approved in production).
-	// Analyzer() and SetAnalyzer() are package-level functions.
-	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "Analyzer", Kind: ProtectedPackageFunction},
-	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "SetAnalyzer", Kind: ProtectedPackageFunction},
-	// DefaultAnalyzer is a package-level variable holding a function value.
-	// Resolved as *types.Var (not *types.Func).
-	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "DefaultAnalyzer", Kind: ProtectedPackageVariable},
 }
 
-// ApprovedCallers defines exact approved caller-to-callee edges for BOTH layers.
-//
-// Raw edges: adapter method on *DupcodeRunner → raw dupcode function.
-// Adapter edges: dispatcher owner → protectedverifier adapter symbol.
+// ApprovedCallers defines exact approved caller-to-callee edges for the raw
+// layer. Each *DupcodeRunner method is the sole allowed caller of the matching
+// raw op.
 //
 // No wildcards. Function/Receiver must match exactly. Anonymous literals
 // (func@line:col) are NOT allowed as approvals.
@@ -96,14 +88,259 @@ var ApprovedCallers = []ApprovedCaller{
 			Name: "CompareToBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
+
+	// ────────────────────────────────────────────────────────────────────
+	// gate.FactorizeVerifiersWithDupcodeContext wires the production dupcode
+	// analyzer into the shared analysis context. The analyzer reference
+	// (dupcode.CheckRepo) is captured here and passed through to the
+	// binder-local DupcodeAnalysisProvider. The actual scan happens
+	// later through the named post-authority binder.
+	// ────────────────────────────────────────────────────────────────────
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "FactorizeVerifiersWithDupcodeContext",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "CheckRepo", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "factorizeVerifiersWithDupcodeAnalyzer",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "LoadBaseline", Kind: ProtectedPackageFunction,
+		},
+	},
 }
 
-// AdapterApprovedCallers defines approved dispatcher-owner edges for adapter-layer symbols.
-// These are the ONLY legitimate callers of protectedverifier adapter methods.
-// Package-level wildcards are forbidden.
+// AdapterApprovedCallers defines the exact post-authority caller edges for
+// adapter-layer symbols. Each edge corresponds to a real named caller
+// declaration in internal/factory/gate that constructs the protected adapter
+// or invokes an exact adapter operation.
+//
+// No wildcards. Function/Receiver must match exactly. Package-level wildcards
+// (all functions in gate) and anonymous literals (func@line:col) are
+// forbidden. The list reflects the production topology after the
+// CORRECTION02G refactor:
+//
+//	CLI data → DispatchDupcodeVerifyTyped
+//	CLI data → DispatchDupcodeBaselineVerifyTyped
+//	CLI data → DispatchDupcodeUpdateBaselineTyped
+//	  → named post-authority binder (DupcodeVerifyBinder / DupcodeBaselineBinder /
+//	    DupcodeUpdateBaselineBinder) or named bound runner
+//	    (dupCodeVerifier / dupcodeBaselineVerifier)
+//	  → protectedverifier.NewDupcodeRunner
+//	  → exact adapter method (LoadBaseline / RunCheckReport / VerifyBaseline /
+//	    WriteBaseline / CompareToBaseline)
 var AdapterApprovedCallers = []ApprovedCaller{
-	// Dispatcher.Dispatch is the canonical authority owner.
-	// Concrete function/edge must be set after dispatcher source audit.
+	// ────────────────────────────────────────────────────────────────────
+	// DupcodeVerifyBinder.run (named post-authority binder, verify lane)
+	// ────────────────────────────────────────────────────────────────────
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeVerifyBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "NewDupcodeRunner", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeVerifyBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "LoadBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeVerifyBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "RunCheckReport", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeVerifyBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "CompareToBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+
+	// ────────────────────────────────────────────────────────────────────
+	// DupcodeBaselineBinder.run (named post-authority binder, baseline lane)
+	// ────────────────────────────────────────────────────────────────────
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeBaselineBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "NewDupcodeRunner", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeBaselineBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "VerifyBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+
+	// ────────────────────────────────────────────────────────────────────
+	// DupcodeUpdateBaselineBinder.run (named post-authority binder, update lane)
+	// ────────────────────────────────────────────────────────────────────
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeUpdateBaselineBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "NewDupcodeRunner", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeUpdateBaselineBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "RunCheckReport", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "run",
+		Receiver:    "DupcodeUpdateBaselineBinder",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "WriteBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+
+	// ────────────────────────────────────────────────────────────────────
+	// dupCodeVerifier (named bound runner, registry verify lane)
+	// ────────────────────────────────────────────────────────────────────
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "dupCodeVerifier",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "NewDupcodeRunner", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "dupCodeVerifier",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "LoadBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "dupCodeVerifier",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "RunCheckReport", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "dupCodeVerifier",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "CompareToBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+
+	// ────────────────────────────────────────────────────────────────────
+	// dupcodeBaselineVerifier (named bound runner, registry baseline lane)
+	// ────────────────────────────────────────────────────────────────────
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "dupcodeBaselineVerifier",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "NewDupcodeRunner", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "dupcodeBaselineVerifier",
+		Receiver:    "",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "VerifyBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+
+	// ────────────────────────────────────────────────────────────────────
+	// SharedDupCodeVerifier closure (named post-authority bound runner inside
+	// protectedverifier.DupcodeVerifierFactory). All raw dupcode operations
+	// from this closure flow through the DupcodeRunner adapter.
+	// ────────────────────────────────────────────────────────────────────
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:    "SharedDupCodeVerifier",
+		Receiver:    "DupcodeVerifierFactory",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "NewDupcodeRunner", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:    "SharedDupCodeVerifier",
+		Receiver:    "DupcodeVerifierFactory",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "LoadBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:    "SharedDupCodeVerifier",
+		Receiver:    "DupcodeVerifierFactory",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "CompareToBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
 }
 
 // IsApprovedCaller checks if a caller-callee edge is approved for EITHER layer.

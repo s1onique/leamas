@@ -9,9 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/gate"
-	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
@@ -21,18 +19,6 @@ const (
 	ExitAuthorityFailure = 1
 	ExitParseFailure     = 2
 )
-
-// dupcodeDispatchers holds the dispatch functions for verify and update operations.
-type dupcodeDispatchers struct {
-	verify         gate.DispatchFunc
-	updateBaseline gate.DispatchFunc
-}
-
-// productionDupcodeDispatchers uses the real gate dispatchers.
-var productionDupcodeDispatchers = dupcodeDispatchers{
-	verify:         gate.DispatchDupcodeVerify,
-	updateBaseline: gate.DispatchDupcodeUpdateBaseline,
-}
 
 // Default thresholds for the quality gate.
 const (
@@ -75,13 +61,13 @@ func handleFactoryVerifyDupcode() {
 		osExit(ExitParseFailure)
 		return
 	}
-	osExit(handleDupcode(args, productionDupcodeDispatchers, os.Stdout, os.Stderr))
+	osExit(handleDupcode(args, os.Stdout, os.Stderr))
 }
 
-// handleDupcode is the internal handler that accepts dispatchers for testing.
-// It parses flags and routes to either verify or update handler based on flags.
-// Returns an exit code: 0 = success, 1 = authority/gate failure, 2 = parse failure.
-func handleDupcode(args []string, dispatchers dupcodeDispatchers, stdout, stderr io.Writer) int {
+// handleDupcode is the internal handler. It parses flags, constructs a
+// data-only dispatch spec, and routes through the typed dispatch entry
+// point. The command layer holds no adapter surface or executable factories.
+func handleDupcode(args []string, stdout, stderr io.Writer) int {
 	// Reset flag state for this subcommand
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	// Use a discard writer for FlagSet output to avoid mixing with user-visible output.
@@ -126,57 +112,30 @@ func handleDupcode(args []string, dispatchers dupcodeDispatchers, stdout, stderr
 		return ExitParseFailure
 	}
 
-	// Build config using protectedverifier adapter
-	cfg := protectedverifier.DefaultConfig()
-	cfg.MinLines = *minLines
-	cfg.MinTokens = *minTokens
-
-	if *updateBaseline {
-		return handleUpdateBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, stdout, stderr, dispatchers.updateBaseline)
-	}
-
-	return handleVerifyBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, stdout, stderr, dispatchers.verify)
-}
-
-// handleUpdateBaselineWithDispatch runs the update baseline handler with the given dispatcher.
-func handleUpdateBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, stdout, stderr io.Writer, dispatcher gate.DispatchFunc) int {
 	ctx := context.Background()
 
-	runner := protectedverifier.NewDupcodeRunner()
-	var scanReport protectedverifier.Report
-
-	runnerFactory := func() func(root string) []checks.Finding {
-		return func(root string) []checks.Finding {
-			report, err := runner.RunCheckReport(root, cfg)
-			if err != nil {
-				return []checks.Finding{
-					{
-						Path:     "dupcode",
-						Kind:     "error",
-						Message:  fmt.Sprintf("scan failed: %v", err),
-						Severity: checks.SeverityError,
-					},
-				}
-			}
-
-			scanReport = report
-
-			if err := runner.WriteBaseline(baselinePath, report); err != nil {
-				return []checks.Finding{
-					{
-						Path:     "dupcode",
-						Kind:     "error",
-						Message:  fmt.Sprintf("failed to write baseline: %v", err),
-						Severity: checks.SeverityError,
-					},
-				}
-			}
-
-			return nil
+	if *updateBaseline {
+		spec := gate.DupcodeUpdateBaselineSpec{
+			BaselinePath: *baselinePath,
+			MinLines:     *minLines,
+			MinTokens:    *minTokens,
 		}
+		return renderUpdateBaselineResult(ctx, spec, *jsonOutput, stdout, stderr)
 	}
 
-	result := dispatcher(ctx, ".", runnerFactory)
+	spec := gate.DupcodeVerifySpec{
+		BaselinePath: *baselinePath,
+		MinLines:     *minLines,
+		MinTokens:    *minTokens,
+	}
+	return renderVerifyBaselineResult(ctx, spec, *jsonOutput, stdout, stderr)
+}
+
+// renderUpdateBaselineResult drives the typed dispatch and renders output.
+// The command layer holds only data (spec, stdout, stderr) and never touches
+// the adapter or dupcode packages.
+func renderUpdateBaselineResult(ctx context.Context, spec gate.DupcodeUpdateBaselineSpec, jsonOutput bool, stdout, stderr io.Writer) int {
+	result := gate.DispatchDupcodeUpdateBaselineTyped(ctx, ".", spec)
 
 	if len(result.Findings) > 0 {
 		f := result.Findings[0]
@@ -202,88 +161,23 @@ func handleUpdateBaselineWithDispatch(baselinePath string, cfg protectedverifier
 		return ExitAuthorityFailure
 	}
 
-	findingsCount := len(scanReport.Findings)
-
 	if jsonOutput {
 		enc := json.NewEncoder(stdout)
 		enc.Encode(map[string]interface{}{
-			"baseline":    baselinePath,
-			"findings":    findingsCount,
-			"thresholds":  map[string]int{"min_lines": cfg.MinLines, "min_tokens": cfg.MinTokens},
-			"scan_report": scanReport,
+			"baseline":   spec.BaselinePath,
+			"thresholds": map[string]int{"min_lines": spec.MinLines, "min_tokens": spec.MinTokens},
 		})
 	} else {
-		fmt.Fprintf(stdout, "Baseline written to: %s\n", baselinePath)
-		fmt.Fprintf(stdout, "Thresholds: min_lines=%d, min_tokens=%d\n", cfg.MinLines, cfg.MinTokens)
-		fmt.Fprintf(stdout, "Scan found %d duplicate blocks\n", findingsCount)
+		fmt.Fprintf(stdout, "Baseline written to: %s\n", spec.BaselinePath)
+		fmt.Fprintf(stdout, "Thresholds: min_lines=%d, min_tokens=%d\n", spec.MinLines, spec.MinTokens)
 	}
 
 	return ExitSuccess
 }
 
-// handleVerifyBaselineWithDispatch runs the verify baseline handler with the given dispatcher.
-func handleVerifyBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, stdout, stderr io.Writer, dispatcher gate.DispatchFunc) int {
-	ctx := context.Background()
-
-	runner := protectedverifier.NewDupcodeRunner()
-	var compareResult protectedverifier.CompareResult
-	var report protectedverifier.Report
-
-	runnerFactory := func() func(root string) []checks.Finding {
-		return func(root string) []checks.Finding {
-			baseline, err := runner.LoadBaseline(baselinePath)
-			if err != nil {
-				return []checks.Finding{
-					{
-						Path:     "dupcode",
-						Kind:     "error",
-						Message:  fmt.Sprintf("failed to load baseline: %v", err),
-						Severity: checks.SeverityError,
-					},
-				}
-			}
-
-			scanReport, err := runner.RunCheckReport(root, cfg)
-			if err != nil {
-				return []checks.Finding{
-					{
-						Path:     "dupcode",
-						Kind:     "error",
-						Message:  fmt.Sprintf("scan failed: %v", err),
-						Severity: checks.SeverityError,
-					},
-				}
-			}
-
-			report = scanReport
-			comparison := runner.CompareToBaseline(scanReport, baseline)
-			compareResult = comparison
-
-			var findings []checks.Finding
-			if comparison.HasChanges {
-				for _, f := range comparison.NewFindings {
-					findings = append(findings, checks.Finding{
-						Path:     "dupcode",
-						Kind:     "new_duplicate",
-						Message:  fmt.Sprintf("new duplicate (fingerprint: %s, tokens: %d)", f.Fingerprint, f.TokenCount),
-						Severity: checks.SeverityError,
-					})
-				}
-				for _, f := range comparison.WorsenedFindings {
-					findings = append(findings, checks.Finding{
-						Path:     "dupcode",
-						Kind:     "worsened_duplicate",
-						Message:  fmt.Sprintf("worsened duplicate (fingerprint: %s)", f.Fingerprint),
-						Severity: checks.SeverityError,
-					})
-				}
-			}
-
-			return findings
-		}
-	}
-
-	result := dispatcher(ctx, ".", runnerFactory)
+// renderVerifyBaselineResult drives the typed dispatch and renders output.
+func renderVerifyBaselineResult(ctx context.Context, spec gate.DupcodeVerifySpec, jsonOutput bool, stdout, stderr io.Writer) int {
+	result := gate.DispatchDupcodeVerifyTyped(ctx, ".", spec)
 
 	if len(result.Findings) > 0 {
 		f := result.Findings[0]
@@ -309,21 +203,18 @@ func handleVerifyBaselineWithDispatch(baselinePath string, cfg protectedverifier
 		return ExitAuthorityFailure
 	}
 
+	// Successful dispatch produced no findings — render the OK result.
+	// The dupcode compare result is in result.Findings (may be empty).
 	if jsonOutput {
 		enc := json.NewEncoder(stdout)
 		enc.Encode(map[string]interface{}{
-			"has_changes":       compareResult.HasChanges,
-			"new_count":         len(compareResult.NewFindings),
-			"worsened_count":    len(compareResult.WorsenedFindings),
-			"new_findings":      compareResult.NewFindings,
-			"worsened_findings": compareResult.WorsenedFindings,
-			"current_report":    report,
+			"baseline":   spec.BaselinePath,
+			"thresholds": map[string]int{"min_lines": spec.MinLines, "min_tokens": spec.MinTokens},
+			"ok":         len(result.Findings) == 0,
 		})
 	} else {
-		if compareResult.HasChanges {
-			fmt.Fprintf(stdout, "Duplicate code violations found:\n")
-			fmt.Fprintf(stdout, "  New: %d\n", len(compareResult.NewFindings))
-			fmt.Fprintf(stdout, "  Worsened: %d\n", len(compareResult.WorsenedFindings))
+		if len(result.Findings) > 0 {
+			fmt.Fprintf(stdout, "Duplicate code violations found: %d\n", len(result.Findings))
 		} else {
 			fmt.Fprintf(stdout, "No duplicate code violations found.\n")
 		}
