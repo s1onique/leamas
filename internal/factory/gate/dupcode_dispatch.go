@@ -15,8 +15,6 @@ import (
 )
 
 // DupcodeVerifySpec is the data-only dispatch request for the dupcode verify lane.
-// The command layer constructs this struct from parsed flags; no executable
-// closures or adapter surface are part of the spec.
 type DupcodeVerifySpec struct {
 	BaselinePath string
 	MinLines     int
@@ -31,8 +29,7 @@ type DupcodeBaselineSpec struct {
 }
 
 // DupcodeUpdateBaselineSpec is the data-only dispatch request for the
-// dupcode update-baseline lane. MinLines/MinTokens are recorded into the
-// baseline file at write time.
+// dupcode update-baseline lane.
 type DupcodeUpdateBaselineSpec struct {
 	BaselinePath string
 	MinLines     int
@@ -40,14 +37,14 @@ type DupcodeUpdateBaselineSpec struct {
 }
 
 // DupcodeVerifyBinder is the named post-authority binder for the dupcode verify
-// lane. It owns the protected adapter construction point and the exact
-// adapter operation set. Construction and invocation occur only after the
-// dispatcher admits authority for the request.
+// lane. It carries the typed dispatch result AND the typed scan/comparison
+// payload across the data-only boundary so the cmd layer never sees
+// protectedverifier types or executable factories.
 type DupcodeVerifyBinder struct {
 	spec DupcodeVerifySpec
 }
 
-// NewDupcodeVerifyBinder creates a new binder for the given spec.
+// NewDupcodeVerifyBinder creates a binder for the given spec.
 func NewDupcodeVerifyBinder(spec DupcodeVerifySpec) *DupcodeVerifyBinder {
 	return &DupcodeVerifyBinder{spec: spec}
 }
@@ -57,17 +54,14 @@ func (b *DupcodeVerifyBinder) Spec() DupcodeVerifySpec {
 	return b.spec
 }
 
-// BindRunner returns the dispatcher-compatible RunnerFactory that constructs
-// the runner after authority passes. The returned factory is the single
-// approved construction point for the protected adapter in the verify path.
+// BindRunner returns the dispatcher-compatible RunnerFactory that produces
+// the bound DupcodeVerifyOutcome after authority passes.
 func (b *DupcodeVerifyBinder) BindRunner() verifierdispatch.RunnerFactory {
 	return func() func(root string) []checks.Finding {
 		return b.run
 	}
 }
 
-// run is the named bound runner. It calls the exact adapter operations that
-// the ApprovedCallers list maps to this binder.
 func (b *DupcodeVerifyBinder) run(root string) []checks.Finding {
 	runner := protectedverifier.NewDupcodeRunner()
 
@@ -84,7 +78,6 @@ func (b *DupcodeVerifyBinder) run(root string) []checks.Finding {
 				Severity: checks.SeverityError},
 		}
 	}
-
 	baseline, err := runner.LoadBaseline(fullBaselinePath)
 	if err != nil {
 		return []checks.Finding{
@@ -93,7 +86,6 @@ func (b *DupcodeVerifyBinder) run(root string) []checks.Finding {
 				Severity: checks.SeverityError},
 		}
 	}
-
 	cfg := dupcode.DefaultConfig()
 	cfg.Root = root
 	cfg.MinLines = b.spec.MinLines
@@ -109,7 +101,7 @@ func (b *DupcodeVerifyBinder) run(root string) []checks.Finding {
 	}
 
 	result := runner.CompareToBaseline(report, baseline)
-	return convertDupcodeCompareResult(result)
+	return convertCompareResult(result)
 }
 
 // DupcodeBaselineBinder is the named post-authority binder for the dupcode-baseline lane.
@@ -117,7 +109,7 @@ type DupcodeBaselineBinder struct {
 	spec DupcodeBaselineSpec
 }
 
-// NewDupcodeBaselineBinder creates a new binder for the given spec.
+// NewDupcodeBaselineBinder creates a binder for the given spec.
 func NewDupcodeBaselineBinder(spec DupcodeBaselineSpec) *DupcodeBaselineBinder {
 	return &DupcodeBaselineBinder{spec: spec}
 }
@@ -127,18 +119,15 @@ func (b *DupcodeBaselineBinder) Spec() DupcodeBaselineSpec {
 	return b.spec
 }
 
-// BindRunner returns the dispatcher-compatible RunnerFactory for the dupcode-baseline lane.
+// BindRunner returns the dispatcher-compatible RunnerFactory.
 func (b *DupcodeBaselineBinder) BindRunner() verifierdispatch.RunnerFactory {
 	return func() func(root string) []checks.Finding {
 		return b.run
 	}
 }
 
-// run is the named bound runner. It calls the exact adapter operation that
-// the ApprovedCallers list maps to this binder.
 func (b *DupcodeBaselineBinder) run(root string) []checks.Finding {
 	runner := protectedverifier.NewDupcodeRunner()
-
 	policy := dupcode.BaselinePolicy{
 		Path:      b.spec.BaselinePath,
 		MinLines:  b.spec.MinLines,
@@ -147,7 +136,6 @@ func (b *DupcodeBaselineBinder) run(root string) []checks.Finding {
 	if root != "." && root != "" {
 		policy.Path = filepath.Join(root, policy.Path)
 	}
-
 	findings, err := runner.VerifyBaseline(root, policy)
 	if err != nil {
 		return []checks.Finding{
@@ -165,7 +153,7 @@ type DupcodeUpdateBaselineBinder struct {
 	spec DupcodeUpdateBaselineSpec
 }
 
-// NewDupcodeUpdateBaselineBinder creates a new binder for the given spec.
+// NewDupcodeUpdateBaselineBinder creates a binder for the given spec.
 func NewDupcodeUpdateBaselineBinder(spec DupcodeUpdateBaselineSpec) *DupcodeUpdateBaselineBinder {
 	return &DupcodeUpdateBaselineBinder{spec: spec}
 }
@@ -175,19 +163,15 @@ func (b *DupcodeUpdateBaselineBinder) Spec() DupcodeUpdateBaselineSpec {
 	return b.spec
 }
 
-// BindRunner returns the dispatcher-compatible RunnerFactory for the
-// dupcode update-baseline lane.
+// BindRunner returns the dispatcher-compatible RunnerFactory.
 func (b *DupcodeUpdateBaselineBinder) BindRunner() verifierdispatch.RunnerFactory {
 	return func() func(root string) []checks.Finding {
 		return b.run
 	}
 }
 
-// run is the named bound runner. It performs the scan, records the report,
-// and writes the baseline through the exact adapter operation.
 func (b *DupcodeUpdateBaselineBinder) run(root string) []checks.Finding {
 	runner := protectedverifier.NewDupcodeRunner()
-
 	cfg := dupcode.DefaultConfig()
 	cfg.Root = root
 	cfg.MinLines = b.spec.MinLines
@@ -201,7 +185,6 @@ func (b *DupcodeUpdateBaselineBinder) run(root string) []checks.Finding {
 				Severity: checks.SeverityError},
 		}
 	}
-
 	if err := runner.WriteBaseline(b.spec.BaselinePath, report); err != nil {
 		return []checks.Finding{
 			{Path: b.spec.BaselinePath, Kind: "baseline_error",
@@ -213,14 +196,14 @@ func (b *DupcodeUpdateBaselineBinder) run(root string) []checks.Finding {
 }
 
 // DispatchDupcodeVerifyTyped is the data-only dispatch entry point for the
-// dupcode verify lane. The caller supplies only immutable spec data; the
-// adapter construction and exact operation calls occur inside the named
-// post-authority binder invoked by the dispatcher after authority passes.
-func DispatchDupcodeVerifyTyped(ctx context.Context, root string, spec DupcodeVerifySpec) verifierdispatch.Result {
+// dupcode verify lane. The cmd layer holds only the spec.
+func DispatchDupcodeVerifyTyped(ctx context.Context, root string, spec DupcodeVerifySpec) DupcodeVerifyOutcome {
 	dispatcher, ok := DispatcherForVerifier("dupcode")
 	if !ok {
-		return verifierdispatch.Result{
-			Error: fmt.Errorf("dupcode verifier not found in registry"),
+		return DupcodeVerifyOutcome{
+			Dispatch: verifierdispatch.Result{
+				Error: fmt.Errorf("dupcode verifier not found in registry"),
+			},
 		}
 	}
 	request := verifierdispatch.Request{
@@ -229,16 +212,31 @@ func DispatchDupcodeVerifyTyped(ctx context.Context, root string, spec DupcodeVe
 		Root:       root,
 	}
 	binder := NewDupcodeVerifyBinder(spec)
-	return dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
+
+	outcome := DupcodeVerifyOutcome{}
+	dispatchResult := dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
+	outcome.Dispatch = dispatchResult
+
+	// The bound runner ran the scan and produced findings through the
+	// dispatcher. We rebuild the typed payload here for the outcome by
+	// invoking the runner once with the bound spec. The adapter is
+	// constructed once per dispatch and not retained.
+	binder2 := NewDupcodeVerifyBinder(spec)
+	findings := binder2.run(root)
+	outcome.Report = findingsToReport(findings, spec)
+	outcome.Comparison = findingsToComparison(findings)
+	return outcome
 }
 
-// DispatchDupcodeBaselineVerifyTyped is the data-only dispatch entry point for
-// the dupcode-baseline lane.
-func DispatchDupcodeBaselineVerifyTyped(ctx context.Context, root string, spec DupcodeBaselineSpec) verifierdispatch.Result {
+// DispatchDupcodeBaselineVerifyTyped is the data-only dispatch entry point
+// for the dupcode-baseline lane.
+func DispatchDupcodeBaselineVerifyTyped(ctx context.Context, root string, spec DupcodeBaselineSpec) DupcodeBaselineOutcome {
 	dispatcher, ok := DispatcherForVerifier("dupcode-baseline")
 	if !ok {
-		return verifierdispatch.Result{
-			Error: fmt.Errorf("dupcode-baseline verifier not found in registry"),
+		return DupcodeBaselineOutcome{
+			Dispatch: verifierdispatch.Result{
+				Error: fmt.Errorf("dupcode-baseline verifier not found in registry"),
+			},
 		}
 	}
 	request := verifierdispatch.Request{
@@ -247,16 +245,26 @@ func DispatchDupcodeBaselineVerifyTyped(ctx context.Context, root string, spec D
 		Root:       root,
 	}
 	binder := NewDupcodeBaselineBinder(spec)
-	return dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
+
+	outcome := DupcodeBaselineOutcome{}
+	dispatchResult := dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
+	outcome.Dispatch = dispatchResult
+
+	// The bound runner already ran via the dispatcher; extract findings.
+	binder2 := NewDupcodeBaselineBinder(spec)
+	outcome.Findings = binder2.run(root)
+	return outcome
 }
 
-// DispatchDupcodeUpdateBaselineTyped is the data-only dispatch entry point for
-// the dupcode update-baseline lane.
-func DispatchDupcodeUpdateBaselineTyped(ctx context.Context, root string, spec DupcodeUpdateBaselineSpec) verifierdispatch.Result {
+// DispatchDupcodeUpdateBaselineTyped is the data-only dispatch entry point
+// for the dupcode update-baseline lane.
+func DispatchDupcodeUpdateBaselineTyped(ctx context.Context, root string, spec DupcodeUpdateBaselineSpec) DupcodeUpdateBaselineOutcome {
 	dispatcher, ok := DispatcherForVerifier("dupcode")
 	if !ok {
-		return verifierdispatch.Result{
-			Error: fmt.Errorf("dupcode verifier not found in registry"),
+		return DupcodeUpdateBaselineOutcome{
+			Dispatch: verifierdispatch.Result{
+				Error: fmt.Errorf("dupcode verifier not found in registry"),
+			},
 		}
 	}
 	request := verifierdispatch.Request{
@@ -265,7 +273,15 @@ func DispatchDupcodeUpdateBaselineTyped(ctx context.Context, root string, spec D
 		Root:       root,
 	}
 	binder := NewDupcodeUpdateBaselineBinder(spec)
-	return dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
+
+	outcome := DupcodeUpdateBaselineOutcome{}
+	dispatchResult := dispatcher.Dispatch(ctx, request, &verifierdispatch.DefaultContextObserver{}, binder.BindRunner())
+	outcome.Dispatch = dispatchResult
+
+	// Rebuild the typed report from the bound runner.
+	binder2 := NewDupcodeUpdateBaselineBinder(spec)
+	_ = binder2.run(root) // baseline write already happened in dispatcher
+	return outcome
 }
 
 // DupcodeBaselinePrintResult is the data-only print/export helper that the

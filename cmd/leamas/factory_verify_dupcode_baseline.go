@@ -74,17 +74,17 @@ func handleFactoryVerifyDupcodeBaseline() {
 	result := gate.DispatchDupcodeBaselineVerifyTyped(ctx, ".", spec)
 
 	// Handle authority denial or runner errors (infrastructure failures only)
-	if result.Error != nil {
+	if result.Dispatch.Error != nil {
 		if *jsonOutput {
-			printJSONAndExit(jsonError{Error: fmt.Sprintf("dispatcher error: %v", result.Error)}, 1)
+			printJSONAndExit(jsonError{Error: fmt.Sprintf("dispatcher error: %v", result.Dispatch.Error)}, 1)
 		} else {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Error)
+			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Dispatch.Error)
 			os.Exit(1)
 		}
 	}
 
 	// Get the typed findings from the authorized runner
-	findings := result.Findings
+	findings := result.Dispatch.Findings
 
 	// Print results with proper exit semantics
 	if *jsonOutput {
