@@ -22,10 +22,8 @@ import (
 type ProtectedSymbolKind string
 
 const (
-	// ProtectedPackageFunction is a package-level function.
 	ProtectedPackageFunction ProtectedSymbolKind = "package_function"
-	// ProtectedMethod is a method with a receiver.
-	ProtectedMethod ProtectedSymbolKind = "method"
+	ProtectedMethod          ProtectedSymbolKind = "method"
 )
 
 // ProtectedSymbol represents an exact protected declaration.
@@ -33,8 +31,7 @@ type ProtectedSymbol struct {
 	PackagePath string
 	Name        string
 	Kind        ProtectedSymbolKind
-	// Receiver is required for ProtectedMethod.
-	Receiver string
+	Receiver    string
 }
 
 // ApprovedCaller defines an exact approved caller edge.
@@ -48,15 +45,6 @@ type ApprovedCaller struct {
 // DupcodeProtectedPrefixes defines protected package prefixes.
 var DupcodeProtectedPrefixes = []string{
 	"github.com/s1onique/leamas/internal/factory/dupcode",
-}
-
-func isProtectedPackage(path string) bool {
-	for _, prefix := range DupcodeProtectedPrefixes {
-		if path == prefix || strings.HasPrefix(path, prefix+"/") {
-			return true
-		}
-	}
-	return false
 }
 
 // ApprovedCallers defines exact approved caller-to-callee edges.
@@ -75,10 +63,10 @@ type CallerIdentity struct {
 	PackagePath string
 	Function    string
 	Receiver    string
-	Kind        string // package_function, method, function_literal, package_init, variable_initializer
+	Kind        string
 }
 
-// IsApprovedCaller checks if a caller-callee edge is approved. Function and Receiver must both match exactly.
+// IsApprovedCaller checks if a caller-callee edge is approved.
 func IsApprovedCaller(caller CallerIdentity, callee ProtectedSymbol) bool {
 	for _, ac := range ApprovedCallers {
 		if ac.PackagePath != caller.PackagePath {
@@ -86,14 +74,14 @@ func IsApprovedCaller(caller CallerIdentity, callee ProtectedSymbol) bool {
 		}
 		if ac.Callee.PackagePath != callee.PackagePath ||
 			ac.Callee.Name != callee.Name ||
-			ac.Callee.Kind != callee.Kind {
+			ac.Callee.Kind != callee.Kind ||
+			ac.Callee.Receiver != callee.Receiver {
 			continue
 		}
-		// Function must match exactly (no wildcards)
-		if ac.Function != caller.Function {
+		// Function and Receiver must match exactly (no wildcards)
+		if ac.Function == "" || ac.Function != caller.Function {
 			continue
 		}
-		// Receiver must match exactly
 		if ac.Receiver != caller.Receiver {
 			continue
 		}
@@ -132,11 +120,11 @@ func CanonicalCheckDupcodeBypass(root string, modulePath string) []checks.Findin
 		}
 	}
 
-	// Phase 1: discover eligible files from filesystem
-	discovered, err := policy.DiscoverProductionFilesRepoWide()
-	if err != nil {
+	// Phase 1: discover eligible files from filesystem (fail-closed on errors)
+	discovered, walkErr := policy.DiscoverProductionFilesRepoWide()
+	if walkErr != nil {
 		return []checks.Finding{
-			{Path: policy.repoRoot, Kind: "dupcode_discovery_error", Message: err.Error(), Severity: checks.SeverityError},
+			{Path: policy.repoRoot, Kind: "dupcode_discovery_error", Message: walkErr.Error(), Severity: checks.SeverityError},
 		}
 	}
 
@@ -157,20 +145,23 @@ func CanonicalCheckDupcodeBypass(root string, modulePath string) []checks.Findin
 
 	// Phase 3: validate each package
 	var findings []checks.Finding
-	var typedFiles []string
+	typedFiles := make(map[string]bool)
 	ignoredFiles := make(map[string]bool)
 	for _, pkg := range pkgs {
 		if pkg.PkgPath == "" || strings.HasSuffix(pkg.PkgPath, "_test") {
 			continue
 		}
 
-		// Track ignored files
 		for _, ignored := range pkg.IgnoredFiles {
-			rel, _ := filepath.Rel(policy.repoRoot, ignored)
-			ignoredFiles[rel] = true
+			rel, err := filepath.Rel(policy.repoRoot, ignored)
+			if err != nil {
+				continue
+			}
+			ignoredFiles[filepath.ToSlash(rel)] = true
 		}
 
-		// Phase 3a: fail closed on package errors
+		// Fail closed on package errors
+		packageInvalid := false
 		if len(pkg.Errors) > 0 {
 			for _, e := range pkg.Errors {
 				findings = append(findings, checks.Finding{
@@ -179,6 +170,7 @@ func CanonicalCheckDupcodeBypass(root string, modulePath string) []checks.Findin
 					Severity: checks.SeverityError,
 				})
 			}
+			packageInvalid = true
 		}
 		if len(pkg.TypeErrors) > 0 {
 			for _, e := range pkg.TypeErrors {
@@ -188,6 +180,7 @@ func CanonicalCheckDupcodeBypass(root string, modulePath string) []checks.Findin
 					Severity: checks.SeverityError,
 				})
 			}
+			packageInvalid = true
 		}
 		if pkg.IllTyped {
 			findings = append(findings, checks.Finding{
@@ -195,6 +188,7 @@ func CanonicalCheckDupcodeBypass(root string, modulePath string) []checks.Findin
 				Message:  fmt.Sprintf("%s: ill-typed package", pkg.PkgPath),
 				Severity: checks.SeverityError,
 			})
+			packageInvalid = true
 		}
 		if pkg.Types == nil || pkg.TypesInfo == nil || pkg.Fset == nil {
 			findings = append(findings, checks.Finding{
@@ -202,32 +196,66 @@ func CanonicalCheckDupcodeBypass(root string, modulePath string) []checks.Findin
 				Message:  fmt.Sprintf("%s: missing type info or file set", pkg.PkgPath),
 				Severity: checks.SeverityError,
 			})
+			packageInvalid = true
+		}
+
+		// Skip semantic enforcement if package is invalid
+		if packageInvalid {
 			continue
 		}
 
-		// Phase 3b: analyze each compiled file using CompiledGoFiles
-		for i, file := range pkg.Syntax {
-			if i >= len(pkg.CompiledGoFiles) {
+		// Phase 3b: analyze each syntax tree via Fset filename mapping
+		syntaxFiles := make(map[string]*ast.File)
+		for _, file := range pkg.Syntax {
+			pos := pkg.Fset.PositionFor(file.Pos(), true)
+			if pos.Filename == "" {
 				continue
 			}
-			filename := pkg.CompiledGoFiles[i]
-			rel, _ := filepath.Rel(policy.repoRoot, filename)
-			typedFiles = append(typedFiles, rel)
+			syntaxFiles[filepath.ToSlash(pos.Filename)] = file
+		}
+
+		// Verify each CompiledGoFile has a syntax tree
+		for _, compiled := range pkg.CompiledGoFiles {
+			rel, err := filepath.Rel(policy.repoRoot, compiled)
+			if err != nil {
+				continue
+			}
+			relSlash := filepath.ToSlash(rel)
+			if _, ok := syntaxFiles[filepath.ToSlash(compiled)]; !ok {
+				// CompiledGoFiles missing syntax tree — try using rel path
+				if _, ok := syntaxFiles[relSlash]; !ok {
+					findings = append(findings, checks.Finding{
+						Path: relSlash, Kind: "dupcode_analysis_coverage_error",
+						Message:  fmt.Sprintf("compiled file missing syntax: %s", relSlash),
+						Severity: checks.SeverityError,
+					})
+				}
+			}
+		}
+
+		for filename, file := range syntaxFiles {
+			rel, err := filepath.Rel(policy.repoRoot, filename)
+			if err != nil {
+				continue
+			}
+			relSlash := filepath.ToSlash(rel)
+			typedFiles[relSlash] = true
+
 			fileFindings := policy.analyzeFile(pkg, filename, file)
 			findings = append(findings, fileFindings...)
 		}
 	}
 
 	// Phase 4: reconcile discovery with typed files
-	typedSet := make(map[string]bool)
-	for _, f := range typedFiles {
-		typedSet[f] = true
-	}
 	for _, d := range discovered {
-		if !typedSet[d] && !ignoredFiles[d] {
+		if !typedFiles[d] {
+			reason := "missing_from_packages"
+			if ignoredFiles[d] {
+				reason = "build_ignored"
+			}
 			findings = append(findings, checks.Finding{
 				Path: d, Kind: "dupcode_analysis_coverage_error",
-				Message:  fmt.Sprintf("eligible file not in typed analysis: %s", d),
+				Message:  fmt.Sprintf("eligible file not analyzed (reason=%s): %s", reason, d),
 				Severity: checks.SeverityError,
 			})
 		}
@@ -248,12 +276,13 @@ func CanonicalCheckDupcodeBypass(root string, modulePath string) []checks.Findin
 }
 
 // DiscoverProductionFilesRepoWide walks the repo and returns eligible files.
+// Fails closed on traversal errors.
 func (p *DupcodeBypassPolicy) DiscoverProductionFilesRepoWide() ([]string, error) {
 	var files []string
 
 	err := filepath.WalkDir(p.repoRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return fmt.Errorf("walk %s: %w", path, err)
 		}
 
 		if d.IsDir() {
@@ -268,13 +297,15 @@ func (p *DupcodeBypassPolicy) DiscoverProductionFilesRepoWide() ([]string, error
 			return nil
 		}
 
-		// Skip test files
 		if strings.HasSuffix(path, "_test.go") {
 			return nil
 		}
 
-		rel, _ := filepath.Rel(p.repoRoot, path)
-		files = append(files, rel)
+		rel, err := filepath.Rel(p.repoRoot, path)
+		if err != nil {
+			return fmt.Errorf("rel %s: %w", path, err)
+		}
+		files = append(files, filepath.ToSlash(rel))
 		return nil
 	})
 
@@ -286,189 +317,164 @@ func (p *DupcodeBypassPolicy) DiscoverProductionFilesRepoWide() ([]string, error
 	return files, nil
 }
 
-// analyzeFile analyzes a single file for dupcode bypass violations.
-func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string, file *ast.File) []checks.Finding {
-	var findings []checks.Finding
-
-	relPath, _ := filepath.Rel(p.repoRoot, filename)
-	callerPath := pkg.PkgPath
-
-	// Track files we've already reported function-value findings for (to avoid duplicates)
-	reportedValueUses := make(map[token.Pos]bool)
-
-	// Track enclosing caller using a stack
-	type callerFrame struct {
-		identity CallerIdentity
-	}
-	var stack []callerFrame
-
-	push := func(id CallerIdentity) {
-		stack = append(stack, callerFrame{id})
-	}
-	pop := func() {
-		if len(stack) > 0 {
-			stack = stack[:len(stack)]
-		}
-	}
-	currentCaller := func() CallerIdentity {
-		if len(stack) == 0 {
-			return CallerIdentity{PackagePath: callerPath, Function: "<init>", Kind: "package_init"}
-		}
-		return stack[len(stack)-1].identity
-	}
-
-	ast.Inspect(file, func(n ast.Node) bool {
-		switch x := n.(type) {
+// callerIdentity derives the enclosing caller using the ancestor stack.
+// Precedence (nearest first): function literal > method > package function > variable initializer > package init
+func callerIdentity(pkgPath string, ancestors []ast.Node, fset *token.FileSet) CallerIdentity {
+	for i := len(ancestors) - 1; i >= 0; i-- {
+		switch a := ancestors[i].(type) {
+		case *ast.FuncLit:
+			pos := fset.Position(a.Pos())
+			return CallerIdentity{
+				PackagePath: pkgPath,
+				Function:    fmt.Sprintf("func@%d:%d", pos.Line, pos.Column),
+				Kind:        "function_literal",
+			}
 		case *ast.FuncDecl:
-			// Push function/method caller
 			id := CallerIdentity{
-				PackagePath: callerPath,
-				Function:    x.Name.Name,
+				PackagePath: pkgPath,
+				Function:    a.Name.Name,
 				Kind:        "package_function",
 			}
-			if x.Recv != nil {
-				id.Receiver = recvTypeName(x.Recv)
+			if a.Recv != nil {
+				id.Receiver = recvTypeNameFromAST(a.Recv)
 				id.Kind = "method"
 			}
-			push(id)
-			defer pop()
-			return true
-
-		case *ast.CallExpr:
-			line := pkg.Fset.Position(x.Pos()).Line
-			caller := currentCaller()
-
-			// Selector call: x.Method()
-			if sel, ok := x.Fun.(*ast.SelectorExpr); ok {
-				if ident, ok := sel.X.(*ast.Ident); ok {
-					baseObj := pkg.TypesInfo.ObjectOf(ident)
-					if pkgName, ok := baseObj.(*types.PkgName); ok {
-						importedPath := pkgName.Imported().Path()
-						selObj := pkg.TypesInfo.ObjectOf(sel.Sel)
-						if fn, ok := selObj.(*types.Func); ok {
-							fnPkg := fn.Pkg()
-							if fnPkg != nil {
-								callee := ProtectedSymbol{
-									PackagePath: fnPkg.Path(),
-									Name:        fn.Name(),
-									Kind:        ProtectedPackageFunction,
-								}
-								if fn.Type() != nil {
-									if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-										callee.Kind = ProtectedMethod
-										callee.Receiver = recvTypeNameFromType(sig.Recv())
-									}
-								}
-
-								if p.isProtectedCall(caller, callee) {
-									findings = append(findings, checks.Finding{
-										Path: relPath, Kind: "dupcode_bypass",
-										Message:  fmt.Sprintf("line %d: %s.%s called by %s.%s", line, importedPath, fn.Name(), caller.PackagePath, caller.Function),
-										Severity: checks.SeverityError,
-									})
-								}
-							}
+			return id
+		}
+	}
+	// Check for variable initializer
+	for i := len(ancestors) - 1; i >= 0; i-- {
+		if gd, ok := ancestors[i].(*ast.GenDecl); ok {
+			if gd.Tok == token.VAR {
+				for _, spec := range gd.Specs {
+					if vspec, ok := spec.(*ast.ValueSpec); ok && vspec.Values != nil {
+						return CallerIdentity{
+							PackagePath: pkgPath,
+							Function:    "<var-init:" + vspec.Names[0].Name + ">",
+							Kind:        "variable_initializer",
 						}
 					}
 				}
-				return true
 			}
+		}
+	}
+	return CallerIdentity{PackagePath: pkgPath, Function: "<init>", Kind: "package_init"}
+}
 
-			// Direct call: Function()
-			if ident, ok := x.Fun.(*ast.Ident); ok {
-				obj := pkg.TypesInfo.ObjectOf(ident)
-				if fn, ok := obj.(*types.Func); ok {
+// resolveProtectedUse resolves a protected object from an expression.
+func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr ast.Expr) (ProtectedSymbol, bool) {
+	switch e := expr.(type) {
+	case *ast.SelectorExpr:
+		if ident, ok := e.X.(*ast.Ident); ok {
+			baseObj := pkg.TypesInfo.ObjectOf(ident)
+			if pkgName, ok := baseObj.(*types.PkgName); ok {
+				importedPath := pkgName.Imported().Path()
+				selObj := pkg.TypesInfo.ObjectOf(e.Sel)
+				if fn, ok := selObj.(*types.Func); ok {
 					fnPkg := fn.Pkg()
-					if fnPkg != nil {
+					if fnPkg != nil && fnPkg.Path() == importedPath {
 						callee := ProtectedSymbol{
 							PackagePath: fnPkg.Path(),
 							Name:        fn.Name(),
 							Kind:        ProtectedPackageFunction,
 						}
-						if fn.Type() != nil {
-							if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-								callee.Kind = ProtectedMethod
-								callee.Receiver = recvTypeNameFromType(sig.Recv())
-							}
+						if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+							callee.Kind = ProtectedMethod
+							callee.Receiver = recvTypeNameFromSig(sig.Recv())
 						}
-
-						if p.isProtectedCall(caller, callee) {
-							findings = append(findings, checks.Finding{
-								Path: relPath, Kind: "dupcode_bypass",
-								Message:  fmt.Sprintf("line %d: %s.%s called by %s.%s", line, fnPkg.Path(), fn.Name(), caller.PackagePath, caller.Function),
-								Severity: checks.SeverityError,
-							})
+						// Verify this is a configured protected symbol
+						if _, ok := ProtectedSymbolsMap()[callee.PackagePath+"."+callee.Name]; ok {
+							return callee, true
 						}
 					}
 				}
 			}
-			return true
-
-		case *ast.SelectorExpr:
-			// Check for protected function-value capture: dupcode.CheckRepo (not called)
-			if x.Sel.Name == "CheckRepo" || x.Sel.Name == "CheckReport" {
-				if ident, ok := x.X.(*ast.Ident); ok {
-					baseObj := pkg.TypesInfo.ObjectOf(ident)
-					if pkgName, ok := baseObj.(*types.PkgName); ok {
-						importedPath := pkgName.Imported().Path()
-						if isProtectedPackage(importedPath) {
-							// Confirm it's a protected symbol
-							if _, ok := ProtectedSymbolsMap()[importedPath+"."+x.Sel.Name]; ok {
-								if !reportedValueUses[x.Pos()] {
-									reportedValueUses[x.Pos()] = true
-									line := pkg.Fset.Position(x.Pos()).Line
-									caller := currentCaller()
-									findings = append(findings, checks.Finding{
-										Path: relPath, Kind: "dupcode_protected_function_value",
-										Message:  fmt.Sprintf("line %d: protected function value %s.%s captured by %s.%s", line, importedPath, x.Sel.Name, caller.PackagePath, caller.Function),
-										Severity: checks.SeverityError,
-									})
-								}
-							}
-						}
-					}
-				}
-			}
-			return true
-
-		case *ast.GenDecl:
-			// Track variable initializers
-			if x.Tok == token.VAR {
-				for _, spec := range x.Specs {
-					if vspec, ok := spec.(*ast.ValueSpec); ok {
-						if vspec.Values != nil {
-							id := CallerIdentity{
-								PackagePath: callerPath,
-								Function:    "<var-init:" + vspec.Names[0].Name + ">",
-								Kind:        "variable_initializer",
-							}
-							push(id)
-							defer pop()
-						}
-					}
-				}
-			}
-			return true
-
-		case *ast.FuncLit:
-			// Function literal
-			id := CallerIdentity{
-				PackagePath: callerPath,
-				Function:    currentCaller().Function + "@literal",
-				Kind:        "function_literal",
-			}
-			push(id)
-			defer pop()
-			return true
 		}
+	case *ast.Ident:
+		obj := pkg.TypesInfo.ObjectOf(e)
+		if fn, ok := obj.(*types.Func); ok {
+			fnPkg := fn.Pkg()
+			if fnPkg != nil {
+				callee := ProtectedSymbol{
+					PackagePath: fnPkg.Path(),
+					Name:        fn.Name(),
+					Kind:        ProtectedPackageFunction,
+				}
+				if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+					callee.Kind = ProtectedMethod
+					callee.Receiver = recvTypeNameFromSig(sig.Recv())
+				}
+				if _, ok := ProtectedSymbolsMap()[callee.PackagePath+"."+callee.Name]; ok {
+					return callee, true
+				}
+			}
+		}
+	}
+	return ProtectedSymbol{}, false
+}
 
+// analyzeFile uses PreorderStack to track caller via ancestor stack.
+func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string, file *ast.File) []checks.Finding {
+	var findings []checks.Finding
+	relPath, _ := filepath.Rel(p.repoRoot, filename)
+
+	// Track which CallExpr.Fun selectors/idents we've already classified as calls
+	// (so we don't double-report as function-value captures)
+	calledPos := make(map[token.Pos]bool)
+
+	// First pass: collect all CallExpr.Fun positions
+	ast.Inspect(file, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			calledPos[call.Fun.Pos()] = true
+		}
+		return true
+	})
+
+	// Use PreorderStack for proper caller tracking
+	ast.PreorderStack(file, nil, func(n ast.Node, ancestors []ast.Node) bool {
+		switch node := n.(type) {
+		case *ast.CallExpr:
+			caller := callerIdentity(pkg.PkgPath, ancestors, pkg.Fset)
+			callee, ok := p.resolveProtectedUse(pkg, node.Fun)
+			if !ok {
+				return true
+			}
+			if IsApprovedCaller(caller, callee) {
+				return true
+			}
+			line := pkg.Fset.Position(node.Pos()).Line
+			findings = append(findings, checks.Finding{
+				Path: relPath, Kind: "dupcode_bypass",
+				Message:  fmt.Sprintf("line %d: %s.%s called by %s.%s", line, callee.PackagePath, callee.Name, caller.PackagePath, caller.Function),
+				Severity: checks.SeverityError,
+			})
+		case *ast.SelectorExpr, *ast.Ident:
+			// Skip if this expression is used as CallExpr.Fun (already reported as direct call)
+			if calledPos[node.Pos()] {
+				return true
+			}
+			caller := callerIdentity(pkg.PkgPath, ancestors, pkg.Fset)
+			callee, ok := p.resolveProtectedUse(pkg, node.(ast.Expr))
+			if !ok {
+				return true
+			}
+			if IsApprovedCaller(caller, callee) {
+				return true
+			}
+			line := pkg.Fset.Position(node.Pos()).Line
+			findings = append(findings, checks.Finding{
+				Path: relPath, Kind: "dupcode_protected_function_value",
+				Message:  fmt.Sprintf("line %d: protected function value %s.%s captured by %s.%s", line, callee.PackagePath, callee.Name, caller.PackagePath, caller.Function),
+				Severity: checks.SeverityError,
+			})
+		}
 		return true
 	})
 
 	return findings
 }
 
-func recvTypeName(recv *ast.FieldList) string {
+func recvTypeNameFromAST(recv *ast.FieldList) string {
 	if recv == nil || len(recv.List) == 0 {
 		return ""
 	}
@@ -483,7 +489,7 @@ func recvTypeName(recv *ast.FieldList) string {
 	return ""
 }
 
-func recvTypeNameFromType(recv *types.Var) string {
+func recvTypeNameFromSig(recv *types.Var) string {
 	if recv == nil {
 		return ""
 	}
@@ -498,15 +504,7 @@ func recvTypeNameFromType(recv *types.Var) string {
 	return ""
 }
 
-func (p *DupcodeBypassPolicy) isProtectedCall(caller CallerIdentity, callee ProtectedSymbol) bool {
-	key := callee.PackagePath + "." + callee.Name
-	if _, ok := ProtectedSymbolsMap()[key]; !ok {
-		return false
-	}
-	return !IsApprovedCaller(caller, callee)
-}
-
-// ProtectedSymbolsMap returns a map for fast lookup.
+// ProtectedSymbolsMap returns a map for fast lookup (package.path + . + name).
 func ProtectedSymbolsMap() map[string]bool {
 	result := make(map[string]bool)
 	for _, sym := range ProtectedSymbols {
@@ -534,4 +532,13 @@ func FindProtectedSymbol(pkgPath, name string) *ProtectedSymbol {
 		}
 	}
 	return nil
+}
+
+func isProtectedPackage(path string) bool {
+	for _, prefix := range DupcodeProtectedPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
