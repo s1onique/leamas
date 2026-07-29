@@ -28,9 +28,6 @@ type dupcodeDispatchers struct {
 	updateBaseline gate.DispatchFunc
 }
 
-// osExit is injectable for testing.
-var osExit = os.Exit
-
 // productionDupcodeDispatchers uses the real gate dispatchers.
 var productionDupcodeDispatchers = dupcodeDispatchers{
 	verify:         gate.DispatchDupcodeVerify,
@@ -46,6 +43,9 @@ const (
 // BaselineDefaultPath is the default path for the baseline file.
 const BaselineDefaultPath = ".factory/dupcode-baseline.json"
 
+// osExit is used by the production wrapper to exit with the handler's return code.
+var osExit = os.Exit
+
 // handleFactoryVerifyDupcode is the production entry point for the dupcode subcommand.
 // It expects args starting at os.Args[4:] (after "leamas factory verify dupcode").
 func handleFactoryVerifyDupcode() {
@@ -58,9 +58,10 @@ func handleFactoryVerifyDupcode() {
 func handleDupcode(args []string, dispatchers dupcodeDispatchers, stdout, stderr io.Writer) int {
 	// Reset flag state for this subcommand
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	// Use a discard writer for FlagSet output to avoid mixing with user-visible output.
+	fs.SetOutput(io.Discard)
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: leamas factory verify dupcode [options]\n")
-		fs.PrintDefaults()
+		// Usage is printed below when --help is detected
 	}
 
 	// Parse flags for dupcode subcommand
@@ -73,10 +74,14 @@ func handleDupcode(args []string, dispatchers dupcodeDispatchers, stdout, stderr
 	// Parse arguments
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
+			// Print usage to stderr and return success
+			fmt.Fprintf(stderr, "Usage: leamas factory verify dupcode [options]\n")
+			fs.PrintDefaults()
 			return ExitSuccess
 		}
 		if *jsonOutput {
-			fmt.Fprintf(stdout, `{"error": "flag parse error: %v"}`, err)
+			enc := json.NewEncoder(stderr)
+			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("flag parse error: %v", err)})
 		} else {
 			fmt.Fprintf(stderr, "Error: %v\n", err)
 		}
@@ -86,7 +91,8 @@ func handleDupcode(args []string, dispatchers dupcodeDispatchers, stdout, stderr
 	// Check for unexpected positional arguments
 	if fs.NArg() > 0 {
 		if *jsonOutput {
-			fmt.Fprintf(stdout, `{"error": "unexpected positional argument: %s"}`, fs.Arg(0))
+			enc := json.NewEncoder(stderr)
+			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("unexpected positional argument: %s", fs.Arg(0))})
 		} else {
 			fmt.Fprintf(stderr, "Error: unexpected positional argument: %s\n", fs.Arg(0))
 		}
