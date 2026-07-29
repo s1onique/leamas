@@ -6,9 +6,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
+	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/gate"
+	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
 
 // Default thresholds for the baseline policy
@@ -31,6 +34,42 @@ func printJSONAndExit(v any, code int) {
 	}
 	fmt.Println(string(data))
 	os.Exit(code)
+}
+
+// renderDupcodeBaselineDispatchFailure evaluates dispatcher failure channels
+// for the standalone dupcode-baseline command. The order is:
+//  1. Dispatch.Error
+//  2. Dispatch.Findings
+//
+// Returns exitCode and failed=true when a failure channel was rendered.
+func renderDupcodeBaselineDispatchFailure(
+	result verifierdispatch.Result,
+	jsonOutput bool,
+	stdout io.Writer,
+	stderr io.Writer,
+) (int, bool) {
+	if result.Error != nil {
+		if jsonOutput {
+			printJSONAndExit(jsonError{Error: fmt.Sprintf("dispatcher error: %v", result.Error)}, 1)
+		} else {
+			fmt.Fprintf(stderr, "Error: %v\n", result.Error)
+		}
+		return 1, true
+	}
+	if len(result.Findings) > 0 {
+		f := result.Findings[0]
+		if jsonOutput {
+			type findingError struct {
+				Error string `json:"error"`
+				Kind  string `json:"kind"`
+			}
+			printJSONAndExit(findingError{Error: f.Message, Kind: f.Kind}, 1)
+		} else {
+			fmt.Fprintf(stderr, "Error: %s\n", f.Message)
+		}
+		return 1, true
+	}
+	return 0, false
 }
 
 func handleFactoryVerifyDupcodeBaseline() {
@@ -73,14 +112,11 @@ func handleFactoryVerifyDupcodeBaseline() {
 	ctx := context.Background()
 	result := gate.DispatchDupcodeBaselineVerifyTyped(ctx, ".", spec)
 
-	// Handle authority denial or runner errors (infrastructure failures only)
-	if result.Dispatch.Error != nil {
-		if *jsonOutput {
-			printJSONAndExit(jsonError{Error: fmt.Sprintf("dispatcher error: %v", result.Dispatch.Error)}, 1)
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", result.Dispatch.Error)
-			os.Exit(1)
-		}
+	stdout := io.Writer(os.Stdout)
+	stderr := io.Writer(os.Stderr)
+
+	if exitCode, failed := renderDupcodeBaselineDispatchFailure(result.Dispatch, *jsonOutput, stdout, stderr); failed {
+		os.Exit(exitCode)
 	}
 
 	// Get the typed findings from the authorized runner
@@ -128,3 +164,7 @@ func handleFactoryVerifyDupcodeBaseline() {
 	code := gate.DupcodeBaselinePrintResult("dupcode baseline", findings)
 	os.Exit(code)
 }
+
+// _ ensures checks import is referenced; the dupcode_baseline path uses
+// checks.Finding through the typed dispatch outcome.
+var _ = []checks.Finding(nil)

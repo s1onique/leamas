@@ -9,42 +9,6 @@ import (
 	"testing"
 )
 
-// TestNoProtectedVerifierImportsInCmd ensures the command layer never imports
-// the protectedverifier adapter package directly.
-func TestNoProtectedVerifierImportsInCmd(t *testing.T) {
-	// The check is structural: the cmd package's go.mod graph must not include
-	// the adapter. We verify by counting references in cmd source files.
-	// cmd/leamas/factory_verify_dupcode.go and factory_verify_dupcode_baseline.go
-	// must not contain "protectedverifier" as an import.
-	for _, path := range []string{
-		"factory_verify_dupcode.go",
-		"factory_verify_dupcode_baseline.go",
-	} {
-		// Use a sentinel import-name check by attempting to compile a small
-		// type assertion in test code that would only succeed if the import
-		// existed. We rely on go test's own compile failure for missing
-		// imports. This test simply asserts that, by absence, the import
-		// list does not contain "protectedverifier".
-		_ = path
-	}
-	// Build-time enforcement (compile error if import re-introduced) is
-	// the actual gate; this test exists to document the invariant.
-}
-
-// TestNoRunnerFactoryInCmd verifies the cmd package does not construct or
-// pass RunnerFactory closures to gate.Dispatch*. The cmd package uses the
-// typed dispatch entry points with data-only specs.
-func TestNoRunnerFactoryInCmd(t *testing.T) {
-	// Structural: this test exists to document that handleDupcode takes no
-	// dispatchers/RunnerFactory parameters. Compile-time enforcement of the
-	// data-only contract is the actual gate; this test is documentation.
-	for _, name := range []string{"dupcodeDispatchers"} {
-		_ = name
-	}
-	// If a future change re-introduces `dupcodeDispatchers`, this test will
-	// need to assert against the type. For now the absence is the invariant.
-}
-
 // TestDupcodeHelpZeroDispatch proves --help renders complete usage and returns ExitSuccess without dispatch.
 func TestDupcodeHelpZeroDispatch(t *testing.T) {
 	args := []string{"--help"}

@@ -6,13 +6,46 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
-	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
+
+// dupcodeReentryKind is the canonical kind for a binder re-entry finding.
+const dupcodeReentryKind = "dupcode_execution_reentered"
+
+// dupcodeReentryMessage is the canonical message for a binder re-entry finding.
+const dupcodeReentryMessage = "dupcode bound runner invoked more than once"
+
+// binderEntryGuard is an invocation-local concurrency-safe entry guard for a
+// bound runner. The first call succeeds and returns nil. Every subsequent
+// call returns exactly one explicit invariant finding so a contract violation
+// cannot be misread as a successful zero-finding dispatch.
+//
+// We do NOT use sync.Once: the contract requires surfacing the second
+// invocation as an observable invariant breach, not silently suppressing it.
+type binderEntryGuard struct {
+	entered atomic.Bool
+}
+
+// enter attempts to claim the binder entry slot. It returns nil on the first
+// successful claim and a single dupcode_execution_reentered finding on every
+// later call. The guard is concurrency-safe: at most one caller observes a
+// successful claim even under concurrent invocation.
+func (g *binderEntryGuard) enter() []checks.Finding {
+	if g.entered.CompareAndSwap(false, true) {
+		return nil
+	}
+	return []checks.Finding{{
+		Path:     "dupcode",
+		Kind:     dupcodeReentryKind,
+		Message:  dupcodeReentryMessage,
+		Severity: checks.SeverityError,
+	}}
+}
 
 // DupcodeVerifySpec is the data-only dispatch request for the dupcode verify lane.
 type DupcodeVerifySpec struct {
@@ -56,25 +89,15 @@ type dupcodeBinderDeps struct {
 	NewRunner func() dupcodeRunner
 }
 
-// productionDupcodeBinderDeps returns the production default deps. The
-// returned struct is invocation-local; no package-global state.
-func productionDupcodeBinderDeps() dupcodeBinderDeps {
-	return dupcodeBinderDeps{
-		NewRunner: func() dupcodeRunner {
-			return protectedverifier.NewDupcodeRunner()
-		},
-	}
-}
-
 // DupcodeVerifyBinder is the named post-authority binder for the dupcode
 // verify lane. It owns an invocation-local payload cell so the typed
 // outcome can be read after Dispatch returns, without re-executing the
 // protected work.
 type DupcodeVerifyBinder struct {
-	spec DupcodeVerifySpec
-	deps dupcodeBinderDeps
+	spec  DupcodeVerifySpec
+	deps  dupcodeBinderDeps
+	entry binderEntryGuard
 
-	ran     bool
 	report  dupcode.Report
 	compRes dupcode.CompareResult
 }
@@ -104,13 +127,14 @@ func (b *DupcodeVerifyBinder) BindRunner() verifierdispatch.RunnerFactory {
 // run is the named bound runner. It executes the protected work AT MOST
 // ONCE per binder instance and stores the typed payload for later
 // retrieval by the typed dispatch entry point.
+//
+// Concurrency-safe entry: the binderEntryGuard rejects every invocation
+// after the first with a dupcode_execution_reentered finding. This makes
+// any double-invocation observable rather than silently skipped.
 func (b *DupcodeVerifyBinder) run(root string) []checks.Finding {
-	if b.ran {
-		// Defensive: should not happen because the dispatcher invokes the
-		// factory exactly once. Returning nil keeps the contract.
-		return nil
+	if findings := b.entry.enter(); findings != nil {
+		return findings
 	}
-	b.ran = true
 
 	runner := b.deps.NewRunner()
 
@@ -171,7 +195,7 @@ func (b *DupcodeVerifyBinder) CompareResult() dupcode.CompareResult {
 type DupcodeBaselineBinder struct {
 	spec     DupcodeBaselineSpec
 	deps     dupcodeBinderDeps
-	ran      bool
+	entry    binderEntryGuard
 	findings []checks.Finding
 }
 
@@ -196,11 +220,13 @@ func (b *DupcodeBaselineBinder) BindRunner() verifierdispatch.RunnerFactory {
 	}
 }
 
+// run is the named bound runner for the dupcode-baseline lane. The
+// binderEntryGuard rejects every invocation after the first with a
+// dupcode_execution_reentered finding.
 func (b *DupcodeBaselineBinder) run(root string) []checks.Finding {
-	if b.ran {
-		return nil
+	if findings := b.entry.enter(); findings != nil {
+		return findings
 	}
-	b.ran = true
 
 	runner := b.deps.NewRunner()
 	policy := dupcode.BaselinePolicy{
@@ -234,7 +260,7 @@ func (b *DupcodeBaselineBinder) Findings() []checks.Finding {
 type DupcodeUpdateBaselineBinder struct {
 	spec    DupcodeUpdateBaselineSpec
 	deps    dupcodeBinderDeps
-	ran     bool
+	entry   binderEntryGuard
 	report  dupcode.Report
 	written bool
 }
@@ -260,11 +286,13 @@ func (b *DupcodeUpdateBaselineBinder) BindRunner() verifierdispatch.RunnerFactor
 	}
 }
 
+// run is the named bound runner for the dupcode update-baseline lane.
+// The binderEntryGuard rejects every invocation after the first with a
+// dupcode_execution_reentered finding.
 func (b *DupcodeUpdateBaselineBinder) run(root string) []checks.Finding {
-	if b.ran {
-		return nil
+	if findings := b.entry.enter(); findings != nil {
+		return findings
 	}
-	b.ran = true
 
 	runner := b.deps.NewRunner()
 	cfg := dupcode.DefaultConfig()
@@ -340,97 +368,4 @@ func dispatchDupcodeVerifyTypedWith(
 	outcome.Report = reportToDTO(binder.Report(), spec)
 	outcome.Comparison = compareResultToDTO(binder.CompareResult())
 	return outcome
-}
-
-// DispatchDupcodeVerifyTyped is the production typed dispatch entry
-// point for the dupcode verify lane. The cmd layer holds only the spec.
-func DispatchDupcodeVerifyTyped(ctx context.Context, root string, spec DupcodeVerifySpec) DupcodeVerifyOutcome {
-	return dispatchDupcodeVerifyTypedWith(ctx, root, spec, &verifierdispatch.DefaultContextObserver{}, productionDupcodeBinderDeps())
-}
-
-// dispatchDupcodeBaselineVerifyTypedWith is the testable typed dispatch
-// entry point for the dupcode-baseline lane.
-func dispatchDupcodeBaselineVerifyTypedWith(
-	ctx context.Context,
-	root string,
-	spec DupcodeBaselineSpec,
-	observer verifierdispatch.ContextObserver,
-	deps dupcodeBinderDeps,
-) DupcodeBaselineOutcome {
-	dispatcher, ok := DispatcherForVerifier("dupcode-baseline")
-	if !ok {
-		return DupcodeBaselineOutcome{
-			Dispatch: verifierdispatch.Result{
-				Error: fmt.Errorf("dupcode-baseline verifier not found in registry"),
-			},
-		}
-	}
-	request := verifierdispatch.Request{
-		VerifierID: "dupcode-baseline",
-		Operation:  verifierauthority.OperationVerify,
-		Root:       root,
-	}
-	binder := newDupcodeBaselineBinderWithDeps(spec, deps)
-
-	outcome := DupcodeBaselineOutcome{
-		Dispatch: dispatcher.Dispatch(ctx, request, observer, binder.BindRunner()),
-	}
-
-	// Read findings from the binder's invocation-local cell. Do NOT
-	// re-execute the runner.
-	outcome.Findings = binder.Findings()
-	return outcome
-}
-
-// DispatchDupcodeBaselineVerifyTyped is the production typed dispatch
-// entry point for the dupcode-baseline lane.
-func DispatchDupcodeBaselineVerifyTyped(ctx context.Context, root string, spec DupcodeBaselineSpec) DupcodeBaselineOutcome {
-	return dispatchDupcodeBaselineVerifyTypedWith(ctx, root, spec, &verifierdispatch.DefaultContextObserver{}, productionDupcodeBinderDeps())
-}
-
-// dispatchDupcodeUpdateBaselineTypedWith is the testable typed dispatch
-// entry point for the dupcode update-baseline lane.
-func dispatchDupcodeUpdateBaselineTypedWith(
-	ctx context.Context,
-	root string,
-	spec DupcodeUpdateBaselineSpec,
-	observer verifierdispatch.ContextObserver,
-	deps dupcodeBinderDeps,
-) DupcodeUpdateBaselineOutcome {
-	dispatcher, ok := DispatcherForVerifier("dupcode")
-	if !ok {
-		return DupcodeUpdateBaselineOutcome{
-			Dispatch: verifierdispatch.Result{
-				Error: fmt.Errorf("dupcode verifier not found in registry"),
-			},
-		}
-	}
-	request := verifierdispatch.Request{
-		VerifierID: "dupcode",
-		Operation:  verifierauthority.OperationUpdateBaseline,
-		Root:       root,
-	}
-	binder := newDupcodeUpdateBaselineBinderWithDeps(spec, deps)
-
-	outcome := DupcodeUpdateBaselineOutcome{
-		Dispatch: dispatcher.Dispatch(ctx, request, observer, binder.BindRunner()),
-	}
-
-	// Read the typed report from the binder's invocation-local cell.
-	outcome.Report = reportToDTO(binder.Report(), DupcodeVerifySpec{
-		MinLines:  spec.MinLines,
-		MinTokens: spec.MinTokens,
-	})
-	return outcome
-}
-
-// DispatchDupcodeUpdateBaselineTyped is the production typed dispatch
-// entry point for the dupcode update-baseline lane.
-func DispatchDupcodeUpdateBaselineTyped(ctx context.Context, root string, spec DupcodeUpdateBaselineSpec) DupcodeUpdateBaselineOutcome {
-	return dispatchDupcodeUpdateBaselineTypedWith(ctx, root, spec, &verifierdispatch.DefaultContextObserver{}, productionDupcodeBinderDeps())
-}
-
-// DupcodeBaselinePrintResult is the data-only print/export helper.
-func DupcodeBaselinePrintResult(label string, findings []checks.Finding) int {
-	return dupcode.PrintBaselineVerifyResult(label, findings)
 }

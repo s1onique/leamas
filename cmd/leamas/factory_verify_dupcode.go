@@ -9,9 +9,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/gate"
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
+	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
 
 const (
@@ -120,16 +120,48 @@ func handleDupcodeWith(args []string, stdout, stderr io.Writer, dispatchers dupc
 	return renderVerifyBaselineResult(ctx, spec, *jsonOutput, stdout, stderr, dispatchers)
 }
 
-func renderUpdateBaselineResult(ctx context.Context, spec gate.DupcodeUpdateBaselineSpec, jsonOutput bool, stdout, stderr io.Writer, dispatchers dupcodeTypedDispatchers) int {
-	result := dispatchers.updateBaseline(ctx, ".", spec)
-	if result.Dispatch.Error != nil {
+// renderDupcodeDispatchFailure evaluates dispatcher failure channels in the
+// canonical order: Dispatch.Error, then Dispatch.Findings. The first channel
+// that carries an observable signal wins; the typed payload is only rendered
+// when both channels are empty.
+//
+// Returns exitCode and failed=true when a failure channel was rendered.
+// failed=false means the caller may proceed to render the typed payload.
+func renderDupcodeDispatchFailure(
+	result verifierdispatch.Result,
+	jsonOutput bool,
+	stdout io.Writer,
+	stderr io.Writer,
+) (exitCode int, failed bool) {
+	if result.Error != nil {
 		if jsonOutput {
 			enc := json.NewEncoder(stdout)
-			_ = enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Dispatch.Error)})
+			_ = enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Error)})
 		} else {
-			fmt.Fprintf(stderr, "dupcode: %v\n", result.Dispatch.Error)
+			fmt.Fprintf(stderr, "dupcode: %v\n", result.Error)
 		}
-		return ExitAuthorityFailure
+		return ExitAuthorityFailure, true
+	}
+	if len(result.Findings) > 0 {
+		f := result.Findings[0]
+		if jsonOutput {
+			enc := json.NewEncoder(stdout)
+			_ = enc.Encode(map[string]interface{}{
+				"error": f.Message,
+				"kind":  f.Kind,
+			})
+		} else {
+			fmt.Fprintf(stderr, "dupcode: %s\n", f.Message)
+		}
+		return ExitAuthorityFailure, true
+	}
+	return 0, false
+}
+
+func renderUpdateBaselineResult(ctx context.Context, spec gate.DupcodeUpdateBaselineSpec, jsonOutput bool, stdout, stderr io.Writer, dispatchers dupcodeTypedDispatchers) int {
+	result := dispatchers.updateBaseline(ctx, ".", spec)
+	if exitCode, failed := renderDupcodeDispatchFailure(result.Dispatch, jsonOutput, stdout, stderr); failed {
+		return exitCode
 	}
 	if jsonOutput {
 		enc := json.NewEncoder(stdout)
@@ -152,14 +184,8 @@ func renderUpdateBaselineResult(ctx context.Context, spec gate.DupcodeUpdateBase
 
 func renderVerifyBaselineResult(ctx context.Context, spec gate.DupcodeVerifySpec, jsonOutput bool, stdout, stderr io.Writer, dispatchers dupcodeTypedDispatchers) int {
 	result := dispatchers.verify(ctx, ".", spec)
-	if result.Dispatch.Error != nil {
-		if jsonOutput {
-			enc := json.NewEncoder(stdout)
-			_ = enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Dispatch.Error)})
-		} else {
-			fmt.Fprintf(stderr, "dupcode: %v\n", result.Dispatch.Error)
-		}
-		return ExitAuthorityFailure
+	if exitCode, failed := renderDupcodeDispatchFailure(result.Dispatch, jsonOutput, stdout, stderr); failed {
+		return exitCode
 	}
 	if jsonOutput {
 		enc := json.NewEncoder(stdout)
@@ -191,5 +217,3 @@ func ValidateDupcodeAuthorityWithOperation(operation verifierauthority.VerifierO
 	}
 	return gate.ValidateDupcodeExecutionAuthority(ec, operation)
 }
-
-var _ = checks.FileExists

@@ -3,11 +3,13 @@
 package main
 
 import (
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -165,20 +167,12 @@ func findModuleRoot() (string, error) {
 	return "", os.ErrNotExist
 }
 
-// unquoteImport unquotes an import path value.
+// unquoteImport unquotes an import path value. It deliberately delegates to
+// strconv.Unquote so that malformed import literals fail this test rather
+// than silently passing via a hand-rolled substring path.
 func unquoteImport(imp *ast.ImportSpec) (string, error) {
 	if imp.Path == nil {
-		return "", os.ErrInvalid
+		return "", errors.New("missing import path")
 	}
-	v := imp.Path.Value
-	if len(v) < 2 {
-		return "", os.ErrInvalid
-	}
-	if v[0] == '"' && v[len(v)-1] == '"' {
-		return v[1 : len(v)-1], nil
-	}
-	if v[0] == '`' && v[len(v)-1] == '`' {
-		return v[1 : len(v)-1], nil
-	}
-	return v, nil
+	return strconv.Unquote(imp.Path.Value)
 }

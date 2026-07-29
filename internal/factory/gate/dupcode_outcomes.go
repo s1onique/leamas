@@ -103,7 +103,7 @@ func baselineFindingsToDTO(src []dupcode.BaselineFinding) []DupcodeFindingDTO {
 		out = append(out, DupcodeFindingDTO{
 			Path:        baselineFindingPath(f),
 			Kind:        "duplicate",
-			Message:    "duplicate block",
+			Message:     "duplicate block",
 			Severity:    "error",
 			Fingerprint: f.Fingerprint,
 			TokenCount:  f.TokenCount,
@@ -119,7 +119,7 @@ func newFindingsToDTO(src []dupcode.NewFinding) []DupcodeFindingDTO {
 		out = append(out, DupcodeFindingDTO{
 			Path:        newFindingPath(f),
 			Kind:        "new_duplicate",
-			Message:    "new duplicate",
+			Message:     "new duplicate",
 			Severity:    "error",
 			Fingerprint: f.Fingerprint,
 			TokenCount:  f.TokenCount,
@@ -136,7 +136,7 @@ func worsenedFindingsToDTO(src []dupcode.WorsenedFinding) []DupcodeFindingDTO {
 		out = append(out, DupcodeFindingDTO{
 			Path:        worsenedFindingPath(f),
 			Kind:        "worsened_duplicate",
-			Message:    "worsened duplicate",
+			Message:     "worsened duplicate",
 			Severity:    "error",
 			Fingerprint: f.Fingerprint,
 			TokenCount:  f.TotalNow,
@@ -178,7 +178,7 @@ func reportToDTO(report dupcode.Report, spec DupcodeVerifySpec) DupcodeReportDTO
 		findings = append(findings, DupcodeFindingDTO{
 			Path:        findingPath(f),
 			Kind:        "duplicate",
-			Message:    "duplicate block",
+			Message:     "duplicate block",
 			Severity:    "error",
 			Fingerprint: f.Fingerprint,
 			TokenCount:  f.TokenCount,
