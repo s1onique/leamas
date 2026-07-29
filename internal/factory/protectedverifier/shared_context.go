@@ -17,11 +17,20 @@ import (
 // DupcodeAnalysisProvider manages a single-scan context for dupcode analysis.
 // This is the ONLY production entry point for shared dupcode analysis context.
 type DupcodeAnalysisProvider struct {
-	mu       sync.Mutex
-	state    providerState
-	input    DupcodeInput
-	analysis *DupcodeAnalysis
-	analyzer DupcodeAnalyzer
+	mu             sync.Mutex
+	state          providerState
+	input          DupcodeInput
+	analysis       *DupcodeAnalysis
+	analyzer       DupcodeAnalyzer
+	initialFailure *initialFailure
+}
+
+// initialFailure records an analyzer failure during the first
+// consumer's invocation. Subsequent ConsumedBy calls return the same
+// error without retrying the analyzer, so the failure is stable for
+// the invocation.
+type initialFailure struct {
+	err error
 }
 
 type providerState int
@@ -64,7 +73,8 @@ func NewDupcodeAnalysisProvider(input DupcodeInput, analyzer DupcodeAnalyzer) *D
 }
 
 // ConsumedBy performs the analysis and returns the result.
-// The analysis is performed exactly once, with subsequent calls returning the cached result.
+// The analysis is performed exactly once, with subsequent calls returning
+// the cached result (success or failure).
 func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*DupcodeAnalysis, error) {
 	if input.Root != p.input.Root || input.MinLines != p.input.MinLines || input.MinTokens != p.input.MinTokens {
 		return nil, fmt.Errorf("dupcode analysis input mismatch for %s: "+
@@ -81,7 +91,13 @@ func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*
 		p.state = providerStateConsuming
 		findings, err := p.analyzer(input.Root, input.Config)
 		if err != nil {
-			p.state = providerStateEmpty
+			// Move to a terminal state so subsequent ConsumedBy calls
+			// return the same error without re-invoking the analyzer.
+			// This guarantees "initialization failure is stable for the
+			// invocation" — the analyzer runs at most once per provider
+			// regardless of outcome.
+			p.initialFailure = &initialFailure{err: err}
+			p.state = providerStateConsumed
 			return nil, err
 		}
 
@@ -102,6 +118,9 @@ func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*
 		return nil, fmt.Errorf("dupcode analysis: concurrent scan detected (programming error)")
 
 	case providerStateConsumed:
+		if p.initialFailure != nil {
+			return nil, p.initialFailure.err
+		}
 		return p.analysis, nil
 
 	default:
