@@ -58,8 +58,8 @@ func AllVerifiers() []registry.Verifier {
 		{Name: "executable-contract-first", Run: doctrine.CheckExecutableContractFirst, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
 			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/doctrine.CheckExecutableContractFirst", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
-		{Name: "forbidden-patterns", Run: forbidden.CheckRepo, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
-			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/forbidden.CheckRepo", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		{Name: "forbidden-patterns", Run: forbiddenPatternsVerifier, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.forbiddenPatternsVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
 		{Name: "git-hooks", Run: gitHooksVerifier, Lane: registry.VerifierLaneFast, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
 			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.gitHooksVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
@@ -328,6 +328,38 @@ func dupcodeBaselineVerifier(root string) []checks.Finding {
 		}
 	}
 	return findings
+}
+
+// forbiddenPatternsVerifier runs the canonical AST-based dupcode bypass policy.
+func forbiddenPatternsVerifier(root string) []checks.Finding {
+	// Use the canonical V2 policy with repository-wide scanning and symbol awareness
+	findings := forbidden.CanonicalCheckDupcodeBypassV2(root, "github.com/s1onique/leamas")
+
+	// Also run the legacy forbidden patterns check for completeness
+	// (patterns like OIDC, OAuth, RBAC, etc.)
+	legacyFindings := forbidden.CheckRepo(root)
+
+	// Merge findings, avoiding duplicates
+	existingKinds := make(map[string]bool)
+	result := make([]checks.Finding, 0, len(findings)+len(legacyFindings))
+
+	for _, f := range findings {
+		key := f.Path + "|" + f.Kind + "|" + f.Message
+		if !existingKinds[key] {
+			existingKinds[key] = true
+			result = append(result, f)
+		}
+	}
+
+	for _, f := range legacyFindings {
+		key := f.Path + "|" + f.Kind + "|" + f.Message
+		if !existingKinds[key] {
+			existingKinds[key] = true
+			result = append(result, f)
+		}
+	}
+
+	return result
 }
 
 // convertDupcodeCompareResult converts dupcode comparison results to gate findings.
