@@ -14,7 +14,6 @@ import (
 )
 
 // callerIdentity derives the enclosing caller using the ancestor stack.
-// Precedence (nearest first): function literal > method > package function > variable initializer > package init.
 func callerIdentity(pkgPath string, ancestors []ast.Node, fset *token.FileSet) CallerIdentity {
 	for i := len(ancestors) - 1; i >= 0; i-- {
 		switch a := ancestors[i].(type) {
@@ -74,9 +73,17 @@ func recvTypeNameFromAST(recv *ast.FieldList) string {
 }
 
 // resolveProtectedUse resolves a protected object (any layer) from an expression.
+// Supports:
+//   - package-qualified functions: protectedverifier.NewDupcodeRunner
+//   - package-qualified variables: protectedverifier.DefaultAnalyzer
+//   - method calls on values: runner.RunCheckRepo
+//   - method values: run := runner.RunCheckRepo
+//   - method expressions: run := (*protectedverifier.DupcodeRunner).RunCheckRepo
+//   - direct ident references: CheckRepo (only when it resolves to a protected symbol)
 func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr ast.Expr) (ProtectedSymbol, bool) {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
+		// Case 1: package-qualified selector (protectedverifier.X)
 		if ident, ok := e.X.(*ast.Ident); ok {
 			baseObj := pkg.TypesInfo.ObjectOf(ident)
 			if pkgName, ok := baseObj.(*types.PkgName); ok {
@@ -85,24 +92,46 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 				if fn, ok := selObj.(*types.Func); ok {
 					fnPkg := fn.Pkg()
 					if fnPkg != nil && fnPkg.Path() == importedPath {
-						// Check raw layer
 						if sym := findProtectedSymbol(AuthorityLayerRaw, fnPkg.Path(), fn.Name()); sym != nil {
 							callee := *sym
-							if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-								callee.Kind = ProtectedMethod
-								callee.Receiver = recvTypeNameFromSig(sig.Recv())
-							}
+							applyReceiver(&callee, fn)
 							return callee, true
 						}
-						// Check adapter layer
 						if sym := findProtectedSymbol(AuthorityLayerAdapter, fnPkg.Path(), fn.Name()); sym != nil {
 							callee := *sym
-							if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-								callee.Kind = ProtectedMethod
-								callee.Receiver = recvTypeNameFromSig(sig.Recv())
-							}
+							applyReceiver(&callee, fn)
 							return callee, true
 						}
+					}
+				}
+				// Package-qualified variable (e.g., protectedverifier.DefaultAnalyzer)
+				if v, ok := selObj.(*types.Var); ok {
+					vPkg := v.Pkg()
+					if vPkg != nil && vPkg.Path() == importedPath {
+						if sym := findProtectedSymbolVariable(AuthorityLayerAdapter, vPkg.Path(), v.Name()); sym != nil {
+							return *sym, true
+						}
+						if sym := findProtectedSymbolVariable(AuthorityLayerRaw, vPkg.Path(), v.Name()); sym != nil {
+							return *sym, true
+						}
+					}
+				}
+			}
+		}
+		// Case 2: method selection (runner.Method or type.Method expression)
+		// Use types.Info.Selections to resolve method calls/values/expressions.
+		if sel, ok := pkg.TypesInfo.Selections[e]; ok {
+			if fn, ok := sel.Obj().(*types.Func); ok {
+				fnPkg := fn.Pkg()
+				if fnPkg != nil {
+					if sym := findProtectedSymbol(AuthorityLayerAdapter, fnPkg.Path(), fn.Name()); sym != nil {
+						callee := *sym
+						// Use receiver from selection
+						recv := recvFromSelection(sel)
+						if recv != nil {
+							callee.Receiver = recvTypeNameFromSig(recv)
+						}
+						return callee, true
 					}
 				}
 			}
@@ -114,19 +143,22 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 			if fnPkg != nil {
 				if sym := findProtectedSymbol(AuthorityLayerRaw, fnPkg.Path(), fn.Name()); sym != nil {
 					callee := *sym
-					if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-						callee.Kind = ProtectedMethod
-						callee.Receiver = recvTypeNameFromSig(sig.Recv())
-					}
+					applyReceiver(&callee, fn)
 					return callee, true
 				}
 				if sym := findProtectedSymbol(AuthorityLayerAdapter, fnPkg.Path(), fn.Name()); sym != nil {
 					callee := *sym
-					if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-						callee.Kind = ProtectedMethod
-						callee.Receiver = recvTypeNameFromSig(sig.Recv())
-					}
+					applyReceiver(&callee, fn)
 					return callee, true
+				}
+			}
+		}
+		// Package-level variable (e.g., DefaultAnalyzer)
+		if v, ok := obj.(*types.Var); ok {
+			vPkg := v.Pkg()
+			if vPkg != nil {
+				if sym := findProtectedSymbolVariable(AuthorityLayerAdapter, vPkg.Path(), v.Name()); sym != nil {
+					return *sym, true
 				}
 			}
 		}
@@ -134,13 +166,46 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 	return ProtectedSymbol{}, false
 }
 
-// findProtectedSymbol looks up a protected symbol across both layers.
+// applyReceiver sets the receiver if the function has one.
+func applyReceiver(callee *ProtectedSymbol, fn *types.Func) {
+	if fn.Type() != nil {
+		if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+			callee.Kind = ProtectedMethod
+			callee.Receiver = recvTypeNameFromSig(sig.Recv())
+		}
+	}
+}
+
+// recvFromSelection extracts the receiver from a types.Selection.
+func recvFromSelection(sel *types.Selection) *types.Var {
+	switch sel.Kind() {
+	case types.MethodVal, types.MethodExpr:
+		if fn, ok := sel.Obj().(*types.Func); ok {
+			if sig, ok := fn.Type().(*types.Signature); ok {
+				return sig.Recv()
+			}
+		}
+	}
+	return nil
+}
+
+// findProtectedSymbol looks up a protected function symbol across both layers.
 func findProtectedSymbol(layer AuthorityLayer, pkgPath, name string) *ProtectedSymbol {
 	for _, sym := range ProtectedSymbols {
 		if sym.Layer == layer && sym.PackagePath == pkgPath && sym.Name == name {
 			return &sym
 		}
 	}
+	for _, sym := range AdapterProtectedSymbols {
+		if sym.Layer == layer && sym.PackagePath == pkgPath && sym.Name == name {
+			return &sym
+		}
+	}
+	return nil
+}
+
+// findProtectedSymbolVariable looks up a protected variable symbol across both layers.
+func findProtectedSymbolVariable(layer AuthorityLayer, pkgPath, name string) *ProtectedSymbol {
 	for _, sym := range AdapterProtectedSymbols {
 		if sym.Layer == layer && sym.PackagePath == pkgPath && sym.Name == name {
 			return &sym

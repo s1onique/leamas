@@ -23,6 +23,8 @@ type ProtectedSymbolKind string
 const (
 	ProtectedPackageFunction ProtectedSymbolKind = "package_function"
 	ProtectedMethod          ProtectedSymbolKind = "method"
+	// ProtectedPackageVariable is a package-level variable holding a function value.
+	ProtectedPackageVariable ProtectedSymbolKind = "package_variable"
 )
 
 // ProtectedSymbol represents an exact protected declaration.

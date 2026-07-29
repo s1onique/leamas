@@ -24,9 +24,12 @@ var AdapterProtectedSymbols = []ProtectedSymbol{
 	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "WriteBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
 	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "CompareToBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
 	// Global analyzer escape - explicitly protected (not approved in production).
+	// Analyzer() and SetAnalyzer() are package-level functions.
 	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "Analyzer", Kind: ProtectedPackageFunction},
 	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "SetAnalyzer", Kind: ProtectedPackageFunction},
-	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "DefaultAnalyzer", Kind: ProtectedPackageFunction},
+	// DefaultAnalyzer is a package-level variable holding a function value.
+	// Resolved as *types.Var (not *types.Func).
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "DefaultAnalyzer", Kind: ProtectedPackageVariable},
 }
 
 // ApprovedCallers defines exact approved caller-to-callee edges for BOTH layers.
