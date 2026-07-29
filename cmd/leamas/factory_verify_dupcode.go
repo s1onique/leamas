@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -14,11 +15,21 @@ import (
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
+// Exit codes for the dupcode subcommand.
+const (
+	ExitSuccess          = 0
+	ExitAuthorityFailure = 1
+	ExitParseFailure     = 2
+)
+
 // dupcodeDispatchers holds the dispatch functions for verify and update operations.
 type dupcodeDispatchers struct {
 	verify         gate.DispatchFunc
 	updateBaseline gate.DispatchFunc
 }
+
+// osExit is injectable for testing.
+var osExit = os.Exit
 
 // productionDupcodeDispatchers uses the real gate dispatchers.
 var productionDupcodeDispatchers = dupcodeDispatchers{
@@ -26,10 +37,7 @@ var productionDupcodeDispatchers = dupcodeDispatchers{
 	updateBaseline: gate.DispatchDupcodeUpdateBaseline,
 }
 
-// osExit is injectable for testing.
-var osExit = os.Exit
-
-// Default thresholds for the quality gate
+// Default thresholds for the quality gate.
 const (
 	DefaultMinLines  = 40
 	DefaultMinTokens = 400
@@ -39,13 +47,15 @@ const (
 const BaselineDefaultPath = ".factory/dupcode-baseline.json"
 
 // handleFactoryVerifyDupcode is the production entry point for the dupcode subcommand.
+// It expects args starting at os.Args[4:] (after "leamas factory verify dupcode").
 func handleFactoryVerifyDupcode() {
-	handleDupcode(os.Args[1:], productionDupcodeDispatchers)
+	osExit(handleDupcode(os.Args[4:], productionDupcodeDispatchers, os.Stdout, os.Stderr))
 }
 
 // handleDupcode is the internal handler that accepts dispatchers for testing.
 // It parses flags and routes to either verify or update handler based on flags.
-func handleDupcode(args []string, dispatchers dupcodeDispatchers) {
+// Returns an exit code: 0 = success, 1 = authority/gate failure, 2 = parse failure.
+func handleDupcode(args []string, dispatchers dupcodeDispatchers, stdout, stderr io.Writer) int {
 	// Reset flag state for this subcommand
 	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	fs.Usage = func() {
@@ -63,24 +73,24 @@ func handleDupcode(args []string, dispatchers dupcodeDispatchers) {
 	// Parse arguments
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
-			osExit(0)
+			return ExitSuccess
 		}
 		if *jsonOutput {
-			fmt.Printf(`{"error": "flag parse error: %v"}`, err)
+			fmt.Fprintf(stdout, `{"error": "flag parse error: %v"}`, err)
 		} else {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintf(stderr, "Error: %v\n", err)
 		}
-		osExit(2)
+		return ExitParseFailure
 	}
 
 	// Check for unexpected positional arguments
 	if fs.NArg() > 0 {
 		if *jsonOutput {
-			fmt.Printf(`{"error": "unexpected positional argument: %s"}`, fs.Arg(0))
+			fmt.Fprintf(stdout, `{"error": "unexpected positional argument: %s"}`, fs.Arg(0))
 		} else {
-			fmt.Fprintf(os.Stderr, "Error: unexpected positional argument: %s\n", fs.Arg(0))
+			fmt.Fprintf(stderr, "Error: unexpected positional argument: %s\n", fs.Arg(0))
 		}
-		osExit(2)
+		return ExitParseFailure
 	}
 
 	// Build config using protectedverifier adapter
@@ -89,15 +99,14 @@ func handleDupcode(args []string, dispatchers dupcodeDispatchers) {
 	cfg.MinTokens = *minTokens
 
 	if *updateBaseline {
-		handleUpdateBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, dispatchers.updateBaseline)
-		return
+		return handleUpdateBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, stdout, stderr, dispatchers.updateBaseline)
 	}
 
-	handleVerifyBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, dispatchers.verify)
+	return handleVerifyBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, stdout, stderr, dispatchers.verify)
 }
 
 // handleUpdateBaselineWithDispatch runs the update baseline handler with the given dispatcher.
-func handleUpdateBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, dispatcher gate.DispatchFunc) {
+func handleUpdateBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, stdout, stderr io.Writer, dispatcher gate.DispatchFunc) int {
 	ctx := context.Background()
 
 	runner := protectedverifier.NewDupcodeRunner()
@@ -139,31 +148,31 @@ func handleUpdateBaselineWithDispatch(baselinePath string, cfg protectedverifier
 	if len(result.Findings) > 0 {
 		f := result.Findings[0]
 		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
+			enc := json.NewEncoder(stdout)
 			enc.Encode(map[string]interface{}{
 				"error": f.Message,
 				"kind":  f.Kind,
 			})
 		} else {
-			fmt.Fprintf(os.Stderr, "dupcode: %v\n", f.Message)
+			fmt.Fprintf(stderr, "dupcode: %v\n", f.Message)
 		}
-		osExit(1)
+		return ExitAuthorityFailure
 	}
 
 	if result.Error != nil {
 		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
+			enc := json.NewEncoder(stdout)
 			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Error)})
 		} else {
-			fmt.Fprintf(os.Stderr, "dupcode: %v\n", result.Error)
+			fmt.Fprintf(stderr, "dupcode: %v\n", result.Error)
 		}
-		osExit(1)
+		return ExitAuthorityFailure
 	}
 
 	findingsCount := len(scanReport.Findings)
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(stdout)
 		enc.Encode(map[string]interface{}{
 			"baseline":    baselinePath,
 			"findings":    findingsCount,
@@ -171,16 +180,16 @@ func handleUpdateBaselineWithDispatch(baselinePath string, cfg protectedverifier
 			"scan_report": scanReport,
 		})
 	} else {
-		fmt.Printf("Baseline written to: %s\n", baselinePath)
-		fmt.Printf("Thresholds: min_lines=%d, min_tokens=%d\n", cfg.MinLines, cfg.MinTokens)
-		fmt.Printf("Scan found %d duplicate blocks\n", findingsCount)
+		fmt.Fprintf(stdout, "Baseline written to: %s\n", baselinePath)
+		fmt.Fprintf(stdout, "Thresholds: min_lines=%d, min_tokens=%d\n", cfg.MinLines, cfg.MinTokens)
+		fmt.Fprintf(stdout, "Scan found %d duplicate blocks\n", findingsCount)
 	}
 
-	osExit(0)
+	return ExitSuccess
 }
 
 // handleVerifyBaselineWithDispatch runs the verify baseline handler with the given dispatcher.
-func handleVerifyBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, dispatcher gate.DispatchFunc) {
+func handleVerifyBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, stdout, stderr io.Writer, dispatcher gate.DispatchFunc) int {
 	ctx := context.Background()
 
 	runner := protectedverifier.NewDupcodeRunner()
@@ -246,29 +255,29 @@ func handleVerifyBaselineWithDispatch(baselinePath string, cfg protectedverifier
 	if len(result.Findings) > 0 {
 		f := result.Findings[0]
 		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
+			enc := json.NewEncoder(stdout)
 			enc.Encode(map[string]interface{}{
 				"error": f.Message,
 				"kind":  f.Kind,
 			})
 		} else {
-			fmt.Fprintf(os.Stderr, "dupcode: %v\n", f.Message)
+			fmt.Fprintf(stderr, "dupcode: %v\n", f.Message)
 		}
-		osExit(1)
+		return ExitAuthorityFailure
 	}
 
 	if result.Error != nil {
 		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
+			enc := json.NewEncoder(stdout)
 			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Error)})
 		} else {
-			fmt.Fprintf(os.Stderr, "dupcode: %v\n", result.Error)
+			fmt.Fprintf(stderr, "dupcode: %v\n", result.Error)
 		}
-		osExit(1)
+		return ExitAuthorityFailure
 	}
 
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
+		enc := json.NewEncoder(stdout)
 		enc.Encode(map[string]interface{}{
 			"has_changes":       compareResult.HasChanges,
 			"new_count":         len(compareResult.NewFindings),
@@ -279,15 +288,15 @@ func handleVerifyBaselineWithDispatch(baselinePath string, cfg protectedverifier
 		})
 	} else {
 		if compareResult.HasChanges {
-			fmt.Printf("Duplicate code violations found:\n")
-			fmt.Printf("  New: %d\n", len(compareResult.NewFindings))
-			fmt.Printf("  Worsened: %d\n", len(compareResult.WorsenedFindings))
+			fmt.Fprintf(stdout, "Duplicate code violations found:\n")
+			fmt.Fprintf(stdout, "  New: %d\n", len(compareResult.NewFindings))
+			fmt.Fprintf(stdout, "  Worsened: %d\n", len(compareResult.WorsenedFindings))
 		} else {
-			fmt.Printf("No duplicate code violations found.\n")
+			fmt.Fprintf(stdout, "No duplicate code violations found.\n")
 		}
 	}
 
-	osExit(0)
+	return ExitSuccess
 }
 
 // ValidateDupcodeAuthorityWithOperation validates dupcode authority for a specific operation.
