@@ -11,7 +11,6 @@ import (
 const testModulePath = "github.com/s1onique/leamas"
 
 func createTestModule(t *testing.T, dir string) {
-	// Create go.mod file
 	goMod := `module github.com/s1onique/leamas
 
 go 1.21
@@ -84,7 +83,6 @@ func TestProtectedSymbolsMap(t *testing.T) {
 		t.Error("ProtectedSymbolsMap should not be empty")
 	}
 
-	// Check for expected protected symbols
 	expected := []string{
 		"github.com/s1onique/leamas/internal/factory/dupcode.CheckRepo",
 		"github.com/s1onique/leamas/internal/factory/dupcode.CheckReport",
@@ -98,21 +96,22 @@ func TestProtectedSymbolsMap(t *testing.T) {
 
 func TestIsApprovedCaller(t *testing.T) {
 	// Approved caller should return true
-	if !IsApprovedCaller(
-		"github.com/s1onique/leamas/internal/factory/protectedverifier",
-		"",
-		"github.com/s1onique/leamas/internal/factory/dupcode",
-		"CheckRepo",
-	) {
+	caller := CallerIdentity{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:    "Adapter",
+	}
+	if !IsApprovedCaller(caller, ProtectedSymbol{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+		Name:        "CheckRepo",
+		Kind:        ProtectedPackageFunction,
+	}) {
 		t.Error("approved caller should return true")
 	}
 
-	// Unapproved caller should return false
+	// Unapproved function should return false
 	if IsApprovedCaller(
-		"github.com/s1onique/leamas/internal/factory/gate",
-		"",
-		"github.com/s1onique/leamas/internal/factory/dupcode",
-		"CheckRepo",
+		CallerIdentity{PackagePath: "github.com/s1onique/leamas/internal/factory/gate", Function: "AnyFunc"},
+		ProtectedSymbol{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
 	) {
 		t.Error("unapproved caller should return false")
 	}
@@ -133,7 +132,6 @@ func TestFindProtectedSymbol(t *testing.T) {
 func TestCanonicalPolicy_LoadsPackagesFromRepoRoot(t *testing.T) {
 	dir := t.TempDir()
 
-	// Create nested package structure
 	pkgDir := filepath.Join(dir, "internal", "app")
 	if err := os.MkdirAll(pkgDir, 0755); err != nil {
 		t.Fatalf("failed to create pkg dir: %v", err)
@@ -152,10 +150,38 @@ func Run() {}`
 	createTestModule(t, dir)
 
 	findings := CanonicalCheckDupcodeBypass(dir, testModulePath)
-	// Should not have errors about package loading
 	for _, f := range findings {
 		if f.Kind == "dupcode_package_load_error" {
 			t.Errorf("unexpected package load error: %s", f.Message)
 		}
+	}
+}
+
+func TestCanonicalPolicy_FailClosedOnPackageErrors(t *testing.T) {
+	// This test ensures that package errors trigger fail-closed behavior.
+	// We use a non-existent path which should produce canonical_root_error.
+	findings := CanonicalCheckDupcodeBypass("/nonexistent", testModulePath)
+	if len(findings) == 0 {
+		t.Error("expected findings for nonexistent path")
+	}
+	foundCanonicalRoot := false
+	for _, f := range findings {
+		if f.Kind == "canonical_root_error" {
+			foundCanonicalRoot = true
+			break
+		}
+	}
+	if !foundCanonicalRoot {
+		t.Error("expected canonical_root_error finding")
+	}
+}
+
+func TestCallerIdentityEnforcedStrict(t *testing.T) {
+	// An empty Function in ApprovedCallers must NOT match.
+	if IsApprovedCaller(
+		CallerIdentity{PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Function: ""},
+		ProtectedSymbol{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
+	) {
+		t.Error("empty Function should not be approved (no wildcards)")
 	}
 }

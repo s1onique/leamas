@@ -236,12 +236,12 @@ func isInAllowedDir(path string) bool {
 	return false
 }
 
-// CheckRepo runs all forbidden pattern checks.
+// CheckRepo runs non-dupcode forbidden pattern checks.
+// Dupcode bypass enforcement is performed separately by CanonicalCheckDupcodeBypass.
 func CheckRepo(root string) []checks.Finding {
 	var findings []checks.Finding
 	findings = append(findings, CheckForbiddenPatterns(root)...)
 	findings = append(findings, CheckDatabaseImports(root)...)
-	findings = append(findings, CheckDupcodeBypass(root)...)
 	checks.SortFindings(findings)
 	return findings
 }
