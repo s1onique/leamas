@@ -7,6 +7,16 @@ import (
 	"strings"
 )
 
+// AuthorityLayer distinguishes between raw protected operations and adapter capabilities.
+type AuthorityLayer string
+
+const (
+	// AuthorityLayerRaw protects raw dupcode package-level operations.
+	AuthorityLayerRaw AuthorityLayer = "raw_dupcode"
+	// AuthorityLayerAdapter protects protectedverifier adapter capabilities.
+	AuthorityLayerAdapter AuthorityLayer = "protected_adapter"
+)
+
 // ProtectedSymbolKind is the kind of a protected symbol.
 type ProtectedSymbolKind string
 
@@ -17,6 +27,7 @@ const (
 
 // ProtectedSymbol represents an exact protected declaration.
 type ProtectedSymbol struct {
+	Layer       AuthorityLayer
 	PackagePath string
 	Name        string
 	Kind        ProtectedSymbolKind
@@ -37,15 +48,15 @@ var DupcodeProtectedPrefixes = []string{
 	"github.com/s1onique/leamas/internal/factory/dupcode",
 }
 
-// ProtectedSymbols defines exact protected symbols.
+// ProtectedSymbols defines exact raw-layer protected symbols.
 // Source of truth: internal/factory/dupcode
 var ProtectedSymbols = []ProtectedSymbol{
-	{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
-	{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckReport", Kind: ProtectedPackageFunction},
-	{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "LoadBaseline", Kind: ProtectedPackageFunction},
-	{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "VerifyBaseline", Kind: ProtectedPackageFunction},
-	{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "WriteBaseline", Kind: ProtectedPackageFunction},
-	{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CompareToBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckReport", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "LoadBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "VerifyBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "WriteBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CompareToBaseline", Kind: ProtectedPackageFunction},
 }
 
 // CallerIdentity identifies an enclosing caller.

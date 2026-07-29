@@ -73,7 +73,7 @@ func recvTypeNameFromAST(recv *ast.FieldList) string {
 	return ""
 }
 
-// resolveProtectedUse resolves a protected object from an expression.
+// resolveProtectedUse resolves a protected object (any layer) from an expression.
 func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr ast.Expr) (ProtectedSymbol, bool) {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
@@ -85,16 +85,22 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 				if fn, ok := selObj.(*types.Func); ok {
 					fnPkg := fn.Pkg()
 					if fnPkg != nil && fnPkg.Path() == importedPath {
-						callee := ProtectedSymbol{
-							PackagePath: fnPkg.Path(),
-							Name:        fn.Name(),
-							Kind:        ProtectedPackageFunction,
+						// Check raw layer
+						if sym := findProtectedSymbol(AuthorityLayerRaw, fnPkg.Path(), fn.Name()); sym != nil {
+							callee := *sym
+							if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+								callee.Kind = ProtectedMethod
+								callee.Receiver = recvTypeNameFromSig(sig.Recv())
+							}
+							return callee, true
 						}
-						if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-							callee.Kind = ProtectedMethod
-							callee.Receiver = recvTypeNameFromSig(sig.Recv())
-						}
-						if _, ok := ProtectedSymbolsMap()[callee.PackagePath+"."+callee.Name]; ok {
+						// Check adapter layer
+						if sym := findProtectedSymbol(AuthorityLayerAdapter, fnPkg.Path(), fn.Name()); sym != nil {
+							callee := *sym
+							if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+								callee.Kind = ProtectedMethod
+								callee.Receiver = recvTypeNameFromSig(sig.Recv())
+							}
 							return callee, true
 						}
 					}
@@ -106,16 +112,20 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 		if fn, ok := obj.(*types.Func); ok {
 			fnPkg := fn.Pkg()
 			if fnPkg != nil {
-				callee := ProtectedSymbol{
-					PackagePath: fnPkg.Path(),
-					Name:        fn.Name(),
-					Kind:        ProtectedPackageFunction,
+				if sym := findProtectedSymbol(AuthorityLayerRaw, fnPkg.Path(), fn.Name()); sym != nil {
+					callee := *sym
+					if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+						callee.Kind = ProtectedMethod
+						callee.Receiver = recvTypeNameFromSig(sig.Recv())
+					}
+					return callee, true
 				}
-				if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
-					callee.Kind = ProtectedMethod
-					callee.Receiver = recvTypeNameFromSig(sig.Recv())
-				}
-				if _, ok := ProtectedSymbolsMap()[callee.PackagePath+"."+callee.Name]; ok {
+				if sym := findProtectedSymbol(AuthorityLayerAdapter, fnPkg.Path(), fn.Name()); sym != nil {
+					callee := *sym
+					if sig, ok := fn.Type().(*types.Signature); ok && sig.Recv() != nil {
+						callee.Kind = ProtectedMethod
+						callee.Receiver = recvTypeNameFromSig(sig.Recv())
+					}
 					return callee, true
 				}
 			}
@@ -124,12 +134,26 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 	return ProtectedSymbol{}, false
 }
 
+// findProtectedSymbol looks up a protected symbol across both layers.
+func findProtectedSymbol(layer AuthorityLayer, pkgPath, name string) *ProtectedSymbol {
+	for _, sym := range ProtectedSymbols {
+		if sym.Layer == layer && sym.PackagePath == pkgPath && sym.Name == name {
+			return &sym
+		}
+	}
+	for _, sym := range AdapterProtectedSymbols {
+		if sym.Layer == layer && sym.PackagePath == pkgPath && sym.Name == name {
+			return &sym
+		}
+	}
+	return nil
+}
+
 // analyzeFile uses PreorderStack to track caller via ancestor stack.
 func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string, file *ast.File) []checks.Finding {
 	var findings []checks.Finding
 	relPath, _ := filepath.Rel(p.repoRoot, filename)
 
-	// Track CallExpr.Fun positions to avoid double-reporting direct calls as function values
 	calledPos := make(map[token.Pos]bool)
 	ast.Inspect(file, func(n ast.Node) bool {
 		if call, ok := n.(*ast.CallExpr); ok {
@@ -150,8 +174,12 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 				return true
 			}
 			line := pkg.Fset.Position(node.Pos()).Line
+			kind := "dupcode_bypass"
+			if callee.Layer == AuthorityLayerAdapter {
+				kind = "dupcode_adapter_bypass"
+			}
 			findings = append(findings, checks.Finding{
-				Path: relPath, Kind: "dupcode_bypass",
+				Path: relPath, Kind: kind,
 				Message:  fmt.Sprintf("line %d: %s.%s called by %s.%s", line, callee.PackagePath, callee.Name, caller.PackagePath, caller.Function),
 				Severity: checks.SeverityError,
 			})
@@ -168,8 +196,12 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 				return true
 			}
 			line := pkg.Fset.Position(node.Pos()).Line
+			kind := "dupcode_protected_function_value"
+			if callee.Layer == AuthorityLayerAdapter {
+				kind = "dupcode_adapter_function_value"
+			}
 			findings = append(findings, checks.Finding{
-				Path: relPath, Kind: "dupcode_protected_function_value",
+				Path: relPath, Kind: kind,
 				Message:  fmt.Sprintf("line %d: protected function value %s.%s captured by %s.%s", line, callee.PackagePath, callee.Name, caller.PackagePath, caller.Function),
 				Severity: checks.SeverityError,
 			})

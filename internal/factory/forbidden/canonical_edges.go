@@ -2,29 +2,50 @@
 
 package forbidden
 
-// ApprovedCallers defines exact approved caller-to-callee edges based on the
-// real production declarations in internal/factory/protectedverifier/adapter.go.
+// AdapterProtectedSymbols defines the protectedverifier adapter-layer capabilities.
+// These are the only exported methods/constructors through which raw dupcode
+// operations may be invoked.
 //
-// Source of truth:
+// Authority chain:
 //
-//	(*DupcodeRunner).RunCheckRepo     → dupcode.CheckRepo        (adapter.go:32-33)
-//	(*DupcodeRunner).RunCheckReport   → dupcode.CheckReport      (adapter.go:25-26)
-//	(*DupcodeRunner).LoadBaseline     → dupcode.LoadBaseline     (adapter.go:39-40)
-//	(*DupcodeRunner).VerifyBaseline   → dupcode.VerifyBaseline   (adapter.go:46-47)
-//	(*DupcodeRunner).WriteBaseline    → dupcode.WriteBaseline    (adapter.go:53-54)
-//	(*DupcodeRunner).CompareToBaseline → dupcode.CompareToBaseline (adapter.go:60-61)
-//	<var-init:DefaultAnalyzer>        → dupcode.CheckRepo        (adapter.go:68)
+//	raw dupcode operations (AuthorityLayerRaw)
+//	  → exact adapter implementation (AuthorityLayerAdapter, here)
+//	  → exact dispatcher-owned authority path
 //
-// No wildcards. Function/Receiver must match exactly.
+// Anything else that touches raw dupcode or constructs an adapter is a bypass.
+var AdapterProtectedSymbols = []ProtectedSymbol{
+	// Constructor
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "NewDupcodeRunner", Kind: ProtectedPackageFunction},
+	// Methods on *DupcodeRunner
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "RunCheckRepo", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "RunCheckReport", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "LoadBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "VerifyBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "WriteBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "CompareToBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner"},
+	// Global analyzer escape - explicitly protected (not approved in production).
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "Analyzer", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "SetAnalyzer", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerAdapter, PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier", Name: "DefaultAnalyzer", Kind: ProtectedPackageFunction},
+}
+
+// ApprovedCallers defines exact approved caller-to-callee edges for BOTH layers.
+//
+// Raw edges: adapter method on *DupcodeRunner → raw dupcode function.
+// Adapter edges: dispatcher owner → protectedverifier adapter symbol.
+//
+// No wildcards. Function/Receiver must match exactly. Anonymous literals
+// (func@line:col) are NOT allowed as approvals.
 var ApprovedCallers = []ApprovedCaller{
-	// *DupcodeRunner methods (6 edges)
+	// Layer 1: raw dupcode operations allowed only inside exact adapter methods.
+	// Each *DupcodeRunner method is the sole allowed caller of the matching raw op.
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
 		Function:    "RunCheckRepo",
 		Receiver:    "DupcodeRunner",
 		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "CheckRepo", Kind: ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "CheckRepo", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
@@ -32,8 +53,8 @@ var ApprovedCallers = []ApprovedCaller{
 		Function:    "RunCheckReport",
 		Receiver:    "DupcodeRunner",
 		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "CheckReport", Kind: ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "CheckReport", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
@@ -41,8 +62,8 @@ var ApprovedCallers = []ApprovedCaller{
 		Function:    "LoadBaseline",
 		Receiver:    "DupcodeRunner",
 		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "LoadBaseline", Kind: ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "LoadBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
@@ -50,8 +71,8 @@ var ApprovedCallers = []ApprovedCaller{
 		Function:    "VerifyBaseline",
 		Receiver:    "DupcodeRunner",
 		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "VerifyBaseline", Kind: ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "VerifyBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
@@ -59,8 +80,8 @@ var ApprovedCallers = []ApprovedCaller{
 		Function:    "WriteBaseline",
 		Receiver:    "DupcodeRunner",
 		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "WriteBaseline", Kind: ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "WriteBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
@@ -68,54 +89,46 @@ var ApprovedCallers = []ApprovedCaller{
 		Function:    "CompareToBaseline",
 		Receiver:    "DupcodeRunner",
 		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "CompareToBaseline", Kind: ProtectedPackageFunction,
-		},
-	},
-	// DefaultAnalyzer var-init in protectedverifier (function-value capture)
-	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "<var-init:DefaultAnalyzer>",
-		Receiver:    "",
-		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "CheckRepo", Kind: ProtectedPackageFunction,
-		},
-	},
-	// Function literals inside *DupcodeVerifierFactory.SharedDupCodeVerifier
-	// shared_context.go:140 - calls dupcode.LoadBaseline (line 153) and dupcode.CompareToBaseline (line 187)
-	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "func@140:9",
-		Receiver:    "",
-		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "LoadBaseline", Kind: ProtectedPackageFunction,
-		},
-	},
-	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "func@140:9",
-		Receiver:    "",
-		Callee: ProtectedSymbol{
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "CompareToBaseline", Kind: ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "CompareToBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
 }
 
-// IsApprovedCaller checks if a caller-callee edge is approved.
-// Function and Receiver must match exactly. Empty Function in ApprovedCallers
-// is treated as invalid (no wildcards).
+// AdapterApprovedCallers defines approved dispatcher-owner edges for adapter-layer symbols.
+// These are the ONLY legitimate callers of protectedverifier adapter methods.
+// Package-level wildcards are forbidden.
+var AdapterApprovedCallers = []ApprovedCaller{
+	// Dispatcher.Dispatch is the canonical authority owner.
+	// Concrete function/edge must be set after dispatcher source audit.
+}
+
+// IsApprovedCaller checks if a caller-callee edge is approved for EITHER layer.
+// Function and Receiver must match exactly. Empty Function is invalid.
+//
+// Implementation-package intra-package self-calls are allowed: helper functions
+// inside internal/factory/dupcode may call other functions in the same package.
+// This is consistent with normal Go module composition: each package owns its
+// internal implementation, and the protected layer is about preventing
+// external bypass of authority.
 func IsApprovedCaller(caller CallerIdentity, callee ProtectedSymbol) bool {
-	for _, ac := range ApprovedCallers {
+	// Allow same-package calls within the implementation package only.
+	if callee.Layer == AuthorityLayerRaw && caller.PackagePath == callee.PackagePath {
+		return true
+	}
+	approved := ApprovedCallers
+	if callee.Layer == AuthorityLayerAdapter {
+		approved = AdapterApprovedCallers
+	}
+	for _, ac := range approved {
 		if ac.PackagePath != caller.PackagePath {
 			continue
 		}
 		if ac.Callee.PackagePath != callee.PackagePath ||
 			ac.Callee.Name != callee.Name ||
 			ac.Callee.Kind != callee.Kind ||
-			ac.Callee.Receiver != callee.Receiver {
+			ac.Callee.Receiver != callee.Receiver ||
+			ac.Callee.Layer != callee.Layer {
 			continue
 		}
 		if ac.Function == "" || ac.Function != caller.Function {
