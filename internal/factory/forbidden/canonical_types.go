@@ -98,6 +98,20 @@ func isProtectedPackage(path string) bool {
 	return false
 }
 
+// AdapterProtectedPrefixes defines protected adapter package prefixes.
+var AdapterProtectedPrefixes = []string{
+	"github.com/s1onique/leamas/internal/factory/protectedverifier",
+}
+
+func isAdapterProtectedPackage(path string) bool {
+	for _, prefix := range AdapterProtectedPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 func recvTypeNameFromSig(recv *types.Var) string {
 	if recv == nil {
 		return ""

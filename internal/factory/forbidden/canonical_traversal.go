@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"go/types"
 	"path/filepath"
+	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"golang.org/x/tools/go/packages"
@@ -72,23 +73,36 @@ func recvTypeNameFromAST(recv *ast.FieldList) string {
 	return ""
 }
 
+// referenceClass classifies a protected reference in source.
+type referenceClass string
+
+const (
+	refDirectCall       referenceClass = "DIRECT_CALL"
+	refFunctionValue    referenceClass = "FUNCTION_VALUE"
+	refMethodValue      referenceClass = "METHOD_VALUE"
+	refMethodExpression referenceClass = "METHOD_EXPRESSION"
+	refPackageVariable  referenceClass = "PACKAGE_VARIABLE_REFERENCE"
+	refDeclaration      referenceClass = "DECLARATION"
+)
+
 // resolveProtectedUse resolves a protected object (any layer) from an expression.
-// Supports:
-//   - package-qualified functions: protectedverifier.NewDupcodeRunner
-//   - package-qualified variables: protectedverifier.DefaultAnalyzer
-//   - method calls on values: runner.RunCheckRepo
-//   - method values: run := runner.RunCheckRepo
-//   - method expressions: run := (*protectedverifier.DupcodeRunner).RunCheckRepo
-//   - direct ident references: CheckRepo (only when it resolves to a protected symbol)
-func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr ast.Expr) (ProtectedSymbol, bool) {
+// It only processes USE-site identifiers, never declarations.
+func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr ast.Expr, class referenceClass) (ProtectedSymbol, bool) {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
 		// Case 1: package-qualified selector (protectedverifier.X)
 		if ident, ok := e.X.(*ast.Ident); ok {
-			baseObj := pkg.TypesInfo.ObjectOf(ident)
-			if pkgName, ok := baseObj.(*types.PkgName); ok {
+			// USE site only - use Uses map
+			useObj, isUse := pkg.TypesInfo.Uses[ident]
+			if !isUse || useObj == nil {
+				return ProtectedSymbol{}, false
+			}
+			if pkgName, ok := useObj.(*types.PkgName); ok {
 				importedPath := pkgName.Imported().Path()
-				selObj := pkg.TypesInfo.ObjectOf(e.Sel)
+				selObj, isUseSel := pkg.TypesInfo.Uses[e.Sel]
+				if !isUseSel || selObj == nil {
+					return ProtectedSymbol{}, false
+				}
 				if fn, ok := selObj.(*types.Func); ok {
 					fnPkg := fn.Pkg()
 					if fnPkg != nil && fnPkg.Path() == importedPath {
@@ -104,7 +118,6 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 						}
 					}
 				}
-				// Package-qualified variable (e.g., protectedverifier.DefaultAnalyzer)
 				if v, ok := selObj.(*types.Var); ok {
 					vPkg := v.Pkg()
 					if vPkg != nil && vPkg.Path() == importedPath {
@@ -119,14 +132,12 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 			}
 		}
 		// Case 2: method selection (runner.Method or type.Method expression)
-		// Use types.Info.Selections to resolve method calls/values/expressions.
 		if sel, ok := pkg.TypesInfo.Selections[e]; ok {
 			if fn, ok := sel.Obj().(*types.Func); ok {
 				fnPkg := fn.Pkg()
 				if fnPkg != nil {
 					if sym := findProtectedSymbol(AuthorityLayerAdapter, fnPkg.Path(), fn.Name()); sym != nil {
 						callee := *sym
-						// Use receiver from selection
 						recv := recvFromSelection(sel)
 						if recv != nil {
 							callee.Receiver = recvTypeNameFromSig(recv)
@@ -137,8 +148,15 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 			}
 		}
 	case *ast.Ident:
-		obj := pkg.TypesInfo.ObjectOf(e)
-		if fn, ok := obj.(*types.Func); ok {
+		// USE site only - skip identifiers that are declarations (Defs map)
+		if _, isDef := pkg.TypesInfo.Defs[e]; isDef {
+			return ProtectedSymbol{}, false
+		}
+		useObj, isUse := pkg.TypesInfo.Uses[e]
+		if !isUse || useObj == nil {
+			return ProtectedSymbol{}, false
+		}
+		if fn, ok := useObj.(*types.Func); ok {
 			fnPkg := fn.Pkg()
 			if fnPkg != nil {
 				if sym := findProtectedSymbol(AuthorityLayerRaw, fnPkg.Path(), fn.Name()); sym != nil {
@@ -153,8 +171,7 @@ func (p *DupcodeBypassPolicy) resolveProtectedUse(pkg *packages.Package, expr as
 				}
 			}
 		}
-		// Package-level variable (e.g., DefaultAnalyzer)
-		if v, ok := obj.(*types.Var); ok {
+		if v, ok := useObj.(*types.Var); ok {
 			vPkg := v.Pkg()
 			if vPkg != nil {
 				if sym := findProtectedSymbolVariable(AuthorityLayerAdapter, vPkg.Path(), v.Name()); sym != nil {
@@ -219,19 +236,32 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 	var findings []checks.Finding
 	relPath, _ := filepath.Rel(p.repoRoot, filename)
 
-	calledPos := make(map[token.Pos]bool)
-	ast.Inspect(file, func(n ast.Node) bool {
-		if call, ok := n.(*ast.CallExpr); ok {
-			calledPos[call.Fun.Pos()] = true
-		}
-		return true
-	})
+	// Track which direct-call callee expressions have already been classified,
+	// so they don't produce a second function-value finding.
+	calledCallees := make(map[token.Pos]bool)
 
+	// Phase 1: detect dot imports (independent of use detection).
+	for _, imp := range file.Imports {
+		if imp.Name != nil && imp.Name.Name == "." {
+			path := strings.Trim(imp.Path.Value, "\"")
+			if isProtectedPackage(path) || isAdapterProtectedPackage(path) {
+				findings = append(findings, checks.Finding{
+					Path:     relPath,
+					Kind:     "dupcode_dot_import",
+					Message:  fmt.Sprintf("line %d: dot import of protected package %s is forbidden", pkg.Fset.Position(imp.Pos()).Line, path),
+					Severity: checks.SeverityError,
+				})
+			}
+		}
+	}
+
+	// Phase 2: classify protected references.
 	ast.PreorderStack(file, nil, func(n ast.Node, ancestors []ast.Node) bool {
 		switch node := n.(type) {
 		case *ast.CallExpr:
+			// Direct call
 			caller := callerIdentity(pkg.PkgPath, ancestors, pkg.Fset)
-			callee, ok := p.resolveProtectedUse(pkg, node.Fun)
+			callee, ok := p.resolveProtectedUse(pkg, node.Fun, refDirectCall)
 			if !ok {
 				return true
 			}
@@ -248,12 +278,22 @@ func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string
 				Message:  fmt.Sprintf("line %d: %s.%s called by %s.%s", line, callee.PackagePath, callee.Name, caller.PackagePath, caller.Function),
 				Severity: checks.SeverityError,
 			})
+			// Mark the callee expression position so a child selector
+			// or ident does not produce a duplicate function-value finding.
+			calledCallees[node.Fun.Pos()] = true
+			// Prune descent into the callee expression.
+			return true
 		case *ast.SelectorExpr, *ast.Ident:
-			if calledPos[node.Pos()] {
+			// Skip if this expression is the callee of a direct call (already reported)
+			if calledCallees[node.Pos()] {
 				return true
 			}
 			caller := callerIdentity(pkg.PkgPath, ancestors, pkg.Fset)
-			callee, ok := p.resolveProtectedUse(pkg, node.(ast.Expr))
+			class := refFunctionValue
+			if _, ok := node.(*ast.SelectorExpr); ok {
+				class = refMethodValue
+			}
+			callee, ok := p.resolveProtectedUse(pkg, node.(ast.Expr), class)
 			if !ok {
 				return true
 			}

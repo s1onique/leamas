@@ -103,6 +103,7 @@ func TestIsApprovedCaller(t *testing.T) {
 		Kind:        "method",
 	}
 	if !IsApprovedCaller(caller, ProtectedSymbol{
+		Layer:       AuthorityLayerRaw,
 		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 		Name:        "CheckRepo",
 		Kind:        ProtectedPackageFunction,
@@ -113,7 +114,7 @@ func TestIsApprovedCaller(t *testing.T) {
 	// Unapproved function should return false
 	if IsApprovedCaller(
 		CallerIdentity{PackagePath: "github.com/s1onique/leamas/internal/factory/gate", Function: "AnyFunc", Receiver: "", Kind: "package_function"},
-		ProtectedSymbol{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
+		ProtectedSymbol{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
 	) {
 		t.Error("unapproved caller should return false")
 	}

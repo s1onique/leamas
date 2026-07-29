@@ -109,16 +109,11 @@ var AdapterApprovedCallers = []ApprovedCaller{
 // IsApprovedCaller checks if a caller-callee edge is approved for EITHER layer.
 // Function and Receiver must match exactly. Empty Function is invalid.
 //
-// Implementation-package intra-package self-calls are allowed: helper functions
-// inside internal/factory/dupcode may call other functions in the same package.
-// This is consistent with normal Go module composition: each package owns its
-// internal implementation, and the protected layer is about preventing
-// external bypass of authority.
+// No wildcards. Every approved edge must correspond to an exact named caller
+// declaration in ApprovedCallers or AdapterApprovedCallers. Internal
+// implementation-package edges (e.g., helper functions inside dupcode) must
+// be listed explicitly when needed.
 func IsApprovedCaller(caller CallerIdentity, callee ProtectedSymbol) bool {
-	// Allow same-package calls within the implementation package only.
-	if callee.Layer == AuthorityLayerRaw && caller.PackagePath == callee.PackagePath {
-		return true
-	}
 	approved := ApprovedCallers
 	if callee.Layer == AuthorityLayerAdapter {
 		approved = AdapterApprovedCallers
