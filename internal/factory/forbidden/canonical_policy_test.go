@@ -95,22 +95,24 @@ func TestProtectedSymbolsMap(t *testing.T) {
 }
 
 func TestIsApprovedCaller(t *testing.T) {
-	// Approved caller should return true
+	// Approved *DupcodeRunner.RunCheckRepo caller should return true
 	caller := CallerIdentity{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "Adapter",
+		Function:    "RunCheckRepo",
+		Receiver:    "DupcodeRunner",
+		Kind:        "method",
 	}
 	if !IsApprovedCaller(caller, ProtectedSymbol{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 		Name:        "CheckRepo",
 		Kind:        ProtectedPackageFunction,
 	}) {
-		t.Error("approved caller should return true")
+		t.Error("approved *DupcodeRunner.RunCheckRepo caller should return true")
 	}
 
 	// Unapproved function should return false
 	if IsApprovedCaller(
-		CallerIdentity{PackagePath: "github.com/s1onique/leamas/internal/factory/gate", Function: "AnyFunc"},
+		CallerIdentity{PackagePath: "github.com/s1onique/leamas/internal/factory/gate", Function: "AnyFunc", Receiver: "", Kind: "package_function"},
 		ProtectedSymbol{PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
 	) {
 		t.Error("unapproved caller should return false")
