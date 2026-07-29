@@ -14,13 +14,20 @@ import (
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
-// DupcodeVerifyDispatcher is the injectable dispatch function for verify.
-// Production default calls gate.DispatchDupcodeVerify.
-var DupcodeVerifyDispatcher gate.DispatchFunc = gate.DispatchDupcodeVerify
+// dupcodeDispatchers holds the dispatch functions for verify and update operations.
+type dupcodeDispatchers struct {
+	verify         gate.DispatchFunc
+	updateBaseline gate.DispatchFunc
+}
 
-// DupcodeUpdateBaselineDispatcher is the injectable dispatch function for update.
-// Production default calls gate.DispatchDupcodeUpdateBaseline.
-var DupcodeUpdateBaselineDispatcher gate.DispatchFunc = gate.DispatchDupcodeUpdateBaseline
+// productionDupcodeDispatchers uses the real gate dispatchers.
+var productionDupcodeDispatchers = dupcodeDispatchers{
+	verify:         gate.DispatchDupcodeVerify,
+	updateBaseline: gate.DispatchDupcodeUpdateBaseline,
+}
+
+// osExit is injectable for testing.
+var osExit = os.Exit
 
 // Default thresholds for the quality gate
 const (
@@ -31,33 +38,49 @@ const (
 // BaselineDefaultPath is the default path for the baseline file.
 const BaselineDefaultPath = ".factory/dupcode-baseline.json"
 
+// handleFactoryVerifyDupcode is the production entry point for the dupcode subcommand.
 func handleFactoryVerifyDupcode() {
+	handleDupcode(os.Args[1:], productionDupcodeDispatchers)
+}
+
+// handleDupcode is the internal handler that accepts dispatchers for testing.
+// It parses flags and routes to either verify or update handler based on flags.
+func handleDupcode(args []string, dispatchers dupcodeDispatchers) {
 	// Reset flag state for this subcommand
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	flag.CommandLine.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: leamas factory verify dupcode [options]\n")
-		flag.CommandLine.PrintDefaults()
+	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	fs.Usage = func() {
+		fmt.Fprintf(fs.Output(), "Usage: leamas factory verify dupcode [options]\n")
+		fs.PrintDefaults()
 	}
 
 	// Parse flags for dupcode subcommand
-	baselinePath := flag.String("baseline", BaselineDefaultPath, "Path to baseline file")
-	updateBaseline := flag.Bool("update-baseline", false, "Update baseline file with current findings")
-	minLines := flag.Int("min-lines", DefaultMinLines, "Minimum lines for duplicate block")
-	minTokens := flag.Int("min-tokens", DefaultMinTokens, "Minimum tokens for duplicate block")
-	jsonOutput := flag.Bool("json", false, "Output results as JSON")
+	baselinePath := fs.String("baseline", BaselineDefaultPath, "Path to baseline file")
+	updateBaseline := fs.Bool("update-baseline", false, "Update baseline file with current findings")
+	minLines := fs.Int("min-lines", DefaultMinLines, "Minimum lines for duplicate block")
+	minTokens := fs.Int("min-tokens", DefaultMinTokens, "Minimum tokens for duplicate block")
+	jsonOutput := fs.Bool("json", false, "Output results as JSON")
 
-	// Parse only the arguments after "dupcode"
-	args := os.Args[4:] // Skip "leamas factory verify"
-	if err := flag.CommandLine.Parse(args); err != nil {
+	// Parse arguments
+	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
-			os.Exit(0)
+			osExit(0)
 		}
 		if *jsonOutput {
 			fmt.Printf(`{"error": "flag parse error: %v"}`, err)
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		}
-		os.Exit(2)
+		osExit(2)
+	}
+
+	// Check for unexpected positional arguments
+	if fs.NArg() > 0 {
+		if *jsonOutput {
+			fmt.Printf(`{"error": "unexpected positional argument: %s"}`, fs.Arg(0))
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: unexpected positional argument: %s\n", fs.Arg(0))
+		}
+		osExit(2)
 	}
 
 	// Build config using protectedverifier adapter
@@ -66,25 +89,20 @@ func handleFactoryVerifyDupcode() {
 	cfg.MinTokens = *minTokens
 
 	if *updateBaseline {
-		handleUpdateBaseline(*baselinePath, cfg, *jsonOutput)
+		handleUpdateBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, dispatchers.updateBaseline)
 		return
 	}
 
-	handleVerifyBaseline(*baselinePath, cfg, *jsonOutput)
+	handleVerifyBaselineWithDispatch(*baselinePath, cfg, *jsonOutput, dispatchers.verify)
 }
 
-func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jsonOutput bool) {
-	// Route through the central dispatcher with OperationUpdateBaseline.
-	// Authority validation happens BEFORE any expensive operations.
+// handleUpdateBaselineWithDispatch runs the update baseline handler with the given dispatcher.
+func handleUpdateBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, dispatcher gate.DispatchFunc) {
 	ctx := context.Background()
 
-	// Create runner using the protectedverifier adapter
 	runner := protectedverifier.NewDupcodeRunner()
-
-	// Capture report data for output
 	var scanReport protectedverifier.Report
 
-	// Create runner factory - invoked ONLY after authority validation passes
 	runnerFactory := func() func(root string) []checks.Finding {
 		return func(root string) []checks.Finding {
 			report, err := runner.RunCheckReport(root, cfg)
@@ -99,10 +117,8 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 				}
 			}
 
-			// Capture report for output
 			scanReport = report
 
-			// Write baseline inside the runner factory
 			if err := runner.WriteBaseline(baselinePath, report); err != nil {
 				return []checks.Finding{
 					{
@@ -114,13 +130,12 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 				}
 			}
 
-			return nil // Success
+			return nil
 		}
 	}
 
-	result := DupcodeUpdateBaselineDispatcher(ctx, ".", runnerFactory)
+	result := dispatcher(ctx, ".", runnerFactory)
 
-	// Handle authority denial or runner errors
 	if len(result.Findings) > 0 {
 		f := result.Findings[0]
 		if jsonOutput {
@@ -132,7 +147,7 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		} else {
 			fmt.Fprintf(os.Stderr, "dupcode: %v\n", f.Message)
 		}
-		os.Exit(1)
+		osExit(1)
 	}
 
 	if result.Error != nil {
@@ -142,10 +157,9 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		} else {
 			fmt.Fprintf(os.Stderr, "dupcode: %v\n", result.Error)
 		}
-		os.Exit(1)
+		osExit(1)
 	}
 
-	// Report actual scan results
 	findingsCount := len(scanReport.Findings)
 
 	if jsonOutput {
@@ -162,25 +176,19 @@ func handleUpdateBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		fmt.Printf("Scan found %d duplicate blocks\n", findingsCount)
 	}
 
-	os.Exit(0)
+	osExit(0)
 }
 
-func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jsonOutput bool) {
-	// Route through the central dispatcher with OperationVerify.
-	// Authority validation happens BEFORE any expensive operations.
+// handleVerifyBaselineWithDispatch runs the verify baseline handler with the given dispatcher.
+func handleVerifyBaselineWithDispatch(baselinePath string, cfg protectedverifier.Config, jsonOutput bool, dispatcher gate.DispatchFunc) {
 	ctx := context.Background()
 
-	// Create runner using the protectedverifier adapter
 	runner := protectedverifier.NewDupcodeRunner()
-
-	// Capture comparison result for output
 	var compareResult protectedverifier.CompareResult
 	var report protectedverifier.Report
 
-	// Create runner factory - invoked ONLY after authority validation passes
 	runnerFactory := func() func(root string) []checks.Finding {
 		return func(root string) []checks.Finding {
-			// Load baseline inside the runner factory
 			baseline, err := runner.LoadBaseline(baselinePath)
 			if err != nil {
 				return []checks.Finding{
@@ -209,7 +217,6 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 			comparison := runner.CompareToBaseline(scanReport, baseline)
 			compareResult = comparison
 
-			// Convert to findings
 			var findings []checks.Finding
 			if comparison.HasChanges {
 				for _, f := range comparison.NewFindings {
@@ -234,9 +241,8 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		}
 	}
 
-	result := DupcodeVerifyDispatcher(ctx, ".", runnerFactory)
+	result := dispatcher(ctx, ".", runnerFactory)
 
-	// Handle authority denial
 	if len(result.Findings) > 0 {
 		f := result.Findings[0]
 		if jsonOutput {
@@ -248,7 +254,7 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		} else {
 			fmt.Fprintf(os.Stderr, "dupcode: %v\n", f.Message)
 		}
-		os.Exit(1)
+		osExit(1)
 	}
 
 	if result.Error != nil {
@@ -258,10 +264,9 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		} else {
 			fmt.Fprintf(os.Stderr, "dupcode: %v\n", result.Error)
 		}
-		os.Exit(1)
+		osExit(1)
 	}
 
-	// Report comparison results
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
 		enc.Encode(map[string]interface{}{
@@ -282,11 +287,10 @@ func handleVerifyBaseline(baselinePath string, cfg protectedverifier.Config, jso
 		}
 	}
 
-	os.Exit(0)
+	osExit(0)
 }
 
 // ValidateDupcodeAuthorityWithOperation validates dupcode authority for a specific operation.
-// This is used by handlers that need direct authority validation.
 func ValidateDupcodeAuthorityWithOperation(operation verifierauthority.VerifierOperation) error {
 	ctx := context.Background()
 	ec, err := gate.DetectDupcodeExecutionContext(ctx, ".")
