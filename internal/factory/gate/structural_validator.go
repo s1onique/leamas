@@ -13,6 +13,13 @@ import (
 // call, no post-dispatch protected call, and only the direct
 // `binder.BindRunner()` may appear inside the dispatch expression's
 // argument list.
+//
+// The AllowedReceivers map keys on the selector name of a permitted
+// CallExpr and gives the required receiver identifier. An empty entry
+// accepts any receiver; a populated entry fails closed if the receiver
+// identifier does not match. This catches the case where an attacker
+// (or a careless refactor) renames the receiver while leaving the
+// selector name unchanged, e.g. evil.BindRunner() vs binder.BindRunner().
 type typedDispatchRule struct {
 	// FunctionName is the package-internal entry-point function name.
 	FunctionName string
@@ -28,6 +35,17 @@ type typedDispatchRule struct {
 	// `dispatcher.Dispatch(..., helper(binder.BindRunner()))` and
 	// `dispatcher.Dispatch(..., func() { NewDupcodeRunner() }())`.
 	AllowedArgCalls []string
+
+	// AllowedReceivers maps a permitted selector name to the exact
+	// receiver identifier that must appear in the AST. An empty entry
+	// accepts any receiver. A populated entry fails closed when the
+	// receiver identifier does not match.
+	//
+	// For example, {"BindRunner": "binder"} permits
+	// `dispatcher.Dispatch(..., binder.BindRunner())` but rejects
+	// `dispatcher.Dispatch(..., evil.BindRunner())` even though both
+	// share the same selector name.
+	AllowedReceivers map[string]string
 }
 
 // typedDelegationRule describes the public wrapper contract: it must
@@ -40,14 +58,16 @@ type typedDelegationRule struct {
 	InternalName string
 }
 
-// StructuralValidatorResult aggregates every error produced by a single
-// structural-validation pass.
-type StructuralValidatorResult struct {
+// structuralValidatorResult aggregates every error produced by a
+// single structural-validation pass. It is intentionally unexported
+// because production callers have no need to inspect the result; the
+// package's own self-validation test is the sole consumer.
+type structuralValidatorResult struct {
 	Errors []error
 }
 
 // OK reports whether the structural validation passed.
-func (r StructuralValidatorResult) OK() bool { return len(r.Errors) == 0 }
+func (r structuralValidatorResult) OK() bool { return len(r.Errors) == 0 }
 
 // typedDispatchContract captures the rules for every internal entry
 // point and every public wrapper in the gate package.
@@ -56,15 +76,30 @@ type typedDispatchContract struct {
 	PublicRules   []typedDelegationRule
 }
 
-// DefaultTypedDispatchContract returns the canonical contract for the
+// defaultTypedDispatchContract returns the canonical contract for the
 // gate package. It is the single source of truth that both the
 // production-source test and the adversarial fixtures exercise.
-func DefaultTypedDispatchContract() typedDispatchContract {
+//
+// It is unexported because it is consumed only by structural
+// validation tests within the gate package.
+func defaultTypedDispatchContract() typedDispatchContract {
 	return typedDispatchContract{
 		InternalRules: []typedDispatchRule{
-			{FunctionName: "dispatchDupcodeVerifyTypedWith", AllowedArgCalls: []string{"BindRunner"}},
-			{FunctionName: "dispatchDupcodeBaselineVerifyTypedWith", AllowedArgCalls: []string{"BindRunner"}},
-			{FunctionName: "dispatchDupcodeUpdateBaselineTypedWith", AllowedArgCalls: []string{"BindRunner"}},
+			{
+				FunctionName:     "dispatchDupcodeVerifyTypedWith",
+				AllowedArgCalls:  []string{"BindRunner"},
+				AllowedReceivers: map[string]string{"BindRunner": "binder"},
+			},
+			{
+				FunctionName:     "dispatchDupcodeBaselineVerifyTypedWith",
+				AllowedArgCalls:  []string{"BindRunner"},
+				AllowedReceivers: map[string]string{"BindRunner": "binder"},
+			},
+			{
+				FunctionName:     "dispatchDupcodeUpdateBaselineTypedWith",
+				AllowedArgCalls:  []string{"BindRunner"},
+				AllowedReceivers: map[string]string{"BindRunner": "binder"},
+			},
 		},
 		PublicRules: []typedDelegationRule{
 			{PublicName: "DispatchDupcodeVerifyTyped", InternalName: "dispatchDupcodeVerifyTypedWith"},
@@ -104,6 +139,7 @@ var protectedCallNamesForStructural = []string{
 //	protected call after dispatch
 //	protected call later in the same statement
 //	disallowed call inside the dispatch argument list
+//	disallowed receiver inside the dispatch argument list
 //	missing public wrapper
 //	duplicate public wrapper
 //	zero public delegations
@@ -113,8 +149,8 @@ func validateTypedDispatchSource(
 	files map[string]*ast.File,
 	fset *token.FileSet,
 	contract typedDispatchContract,
-) StructuralValidatorResult {
-	var result StructuralValidatorResult
+) structuralValidatorResult {
+	var result structuralValidatorResult
 
 	// Index declarations by name.
 	hits := map[string][]astDecl{}
@@ -132,29 +168,29 @@ func validateTypedDispatchSource(
 		}
 	}
 
-	checkInternal := func(name string, allowedArgCalls []string) astDecl {
-		found := hits[name]
+	checkInternal := func(rule typedDispatchRule) astDecl {
+		found := hits[rule.FunctionName]
 		if len(found) == 0 {
 			result.Errors = append(result.Errors,
-				fmt.Errorf("required declaration %q is missing", name))
+				fmt.Errorf("required declaration %q is missing", rule.FunctionName))
 			return astDecl{}
 		}
 		if len(found) > 1 {
 			result.Errors = append(result.Errors,
-				fmt.Errorf("required declaration %q appears %d times, want exactly 1", name, len(found)))
+				fmt.Errorf("required declaration %q appears %d times, want exactly 1", rule.FunctionName, len(found)))
 			return astDecl{}
 		}
 		if found[0].fn.Body == nil {
 			result.Errors = append(result.Errors,
-				fmt.Errorf("required declaration %q has nil body", name))
+				fmt.Errorf("required declaration %q has nil body", rule.FunctionName))
 			return astDecl{}
 		}
-		validateInternalEntryPoint(found[0], allowedArgCalls, &result)
+		validateInternalEntryPoint(found[0], rule.AllowedArgCalls, rule.AllowedReceivers, &result)
 		return found[0]
 	}
 
 	for _, rule := range contract.InternalRules {
-		checkInternal(rule.FunctionName, rule.AllowedArgCalls)
+		checkInternal(rule)
 	}
 
 	for _, rule := range contract.PublicRules {
@@ -190,9 +226,14 @@ type astDecl struct {
 
 // validateInternalEntryPoint checks that fn has exactly one
 // dispatcher.Dispatch call, no post-dispatch protected calls, and
-// only the allowed argument-list calls. Every violation is appended
-// to result.
-func validateInternalEntryPoint(d astDecl, allowedArgCalls []string, result *StructuralValidatorResult) {
+// only the allowed argument-list calls (matched by selector name AND
+// receiver identity). Every violation is appended to result.
+func validateInternalEntryPoint(
+	d astDecl,
+	allowedArgCalls []string,
+	allowedReceivers map[string]string,
+	result *structuralValidatorResult,
+) {
 	calls := dispatchCallsFor(d.fn)
 	if len(calls) == 0 {
 		result.Errors = append(result.Errors,
@@ -242,15 +283,26 @@ func validateInternalEntryPoint(d astDecl, allowedArgCalls []string, result *Str
 			if name == "" {
 				return true
 			}
-			// Inline closures and nested helpers must not hide
-			// protected calls inside the dispatch argument list.
-			// We permit only direct CallExpr expressions whose name
-			// is in the allowed set.
 			if !allowed[name] {
 				pos := d.fset.Position(call.Pos())
 				result.Errors = append(result.Errors,
 					fmt.Errorf("%s: disallowed call %q at line %d col %d inside dispatcher.Dispatch argument list (allowed: %v)",
 						d.fn.Name.Name, name, pos.Line, pos.Column, allowedArgCalls))
+				return true
+			}
+			// Selector name matches; now confirm the receiver
+			// identity matches the contract. A malicious or careless
+			// refactor that renames the receiver (e.g. evil.BindRunner)
+			// while keeping the selector name unchanged is rejected
+			// here.
+			if want, ok := allowedReceivers[name]; ok && want != "" {
+				got := callReceiverName(call)
+				if got != want {
+					pos := d.fset.Position(call.Pos())
+					result.Errors = append(result.Errors,
+						fmt.Errorf("%s: %q at line %d col %d has receiver %q, want %q (selector name matches but receiver identity differs)",
+							d.fn.Name.Name, name, pos.Line, pos.Column, got, want))
+				}
 			}
 			return true
 		})
@@ -319,7 +371,7 @@ func validateInternalEntryPoint(d astDecl, allowedArgCalls []string, result *Str
 
 // validatePublicWrapper checks that fn delegates exactly once to
 // internalName and contains no direct call to a protected operation.
-func validatePublicWrapper(d astDecl, internalName string, result *StructuralValidatorResult) {
+func validatePublicWrapper(d astDecl, internalName string, result *structuralValidatorResult) {
 	delegateCount := 0
 	ast.Inspect(d.fn.Body, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
@@ -364,3 +416,82 @@ func validatePublicWrapper(d astDecl, internalName string, result *StructuralVal
 }
 
 // dispatchCallInfo records a single dispatcher.Dispatch call's token
+// interval and its direct argument expressions. It is the validator's
+// internal representation.
+type dispatchCallInfo struct {
+	pos  token.Pos
+	end  token.Pos
+	args []ast.Expr
+}
+
+// dispatchCallsFor returns every dispatcher.Dispatch call in fn that
+// uses the bare identifier "dispatcher" as the receiver.
+func dispatchCallsFor(fn *ast.FuncDecl) []dispatchCallInfo {
+	var out []dispatchCallInfo
+	if fn == nil || fn.Body == nil {
+		return out
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "Dispatch" {
+			return true
+		}
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok || ident.Name != "dispatcher" {
+			return true
+		}
+		out = append(out, dispatchCallInfo{
+			pos:  call.Pos(),
+			end:  call.End(),
+			args: call.Args,
+		})
+		return true
+	})
+	return out
+}
+
+// callName returns the canonical name used for protected-call and
+// allowed-call matching: the last selector segment for SelectorExpr
+// calls, the bare identifier for plain function calls, or "" when the
+// call is on something we do not match (e.g. method expressions).
+func callName(call *ast.CallExpr) string {
+	switch f := call.Fun.(type) {
+	case *ast.Ident:
+		return f.Name
+	case *ast.SelectorExpr:
+		return f.Sel.Name
+	}
+	return ""
+}
+
+// callReceiverName returns the receiver identifier of a selector
+// call expression (e.g. `binder` for `binder.BindRunner()`) or "" for
+// a bare identifier call. It is used by the validator to confirm the
+// receiver identity against AllowedReceivers.
+func callReceiverName(call *ast.CallExpr) string {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return ident.Name
+}
+
+// findStmtForPos returns the index of the top-level statement in
+// body.List whose token range contains pos, or -1 when no enclosing
+// statement is found.
+func findStmtForPos(body *ast.BlockStmt, pos token.Pos) int {
+	for i, s := range body.List {
+		if pos >= s.Pos() && pos <= s.End() {
+			return i
+		}
+	}
+	return -1
+}

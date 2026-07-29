@@ -14,13 +14,13 @@ import (
 // production-source structural test. It parses every production .go
 // file under internal/factory/gate and runs the unified
 // validateTypedDispatchSource helper against the canonical
-// DefaultTypedDispatchContract.
+// defaultTypedDispatchContract.
 func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
-	files, fset, err := ParseGatePackageFiles()
+	files, fset, err := parseGatePackageFiles()
 	if err != nil {
-		t.Fatalf("ParseGatePackageFiles: %v", err)
+		t.Fatalf("parseGatePackageFiles: %v", err)
 	}
-	result := validateTypedDispatchSource(files, fset, DefaultTypedDispatchContract())
+	result := validateTypedDispatchSource(files, fset, defaultTypedDispatchContract())
 	if !result.OK() {
 		for _, e := range result.Errors {
 			t.Errorf("structural violation: %v", e)
@@ -67,7 +67,7 @@ func DispatchDupcodeVerifyTyped() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "is missing") {
 		t.Errorf("expected missing-declaration error, got: %v", errs)
 	}
@@ -85,7 +85,7 @@ func dispatchDupcodeVerifyTypedWith() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "appears 2 times") {
 		t.Errorf("expected duplicate-declaration error, got: %v", errs)
 	}
@@ -99,7 +99,7 @@ func dispatchDupcodeVerifyTypedWith() int
 func DispatchDupcodeVerifyTyped() int { return 0 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "nil body") {
 		t.Errorf("expected nil-body error, got: %v", errs)
 	}
@@ -119,7 +119,7 @@ func DispatchDupcodeVerifyTyped() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "dispatcher.Dispatch call not found") {
 		t.Errorf("expected zero-dispatch error, got: %v", errs)
 	}
@@ -142,7 +142,7 @@ func DispatchDupcodeVerifyTyped() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "called 2 times") {
 		t.Errorf("expected two-dispatch error, got: %v", errs)
 	}
@@ -168,7 +168,7 @@ func DispatchDupcodeVerifyTyped() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "protected call") {
 		t.Errorf("expected protected-call error, got: %v", errs)
 	}
@@ -194,7 +194,7 @@ func DispatchDupcodeVerifyTyped() int {
 func NewDupcodeRunner() {}
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "disallowed call") {
 		t.Errorf("expected disallowed-call error, got: %v", errs)
 	}
@@ -221,7 +221,7 @@ func DispatchDupcodeVerifyTyped() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "disallowed call") {
 		t.Errorf("expected disallowed-call error for nested helper, got: %v", errs)
 	}
@@ -267,7 +267,7 @@ func DispatchDupcodeUpdateBaselineTyped() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for direct BindRunner, got: %v", errs)
 	}
@@ -284,7 +284,7 @@ func dispatchDupcodeVerifyTypedWith() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "DispatchDupcodeVerifyTyped") || !containsAny(errs, "is missing") {
 		t.Errorf("expected missing-public error, got: %v", errs)
 	}
@@ -298,7 +298,7 @@ func dispatchDupcodeVerifyTypedWith() int { return 0 }
 func DispatchDupcodeVerifyTyped() int { return 0 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "must delegate exactly once") {
 		t.Errorf("expected zero-delegation error, got: %v", errs)
 	}
@@ -316,7 +316,7 @@ func DispatchDupcodeVerifyTyped() int {
 }
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "got 2 calls") {
 		t.Errorf("expected two-delegation error, got: %v", errs)
 	}
@@ -334,7 +334,7 @@ func DispatchDupcodeVerifyTyped() int {
 func LoadBaseline() {}
 `
 	fix := parseFixture(t, src)
-	errs := runValidatorOnFixture(t, fix, DefaultTypedDispatchContract())
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
 	if !containsAny(errs, "directly calls protected operation") {
 		t.Errorf("expected direct-protected-call error, got: %v", errs)
 	}
@@ -351,4 +351,85 @@ func containsAny(errs []error, substr string) bool {
 		}
 	}
 	return false
+}
+
+// completeDispatchFixture builds a structural fixture with all three
+// internal entry points and all three public wrappers wired up.
+// extraDecls is prepended at package level (for adversarial
+// receiver types), and dispatchCall is used as the single argument
+// to dispatcher.Dispatch inside every internal entry point.
+func completeDispatchFixture(t *testing.T, dispatchCall, extraDecls string) structuralFixture {
+	t.Helper()
+	src := `package fixture
+type disp struct{}
+func (disp) Dispatch(int) int { return 0 }
+type b struct{}
+func (b) BindRunner() int { return 0 }
+` + extraDecls + `
+func dispatchDupcodeVerifyTypedWith() int {
+	var dispatcher *disp
+	var binder *b
+	_ = dispatcher.Dispatch(` + dispatchCall + `)
+	return 0
+}
+func dispatchDupcodeBaselineVerifyTypedWith() int {
+	var dispatcher *disp
+	var binder *b
+	_ = dispatcher.Dispatch(` + dispatchCall + `)
+	return 0
+}
+func dispatchDupcodeUpdateBaselineTypedWith() int {
+	var dispatcher *disp
+	var binder *b
+	_ = dispatcher.Dispatch(` + dispatchCall + `)
+	return 0
+}
+func DispatchDupcodeVerifyTyped() int { return dispatchDupcodeVerifyTypedWith() }
+func DispatchDupcodeBaselineVerifyTyped() int { return dispatchDupcodeBaselineVerifyTypedWith() }
+func DispatchDupcodeUpdateBaselineTyped() int { return dispatchDupcodeUpdateBaselineTypedWith() }
+`
+	return parseFixture(t, src)
+}
+
+// TestAdversarialStructuralEvilBinderRejected proves the validator
+// rejects `evil.BindRunner()` even though the selector name matches.
+// The selector name and receiver identity must BOTH match; the
+// rejection reason must mention "receiver identity differs" so the
+// failure mode is clearly distinguishable from a generic "disallowed
+// call".
+func TestAdversarialStructuralEvilBinderRejected(t *testing.T) {
+	fix := completeDispatchFixture(t,
+		"evil.BindRunner()",
+		"type evil struct{}\nfunc (evil) BindRunner() int { return 0 }\n")
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
+	if !containsAny(errs, "receiver") {
+		t.Errorf("expected receiver-identity error, got: %v", errs)
+	}
+	if !containsAny(errs, "receiver identity differs") {
+		t.Errorf("expected 'receiver identity differs' diagnostic, got: %v", errs)
+	}
+}
+
+// TestAdversarialStructuralOtherBinderRejected proves the validator
+// rejects `other.BindRunner()` for the same reason: the receiver
+// must be exactly `binder`.
+func TestAdversarialStructuralOtherBinderRejected(t *testing.T) {
+	fix := completeDispatchFixture(t,
+		"other.BindRunner()",
+		"type other struct{}\nfunc (other) BindRunner() int { return 0 }\n")
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
+	if !containsAny(errs, "receiver") {
+		t.Errorf("expected receiver-identity error, got: %v", errs)
+	}
+}
+
+// TestAdversarialStructuralBinderReceiverAccepted proves the validator
+// accepts `binder.BindRunner()` exactly — the receiver identity must
+// be the literal identifier `binder`.
+func TestAdversarialStructuralBinderReceiverAccepted(t *testing.T) {
+	fix := completeDispatchFixture(t, "binder.BindRunner()", "")
+	errs := runValidatorOnFixture(t, fix, defaultTypedDispatchContract())
+	if len(errs) != 0 {
+		t.Errorf("expected no errors for canonical binder.BindRunner(), got: %v", errs)
+	}
 }
