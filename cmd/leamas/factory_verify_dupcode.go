@@ -47,13 +47,14 @@ const BaselineDefaultPath = ".factory/dupcode-baseline.json"
 var osExit = os.Exit
 
 // dupcodeCommandArgs extracts the dupcode subcommand args from argv.
-// Expected format: ["leamas", "factory", "verify", "dupcode", ...flags]
-// Returns: [...flags] or nil if insufficient args.
-func dupcodeCommandArgs(argv []string) []string {
-	if len(argv) < 5 {
-		return nil
+// After the upper router has validated "factory verify dupcode", this removes
+// the four routing tokens and returns the remaining option flags.
+// Returns: (remaining flags, ok) where ok=false means malformed invocation.
+func dupcodeCommandArgs(argv []string) ([]string, bool) {
+	if len(argv) < 4 {
+		return nil, false
 	}
-	return argv[4:]
+	return argv[4:], true
 }
 
 // printDupcodeUsage prints the usage information for the dupcode command.
@@ -68,8 +69,8 @@ func printDupcodeUsage(fs *flag.FlagSet, output io.Writer) {
 // handleFactoryVerifyDupcode is the production entry point for the dupcode subcommand.
 // It extracts args using dupcodeCommandArgs and passes them to handleDupcode.
 func handleFactoryVerifyDupcode() {
-	args := dupcodeCommandArgs(os.Args)
-	if args == nil {
+	args, ok := dupcodeCommandArgs(os.Args)
+	if !ok {
 		fmt.Fprintln(os.Stderr, "Error: insufficient arguments for dupcode command")
 		osExit(ExitParseFailure)
 		return

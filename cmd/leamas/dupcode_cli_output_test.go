@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -233,33 +232,48 @@ func TestDupcodeMalformedJSONUnexpectedArgument(t *testing.T) {
 
 // TestDupcodeProductionARGVHelperContract proves dupcodeCommandArgs extracts correct slice.
 func TestDupcodeProductionARGVHelperContract(t *testing.T) {
-	// Normal case: leamas factory verify dupcode --update-baseline
-	argv := []string{"leamas", "factory", "verify", "dupcode", "--update-baseline"}
-	result := dupcodeCommandArgs(argv)
-	if len(result) != 1 || result[0] != "--update-baseline" {
-		t.Errorf("dupcodeCommandArgs(%v) = %v, want [\"--update-baseline\"]", argv, result)
+	// Too short: 1 arg
+	args, ok := dupcodeCommandArgs([]string{"leamas"})
+	if ok {
+		t.Errorf("dupcodeCommandArgs([\"leamas\"]) ok = %v, want false", ok)
 	}
 
-	// No args case
-	result = dupcodeCommandArgs([]string{"leamas"})
-	if result != nil {
-		t.Errorf("dupcodeCommandArgs([\"leamas\"]) = %v, want nil", result)
+	// Too short: 3 args
+	args, ok = dupcodeCommandArgs([]string{"leamas", "factory", "verify"})
+	if ok {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\"]) ok = %v, want false", ok)
 	}
 
-	// Exactly 4 args (insufficient)
-	result = dupcodeCommandArgs([]string{"leamas", "factory", "verify", "dupcode"})
-	if result != nil {
-		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\"]) = %v, want nil", result)
+	// Exactly 4 args (no options) - valid!
+	args, ok = dupcodeCommandArgs([]string{"leamas", "factory", "verify", "dupcode"})
+	if !ok {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\"]) ok = %v, want true", ok)
+	}
+	if len(args) != 0 {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\"]) args = %v, want []", args)
+	}
+
+	// With --json
+	args, ok = dupcodeCommandArgs([]string{"leamas", "factory", "verify", "dupcode", "--json"})
+	if !ok {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\", \"--json\"]) ok = %v, want true", ok)
+	}
+	if len(args) != 1 || args[0] != "--json" {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\", \"--json\"]) args = %v, want [\"--json\"]", args)
+	}
+
+	// With --update-baseline
+	args, ok = dupcodeCommandArgs([]string{"leamas", "factory", "verify", "dupcode", "--update-baseline"})
+	if !ok {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\", \"--update-baseline\"]) ok = %v, want true", ok)
+	}
+	if len(args) != 1 || args[0] != "--update-baseline" {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\", \"--update-baseline\"]) args = %v, want [\"--update-baseline\"]", args)
 	}
 }
 
-// TestDupcodeProductionARGVContract proves production wrapper uses dupcodeCommandArgs.
-func TestDupcodeProductionARGVContract(t *testing.T) {
-	oldArgs := os.Args
-	t.Cleanup(func() { os.Args = oldArgs })
-
-	os.Args = []string{"leamas", "factory", "verify", "dupcode", "--update-baseline"}
-
+// TestDupcodeNoOptionVerifyRoutings proves the canonical public verification path.
+func TestDupcodeNoOptionVerifyRouting(t *testing.T) {
 	var verifyCalls int64
 	var updateCalls int64
 
@@ -274,10 +288,48 @@ func TestDupcodeProductionARGVContract(t *testing.T) {
 		},
 	}
 
-	// Simulate what handleFactoryVerifyDupcode does
-	args := dupcodeCommandArgs(os.Args)
-	if args == nil {
-		t.Fatal("dupcodeCommandArgs returned nil for valid argv")
+	// Canonical public invocation: leamas factory verify dupcode
+	args, ok := dupcodeCommandArgs([]string{"leamas", "factory", "verify", "dupcode"})
+	if !ok {
+		t.Fatal("dupcodeCommandArgs returned false for valid no-option invocation")
+	}
+	if len(args) != 0 {
+		t.Errorf("args = %v, want empty slice", args)
+	}
+
+	var stdout, stderr bytes.Buffer
+	exitCode := handleDupcode(args, dispatchers, &stdout, &stderr)
+
+	if atomic.LoadInt64(&verifyCalls) != 1 {
+		t.Errorf("verifyCalls = %d, want 1", atomic.LoadInt64(&verifyCalls))
+	}
+	if atomic.LoadInt64(&updateCalls) != 0 {
+		t.Errorf("updateCalls = %d, want 0", atomic.LoadInt64(&updateCalls))
+	}
+	if exitCode != ExitSuccess {
+		t.Errorf("exitCode = %d, want %d (ExitSuccess)", exitCode, ExitSuccess)
+	}
+}
+
+// TestDupcodeUpdateBaselineRouting proves --update-baseline routes only to update.
+func TestDupcodeUpdateBaselineRouting(t *testing.T) {
+	var verifyCalls int64
+	var updateCalls int64
+
+	dispatchers := dupcodeDispatchers{
+		verify: func(ctx context.Context, root string, f gate.RunnerFactory) gate.DispatchResult {
+			atomic.AddInt64(&verifyCalls, 1)
+			return gate.DispatchResult{}
+		},
+		updateBaseline: func(ctx context.Context, root string, f gate.RunnerFactory) gate.DispatchResult {
+			atomic.AddInt64(&updateCalls, 1)
+			return gate.DispatchResult{}
+		},
+	}
+
+	args, ok := dupcodeCommandArgs([]string{"leamas", "factory", "verify", "dupcode", "--update-baseline"})
+	if !ok {
+		t.Fatal("dupcodeCommandArgs returned false")
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -294,11 +346,33 @@ func TestDupcodeProductionARGVContract(t *testing.T) {
 	}
 }
 
-// TestDupcodeShortARGVFailClosed proves short argv is handled safely.
-func TestDupcodeShortARGVFailClosed(t *testing.T) {
-	// dupcodeCommandArgs should return nil for insufficient args
-	result := dupcodeCommandArgs([]string{"leamas"})
-	if result != nil {
-		t.Errorf("dupcodeCommandArgs(short) = %v, want nil", result)
+// TestDupcodeMalformedZeroDispatch proves malformed args dispatch zero times.
+func TestDupcodeMalformedZeroDispatch(t *testing.T) {
+	var verifyCalls int64
+	var updateCalls int64
+
+	dispatchers := dupcodeDispatchers{
+		verify: func(ctx context.Context, root string, f gate.RunnerFactory) gate.DispatchResult {
+			atomic.AddInt64(&verifyCalls, 1)
+			return gate.DispatchResult{}
+		},
+		updateBaseline: func(ctx context.Context, root string, f gate.RunnerFactory) gate.DispatchResult {
+			atomic.AddInt64(&updateCalls, 1)
+			return gate.DispatchResult{}
+		},
+	}
+
+	args := []string{"--unknown-option"}
+	var stdout, stderr bytes.Buffer
+	exitCode := handleDupcode(args, dispatchers, &stdout, &stderr)
+
+	if atomic.LoadInt64(&verifyCalls) != 0 {
+		t.Errorf("verifyCalls = %d, want 0", atomic.LoadInt64(&verifyCalls))
+	}
+	if atomic.LoadInt64(&updateCalls) != 0 {
+		t.Errorf("updateCalls = %d, want 0", atomic.LoadInt64(&updateCalls))
+	}
+	if exitCode != ExitParseFailure {
+		t.Errorf("exitCode = %d, want %d (ExitParseFailure)", exitCode, ExitParseFailure)
 	}
 }
