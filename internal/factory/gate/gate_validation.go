@@ -99,26 +99,35 @@ func ValidateVerifiers(verifiers []registry.Verifier) error {
 }
 
 // PartitionVerifiers partitions the verifier registry into fast and dupcode lanes.
-// It validates all verifiers before partitioning and fails closed if any verifier
-// has an invalid or unknown lane.
+// It validates the entire canonical registry first (including
+// command-only entries), then filters to gate-scoped entries and
+// partitions them by lane. This order ensures a malformed
+// command-only definition is rejected before being silently dropped.
 //
-// Command-only definitions are excluded from the partitioned lanes and from
-// the partition completeness check. They are reachable via
-// DispatcherForVerifier only.
+// Required order:
+//
+//	ValidateVerifiers(all input definitions)
+//	→ filter InvocationGate
+//	→ partition by lane
+//	→ reconcile exact gate-scoped inventory
 func PartitionVerifiers(verifiers []registry.Verifier) (fast, dupcode []registry.Verifier, err error) {
-	// Filter out command-only entries before validation so the
-	// gate-scoped validation rules (Run required) do not apply to them.
+	// Fail closed: validate the entire canonical registry first,
+	// including command-only entries. A malformed command-only
+	// definition is rejected here, not silently dropped after the
+	// filter step.
+	if err := ValidateVerifiers(verifiers); err != nil {
+		return nil, nil, fmt.Errorf("verifier registry validation failed: %w", err)
+	}
+
+	// Now that validation has passed, filter to gate-scoped entries
+	// for lane partitioning. Command-only entries are explicitly
+	// excluded from gate selection.
 	eligible := make([]registry.Verifier, 0, len(verifiers))
 	for _, v := range verifiers {
 		if v.Scope == registry.InvocationCommandOnly {
 			continue
 		}
 		eligible = append(eligible, v)
-	}
-
-	// Fail closed: validate ALL eligible verifiers first
-	if err := ValidateVerifiers(eligible); err != nil {
-		return nil, nil, fmt.Errorf("verifier registry validation failed: %w", err)
 	}
 
 	for _, v := range eligible {

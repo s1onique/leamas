@@ -149,6 +149,62 @@ var AdapterApprovedCallers = []ApprovedCaller{
 		},
 	},
 
+	// dupcodeRunnerAdapter (gate-package adapter type) forwards each
+	// dupcodeRunnerAdapter method to its corresponding DupcodeRunner
+	// method. The adapter is the only authorized gate-side caller of
+	// these adapter methods, used by DupcodeUpdateBaselineBinder.run
+	// via the newProtectedRunner hook.
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "LoadBaseline",
+		Receiver:    "dupcodeRunnerAdapter",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "LoadBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "RunCheckReport",
+		Receiver:    "dupcodeRunnerAdapter",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "RunCheckReport", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "VerifyBaseline",
+		Receiver:    "dupcodeRunnerAdapter",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "VerifyBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "WriteBaseline",
+		Receiver:    "dupcodeRunnerAdapter",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "WriteBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
+		Function:    "CompareToBaseline",
+		Receiver:    "dupcodeRunnerAdapter",
+		Callee: ProtectedSymbol{
+			Layer:       AuthorityLayerAdapter,
+			PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
+			Name:        "CompareToBaseline", Kind: ProtectedMethod, Receiver: "DupcodeRunner",
+		},
+	},
+
 	// ────────────────────────────────────────────────────────────────────
 	// dupCodeVerifier (named bound runner, registry verify lane)
 	// ────────────────────────────────────────────────────────────────────

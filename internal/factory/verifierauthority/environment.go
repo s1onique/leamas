@@ -9,13 +9,12 @@ package verifierauthority
 // The classification is owned by the authority package and must not be
 // inferred as "all relevant strings empty == local". A caller-controlled
 // environment variable cannot single-handedly prove an explicit local
-// invocation; only the trusted observer's explicit classification does.
+// invocation; only the unexported observation provenance does.
 type ExecutionEnvironmentKind string
 
 const (
-	// EnvironmentLocal means the trusted observer has explicitly
-	// classified the invocation as a local execution via the
-	// ExecutionContext.LocalTrust field.
+	// EnvironmentLocal means the trusted observation completed and
+	// the environment has no positive CI signal and well-formed env.
 	EnvironmentLocal ExecutionEnvironmentKind = "local"
 
 	// EnvironmentGitHubActions means the trusted observer has observed the
@@ -35,64 +34,6 @@ const (
 	EnvironmentUnknown ExecutionEnvironmentKind = "unknown"
 )
 
-// LocalTrustSentinel is the only value of ExecutionContext.LocalTrust that
-// permits a context to be classified as EnvironmentLocal. It is set by
-// the trusted observer only and is never derived from environment
-// variables. Tests use the trusted observer pattern, not the sentinel
-// value directly.
-const LocalTrustSentinel = "trusted-local-observer"
-
-// ClassifyExecutionEnvironment derives the environment kind from an
-// observed ExecutionContext. The function is fail-closed: only a fully
-// self-consistent set of signals is mapped onto a permissive kind.
-//
-// Required classification rules:
-//
-//	GITHUB_ACTIONS=true                  -> github_actions
-//	(authority marker validity, CI value,
-//	 or partial population do not change this)
-//
-//	CI=true without GITHUB_ACTIONS=true  -> ci
-//
-//	LocalTrust == LocalTrustSentinel     -> local
-//	(observed via the trusted observer)
-//
-//	any other partial, contradictory,
-//	or unclassified state                 -> unknown
-//
-// GitHub Actions detection is intentionally independent of CI because
-// GitHub documents CI as overridable while the GITHUB_* variables are
-// reserved defaults. A workflow setting CI=false must not weaken the
-// GitHub Actions classification.
-//
-// Empty contexts (LocalTrust unset, all environment strings empty) are
-// classified as EnvironmentUnknown. The empty context cannot be
-// promoted to local: an observation failure must not be conflated with
-// a successful explicit local observation.
-func ClassifyExecutionEnvironment(ec ExecutionContext) ExecutionEnvironmentKind {
-	// GitHub Actions is detected purely from GITHUB_ACTIONS=true. Any
-	// other state of the context does not weaken this classification:
-	// the authority marker may be missing, CI may be empty or "false",
-	// and the context may otherwise be partial.
-	if ec.GitHubActions == "true" {
-		return EnvironmentGitHubActions
-	}
-
-	// Generic CI signal: CI=true with no GITHUB_ACTIONS claim.
-	if ec.CI == "true" {
-		return EnvironmentCI
-	}
-
-	// Explicit local: only when the trusted observer has set the
-	// LocalTrust sentinel. Environment variables do not qualify.
-	if ec.LocalTrust == LocalTrustSentinel {
-		return EnvironmentLocal
-	}
-
-	// Empty or partially populated contexts are unknown.
-	return EnvironmentUnknown
-}
-
 // Reason codes for environment-classification denials.
 const (
 	ReasonCodeEnvironmentUnknown          = "environment_unknown"
@@ -104,9 +45,9 @@ const (
 
 // ValidateOperationInContext gates a mutation against both the declared
 // authority and the classified execution environment. A local_safe
-// mutation is admitted only when the environment is explicitly local;
+// mutation is admitted only when the environment is EnvironmentLocal;
 // any GitHub Actions, other CI, partial, contradictory, or unknown
-// environment is denied.
+// environment denies the mutation.
 //
 // Verification operations preserve their existing policy: they are
 // admitted under their declared authority regardless of environment, and

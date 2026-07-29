@@ -13,7 +13,7 @@ import (
 // TestDupcodeUpdateExplicitLocalAdmittedExactlyOnce proves that an
 // explicitly classified local context admits the mutation and each
 // protected operation runs exactly once. The localSafeObserver sets
-// the LocalTrust sentinel so ClassifyExecutionEnvironment returns
+// the unexported observation provenance so ClassifyExecutionEnvironment returns
 // EnvironmentLocal.
 func TestDupcodeUpdateExplicitLocalAdmittedExactlyOnce(t *testing.T) {
 	dir := t.TempDir()
@@ -341,10 +341,8 @@ func TestClassifyExecutionEnvironmentIsFailClosed(t *testing.T) {
 			want: verifierauthority.EnvironmentCI,
 		},
 		{
-			name: "local_with_sentinel",
-			ec: verifierauthority.ExecutionContext{
-				LocalTrust: verifierauthority.LocalTrustSentinel,
-			},
+			name: "local_via_NewLocalOnlyContext",
+			ec:   *verifierauthority.NewLocalOnlyContext(),
 			want: verifierauthority.EnvironmentLocal,
 		},
 		{

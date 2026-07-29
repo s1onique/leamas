@@ -178,6 +178,10 @@ func runFactoryVerifyDupcodeBaseline(
 // the dispatcher's authority-denied channel. The dispatcher attaches
 // findings of this kind when authority is denied; all other findings
 // are normal verification failures and flow through the success path.
+//
+// This function takes checks.Finding as a parameter, which is the
+// real (non-blank-identifier) use of the checks package in this
+// command file.
 func isAuthorityDenialFinding(f checks.Finding) bool {
 	return f.Kind == "verifier_execution_authority_denied"
 }
@@ -239,7 +243,3 @@ func handleFactoryVerifyDupcodeBaseline() {
 		gate.DispatchDupcodeBaselineVerifyTyped,
 	))
 }
-
-// _ ensures the runtime slice alias keeps the checks import live when
-// the file is built in isolation.
-var _ = checks.FileExists

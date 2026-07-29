@@ -145,19 +145,28 @@ func TestProfileDigestChangesOnOperationDrift(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
+	obs := &profileLocalObserver{}
 	profile1, err := dispatcher.AuthorizeProfile(context.Background(), "/test",
-		[]ProfileRequest{{VerifierID: "local-test", Operation: verifierauthority.OperationVerify}}, nil)
+		[]ProfileRequest{{VerifierID: "local-test", Operation: verifierauthority.OperationVerify}}, obs)
 	if err != nil {
 		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 	profile2, err := dispatcher.AuthorizeProfile(context.Background(), "/test",
-		[]ProfileRequest{{VerifierID: "local-test", Operation: verifierauthority.OperationUpdateBaseline}}, nil)
+		[]ProfileRequest{{VerifierID: "local-test", Operation: verifierauthority.OperationUpdateBaseline}}, obs)
 	if err != nil {
 		t.Fatalf("AuthorizeProfile: %v", err)
 	}
 	if profile1.RegistryDigest() == profile2.RegistryDigest() {
 		t.Error("digests should differ when operation differs")
 	}
+}
+
+// profileLocalObserver returns a context classified as EnvironmentLocal
+// so the cheap local-safe verify path can run without Git observation.
+type profileLocalObserver struct{}
+
+func (f *profileLocalObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
+	return *verifierauthority.NewLocalOnlyContext()
 }
 
 func TestProfileDigestChangesOnImplementationDrift(t *testing.T) {

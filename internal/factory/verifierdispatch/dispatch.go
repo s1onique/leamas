@@ -13,6 +13,9 @@
 //   - Authority is validated before RunnerFactory is invoked
 //   - No production entry point directly starts dupcode analysis
 //   - Git observations use the bounded execution.RunGit gateway
+//   - Local-safe verify operations perform NO Git observation
+//   - Mutation operations and non-local-safe verifiers trigger a full
+//     observer round-trip exactly once
 package verifierdispatch
 
 import (
@@ -20,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync/atomic"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/registry"
@@ -53,18 +57,46 @@ func (e *ErrVerifierNotFound) Error() string {
 }
 
 // ContextObserver observes execution context when required by authority.
-// For local_safe verifiers, the observer is never called.
-// For ci_exact_checkout verifiers, the observer is called exactly once
-// before authority validation.
+// The observer is invoked exactly once for non-trivial operations; local-safe
+// verification operations that do not mutate state skip the observer entirely.
 type ContextObserver interface {
 	Observe(ctx context.Context, root string) verifierauthority.ExecutionContext
 }
 
+// CountingObserver wraps a ContextObserver and counts how many times
+// Observe is invoked. It is used by tests that prove the cheap
+// local-safe verification path.
+type CountingObserver struct {
+	ContextObserver
+	count atomic.Int64
+}
+
+// Observe records an observation and increments the count.
+func (c *CountingObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
+	c.count.Add(1)
+	return c.ContextObserver.Observe(ctx, root)
+}
+
+// Count returns the current observation count.
+func (c *CountingObserver) Count() int64 { return c.count.Load() }
+
 // DefaultContextObserver is the production context observer using DetectExecutionContext.
 type DefaultContextObserver struct{}
 
+// Observe runs the production observation. It performs the bounded Git
+// subprocess round-trip exactly once.
 func (d *DefaultContextObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
 	return verifierauthority.DetectExecutionContext(ctx, root)
+}
+
+// CheapLocalSafeObserver is the production observer used for local-safe
+// verify operations. It classifies the environment as EnvironmentLocal
+// without performing any Git observation.
+type CheapLocalSafeObserver struct{}
+
+// Observe returns a NewLocalOnlyContext without invoking Git.
+func (c *CheapLocalSafeObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
+	return *verifierauthority.NewLocalOnlyContext()
 }
 
 // Dispatcher is the central production dispatcher for verifier execution.
@@ -78,8 +110,10 @@ type Dispatcher struct {
 //   - No duplicate verifier IDs
 //   - No empty authority
 //   - All authorities must be known
-//   - No dupcode lane with local_safe
+//   - No dupcode lane with local_safe (except the dupcode-update-baseline
+//     command-only identity)
 //   - No fast lane with ci_exact_checkout
+//   - InvocationScope is explicit on every entry
 //
 // The registry is deeply copied; caller may modify original after construction.
 // Each verifier's EnvVars slice is cloned to prevent mutation.
@@ -160,10 +194,12 @@ func (e *RegistryValidationError) Error() string {
 // if authority is denied. The RunnerFactory is never invoked unless authority
 // validation passes.
 //
-// Authorization is fail-closed: the explicit execution-environment
-// classification drives every mutation decision. The ContextObserver is
-// always invoked (cheap zero-cost observer for local_safe verifiers is the
-// trust boundary that sets the LocalTrust sentinel).
+// Observer-call matrix:
+//
+//	local_safe + verify:        0 full Git observations (cheap path)
+//	local_safe + update_baseline: 1 full Git observation (env-classification required)
+//	ci_exact_checkout + verify:    1 full Git observation
+//	ci_exact_checkout + update:    denied before runner (deterministic)
 func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer ContextObserver, factory RunnerFactory) Result {
 	// Step 1: Resolve verifier metadata from registry
 	v := d.resolveVerifier(request.VerifierID)
@@ -173,20 +209,26 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 2: Get execution context from the observer. The observer is the
-	// only trust boundary permitted to set LocalTrust.
+	// Step 2: Determine whether the cheap local-safe verify path applies.
+	// Cheap path skips the observer entirely.
+	if request.Operation == verifierauthority.OperationVerify && v.Authority == verifierauthority.AuthorityLocalSafe {
+		// No observer call; authority is admitted without Git observation.
+		runner := factory()
+		return Result{
+			Findings: runner(request.Root),
+		}
+	}
+
+	// Step 3: For mutations and non-local-safe verifiers, run the full
+	// observer. This is the only path that performs Git observation.
 	ec := observer.Observe(ctx, request.Root)
 
-	// Step 3: Classify the environment explicitly. Any classification other
-	// than EnvironmentLocal denies a local_safe mutation, regardless of how
-	// permissive the declared authority is.
+	// Step 4: Classify the environment explicitly. Any classification
+	// other than EnvironmentLocal denies a local_safe mutation.
 	environment := verifierauthority.ClassifyExecutionEnvironment(ec)
 
-	// Step 4: Validate the operation against BOTH the declared authority
-	// and the classified environment. This is the fail-closed mutation
-	// gate: a local_safe update is admitted only when the environment is
-	// EnvironmentLocal; any CI / GitHub Actions / unknown environment
-	// denies the mutation.
+	// Step 5: Validate operation against authority and classified
+	// environment. This is the fail-closed mutation gate.
 	if err := verifierauthority.ValidateOperationInContext(v.Authority, request.Operation, environment); err != nil {
 		findings := []checks.Finding{
 			{
@@ -202,9 +244,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 5: Validate declared authority against the observed context.
-	// This is the historical per-context acceptance check (CI exact
-	// checkout markers, SHA validity, etc.).
+	// Step 6: Validate declared authority against observed context.
 	if err := verifierauthority.ValidateAuthority(ec, v.Authority, request.Operation); err != nil {
 		findings := []checks.Finding{
 			{
@@ -220,7 +260,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 6: Authority passed - invoke factory
+	// Step 7: Authority passed - invoke factory
 	runner := factory()
 	return Result{
 		Findings: runner(request.Root),
@@ -230,7 +270,18 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 // DispatchWithDefaultObserver is a convenience wrapper that uses the default
 // production context observer. For testing, prefer Dispatch with a fake observer.
 func (d *Dispatcher) DispatchWithDefaultObserver(ctx context.Context, request Request, factory RunnerFactory) Result {
-	return d.Dispatch(ctx, request, &DefaultContextObserver{}, factory)
+	obs := selectObserver(verifierauthority.AuthorityLocalSafe, verifierauthority.OperationVerify)
+	return d.Dispatch(ctx, request, obs, factory)
+}
+
+// selectObserver returns the cheap local-safe observer for verify
+// operations and the full default observer otherwise. This preserves
+// the cheap local-safe verify path.
+func selectObserver(authority verifierauthority.ExecutionAuthority, operation verifierauthority.VerifierOperation) ContextObserver {
+	if operation == verifierauthority.OperationVerify && authority == verifierauthority.AuthorityLocalSafe {
+		return &CheapLocalSafeObserver{}
+	}
+	return &DefaultContextObserver{}
 }
 
 // resolveVerifier looks up a verifier by ID in the registry.

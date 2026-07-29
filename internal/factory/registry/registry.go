@@ -162,15 +162,22 @@ func (v *Verifier) Validate() error {
 		}
 	}
 
-	// Check for dupcode/local_safe contradiction. The dupcode-update-baseline
-	// entry is a distinct command-only internal registry identity for
-	// baseline mutation that runs only under local-safe authority; all
-	// other dupcode-lane entries remain CI-only.
-	if v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Name != "dupcode-update-baseline" {
+	// Check for dupcode/local_safe contradiction. A local-safe dupcode
+	// definition is valid ONLY when it is the command-only mutation
+	// identity (the dupcode-update-baseline entry). Any other
+	// combination is rejected by construction.
+	switch {
+	case v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Scope != InvocationCommandOnly:
 		return &ValidationError{
 			Verifier: v.Name,
-			Field:    "Lane/Authority",
-			Reason:   "dupcode verifier cannot be marked local_safe",
+			Field:    "Lane/Authority/Scope",
+			Reason:   "dupcode local_safe verifier must be command_only",
+		}
+	case v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Run != nil:
+		return &ValidationError{
+			Verifier: v.Name,
+			Field:    "Lane/Authority/Run",
+			Reason:   "dupcode command-only mutation identity must have nil Run (typed binder is the only execution path)",
 		}
 	}
 

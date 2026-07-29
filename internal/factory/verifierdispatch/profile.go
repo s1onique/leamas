@@ -184,17 +184,31 @@ func (d *Dispatcher) AuthorizeProfile(
 		resolved[i] = v
 	}
 
-	// Phase 2: Check if remote observation is needed and validate observer
+	// Phase 2: Determine whether the cheap local-safe verify path
+	// applies. A full observer round-trip is required when ANY of the
+	// authorized requests is a mutation or a ci_exact_checkout
+	// operation. A request can use the cheap path only when ALL of its
+	// verifiers are local_safe + verify.
 	needsObservation := false
-	for _, v := range resolved {
-		if v != nil && v.Authority != verifierauthority.AuthorityLocalSafe {
+	for i, v := range resolved {
+		if v == nil {
+			continue
+		}
+		op := requests[i].Operation
+		if v.Authority != verifierauthority.AuthorityLocalSafe {
+			needsObservation = true
+			break
+		}
+		if op == verifierauthority.OperationUpdateBaseline {
+			// local_safe + update_baseline still requires an
+			// observation so the environment can be classified.
 			needsObservation = true
 			break
 		}
 	}
 
 	if needsObservation && observer == nil {
-		return nil, errors.New("observer cannot be nil for remote authority")
+		return nil, errors.New("observer cannot be nil for non-cheap authority")
 	}
 
 	if needsObservation {
@@ -212,23 +226,21 @@ func (d *Dispatcher) AuthorizeProfile(
 
 		req := requests[i]
 		var ec verifierauthority.ExecutionContext
-		if v.Authority == verifierauthority.AuthorityLocalSafe {
-			ec = *verifierauthority.NewLocalOnlyContext()
-		} else if profile.context != nil {
+		if profile.context != nil {
 			ec = *profile.context
 		} else {
+			// Cheap local-safe verify path: a non-mutating local_safe
+			// verifier does not need an observation. Classify a
+			// synthetic local context.
 			ec = *verifierauthority.NewLocalOnlyContext()
 		}
 
 		// Classify the environment explicitly for fail-closed mutation
-		// gating. local_safe verifiers with the trusted local observer
-		// produce EnvironmentLocal; everything else falls through to a
-		// deny-kind classification.
+		// gating.
 		environment := verifierauthority.ClassifyExecutionEnvironment(ec)
 
 		// Validate operation against declared authority and classified
-		// environment. This replaces the legacy validateOperation check
-		// with the fail-closed mutation gate.
+		// environment. This is the fail-closed mutation gate.
 		if err := verifierauthority.ValidateOperationInContext(v.Authority, req.Operation, environment); err != nil {
 			profile.authorizationSucceeded = false
 			profile.denials = append(profile.denials, ProfileDenial{

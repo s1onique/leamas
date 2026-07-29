@@ -120,17 +120,14 @@ func (a *admittingObserver) Observe(ctx context.Context, root string) verifierau
 
 // localSafeObserver returns an explicitly classified local execution
 // context. It is the trusted observer pattern: the only way to obtain
-// EnvironmentLocal is via the LocalTrust sentinel, never via implicit
-// "all environment strings empty == local". This observer sets the
-// sentinel so ClassifyExecutionEnvironment produces EnvironmentLocal.
+// EnvironmentLocal is via the authority-package observation provenance,
+// never via implicit "all environment strings empty == local". This
+// observer delegates to NewLocalOnlyContext, which records the local
+// classification through the unexported observation field.
 type localSafeObserver struct{}
 
 func (l *localSafeObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
-	return verifierauthority.ExecutionContext{
-		LocalTrust:     verifierauthority.LocalTrustSentinel,
-		RepositoryRoot: root,
-		WorkspaceRoot:  root,
-	}
+	return *verifierauthority.NewLocalOnlyContext()
 }
 
 // makeVerifyDeps wires the runner through a counting factory.
