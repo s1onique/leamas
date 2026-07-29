@@ -37,6 +37,9 @@ func AllVerifiers() []registry.Verifier {
 		{Name: "dupcode-baseline", Run: dupcodeBaselineVerifier, Lane: registry.VerifierLaneDupcode, Authority: verifierauthority.AuthorityCIExactCheckout, Execution: registry.ExecutionDefinition{
 			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.dupcodeBaselineVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
+		{Name: "dupcode-update-baseline", Run: dupCodeUpdateBaselineVerifier, Lane: registry.VerifierLaneDupcode, Authority: verifierauthority.AuthorityLocalSafe, Execution: registry.ExecutionDefinition{
+			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.dupCodeUpdateBaselineVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
+		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},
 		{Name: "dupcode", Run: dupCodeVerifier, Lane: registry.VerifierLaneDupcode, Authority: verifierauthority.AuthorityCIExactCheckout, Execution: registry.ExecutionDefinition{
 			Kind: registry.ExecutionInProcess, ImplementationID: "internal/factory/gate.dupCodeVerifier", EnvVars: []string{"GOFLAGS", "CGO_ENABLED"},
 		}, Cache: registry.CacheSemantics{GoBuildCache: registry.CacheNotApplicable, GoTestResultCache: registry.CacheModeNA}},

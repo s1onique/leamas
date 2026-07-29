@@ -9,7 +9,7 @@ import (
 	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
-const canonicalVerifierCount = 16
+const canonicalVerifierCount = 17
 
 // TestCacheSemantics_AllVerifiersHaveCacheMetadata verifies all verifiers have cache semantics.
 func TestCacheSemantics_AllVerifiersHaveCacheMetadata(t *testing.T) {
@@ -124,7 +124,7 @@ func TestVerifierNames_MatchesCanonicalList(t *testing.T) {
 
 	expectedSet := map[string]bool{
 		"agent-context": true, "doctrine": true, "doctrine-agent-contracts": true,
-		"docs": true, "dupcode": true, "dupcode-baseline": true,
+		"docs": true, "dupcode": true, "dupcode-baseline": true, "dupcode-update-baseline": true,
 		"domain-boundaries": true, "exec-gate": true, "executable-contract-first": true,
 		"forbidden-patterns": true, "git-hooks": true, "language": true,
 		"llm-friendly": true, "long-test-policy": true, "static-binary": true,

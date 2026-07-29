@@ -102,33 +102,70 @@ func TestDupcodeBaselineAdmitted(t *testing.T) {
 	}
 }
 
-// TestDupcodeUpdateAdmitted proves that an admitting authority runs
-// RunCheckReport and WriteBaseline exactly once, and the typed outcome's
-// Report is the exact report supplied to WriteBaseline.
-//
-// The current production registry registers "dupcode" with
-// AuthorityCIExactCheckout, which denies OperationUpdateBaseline. This
-// test is therefore a structural placeholder for the local-safe path; it
-// asserts the operation-policy denial contract instead. The full
-// admission proof is gated by a future correction that switches the
-// dupcode registry entry to AuthorityLocalSafe.
-func TestDupcodeUpdateAdmitted(t *testing.T) {
-	r := &countingDupcodeRunner{}
+// TestDupcodeUpdateLocalAdmittedExactlyOnce proves the
+// dupcode-update-baseline lane admits a local-safe authority and runs
+// each protected operation exactly once, with the typed outcome Report
+// matching the report supplied to WriteBaseline.
+func TestDupcodeUpdateLocalAdmittedExactlyOnce(t *testing.T) {
+	dir := t.TempDir()
+	baselinePath := dir + "/.factory/dupcode-baseline.json"
+	reportWritten := dupcode.Report{
+		Root: dir,
+		Findings: []dupcode.Finding{
+			{Fingerprint: "update-fp", TokenCount: 200, LineCount: 50, Occurrences: []dupcode.Occurrence{{Path: "u.go", StartLine: 1, EndLine: 50}}},
+		},
+		Thresholds: dupcode.BaselineThresholds{MinLines: 40, MinTokens: 400},
+	}
+	r := &countingDupcodeRunner{reportToReturn: reportWritten}
 	outcome := dispatchDupcodeUpdateBaselineTypedWith(
+		context.Background(), dir, DupcodeUpdateBaselineSpec{
+			BaselinePath: baselinePath, MinLines: 40, MinTokens: 400,
+		}, &localSafeObserver{}, makeUpdateDeps(r),
+	)
+	if outcome.Dispatch.Error != nil {
+		t.Fatalf("expected admission: error=%v findings=%v", outcome.Dispatch.Error, outcome.Dispatch.Findings)
+	}
+	if len(outcome.Dispatch.Findings) != 0 {
+		t.Errorf("expected empty Dispatch.Findings on success, got %d", len(outcome.Dispatch.Findings))
+	}
+	if got := r.newRunnerCalls.Load(); got != 1 {
+		t.Errorf("newRunnerCalls = %d, want 1", got)
+	}
+	if got := r.scanCalls.Load(); got != 1 {
+		t.Errorf("scanCalls = %d, want 1", got)
+	}
+	if got := r.writeCalls.Load(); got != 1 {
+		t.Errorf("writeCalls = %d, want 1", got)
+	}
+	if outcome.Report.Root != dir {
+		t.Errorf("outcome.Report.Root = %q, want %q", outcome.Report.Root, dir)
+	}
+	if outcome.Report.FindingCount != 1 {
+		t.Errorf("outcome.Report.FindingCount = %d, want 1", outcome.Report.FindingCount)
+	}
+	if outcome.Report.MinLines != 40 || outcome.Report.MinTokens != 400 {
+		t.Errorf("outcome.Report thresholds = (%d,%d), want (40,400)", outcome.Report.MinLines, outcome.Report.MinTokens)
+	}
+}
+
+// TestDupcodeUpdateCIDeniedBeforeBind proves the dupcode-update-baseline
+// lane is denied under a CI exact-checkout authority. The update
+// operation never runs: no runner factory, no scan, no write.
+func TestDupcodeUpdateCIDeniedBeforeBind(t *testing.T) {
+	r := &countingDupcodeRunner{}
+	out := dispatchDupcodeUpdateBaselineTypedWith(
 		context.Background(), ".", DupcodeUpdateBaselineSpec{
 			BaselinePath: ".factory/dupcode-baseline.json", MinLines: 40, MinTokens: 400,
-		}, &admittingObserver{}, makeUpdateDeps(r),
+		}, &fakeValidCIObserver{}, makeUpdateDeps(r),
 	)
-	// Operation-policy denial must surface as Dispatch.Error and a
-	// verifier_execution_authority_denied finding.
-	if outcome.Dispatch.Error == nil {
-		t.Fatalf("expected update to be denied under CI authority, got error=nil")
+	if out.Dispatch.Error == nil {
+		t.Fatalf("expected CI denial, got error=nil")
 	}
-	if got := len(outcome.Dispatch.Findings); got != 1 {
-		t.Fatalf("expected exactly one denial finding, got %d", got)
+	if len(out.Dispatch.Findings) != 1 {
+		t.Fatalf("expected exactly one denial finding, got %d", len(out.Dispatch.Findings))
 	}
-	if outcome.Dispatch.Findings[0].Kind != "verifier_execution_authority_denied" {
-		t.Errorf("finding kind = %q, want %q", outcome.Dispatch.Findings[0].Kind, "verifier_execution_authority_denied")
+	if out.Dispatch.Findings[0].Kind != "verifier_execution_authority_denied" {
+		t.Errorf("finding kind = %q, want %q", out.Dispatch.Findings[0].Kind, "verifier_execution_authority_denied")
 	}
 	if got := r.newRunnerCalls.Load(); got != 0 {
 		t.Errorf("newRunnerCalls = %d, want 0", got)
@@ -192,28 +229,31 @@ func TestDupcodeBaselineExactlyOnce(t *testing.T) {
 }
 
 // TestDupcodeUpdateExactlyOnce is the behavioral exactly-once proof for
-// the update-baseline typed entry point. Under CI authority, update is
-// denied at the operation-policy layer; this test verifies the same
-// exactly-once behavior on the denial path. See TestDupcodeUpdateAdmitted
-// for the registry-context rationale.
+// the update-baseline typed entry point under a local-safe authority.
 func TestDupcodeUpdateExactlyOnce(t *testing.T) {
-	r := &countingDupcodeRunner{}
+	r := &countingDupcodeRunner{reportToReturn: dupcode.Report{
+		Root: ".",
+		Findings: []dupcode.Finding{{
+			Fingerprint: "exactly-fp", TokenCount: 100, LineCount: 25, Occurrences: []dupcode.Occurrence{{Path: "u.go", StartLine: 1, EndLine: 25}},
+		}},
+		Thresholds: dupcode.BaselineThresholds{MinLines: 40, MinTokens: 400},
+	}}
 	outcome := dispatchDupcodeUpdateBaselineTypedWith(
 		context.Background(), ".", DupcodeUpdateBaselineSpec{
 			BaselinePath: ".factory/dupcode-baseline.json", MinLines: 40, MinTokens: 400,
-		}, &admittingObserver{}, makeUpdateDeps(r),
+		}, &localSafeObserver{}, makeUpdateDeps(r),
 	)
-	if outcome.Dispatch.Error == nil {
-		t.Fatalf("expected update denial, got error=nil")
+	if outcome.Dispatch.Error != nil {
+		t.Fatalf("expected admission: error=%v findings=%v", outcome.Dispatch.Error, outcome.Dispatch.Findings)
 	}
-	if got := r.newRunnerCalls.Load(); got != 0 {
-		t.Errorf("newRunnerCalls = %d, want 0 (denial before factory)", got)
+	if got := r.newRunnerCalls.Load(); got != 1 {
+		t.Errorf("newRunnerCalls = %d, want 1", got)
 	}
-	if got := r.scanCalls.Load(); got != 0 {
-		t.Errorf("scanCalls = %d, want 0", got)
+	if got := r.scanCalls.Load(); got != 1 {
+		t.Errorf("scanCalls = %d, want 1", got)
 	}
-	if got := r.writeCalls.Load(); got != 0 {
-		t.Errorf("writeCalls = %d, want 0", got)
+	if got := r.writeCalls.Load(); got != 1 {
+		t.Errorf("writeCalls = %d, want 1", got)
 	}
 }
 

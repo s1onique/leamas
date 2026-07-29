@@ -89,8 +89,8 @@ func TestSelectVerifiers(t *testing.T) {
 	if !dupcodeVerifierNames["dupcode-baseline"] {
 		t.Error("dupcode lane must contain dupcode-baseline verifier")
 	}
-	if len(dupcode) != 2 {
-		t.Errorf("dupcode lane must contain exactly 2 verifiers, got %d", len(dupcode))
+	if len(dupcode) != 3 {
+		t.Errorf("dupcode lane must contain exactly 3 verifiers, got %d", len(dupcode))
 	}
 }
 

@@ -4,7 +4,9 @@ package gate
 
 import (
 	"fmt"
-	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,36 +28,50 @@ var protectedCallNames = []string{
 	"CompareToBaseline",
 }
 
-// typedEntryPointNames lists the typed dispatch entry-point functions
-// whose post-Dispatch body must not contain protected calls. The
-// package-internal *With variants own the dispatcher.Dispatch call,
-// while the production entry points just delegate to them.
-var typedEntryPointNames = []string{
+// typedEntryPointInternal lists the package-internal typed dispatch
+// entry-point functions whose body must own exactly one
+// dispatcher.Dispatch call and must contain no post-Dispatch protected
+// call.
+var typedEntryPointInternal = []string{
 	"dispatchDupcodeVerifyTypedWith",
 	"dispatchDupcodeBaselineVerifyTypedWith",
 	"dispatchDupcodeUpdateBaselineTypedWith",
+}
+
+// typedEntryPointPublic lists the public typed dispatch entry-point
+// functions. Each must delegate exactly once to its corresponding
+// internal *With function and must contain no direct call to a
+// protected operation.
+var typedEntryPointPublic = []string{
 	"DispatchDupcodeVerifyTyped",
 	"DispatchDupcodeBaselineVerifyTyped",
 	"DispatchDupcodeUpdateBaselineTyped",
 }
 
-// TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls is a
-// structural guard over the typed dispatch entry points. It uses simple
-// source-text scanning so it does not depend on full AST inspection
-// (which can pass nil children to visitor callbacks). The behavioral
-// exactly-once test remains authoritative; this guard is a regression
-// sentinel against re-introducing protected work after DispatcherForVerifier.
+// TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls is a fail-closed
+// structural guard over the typed dispatch entry points. The test parses
+// every production Go file in the gate package with go/parser, locates
+// each expected entry-point declaration (FAIL on missing or duplicate),
+// walks its body to find the dispatcher.Dispatch statement, and asserts
+// that no protected call appears in any subsequent top-level statement.
+// Public wrappers are also required to delegate to the matching
+// internal *With function and to contain no direct protected call.
 func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 	root, err := findModuleRootForGateTest()
 	if err != nil {
 		t.Fatal(err)
 	}
 	srcDir := filepath.Join(root, "internal", "factory", "gate")
+
+	type parsed struct {
+		fset *token.FileSet
+		file *ast.File
+	}
+	files := map[string]parsed{}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
 			continue
@@ -65,86 +81,182 @@ func TestDupcodeTypedEntryPointsNoPostDispatchProtectedCalls(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		src := string(data)
-		for _, want := range typedEntryPointNames {
-			funcHeader := "func " + want + "("
-			idx := strings.Index(src, funcHeader)
-			if idx < 0 {
+		fset := token.NewFileSet()
+		f, err := parser.ParseFile(fset, path, data, parser.AllErrors)
+		if err != nil {
+			t.Fatalf("parse %s: %v", e.Name(), err)
+		}
+		files[e.Name()] = parsed{fset: fset, file: f}
+	}
+
+	type declHit struct {
+		file string
+		pos  token.Pos
+		body *ast.BlockStmt
+	}
+	hits := map[string][]declHit{}
+	for fname, p := range files {
+		for _, decl := range p.file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok {
 				continue
 			}
-			// Isolate the function body up to the next top-level "func " or end of file.
-			rest := src[idx+len(funcHeader):]
-			bodyStart := strings.Index(rest, "{")
-			if bodyStart < 0 {
-				continue
-			}
-			body := rest[bodyStart:]
-			end := strings.Index(body, "\nfunc ")
-			if end < 0 {
-				end = len(body)
-			}
-			region := body[:end]
-			// Find the LAST dispatcher.Dispatch(...) call inside this body.
-			lastIdx := -1
-			searchFrom := 0
-			for searchFrom < len(region) {
-				dIdx := strings.Index(region[searchFrom:], ".Dispatch(")
-				if dIdx < 0 {
-					break
-				}
-				lastIdx = searchFrom + dIdx
-				searchFrom = lastIdx + 1
-			}
-			if lastIdx < 0 {
-				continue
-			}
-			// Anything after the closing paren of the LAST .Dispatch( call
-			// is post-Dispatch. We walk parens to find the matching close,
-			// since .Dispatch's argument list may itself contain parens
-			// (e.g. binder.BindRunner()).
-			after := region[lastIdx+len(".Dispatch("):]
-			depth := 1
-			endIdx := -1
-			for i, r := range after {
-				switch r {
-				case '(':
-					depth++
-				case ')':
-					depth--
-					if depth == 0 {
-						endIdx = i
-						break
-					}
-				}
-			}
-			if endIdx < 0 {
-				continue
-			}
-			afterDispatch := after[endIdx+1:]
-			for _, bad := range protectedCallNames {
-				if strings.Contains(afterDispatch, bad+"(") {
-					t.Errorf("%s in %s: post-Dispatch contains protected call %q", want, e.Name(), bad)
-				}
+			hits[fn.Name.Name] = append(hits[fn.Name.Name], declHit{
+				file: fname,
+				pos:  fn.Pos(),
+				body: fn.Body,
+			})
+		}
+	}
+
+	checkExactlyOne := func(name string) declHit {
+		t.Helper()
+		found := hits[name]
+		if len(found) == 0 {
+			t.Errorf("required declaration %q is missing", name)
+			return declHit{}
+		}
+		if len(found) > 1 {
+			t.Errorf("required declaration %q appears %d times, want exactly 1 (in %s)",
+				name, len(found), found[0].file)
+			return declHit{}
+		}
+		return found[0]
+	}
+
+	// Internal *With entry points: must own exactly one
+	// dispatcher.Dispatch statement and contain no protected call in
+	// any subsequent top-level statement.
+	for _, name := range typedEntryPointInternal {
+		hit := checkExactlyOne(name)
+		if hit.body == nil {
+			continue
+		}
+		// Find the statement that calls dispatcher.Dispatch(...).
+		dispatchStmtIdx := -1
+		for i, stmt := range hit.body.List {
+			if stmtHasDispatchCall(stmt) {
+				dispatchStmtIdx = i
+				break
 			}
 		}
+		if dispatchStmtIdx < 0 {
+			t.Errorf("%s: dispatcher.Dispatch call not found", name)
+			continue
+		}
+		// Walk all SUBSEQUENT top-level statements. Anything inside the
+		// dispatcher.Dispatch call (e.g. argument sub-expressions) is
+		// excluded because the dispatch statement itself is the boundary.
+		for j := dispatchStmtIdx + 1; j < len(hit.body.List); j++ {
+			ast.Inspect(hit.body.List[j], func(n ast.Node) bool {
+				if n == nil {
+					return true
+				}
+				call, ok := n.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				for _, bad := range protectedCallNames {
+					if callContains(call, bad) {
+						t.Errorf("%s: post-Dispatch statement at index %d contains protected call %q",
+							name, j, bad)
+					}
+				}
+				return true
+			})
+		}
+	}
+
+	// Public wrappers: must delegate exactly once to the matching
+	// internal *With function and contain no direct call to a protected
+	// operation anywhere in the wrapper body.
+	for i, name := range typedEntryPointPublic {
+		hit := checkExactlyOne(name)
+		if hit.body == nil {
+			continue
+		}
+		expectedInternal := typedEntryPointInternal[i]
+		delegateCount := 0
+		ast.Inspect(hit.body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			sel, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && sel.Sel.Name == expectedInternal {
+				delegateCount++
+				return true
+			}
+			ident, ok := call.Fun.(*ast.Ident)
+			if !ok || ident.Name != expectedInternal {
+				return true
+			}
+			delegateCount++
+			return true
+		})
+		if delegateCount != 1 {
+			t.Errorf("%s: must delegate exactly once to %s, got %d calls",
+				name, expectedInternal, delegateCount)
+		}
+		ast.Inspect(hit.body, func(n ast.Node) bool {
+			if n == nil {
+				return true
+			}
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			for _, bad := range protectedCallNames {
+				if callContains(call, bad) {
+					t.Errorf("%s: directly calls protected operation %q", name, bad)
+				}
+			}
+			return true
+		})
 	}
 }
 
-// writeFakeBaseline writes a minimal valid baseline file to dir/name and
-// returns its path. It exists so admission tests can drive the verify
-// lane past the missing_baseline early-return into LoadBaseline/Compare.
+// stmtHasDispatchCall reports whether the top-level statement contains a
+// call to dispatcher.Dispatch(...). The call may be the statement's
+// expression, or be embedded in an assignment like
+//
+//	Dispatch: dispatcher.Dispatch(...)
+func stmtHasDispatchCall(stmt ast.Stmt) bool {
+	found := false
+	ast.Inspect(stmt, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "Dispatch" {
+			return true
+		}
+		// Bound receiver is "dispatcher" (the local variable in the
+		// typed entry points).
+		ident, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if ident.Name == "dispatcher" {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
 
-// writeFakeBaseline writes a minimal valid baseline file to dir/name and
-// returns its path. It exists so admission tests can drive the verify
-// lane past the missing_baseline early-return into LoadBaseline/Compare.
-func writeFakeBaseline(t *testing.T, dir, name string, minLines, minTokens int) string {
-	t.Helper()
-	path := filepath.Join(dir, name)
-	content := []byte(fmt.Sprintf(`{"schema_version":1,"generated_at":"test","tool":"test","thresholds":{"min_lines":%d,"min_tokens":%d},"findings":[]}`, minLines, minTokens))
-	if err := os.WriteFile(path, content, 0o644); err != nil {
-		t.Fatalf("write baseline: %v", err)
+func callContains(call *ast.CallExpr, name string) bool {
+	switch f := call.Fun.(type) {
+	case *ast.Ident:
+		return f.Name == name
+	case *ast.SelectorExpr:
+		if f.Sel.Name == name {
+			return true
+		}
 	}
-	return path
+	return false
 }
 
 func findModuleRootForGateTest() (string, error) {
@@ -163,13 +275,5 @@ func findModuleRootForGateTest() (string, error) {
 		}
 		dir = parent
 	}
-	return "", os.ErrNotExist
-}
-
-// reflect.DeepEqual is a small wrapper that lets tests compare
-// struct values without importing the reflect package at the top of this
-// file (avoiding pull-in across test files that might add shadowing).
-func init() {
-	// Compile-time check that the verifierdispatch package is reachable.
-	_ = verifierdispatch.Result{}
+	return "", fmt.Errorf("go.mod not found")
 }

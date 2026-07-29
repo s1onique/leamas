@@ -4,9 +4,12 @@ package gate
 
 import (
 	"context"
+	"fmt"
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 )
@@ -115,6 +118,26 @@ func (a *admittingObserver) Observe(ctx context.Context, root string) verifierau
 	}
 }
 
+// localSafeObserver returns a non-CI execution context so the dispatch
+// flow sees a local-safe effective authority for the dupcode-update-baseline
+// entry. CI fields are explicitly empty so effectiveAuthorityFor does not
+// upgrade the effective authority to ci_exact_checkout.
+type localSafeObserver struct{}
+
+func (l *localSafeObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
+	return verifierauthority.ExecutionContext{
+		CI:              "",
+		GitHubActions:   "",
+		AuthorityMarker: "",
+		GitHubSHA:       "",
+		GitHubWorkspace: root,
+		HeadCommit:      "",
+		WorktreeStatus:  "",
+		RepositoryRoot:  root,
+		WorkspaceRoot:   root,
+	}
+}
+
 // makeVerifyDeps wires the runner through a counting factory.
 func makeVerifyDeps(r *countingDupcodeRunner) dupcodeBinderDeps {
 	return dupcodeBinderDeps{
@@ -198,28 +221,15 @@ func TestDupcodeBaselineDenied(t *testing.T) {
 	}
 }
 
-// TestDupcodeUpdateDenied proves that authority denial performs zero
-// protected work for the update-baseline lane.
-func TestDupcodeUpdateDenied(t *testing.T) {
-	r := &countingDupcodeRunner{}
-	outcome := dispatchDupcodeUpdateBaselineTypedWith(
-		context.Background(), ".", DupcodeUpdateBaselineSpec{
-			BaselinePath: ".factory/dupcode-baseline.json", MinLines: 40, MinTokens: 400,
-		}, &denyingObserver{}, makeUpdateDeps(r),
-	)
-	if outcome.Dispatch.Error == nil && len(outcome.Dispatch.Findings) == 0 {
-		t.Fatalf("expected denial: error=%v findings=%v", outcome.Dispatch.Error, outcome.Dispatch.Findings)
+// writeFakeBaseline writes a minimal valid baseline file to dir/name and
+// returns its path. It exists so admission tests can drive the verify
+// lane past the missing_baseline early-return into LoadBaseline/Compare.
+func writeFakeBaseline(t *testing.T, dir, name string, minLines, minTokens int) string {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	content := []byte(fmt.Sprintf(`{"schema_version":1,"generated_at":"test","tool":"test","thresholds":{"min_lines":%d,"min_tokens":%d},"findings":[]}`, minLines, minTokens))
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		t.Fatalf("write baseline: %v", err)
 	}
-	if got := r.newRunnerCalls.Load(); got != 0 {
-		t.Errorf("newRunnerCalls = %d, want 0", got)
-	}
-	if got := r.scanCalls.Load(); got != 0 {
-		t.Errorf("scanCalls = %d, want 0", got)
-	}
-	if got := r.writeCalls.Load(); got != 0 {
-		t.Errorf("writeCalls = %d, want 0", got)
-	}
-	if len(outcome.Report.Findings) != 0 || outcome.Report.FindingCount != 0 || outcome.Report.Root != "" {
-		t.Errorf("Report = %+v, want zero", outcome.Report)
-	}
+	return path
 }

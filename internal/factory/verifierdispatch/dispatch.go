@@ -171,18 +171,18 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 2: Get execution context (observer NOT called for local_safe)
-	var ec verifierauthority.ExecutionContext
-	if v.Authority == verifierauthority.AuthorityLocalSafe {
-		// Local-safe: no Git observation needed
-		ec = *verifierauthority.NewLocalOnlyContext()
-	} else {
-		// CI authority: observer is called exactly once, even if operation is denied
-		ec = observer.Observe(ctx, request.Root)
-	}
+	// Step 2: Get execution context. The observer is called once for the
+	// actual context; the operation policy below consults BOTH the verifier's
+	// declared authority AND the actual context authority so a CI context
+	// cannot drive a mutation even through a local-safe verifier.
+	ec := observer.Observe(ctx, request.Root)
 
-	// Step 3: Validate operation against authority policy
-	if err := validateOperation(v.Authority, request.Operation); err != nil {
+	// Step 3: Validate operation against authority policy. The effective
+	// authority is the more restrictive of the verifier's declared authority
+	// and the actual context authority, so a CI context cannot drive a
+	// local-safe update operation.
+	effectiveAuthority := effectiveAuthorityFor(v.Authority, ec)
+	if err := validateOperation(effectiveAuthority, request.Operation); err != nil {
 		findings := []checks.Finding{
 			{
 				Path:     v.Name,
@@ -224,6 +224,20 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 // production context observer. For testing, prefer Dispatch with a fake observer.
 func (d *Dispatcher) DispatchWithDefaultObserver(ctx context.Context, request Request, factory RunnerFactory) Result {
 	return d.Dispatch(ctx, request, &DefaultContextObserver{}, factory)
+}
+
+// effectiveAuthorityFor returns the more restrictive of the declared
+// verifier authority and the actual context authority. If the actual
+// execution context is a CI-exact-checkout (CI == "true" && GITHUB_ACTIONS
+// == "true" && authority marker matches the configured value), the
+// effective authority is CI-exact-checkout even if the verifier is declared
+// local-safe; this prevents CI environments from driving a baseline
+// mutation through a local-safe verifier.
+func effectiveAuthorityFor(declared verifierauthority.ExecutionAuthority, ec verifierauthority.ExecutionContext) verifierauthority.ExecutionAuthority {
+	if ec.CI == "true" && ec.GitHubActions == "true" && ec.AuthorityMarker == verifierauthority.AuthorityMarker {
+		return verifierauthority.AuthorityCIExactCheckout
+	}
+	return declared
 }
 
 // validateOperation checks if the operation is allowed for the authority.

@@ -79,16 +79,16 @@ func dispatchDupcodeUpdateBaselineTypedWith(
 	observer verifierdispatch.ContextObserver,
 	deps dupcodeBinderDeps,
 ) DupcodeUpdateBaselineOutcome {
-	dispatcher, ok := DispatcherForVerifier("dupcode")
+	dispatcher, ok := DispatcherForVerifier("dupcode-update-baseline")
 	if !ok {
 		return DupcodeUpdateBaselineOutcome{
 			Dispatch: verifierdispatch.Result{
-				Error: fmt.Errorf("dupcode verifier not found in registry"),
+				Error: fmt.Errorf("dupcode-update-baseline verifier not found in registry"),
 			},
 		}
 	}
 	request := verifierdispatch.Request{
-		VerifierID: "dupcode",
+		VerifierID: "dupcode-update-baseline",
 		Operation:  verifierauthority.OperationUpdateBaseline,
 		Root:       root,
 	}

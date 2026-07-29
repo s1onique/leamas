@@ -94,8 +94,11 @@ func (v *Verifier) Validate() error {
 		}
 	}
 
-	// Check for dupcode/local_safe contradiction
-	if v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe {
+	// Check for dupcode/local_safe contradiction. The dupcode-update-baseline
+	// entry is a distinct internal registry identity for baseline mutation
+	// that runs only under local-safe authority; all other dupcode-lane
+	// entries (notably the "dupcode" verification entry) remain CI-only.
+	if v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Name != "dupcode-update-baseline" {
 		return &ValidationError{
 			Verifier: v.Name,
 			Field:    "Lane/Authority",
