@@ -27,7 +27,7 @@ var sentinelErrorResult = gate.DispatchResult{
 	},
 }
 
-// TestDupcodeHelpZeroDispatch proves --help exits successfully without calling dispatchers.
+// TestDupcodeHelpZeroDispatch proves --help renders complete usage and returns ExitSuccess without dispatch.
 func TestDupcodeHelpZeroDispatch(t *testing.T) {
 	var verifyCalls int64
 	var updateCalls int64
@@ -56,8 +56,19 @@ func TestDupcodeHelpZeroDispatch(t *testing.T) {
 	if exitCode != ExitSuccess {
 		t.Errorf("exitCode = %d, want %d (ExitSuccess)", exitCode, ExitSuccess)
 	}
-	if !strings.Contains(stderr.String(), "Usage: leamas factory verify dupcode") {
-		t.Errorf("stderr = %q, want to contain 'Usage: leamas factory verify dupcode'", stderr.String())
+
+	// Help header must be present
+	help := stderr.String()
+	if !strings.Contains(help, "Usage: leamas factory verify dupcode [options]") {
+		t.Errorf("stderr missing usage header: %q", help)
+	}
+
+	// All flags must be present
+	requiredFlags := []string{"-baseline", "-update-baseline", "-min-lines", "-min-tokens", "-json"}
+	for _, flag := range requiredFlags {
+		if !strings.Contains(help, flag) {
+			t.Errorf("stderr missing flag %q: %q", flag, help)
+		}
 	}
 }
 
@@ -128,7 +139,7 @@ func TestDupcodeJSONSentinelPropagation(t *testing.T) {
 	}
 }
 
-// TestDupcodeMalformedJSONUnknownOption proves JSON output for unknown options is valid.
+// TestDupcodeMalformedJSONUnknownOption proves JSON stdout and empty stderr for unknown flags.
 func TestDupcodeMalformedJSONUnknownOption(t *testing.T) {
 	var verifyCalls int64
 	var updateCalls int64
@@ -158,17 +169,23 @@ func TestDupcodeMalformedJSONUnknownOption(t *testing.T) {
 		t.Errorf("exitCode = %d, want %d (ExitParseFailure)", exitCode, ExitParseFailure)
 	}
 
+	// stdout must contain valid JSON
 	var result map[string]interface{}
-	dec := json.NewDecoder(&stderr)
+	dec := json.NewDecoder(&stdout)
 	if err := dec.Decode(&result); err != nil {
-		t.Fatalf("failed to decode stderr as JSON: %v, stderr=%q", err, stderr.String())
+		t.Fatalf("failed to decode stdout as JSON: %v, stdout=%q", err, stdout.String())
 	}
 	if _, ok := result["error"]; !ok {
-		t.Errorf("result missing 'error' field")
+		t.Errorf("result missing 'error' field: %+v", result)
+	}
+
+	// stderr must be empty for JSON parse failures
+	if stderr.Len() > 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
 	}
 }
 
-// TestDupcodeMalformedJSONUnexpectedArgument proves JSON output for unexpected args is valid.
+// TestDupcodeMalformedJSONUnexpectedArgument proves JSON stdout and empty stderr for bad args.
 func TestDupcodeMalformedJSONUnexpectedArgument(t *testing.T) {
 	var verifyCalls int64
 	var updateCalls int64
@@ -198,17 +215,45 @@ func TestDupcodeMalformedJSONUnexpectedArgument(t *testing.T) {
 		t.Errorf("exitCode = %d, want %d (ExitParseFailure)", exitCode, ExitParseFailure)
 	}
 
+	// stdout must contain valid JSON
 	var result map[string]interface{}
-	dec := json.NewDecoder(&stderr)
+	dec := json.NewDecoder(&stdout)
 	if err := dec.Decode(&result); err != nil {
-		t.Fatalf("failed to decode stderr as JSON: %v, stderr=%q", err, stderr.String())
+		t.Fatalf("failed to decode stdout as JSON: %v, stdout=%q", err, stdout.String())
 	}
 	if _, ok := result["error"]; !ok {
-		t.Errorf("result missing 'error' field")
+		t.Errorf("result missing 'error' field: %+v", result)
+	}
+
+	// stderr must be empty for JSON parse failures
+	if stderr.Len() > 0 {
+		t.Errorf("stderr = %q, want empty", stderr.String())
 	}
 }
 
-// TestDupcodeProductionARGVContract proves the production wrapper passes correct args.
+// TestDupcodeProductionARGVHelperContract proves dupcodeCommandArgs extracts correct slice.
+func TestDupcodeProductionARGVHelperContract(t *testing.T) {
+	// Normal case: leamas factory verify dupcode --update-baseline
+	argv := []string{"leamas", "factory", "verify", "dupcode", "--update-baseline"}
+	result := dupcodeCommandArgs(argv)
+	if len(result) != 1 || result[0] != "--update-baseline" {
+		t.Errorf("dupcodeCommandArgs(%v) = %v, want [\"--update-baseline\"]", argv, result)
+	}
+
+	// No args case
+	result = dupcodeCommandArgs([]string{"leamas"})
+	if result != nil {
+		t.Errorf("dupcodeCommandArgs([\"leamas\"]) = %v, want nil", result)
+	}
+
+	// Exactly 4 args (insufficient)
+	result = dupcodeCommandArgs([]string{"leamas", "factory", "verify", "dupcode"})
+	if result != nil {
+		t.Errorf("dupcodeCommandArgs([\"leamas\", \"factory\", \"verify\", \"dupcode\"]) = %v, want nil", result)
+	}
+}
+
+// TestDupcodeProductionARGVContract proves production wrapper uses dupcodeCommandArgs.
 func TestDupcodeProductionARGVContract(t *testing.T) {
 	oldArgs := os.Args
 	t.Cleanup(func() { os.Args = oldArgs })
@@ -229,7 +274,12 @@ func TestDupcodeProductionARGVContract(t *testing.T) {
 		},
 	}
 
-	args := os.Args[4:]
+	// Simulate what handleFactoryVerifyDupcode does
+	args := dupcodeCommandArgs(os.Args)
+	if args == nil {
+		t.Fatal("dupcodeCommandArgs returned nil for valid argv")
+	}
+
 	var stdout, stderr bytes.Buffer
 	exitCode := handleDupcode(args, dispatchers, &stdout, &stderr)
 
@@ -241,5 +291,14 @@ func TestDupcodeProductionARGVContract(t *testing.T) {
 	}
 	if exitCode != ExitSuccess {
 		t.Errorf("exitCode = %d, want %d (ExitSuccess)", exitCode, ExitSuccess)
+	}
+}
+
+// TestDupcodeShortARGVFailClosed proves short argv is handled safely.
+func TestDupcodeShortARGVFailClosed(t *testing.T) {
+	// dupcodeCommandArgs should return nil for insufficient args
+	result := dupcodeCommandArgs([]string{"leamas"})
+	if result != nil {
+		t.Errorf("dupcodeCommandArgs(short) = %v, want nil", result)
 	}
 }
