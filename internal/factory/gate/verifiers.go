@@ -331,35 +331,31 @@ func dupcodeBaselineVerifier(root string) []checks.Finding {
 }
 
 // forbiddenPatternsVerifier runs the canonical AST-based dupcode bypass policy.
+// This uses module-aware type checking with go/packages for accurate symbol identity resolution.
 func forbiddenPatternsVerifier(root string) []checks.Finding {
-	// Use the canonical V2 policy with repository-wide scanning and symbol awareness
-	findings := forbidden.CanonicalCheckDupcodeBypassV2(root, "github.com/s1onique/leamas")
+	var findings []checks.Finding
 
-	// Also run the legacy forbidden patterns check for completeness
-	// (patterns like OIDC, OAuth, RBAC, etc.)
+	// Run canonical dupcode bypass policy exactly once
+	dupcodeFindings := forbidden.CanonicalCheckDupcodeBypass(root, "github.com/s1onique/leamas")
+	findings = append(findings, dupcodeFindings...)
+
+	// Run legacy non-dupcode forbidden patterns check
+	// CheckRepo runs legacy patterns (OIDC, OAuth, RBAC, etc.)
 	legacyFindings := forbidden.CheckRepo(root)
+	findings = append(findings, legacyFindings...)
 
-	// Merge findings, avoiding duplicates
-	existingKinds := make(map[string]bool)
-	result := make([]checks.Finding, 0, len(findings)+len(legacyFindings))
-
+	// Deduplicate findings
+	seen := make(map[string]bool)
+	unique := findings[:0]
 	for _, f := range findings {
 		key := f.Path + "|" + f.Kind + "|" + f.Message
-		if !existingKinds[key] {
-			existingKinds[key] = true
-			result = append(result, f)
+		if !seen[key] {
+			seen[key] = true
+			unique = append(unique, f)
 		}
 	}
 
-	for _, f := range legacyFindings {
-		key := f.Path + "|" + f.Kind + "|" + f.Message
-		if !existingKinds[key] {
-			existingKinds[key] = true
-			result = append(result, f)
-		}
-	}
-
-	return result
+	return unique
 }
 
 // convertDupcodeCompareResult converts dupcode comparison results to gate findings.
