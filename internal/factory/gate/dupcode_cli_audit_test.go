@@ -238,10 +238,14 @@ func TestAuditOperationPolicyDeniesUpdate(t *testing.T) {
 		t.Errorf("scannerCallCount = %d, want 0", scannerCallCount)
 	}
 
+	// The dupcode verifier declares only [verify], so the operation
+	// policy denies update_baseline at the AllowsOperation check before
+	// any authority or environment validation runs. The finding kind is
+	// therefore verifier_operation_not_allowed.
 	if len(result.Findings) > 0 {
 		f := result.Findings[0]
-		if f.Kind != "verifier_execution_authority_denied" {
-			t.Errorf("finding kind = %q, want %q", f.Kind, "verifier_execution_authority_denied")
+		if f.Kind != "verifier_operation_not_allowed" {
+			t.Errorf("finding kind = %q, want %q", f.Kind, "verifier_operation_not_allowed")
 		}
 	}
 }

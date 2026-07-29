@@ -4,11 +4,8 @@ package verifierdispatch
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 	"slices"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -124,6 +121,11 @@ func (p *AuthorizedProfile) AuthorizationSucceeded() bool {
 //   - If ANY verifier is denied, the profile returns with AuthorizationSucceeded=false
 //   - Only when ALL verifiers are authorized does AuthorizationSucceeded=true
 //
+// Operation compatibility is enforced BEFORE any observation round-trip:
+//   - ValidateOperation rejects unknown / malformed operations
+//   - AllowsOperation rejects verifiers whose declared Operations list
+//     does not contain the requested operation
+//
 // Input hardening:
 //   - Rejects nil observer when remote authority is requested
 //   - Rejects duplicate verifier requests
@@ -162,9 +164,13 @@ func (d *Dispatcher) AuthorizeProfile(
 		authorizationSucceeded: true,
 	}
 
-	// Phase 1: Resolve all verifier metadata
-	resolved := make([]*registry.Verifier, len(requests))
-	for i, req := range requests {
+	// Phase 0: Operation compatibility. Each request is validated for
+	// operation syntax (ValidateOperation) and against the selected
+	// verifier's declared operation list (AllowsOperation). The
+	// dispatch profile MUST NOT acquire the observer or any binder /
+	// provider when ANY request fails this gate. This is the atomic
+	// profile-wide denial surface for operation mismatch.
+	for _, req := range requests {
 		v := d.resolveVerifier(req.VerifierID)
 		if v == nil {
 			profile.authorizationSucceeded = false
@@ -181,7 +187,59 @@ func (d *Dispatcher) AuthorizeProfile(
 			})
 			continue
 		}
-		resolved[i] = v
+		if err := verifierauthority.ValidateOperation(req.Operation); err != nil {
+			profile.authorizationSucceeded = false
+			profile.denials = append(profile.denials, ProfileDenial{
+				VerifierID: req.VerifierID,
+				Findings: []checks.Finding{
+					{
+						Path:     req.VerifierID,
+						Kind:     "verifier_operation_not_allowed",
+						Message:  err.Error(),
+						Severity: checks.SeverityError,
+					},
+				},
+			})
+			continue
+		}
+		if !v.AllowsOperation(req.Operation) {
+			profile.authorizationSucceeded = false
+			profile.denials = append(profile.denials, ProfileDenial{
+				VerifierID: req.VerifierID,
+				Findings: []checks.Finding{
+					{
+						Path: req.VerifierID,
+						Kind: "verifier_operation_not_allowed",
+						Message: fmt.Sprintf(
+							"verifier %q does not declare operation %q (allowed: %v)",
+							v.Name, req.Operation, v.Operations,
+						),
+						Severity: checks.SeverityError,
+					},
+				},
+			})
+			continue
+		}
+	}
+
+	// If any operation was disallowed, refuse to acquire the observer
+	// or any provider / binder. The profile is denied atomically.
+	if !profile.authorizationSucceeded {
+		profile.verifierIDs = nil
+		// Deep clone denials for storage
+		if len(profile.denials) > 0 {
+			profile.denials = cloneDenials(profile.denials)
+		}
+		return profile, nil
+	}
+
+	// Phase 1: Resolve all verifier metadata
+	resolved := make([]*registry.Verifier, len(requests))
+	for i, req := range requests {
+		v := d.resolveVerifier(req.VerifierID)
+		if v != nil {
+			resolved[i] = v
+		}
 	}
 
 	// Phase 2: Determine whether the cheap local-safe verify path
@@ -313,77 +371,4 @@ func (d *Dispatcher) AuthorizeProfile(
 	return profile, nil
 }
 
-// computeRegistryDigest computes a canonical SHA-256 digest of the authorized verifier set.
-// Uses streaming hash to avoid fixed-buffer panic risk.
-// The digest includes: verifier IDs, lanes, authorities, operations, and execution metadata.
-// Ordering is canonical (sorted by verifier ID).
-func (d *Dispatcher) computeRegistryDigest(requests []ProfileRequest, resolved []*registry.Verifier) [32]byte {
-	// Build sorted slice of resolved verifiers for canonical ordering
-	type entry struct {
-		id  string
-		v   *registry.Verifier
-		req ProfileRequest
-	}
-	entries := make([]entry, 0, len(resolved))
-	for i, v := range resolved {
-		if v != nil {
-			entries = append(entries, entry{
-				id:  v.Name,
-				v:   v,
-				req: requests[i],
-			})
-		}
-	}
-
-	// Sort by verifier ID for canonical ordering
-	slices.SortFunc(entries, func(left, right entry) int {
-		return cmpString(left.id, right.id)
-	})
-
-	// Use streaming hash to avoid fixed-buffer overflow
-	h := sha256.New()
-
-	for _, e := range entries {
-		// Write verifier name
-		writeString(h, e.v.Name)
-
-		// Write lane
-		writeString(h, string(e.v.Lane))
-
-		// Write authority
-		writeString(h, string(e.v.Authority))
-
-		// Write operation
-		writeString(h, string(e.req.Operation))
-
-		// Write execution kind
-		writeString(h, string(e.v.Execution.Kind))
-
-		// Write implementation ID
-		writeString(h, e.v.Execution.ImplementationID)
-	}
-
-	// Get the hash sum
-	var digest [32]byte
-	copy(digest[:], h.Sum(nil))
-	return digest
-}
-
-// writeString writes a length-prefixed string to the hash using streaming writes.
-func writeString(h hash.Hash, s string) {
-	var length [4]byte
-	binary.LittleEndian.PutUint32(length[:], uint32(len(s)))
-	h.Write(length[:])
-	h.Write([]byte(s))
-}
-
-// cmpString compares two strings lexicographically.
-func cmpString(a, b string) int {
-	if a < b {
-		return -1
-	}
-	if a > b {
-		return 1
-	}
-	return 0
-}
+// computeRegistryDigest and its hash helpers live in profile_digest.go.

@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 )
 
-// writeFileMkdirAll creates parent directories as needed and writes the
-// supplied bytes atomically. It is a tiny helper used by the canonical
-// local-path integration test to seed a Git worktree.
+// writeFileMkdirAll is a tiny test helper that ensures the parent
+// directory exists before writing a file. It exists solely for the
+// canonical local-path integration test; production code does not use
+// it. Same-package tests in cmd/leamas can call it directly.
 func writeFileMkdirAll(dir, relative string, data []byte) error {
 	full := filepath.Join(dir, relative)
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {

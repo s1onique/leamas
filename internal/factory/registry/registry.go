@@ -84,18 +84,7 @@ type CacheSemantics struct {
 // and typed command dispatch only (InvocationCommandOnly). The Scope field
 // is the single source of truth for both registration and selection; there
 // is no parallel manual registry to maintain.
-// Operations is the canonical list of operations this verifier is
-// approved to handle. A verifier that lacks an entry here cannot be
-// invoked through the dispatcher or profile paths. Every canonical
-// definition declares exactly the operations it supports; ordinary gate
-// verifiers accept only verify, while the reserved mutation identity
-// accepts only update_baseline.
-// Operations is the canonical list of operations this verifier is
-// approved to handle. A verifier that lacks an entry here cannot be
-// invoked through the dispatcher or profile paths. Every canonical
-// definition declares exactly the operations it supports; ordinary gate
-// verifiers accept only verify, while the reserved mutation identity
-// accepts only update_baseline.
+//
 // Operations is the canonical list of operations this verifier is
 // approved to handle. A verifier that lacks an entry here cannot be
 // invoked through the dispatcher or profile paths. Every canonical
@@ -103,14 +92,98 @@ type CacheSemantics struct {
 // verifiers accept only verify, while the reserved mutation identity
 // accepts only update_baseline.
 type Verifier struct {
-	Name      string
-	Run       func(root string) []checks.Finding
-	Lane      VerifierLane
-	Authority verifierauthority.ExecutionAuthority
-	Scope     InvocationScope
-	Execution ExecutionDefinition
-	Cache     CacheSemantics
+	Name       string
+	Run        func(root string) []checks.Finding
+	Lane       VerifierLane
+	Authority  verifierauthority.ExecutionAuthority
+	Scope      InvocationScope
+	Execution  ExecutionDefinition
+	Cache      CacheSemantics
 	Operations []verifierauthority.VerifierOperation
+}
+
+// reservedMutationIdentityName is the single canonical name for the
+// command-only mutation identity. It is reserved by the registry: only
+// an exact-match tuple may use this name, and only an exact-match
+// tuple may be named this way.
+const reservedMutationIdentityName = "dupcode-update-baseline"
+
+// AllowsOperation reports whether the verifier's declared operation
+// list contains the supplied operation. It is the single dispatcher
+// and profile query for operation compatibility.
+//
+// Calling AllowsOperation with an unknown or malformed operation is
+// always false; callers must still invoke
+// verifierauthority.ValidateOperation to surface the canonical
+// reason code.
+func (v Verifier) AllowsOperation(operation verifierauthority.VerifierOperation) bool {
+	for _, op := range v.Operations {
+		if op == operation {
+			return true
+		}
+	}
+	return false
+}
+
+// validateOperations checks every entry of the verifier's declared
+// operation list against verifierauthority.ValidateOperation. The
+// helper rejects empty lists, empty strings, unknown operations,
+// whitespace/case variants, and duplicates. It reports the registry
+// field as "Operations" regardless of the underlying reason.
+func validateOperations(verifierName string, operations []verifierauthority.VerifierOperation) error {
+	if len(operations) == 0 {
+		return &ValidationError{
+			Verifier: verifierName,
+			Field:    "Operations",
+			Reason:   "verifier must declare at least one allowed operation",
+		}
+	}
+	seen := make(map[verifierauthority.VerifierOperation]bool, len(operations))
+	for _, op := range operations {
+		if err := verifierauthority.ValidateOperation(op); err != nil {
+			return &ValidationError{
+				Verifier: verifierName,
+				Field:    "Operations",
+				Reason:   err.Error(),
+			}
+		}
+		if seen[op] {
+			return &ValidationError{
+				Verifier: verifierName,
+				Field:    "Operations",
+				Reason:   "duplicate operation in allowed list: " + string(op),
+			}
+		}
+		seen[op] = true
+	}
+	return nil
+}
+
+// isCanonicalDupcodeUpdateDefinition reports whether v equals the
+// exact reserved mutation tuple:
+//
+//	Name       = reservedMutationIdentityName
+//	Lane       = dupcode
+//	Authority  = local_safe
+//	Scope      = command_only
+//	Run        = nil
+//	Operations = [update_baseline]
+//
+// The check is biconditional: a definition matching this tuple must
+// carry the canonical name, and a definition with the canonical name
+// must match this tuple.
+func isCanonicalDupcodeUpdateDefinition(v Verifier) bool {
+	if len(v.Operations) != 1 {
+		return false
+	}
+	if v.Operations[0] != verifierauthority.OperationUpdateBaseline {
+		return false
+	}
+	return v.Name == reservedMutationIdentityName &&
+		v.Lane == VerifierLaneDupcode &&
+		v.Authority == verifierauthority.AuthorityLocalSafe &&
+		v.Scope == InvocationCommandOnly &&
+		v.Run == nil
 }
 
 // Validate verifies the registry metadata for a verifier.
@@ -122,6 +195,13 @@ type Verifier struct {
 //   - Scope is empty (must be explicit)
 //   - Gate-scoped verifier has nil Run
 //   - Command-only verifier has non-nil Run
+//   - Operations is empty, contains unknown values, duplicates, or
+//     whitespace / case variants
+//   - The reserved mutation identity name is used without the exact
+//     tuple, or a dupcode/local_safe command-only tuple is named
+//     anything other than the reserved name
+//   - A non-canonical verifier declares update_baseline or any
+//     operation list other than exactly [verify]
 func (v *Verifier) Validate() error {
 	// Check for empty authority
 	if v.Authority == "" {
@@ -200,84 +280,57 @@ func (v *Verifier) Validate() error {
 		}
 	}
 
-	// Check for exact dupcode-update-baseline identity. The only
-	// permitted local-safe dupcode command-only entry has the exact
-	// name "dupcode-update-baseline" so arbitrary command-only dupcode
-	// definitions cannot smuggle a mutation into the registry.
-	if v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Scope == InvocationCommandOnly && v.Name != "dupcode-update-baseline" {
-		return &ValidationError{
-			Verifier: v.Name,
-			Field:    "Name",
-			Reason:   "command-only dupcode local_safe must be named exactly \"dupcode-update-baseline\"",
-		}
-	}
-
-	// Operations list is required and must be non-empty and free of
-	// duplicates. Every verifier must declare its allowed operations.
-	if len(v.Operations) == 0 {
-		return &ValidationError{
-			Verifier: v.Name,
-			Field:    "Operations",
-			Reason:   "verifier must declare at least one allowed operation",
-		}
-	}
-	seen := make(map[verifierauthority.VerifierOperation]bool, len(v.Operations))
-	for _, op := range v.Operations {
-		if seen[op] {
-			return &ValidationError{
-				Verifier: v.Name,
-				Field:    "Operations",
-				Reason:   "duplicate operation in allowed list: " + string(op),
-			}
-		}
-		seen[op] = true
+	// Operations list is required and must be non-empty, free of
+	// duplicates, and every entry must be a canonical verifier
+	// operation. validateOperations reports the registry field as
+	// "Operations" so callers see a stable diagnostic.
+	if err := validateOperations(v.Name, v.Operations); err != nil {
+		return err
 	}
 
 	// Reserved canonical mutation identity. The exact tuple is:
-	//   Name       = "dupcode-update-baseline"
+	//   Name       = reservedMutationIdentityName
 	//   Lane       = dupcode
 	//   Authority  = local_safe
 	//   Scope      = command_only
 	//   Run        = nil
 	//   Operations = [update_baseline]
-	// Both directions must hold: a definition with the exact reserved
-	// name must equal this tuple; a definition matching this tuple must
-	// carry the exact reserved name.
-	const reservedName = "dupcode-update-baseline"
-	isReservedTuple := v.Lane == VerifierLaneDupcode &&
-		v.Authority == verifierauthority.AuthorityLocalSafe &&
-		v.Scope == InvocationCommandOnly &&
-		v.Run == nil
-	isReservedName := v.Name == reservedName
-	if isReservedTuple && !isReservedName {
-		return &ValidationError{
-			Verifier: v.Name,
-			Field:    "Name",
-			Reason:   "reserved dupcode local_safe command-only tuple must use the canonical name \"dupcode-update-baseline\"",
-		}
-	}
-	if isReservedName && !isReservedTuple {
+	// The biconditional check is delegated to
+	// isCanonicalDupcodeUpdateDefinition so the reserved name and the
+	// reserved tuple are tested by a single helper.
+	if v.Name == reservedMutationIdentityName && !isCanonicalDupcodeUpdateDefinition(*v) {
 		return &ValidationError{
 			Verifier: v.Name,
 			Field:    "Reserved",
 			Reason:   "name \"dupcode-update-baseline\" is reserved and must match the canonical mutation tuple exactly",
 		}
 	}
-	// Only the reserved name accepts update_baseline; no other
-	// verifier may declare update_baseline in its Operations list.
-	for _, op := range v.Operations {
-		if op == verifierauthority.OperationUpdateBaseline && v.Name != reservedName {
-			return &ValidationError{
-				Verifier: v.Name,
-				Field:    "Operations",
-				Reason:   "update_baseline is reserved for the canonical mutation identity",
+	if !isCanonicalDupcodeUpdateDefinition(*v) && v.Lane == VerifierLaneDupcode && v.Authority == verifierauthority.AuthorityLocalSafe && v.Scope == InvocationCommandOnly {
+		return &ValidationError{
+			Verifier: v.Name,
+			Field:    "Name",
+			Reason:   "reserved dupcode local_safe command-only tuple must use the canonical name \"dupcode-update-baseline\"",
+		}
+	}
+	// Only the reserved mutation identity may declare update_baseline.
+	// Every other verifier is restricted to verify only.
+	if v.Name != reservedMutationIdentityName {
+		for _, op := range v.Operations {
+			if op == verifierauthority.OperationUpdateBaseline {
+				return &ValidationError{
+					Verifier: v.Name,
+					Field:    "Operations",
+					Reason:   "update_baseline is reserved for the canonical mutation identity",
+				}
 			}
 		}
-		if op == verifierauthority.OperationUpdateBaseline && len(v.Operations) != 1 {
+		// Ordinary verifiers (gate-scoped or otherwise non-canonical)
+		// must declare exactly [verify].
+		if len(v.Operations) != 1 || v.Operations[0] != verifierauthority.OperationVerify {
 			return &ValidationError{
 				Verifier: v.Name,
 				Field:    "Operations",
-				Reason:   "dupcode-update-baseline must declare exactly one operation",
+				Reason:   "ordinary verifiers must declare exactly [verify]",
 			}
 		}
 	}

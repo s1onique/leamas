@@ -38,11 +38,12 @@ func (c *countingObserver) Observe(ctx context.Context, root string) verifieraut
 // path performs zero full Git observations.
 func TestLocalSafeVerifySkipsObserver(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "local-fast",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Scope:     registry.InvocationGate,
-		Run:       func(root string) []checks.Finding { return nil },
+		Name:       "local-fast",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
+		Run:        func(root string) []checks.Finding { return nil },
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -68,12 +69,7 @@ func TestLocalSafeVerifySkipsObserver(t *testing.T) {
 // TestLocalSafeUpdateUsesObserver proves local_safe + update_baseline
 // triggers exactly one full observer call.
 func TestLocalSafeUpdateUsesObserver(t *testing.T) {
-	verifiers := []registry.Verifier{{
-		Name:      "dupcode-update-baseline",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneDupcode,
-		Scope:     registry.InvocationCommandOnly,
-	}}
+	verifiers := []registry.Verifier{testMutationVerifier("dupcode-update-baseline")}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
@@ -95,7 +91,6 @@ func TestLocalSafeUpdateUsesObserver(t *testing.T) {
 			}
 		}
 	})
-	// Dispatch may return findings (the stub); the point is the count.
 	if got := obs.counter.Load(); got != 1 {
 		t.Errorf("observer calls = %d, want 1 (local_safe + update needs classification)", got)
 	}
@@ -104,13 +99,9 @@ func TestLocalSafeUpdateUsesObserver(t *testing.T) {
 // TestCIVerifyUsesObserver proves ci_exact_checkout + verify triggers
 // exactly one full observer call.
 func TestCIVerifyUsesObserver(t *testing.T) {
-	verifiers := []registry.Verifier{{
-		Name:      "dupcode",
-		Authority: verifierauthority.AuthorityCIExactCheckout,
-		Lane:      registry.VerifierLaneDupcode,
-		Scope:     registry.InvocationGate,
-		Run:       func(root string) []checks.Finding { return nil },
-	}}
+	verifiers := []registry.Verifier{
+		testVerifier("dupcode", verifierauthority.AuthorityCIExactCheckout, registry.VerifierLaneDupcode),
+	}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)

@@ -1,22 +1,63 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// SPDX-License-Identifier: Apache-2.0
+
 package gate
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/s1onique/leamas/internal/execution"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
+// initTempGitRepoForDupcodeUpdate creates a minimal committed temp
+// git repository that DetectExecutionContext can observe. It exists so
+// mutation-path tests can drive DetectExecutionContext through the
+// production observation path (no synthetic local context). The
+// helper uses execution.RunGit because the executable-contract-first
+// verifier forbids direct os/exec use outside internal/execution.
+func initTempGitRepoForDupcodeUpdate(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	ctx := context.Background()
+	for _, args := range [][]string{
+		{"init", "-b", "main"},
+		{"config", "user.email", "dupcode-update@test.local"},
+		{"config", "user.name", "Dupcode Update Test"},
+	} {
+		out, err := execution.RunGit(ctx, dir, args...)
+		if err != nil || out.ExitCode != 0 {
+			t.Fatalf("git %v: %v\n%s", args, err, out.Stderr)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("seed\n"), 0o644); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	for _, args := range [][]string{
+		{"add", "."},
+		{"commit", "-m", "seed"},
+	} {
+		out, err := execution.RunGit(ctx, dir, args...)
+		if err != nil || out.ExitCode != 0 {
+			t.Fatalf("git %v: %v\n%s", args, err, out.Stderr)
+		}
+	}
+	return dir
+}
+
 // TestDupcodeUpdateExplicitLocalAdmittedExactlyOnce proves that an
 // explicitly classified local context admits the mutation and each
-// protected operation runs exactly once. The localSafeObserver sets
-// the unexported observation provenance so ClassifyExecutionEnvironment returns
-// EnvironmentLocal.
+// protected operation runs exactly once. The observer drives
+// DetectExecutionContext against a real temp git repository so the
+// local classification is recorded through the production observation
+// path.
 func TestDupcodeUpdateExplicitLocalAdmittedExactlyOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := initTempGitRepoForDupcodeUpdate(t)
 	baselinePath := dir + "/.factory/dupcode-baseline.json"
 	reportWritten := dupcode.Report{
 		Root: dir,
@@ -29,7 +70,7 @@ func TestDupcodeUpdateExplicitLocalAdmittedExactlyOnce(t *testing.T) {
 	outcome := dispatchDupcodeUpdateBaselineTypedWith(
 		context.Background(), dir, DupcodeUpdateBaselineSpec{
 			BaselinePath: baselinePath, MinLines: 40, MinTokens: 400,
-		}, &localSafeObserver{}, makeUpdateDeps(r),
+		}, newTempRepoObserver(dir), makeUpdateDeps(r),
 	)
 	if outcome.Dispatch.Error != nil {
 		t.Fatalf("expected admission: error=%v", outcome.Dispatch.Error)
@@ -46,9 +87,6 @@ func TestDupcodeUpdateExplicitLocalAdmittedExactlyOnce(t *testing.T) {
 	if got := r.writeCalls.Load(); got != 1 {
 		t.Errorf("writeCalls = %d, want 1 (the binder must call WriteBaseline exactly once on admission)", got)
 	}
-	// On success, the typed outcome carries the DTO-converted report;
-	// admission is further proven by the binder's NewRunner having
-	// been invoked once and WriteBaseline having been called once.
 	if outcome.Report.Root != dir {
 		t.Errorf("outcome.Report.Root = %q, want %q", outcome.Report.Root, dir)
 	}
@@ -73,7 +111,6 @@ func (g *githubActionsCIContextObserver) Observe(ctx context.Context, root strin
 }
 
 // githubActionsCIFalseObserver returns GITHUB_ACTIONS=true with CI=false.
-// GitHub Actions detection must not weaken when CI is overwritten.
 type githubActionsCIFalseObserver struct{}
 
 func (g *githubActionsCIFalseObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
@@ -91,8 +128,7 @@ func (g *githubActionsCIFalseObserver) Observe(ctx context.Context, root string)
 }
 
 // githubActionsNoAuthorityMarkerObserver returns GITHUB_ACTIONS=true but no
-// authority marker. The GitHub Actions classification must hold; the
-// mutation is still denied by the local-safe gate.
+// authority marker.
 type githubActionsNoAuthorityMarkerObserver struct{}
 
 func (g *githubActionsNoAuthorityMarkerObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
@@ -107,8 +143,7 @@ func (g *githubActionsNoAuthorityMarkerObserver) Observe(ctx context.Context, ro
 	}
 }
 
-// genericCIObserver returns CI=true without GITHUB_ACTIONS. The
-// environment is classified as EnvironmentCI.
+// genericCIObserver returns CI=true without GITHUB_ACTIONS.
 type genericCIObserver struct{}
 
 func (g *genericCIObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
@@ -124,8 +159,7 @@ func (g *genericCIObserver) Observe(ctx context.Context, root string) verifierau
 }
 
 // partialGitHubContextObserver returns GITHUB_ACTIONS=true but with a
-// partial context (no SHA, no workspace, no head commit). The
-// GitHub Actions classification must hold; the mutation is denied.
+// partial context (no SHA, no workspace, no head commit).
 type partialGitHubContextObserver struct{}
 
 func (p *partialGitHubContextObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
@@ -136,8 +170,7 @@ func (p *partialGitHubContextObserver) Observe(ctx context.Context, root string)
 }
 
 // contradictoryContextObserver returns a contradictory context
-// (CI=false AND GITHUB_ACTIONS=false BUT authority marker set). The
-// environment is classified as EnvironmentUnknown.
+// (CI=false AND GITHUB_ACTIONS=false BUT authority marker set).
 type contradictoryContextObserver struct{}
 
 func (c *contradictoryContextObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
@@ -150,7 +183,6 @@ func (c *contradictoryContextObserver) Observe(ctx context.Context, root string)
 }
 
 // unknownContextObserver returns a context with random unrelated fields.
-// The environment is classified as EnvironmentUnknown.
 type unknownContextObserver struct{}
 
 func (u *unknownContextObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
@@ -193,10 +225,7 @@ func assertDenied(t *testing.T, outcome DupcodeUpdateBaselineOutcome, r *countin
 }
 
 // TestDupcodeUpdateGitHubActionsDeniedWhenCITrue proves a fully valid
-// GitHub Actions context (GITHUB_ACTIONS=true AND CI=true AND authority
-// marker set) denies the mutation. This is the historical "valid CI"
-// context; the new gate must deny it because EnvironmentGitHubActions
-// is not EnvironmentLocal.
+// GitHub Actions context denies the mutation.
 func TestDupcodeUpdateGitHubActionsDeniedWhenCITrue(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -209,8 +238,6 @@ func TestDupcodeUpdateGitHubActionsDeniedWhenCITrue(t *testing.T) {
 
 // TestDupcodeUpdateGitHubActionsDeniedWhenCIFalse proves the GitHub
 // Actions classification holds even when CI is overwritten to "false".
-// This is the previous contract's main fail-open path: a workflow
-// setting CI=false must still be denied.
 func TestDupcodeUpdateGitHubActionsDeniedWhenCIFalse(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -223,8 +250,7 @@ func TestDupcodeUpdateGitHubActionsDeniedWhenCIFalse(t *testing.T) {
 
 // TestDupcodeUpdateGitHubActionsDeniedWithoutAuthorityMarker proves the
 // GitHub Actions classification holds even when the authority marker is
-// missing. The previous contract required all three markers; the new
-// gate must not silently promote a partial GitHub Actions context.
+// missing.
 func TestDupcodeUpdateGitHubActionsDeniedWithoutAuthorityMarker(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -235,8 +261,7 @@ func TestDupcodeUpdateGitHubActionsDeniedWithoutAuthorityMarker(t *testing.T) {
 	assertDenied(t, out, r)
 }
 
-// TestDupcodeUpdateOtherCIDenied proves a generic CI context (CI=true
-// without GITHUB_ACTIONS) denies the mutation.
+// TestDupcodeUpdateOtherCIDenied proves a generic CI context denies the mutation.
 func TestDupcodeUpdateOtherCIDenied(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -248,8 +273,7 @@ func TestDupcodeUpdateOtherCIDenied(t *testing.T) {
 }
 
 // TestDupcodeUpdatePartialGitHubContextDenied proves a partially
-// populated GitHub Actions context (GITHUB_ACTIONS=true but no SHA /
-// workspace / head) denies the mutation.
+// populated GitHub Actions context denies the mutation.
 func TestDupcodeUpdatePartialGitHubContextDenied(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -261,9 +285,7 @@ func TestDupcodeUpdatePartialGitHubContextDenied(t *testing.T) {
 }
 
 // TestDupcodeUpdateContradictoryContextDenied proves a contradictory
-// context (CI=false, GitHub Actions=false, but unrelated authority
-// marker) denies the mutation. The environment is classified as
-// EnvironmentUnknown.
+// context denies the mutation.
 func TestDupcodeUpdateContradictoryContextDenied(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -275,8 +297,7 @@ func TestDupcodeUpdateContradictoryContextDenied(t *testing.T) {
 }
 
 // TestDupcodeUpdateUnknownContextDenied proves an unclassified context
-// (some unrelated field populated) denies the mutation. The
-// environment is classified as EnvironmentUnknown.
+// denies the mutation.
 func TestDupcodeUpdateUnknownContextDenied(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -288,10 +309,8 @@ func TestDupcodeUpdateUnknownContextDenied(t *testing.T) {
 }
 
 // TestDupcodeUpdateEmptyUnclassifiedContextDenied proves a fully empty
-// context denies the mutation. The previous contract used "all relevant
-// strings empty == local", which was a fail-open path. The new gate
-// must deny because the empty context cannot be silently promoted to
-// EnvironmentLocal.
+// context denies the mutation. The empty context cannot be silently
+// promoted to EnvironmentLocal.
 func TestDupcodeUpdateEmptyUnclassifiedContextDenied(t *testing.T) {
 	r := &countingDupcodeRunner{}
 	out := dispatchDupcodeUpdateBaselineTypedWith(
@@ -339,11 +358,6 @@ func TestClassifyExecutionEnvironmentIsFailClosed(t *testing.T) {
 				CI: "true",
 			},
 			want: verifierauthority.EnvironmentCI,
-		},
-		{
-			name: "local_via_NewLocalOnlyContext",
-			ec:   *verifierauthority.NewLocalOnlyContext(),
-			want: verifierauthority.EnvironmentLocal,
 		},
 		{
 			name: "empty_context",

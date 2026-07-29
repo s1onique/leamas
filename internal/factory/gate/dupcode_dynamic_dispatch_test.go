@@ -118,16 +118,25 @@ func (a *admittingObserver) Observe(ctx context.Context, root string) verifierau
 	}
 }
 
-// localSafeObserver returns an explicitly classified local execution
-// context. It is the trusted observer pattern: the only way to obtain
-// EnvironmentLocal is via the authority-package observation provenance,
-// never via implicit "all environment strings empty == local". This
-// observer delegates to NewLocalOnlyContext, which records the local
-// classification through the unexported observation field.
-type localSafeObserver struct{}
+// tempRepoContextObserver drives DetectExecutionContext against a real
+// temp git repository so the resulting ExecutionContext is classified
+// as EnvironmentLocal through the production observation path. It is
+// the canonical test-only observer for mutation-path tests.
+type tempRepoContextObserver struct {
+	root string
+}
 
-func (l *localSafeObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
-	return *verifierauthority.NewLocalOnlyContext()
+func (t *tempRepoContextObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
+	if t.root != "" {
+		root = t.root
+	}
+	return verifierauthority.DetectExecutionContext(ctx, root)
+}
+
+// newTempRepoObserver creates a tempRepoContextObserver bound to a real
+// git repository at root.
+func newTempRepoObserver(root string) *tempRepoContextObserver {
+	return &tempRepoContextObserver{root: root}
 }
 
 // makeVerifyDeps wires the runner through a counting factory.

@@ -1,7 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -75,46 +77,28 @@ func assertSuccessfulV2CLIResult(t *testing.T, repository, freeze, subject strin
 	}
 }
 
+// copyCurrentLeamasSource copies the current Leamas source tree into a
+// fresh temporary directory so the v2 closure subprocess test can run
+// against an immutable snapshot.
+//
+// Snapshot authority is the Git INDEX. We use `git checkout-index
+// --all --force --prefix=<dest>/` which copies file CONTENTS
+// represented by the index into the destination directory. This is
+// robust to partial working-tree states (e.g., a tracked source file
+// that has been deleted from the working tree would cause os.Lstat to
+// fail; the index-based copy does not consult the working tree). The
+// helper uses execution.RunGit because the executable-contract-first
+// verifier forbids direct os/exec use outside internal/execution.
 func copyCurrentLeamasSource(t *testing.T) string {
 	t.Helper()
 	source := gitForClosureTest(t, ".", "rev-parse", "--show-toplevel")
-	result, err := execution.RunGit(t.Context(), source, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
-	if err != nil || result.ExitCode != 0 {
-		t.Fatalf("list source files: %v (exit %d): %s", err, result.ExitCode, result.Stderr)
-	}
-	listed := result.Stdout
 	destination := t.TempDir()
-	for _, raw := range bytes.Split(listed, []byte{0}) {
-		if len(raw) == 0 {
-			continue
-		}
-		relative := string(raw)
-		from := filepath.Join(source, filepath.FromSlash(relative))
-		to := filepath.Join(destination, filepath.FromSlash(relative))
-		info, err := os.Lstat(from)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(from)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.Symlink(target, to); err != nil {
-				t.Fatal(err)
-			}
-			continue
-		}
-		data, err := os.ReadFile(from)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(to, data, info.Mode().Perm()); err != nil {
-			t.Fatal(err)
-		}
+	prefix := destination + string(filepath.Separator)
+	ctx := context.Background()
+	out, err := execution.RunGit(ctx, source,
+		"checkout-index", "--all", "--force", "--prefix="+prefix)
+	if err != nil || out.ExitCode != 0 {
+		t.Fatalf("checkout-index: %v (exit %d)\n%s", err, out.ExitCode, out.Stderr)
 	}
 	gitForClosureTest(t, destination, "init", "-b", "main")
 	gitForClosureTest(t, destination, "config", "user.name", "CLI V2 Subject Exact")

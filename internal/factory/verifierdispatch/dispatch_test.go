@@ -39,11 +39,25 @@ func (f *fakeLocalObserver) Observe(ctx context.Context, root string) verifierau
 // testVerifier creates a test verifier with the given parameters.
 func testVerifier(name string, authority verifierauthority.ExecutionAuthority, lane registry.VerifierLane) registry.Verifier {
 	return registry.Verifier{
+		Name:       name,
+		Authority:  authority,
+		Lane:       lane,
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
+		Run:        func(root string) []checks.Finding { return nil },
+	}
+}
+
+// testMutationVerifier creates a command-only mutation verifier.
+func testMutationVerifier(name string) registry.Verifier {
+	return registry.Verifier{
 		Name:      name,
-		Authority: authority,
-		Lane:      lane,
-		Scope:     registry.InvocationGate,
-		Run:       func(root string) []checks.Finding { return nil },
+		Lane:      registry.VerifierLaneDupcode,
+		Authority: verifierauthority.AuthorityLocalSafe,
+		Scope:     registry.InvocationCommandOnly,
+		Operations: []verifierauthority.VerifierOperation{
+			verifierauthority.OperationUpdateBaseline,
+		},
 	}
 }
 

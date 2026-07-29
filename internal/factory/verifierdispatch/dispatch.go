@@ -161,17 +161,51 @@ func (e *RegistryValidationError) Error() string {
 	return fmt.Sprintf("verifier %s: %s %s", e.Verifier, e.Field, e.Reason)
 }
 
+// ReasonCodeVerifierOperationNotAllowed is the canonical reason for a
+// dispatcher denial that the requested operation is not declared by
+// the selected verifier's Operations list.
+const ReasonCodeVerifierOperationNotAllowed = "verifier_operation_not_allowed"
+
+// AuthorityOperationError is returned when a verifier is asked to
+// execute an operation that its declared Operations list does not
+// contain. The error exposes the verifier id, requested operation,
+// allowed list, and reason code so callers can produce stable
+// diagnostics.
+type AuthorityOperationError struct {
+	VerifierID string
+	Operation  verifierauthority.VerifierOperation
+	Allowed    []verifierauthority.VerifierOperation
+	ReasonCode string
+	Message    string
+}
+
+func (e *AuthorityOperationError) Error() string {
+	return e.Message
+}
+
 // Dispatch routes a verifier execution request through authority validation.
 // It returns the verifier's findings if authority permits, or a denial finding
 // if authority is denied. The RunnerFactory is never invoked unless authority
 // validation passes.
 //
+// Dispatch order is fail-closed:
+//
+//  1. Resolve verifier metadata from registry
+//  2. Validate operation syntax via verifierauthority.ValidateOperation
+//  3. Confirm verifier.AllowsOperation(request.Operation)
+//  4. Determine whether the cheap path applies (see below)
+//  5. Classify the environment when observation is required
+//  6. Validate operation against authority and environment
+//  7. Validate declared authority against observed context
+//  8. Invoke factory and runner
+//
 // Observer-call matrix:
 //
-//	local_safe + verify:        0 full Git observations (cheap path)
-//	local_safe + update_baseline: 1 full Git observation (env-classification required)
+//	local_safe + verify (declared): 0 full Git observations (cheap path)
+//	local_safe + update_baseline:  1 full Git observation (env-classification required)
 //	ci_exact_checkout + verify:    1 full Git observation
 //	ci_exact_checkout + update:    denied before runner (deterministic)
+//	disallowed operation:          denied before observer/factory/runner
 func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer ContextObserver, factory RunnerFactory) Result {
 	// Step 1: Resolve verifier metadata from registry
 	v := d.resolveVerifier(request.VerifierID)
@@ -181,9 +215,55 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 2: Determine whether the cheap local-safe verify path applies.
-	// Cheap path skips the observer entirely.
-	if request.Operation == verifierauthority.OperationVerify && v.Authority == verifierauthority.AuthorityLocalSafe {
+	// Step 2: Validate operation syntax. Unknown operations are
+	// rejected here, before any observer call.
+	if err := verifierauthority.ValidateOperation(request.Operation); err != nil {
+		return Result{
+			Findings: []checks.Finding{{
+				Path:     v.Name,
+				Kind:     "verifier_operation_not_allowed",
+				Message:  err.Error(),
+				Severity: checks.SeverityError,
+			}},
+			Error: err,
+		}
+	}
+
+	// Step 3: Confirm the selected verifier declares the requested
+	// operation. The dispatcher must use AllowsOperation as the
+	// single source of truth for operation compatibility.
+	if !v.AllowsOperation(request.Operation) {
+		return Result{
+			Findings: []checks.Finding{{
+				Path: v.Name,
+				Kind: ReasonCodeVerifierOperationNotAllowed,
+				Message: fmt.Sprintf(
+					"verifier %q does not declare operation %q (allowed: %v)",
+					v.Name, request.Operation, v.Operations,
+				),
+				Severity: checks.SeverityError,
+			}},
+			Error: &AuthorityOperationError{
+				VerifierID: v.Name,
+				Operation:  request.Operation,
+				Allowed:    v.Operations,
+				ReasonCode: ReasonCodeVerifierOperationNotAllowed,
+				Message: fmt.Sprintf(
+					"verifier %q does not declare operation %q",
+					v.Name, request.Operation,
+				),
+			},
+		}
+	}
+
+	// Step 4: Determine whether the cheap local-safe verify path
+	// applies. The cheap path is permitted ONLY when the request
+	// operation is verify AND the verifier declares verify AND the
+	// verifier is local_safe. It must not be based only on the
+	// request operation and authority.
+	if request.Operation == verifierauthority.OperationVerify &&
+		v.Authority == verifierauthority.AuthorityLocalSafe &&
+		v.AllowsOperation(verifierauthority.OperationVerify) {
 		// No observer call; authority is admitted without Git observation.
 		runner := factory()
 		return Result{
@@ -191,15 +271,16 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 3: For mutations and non-local-safe verifiers, run the full
-	// observer. This is the only path that performs Git observation.
+	// Step 5: For mutations and non-local-safe verifiers, run the
+	// full observer. This is the only path that performs Git
+	// observation.
 	ec := observer.Observe(ctx, request.Root)
 
-	// Step 4: Classify the environment explicitly. Any classification
+	// Step 6: Classify the environment explicitly. Any classification
 	// other than EnvironmentLocal denies a local_safe mutation.
 	environment := verifierauthority.ClassifyExecutionEnvironment(ec)
 
-	// Step 5: Validate operation against authority and classified
+	// Step 7: Validate operation against authority and classified
 	// environment. This is the fail-closed mutation gate.
 	if err := verifierauthority.ValidateOperationInContext(v.Authority, request.Operation, environment); err != nil {
 		findings := []checks.Finding{
@@ -216,7 +297,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 6: Validate declared authority against observed context.
+	// Step 8: Validate declared authority against observed context.
 	if err := verifierauthority.ValidateAuthority(ec, v.Authority, request.Operation); err != nil {
 		findings := []checks.Finding{
 			{
@@ -232,7 +313,7 @@ func (d *Dispatcher) Dispatch(ctx context.Context, request Request, observer Con
 		}
 	}
 
-	// Step 7: Authority passed - invoke factory
+	// Step 9: Authority passed - invoke factory
 	runner := factory()
 	return Result{
 		Findings: runner(request.Root),

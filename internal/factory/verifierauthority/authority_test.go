@@ -179,14 +179,46 @@ func TestReasonCode(t *testing.T) {
 	}
 }
 
+// TestNewLocalOnlyContext covers the package-internal helper.
 func TestNewLocalOnlyContext(t *testing.T) {
-	ec := NewLocalOnlyContext()
+	ec := newLocalOnlyContext()
 	if ec == nil {
 		t.Fatal("expected non-nil context")
 	}
 	// All fields should be zero values
 	if ec.CI != "" || ec.GitHubActions != "" {
 		t.Error("expected empty CI fields for local context")
+	}
+	if !ec.observationCompleted() {
+		t.Error("expected observation to be marked completed")
+	}
+}
+
+// TestNoExportedLocalConstructor asserts that no exported production
+// function returns a preclassified ExecutionContext. The exported
+// production surface must channel every local-classification through
+// DetectExecutionContext so observation provenance cannot be forged.
+func TestNoExportedLocalConstructor(t *testing.T) {
+	// Build a fresh ExecutionContext by hand: all exported fields.
+	empty := ExecutionContext{}
+	if got := ClassifyExecutionEnvironment(empty); got == EnvironmentLocal {
+		t.Error("zero-value ExecutionContext must NOT classify as EnvironmentLocal")
+	}
+	// A populated but contradictory context must not classify as local.
+	contradictory := ExecutionContext{
+		CI:              "false",
+		GitHubActions:   "false",
+		AuthorityMarker: "marker",
+	}
+	if got := ClassifyExecutionEnvironment(contradictory); got == EnvironmentLocal {
+		t.Error("contradictory context must NOT classify as EnvironmentLocal")
+	}
+	// Calling DetectExecutionContext against a path that is not a
+	// git repository must yield an unclassified context, NOT local.
+	ctx := context.Background()
+	ec := DetectExecutionContext(ctx, t.TempDir())
+	if got := ClassifyExecutionEnvironment(ec); got == EnvironmentLocal {
+		t.Errorf("DetectExecutionContext against non-git must NOT classify as EnvironmentLocal, got %q", got)
 	}
 }
 

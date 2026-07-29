@@ -15,12 +15,23 @@ func noopRun(root string) []checks.Finding {
 	return nil
 }
 
+// verifyOnly returns the canonical ordinary verifier operation list.
+func verifyOnly() []verifierauthority.VerifierOperation {
+	return []verifierauthority.VerifierOperation{verifierauthority.OperationVerify}
+}
+
+// updateBaselineOnly returns the canonical mutation operation list.
+func updateBaselineOnly() []verifierauthority.VerifierOperation {
+	return []verifierauthority.VerifierOperation{verifierauthority.OperationUpdateBaseline}
+}
+
 func TestVerifier_Validate_EmptyAuthority(t *testing.T) {
 	v := Verifier{
-		Name:      "test",
-		Lane:      VerifierLaneFast,
-		Authority: "",
-		Scope:     InvocationGate,
+		Name:       "test",
+		Lane:       VerifierLaneFast,
+		Authority:  "",
+		Scope:      InvocationGate,
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -31,10 +42,11 @@ func TestVerifier_Validate_EmptyAuthority(t *testing.T) {
 
 func TestVerifier_Validate_UnknownAuthority(t *testing.T) {
 	v := Verifier{
-		Name:      "test",
-		Lane:      VerifierLaneFast,
-		Authority: "unknown_authority",
-		Scope:     InvocationGate,
+		Name:       "test",
+		Lane:       VerifierLaneFast,
+		Authority:  "unknown_authority",
+		Scope:      InvocationGate,
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -47,10 +59,11 @@ func TestVerifier_Validate_DupcodeLocalSafe(t *testing.T) {
 	// Dupcode verifiers should NOT be local_safe (security violation).
 	// The dupcode-update-baseline entry is the single explicit exception.
 	v := Verifier{
-		Name:      "dupcode",
-		Lane:      VerifierLaneDupcode,
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Scope:     InvocationGate,
+		Name:       "dupcode",
+		Lane:       VerifierLaneDupcode,
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Scope:      InvocationGate,
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -62,10 +75,11 @@ func TestVerifier_Validate_DupcodeLocalSafe(t *testing.T) {
 func TestVerifier_Validate_FastCIExactCheckout(t *testing.T) {
 	// Fast verifiers should NOT require CI exact checkout (too restrictive)
 	v := Verifier{
-		Name:      "tooling-boundaries",
-		Lane:      VerifierLaneFast,
-		Authority: verifierauthority.AuthorityCIExactCheckout,
-		Scope:     InvocationGate,
+		Name:       "tooling-boundaries",
+		Lane:       VerifierLaneFast,
+		Authority:  verifierauthority.AuthorityCIExactCheckout,
+		Scope:      InvocationGate,
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -76,11 +90,12 @@ func TestVerifier_Validate_FastCIExactCheckout(t *testing.T) {
 
 func TestVerifier_Validate_ValidFast(t *testing.T) {
 	v := Verifier{
-		Name:      "llm-friendly",
-		Lane:      VerifierLaneFast,
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Scope:     InvocationGate,
-		Run:       noopRun,
+		Name:       "llm-friendly",
+		Lane:       VerifierLaneFast,
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Scope:      InvocationGate,
+		Run:        noopRun,
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -91,11 +106,12 @@ func TestVerifier_Validate_ValidFast(t *testing.T) {
 
 func TestVerifier_Validate_ValidDupcode(t *testing.T) {
 	v := Verifier{
-		Name:      "dupcode",
-		Lane:      VerifierLaneDupcode,
-		Authority: verifierauthority.AuthorityCIExactCheckout,
-		Scope:     InvocationGate,
-		Run:       noopRun,
+		Name:       "dupcode",
+		Lane:       VerifierLaneDupcode,
+		Authority:  verifierauthority.AuthorityCIExactCheckout,
+		Scope:      InvocationGate,
+		Run:        noopRun,
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -106,10 +122,11 @@ func TestVerifier_Validate_ValidDupcode(t *testing.T) {
 
 func TestVerifier_Validate_EmptyScope(t *testing.T) {
 	v := Verifier{
-		Name:      "test",
-		Lane:      VerifierLaneFast,
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Scope:     "",
+		Name:       "test",
+		Lane:       VerifierLaneFast,
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Scope:      "",
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -120,10 +137,11 @@ func TestVerifier_Validate_EmptyScope(t *testing.T) {
 
 func TestVerifier_Validate_UnknownScope(t *testing.T) {
 	v := Verifier{
-		Name:      "test",
-		Lane:      VerifierLaneFast,
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Scope:     "fictional-scope",
+		Name:       "test",
+		Lane:       VerifierLaneFast,
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Scope:      "fictional-scope",
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -134,11 +152,12 @@ func TestVerifier_Validate_UnknownScope(t *testing.T) {
 
 func TestVerifier_Validate_GateScopeNilRun(t *testing.T) {
 	v := Verifier{
-		Name:      "test",
-		Lane:      VerifierLaneFast,
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Scope:     InvocationGate,
-		Run:       nil,
+		Name:       "test",
+		Lane:       VerifierLaneFast,
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Scope:      InvocationGate,
+		Run:        nil,
+		Operations: verifyOnly(),
 	}
 
 	err := v.Validate()
@@ -149,11 +168,12 @@ func TestVerifier_Validate_GateScopeNilRun(t *testing.T) {
 
 func TestVerifier_Validate_CommandOnlyNilRun(t *testing.T) {
 	v := Verifier{
-		Name:      "dupcode-update-baseline",
-		Lane:      VerifierLaneDupcode,
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Scope:     InvocationCommandOnly,
-		Run:       nil,
+		Name:       "dupcode-update-baseline",
+		Lane:       VerifierLaneDupcode,
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Scope:      InvocationCommandOnly,
+		Run:        nil,
+		Operations: updateBaselineOnly(),
 	}
 
 	err := v.Validate()
@@ -164,11 +184,12 @@ func TestVerifier_Validate_CommandOnlyNilRun(t *testing.T) {
 
 func TestVerifier_Validate_CommandOnlyWithRunRejected(t *testing.T) {
 	v := Verifier{
-		Name:      "dupcode-update-baseline",
-		Lane:      VerifierLaneDupcode,
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Scope:     InvocationCommandOnly,
-		Run:       noopRun,
+		Name:       "dupcode-update-baseline",
+		Lane:       VerifierLaneDupcode,
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Scope:      InvocationCommandOnly,
+		Run:        noopRun,
+		Operations: updateBaselineOnly(),
 	}
 
 	err := v.Validate()

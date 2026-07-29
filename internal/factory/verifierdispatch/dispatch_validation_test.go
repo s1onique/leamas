@@ -13,11 +13,12 @@ import (
 func TestNewDispatcher_ValidRegistry(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{
-			Name:      "llm-friendly",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
-			Run:       func(root string) []checks.Finding { return nil },
+			Name:       "llm-friendly",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
+			Run:        func(root string) []checks.Finding { return nil },
 		},
 	}
 
@@ -57,16 +58,18 @@ func TestNewDispatcher_EmptyVerifierID(t *testing.T) {
 func TestNewDispatcher_DuplicateID(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{
-			Name:      "test",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
+			Name:       "test",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
 		},
 		{
-			Name:      "test",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
+			Name:       "test",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
 		},
 	}
 
@@ -109,10 +112,11 @@ func TestNewDispatcher_UnknownAuthority(t *testing.T) {
 func TestNewDispatcher_DupcodeLocalSafe(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{
-			Name:      "dupcode",
-			Lane:      registry.VerifierLaneDupcode,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
+			Name:       "dupcode",
+			Lane:       registry.VerifierLaneDupcode,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
 		},
 	}
 
@@ -125,10 +129,11 @@ func TestNewDispatcher_DupcodeLocalSafe(t *testing.T) {
 func TestNewDispatcher_FastCIExactCheckout(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{
-			Name:      "test",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityCIExactCheckout,
-			Scope:     registry.InvocationGate,
+			Name:       "test",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityCIExactCheckout,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
 		},
 	}
 
@@ -141,11 +146,12 @@ func TestNewDispatcher_FastCIExactCheckout(t *testing.T) {
 func TestLookupVerifierMetadata(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{
-			Name:      "llm-friendly",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
-			Run:       func(root string) []checks.Finding { return nil },
+			Name:       "llm-friendly",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
+			Run:        func(root string) []checks.Finding { return nil },
 		},
 	}
 
@@ -171,21 +177,23 @@ func TestLookupVerifierMetadata(t *testing.T) {
 func TestGetVerifierMetadata(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{
-			Name:      "llm-friendly",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
+			Name:       "llm-friendly",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
 			Execution: registry.ExecutionDefinition{
 				EnvVars: []string{"ORIGINAL"},
 			},
 			Run: func(root string) []checks.Finding { return nil },
 		},
 		{
-			Name:      "tooling-boundaries",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
-			Run:       func(root string) []checks.Finding { return nil },
+			Name:       "tooling-boundaries",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
+			Run:        func(root string) []checks.Finding { return nil },
 		},
 	}
 
@@ -212,11 +220,12 @@ func TestGetVerifierMetadata(t *testing.T) {
 func TestVerifierMetadataContainsNoRun(t *testing.T) {
 	verifiers := []registry.Verifier{
 		{
-			Name:      "test",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
-			Run:       func(root string) []checks.Finding { return nil },
+			Name:       "test",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
+			Run:        func(root string) []checks.Finding { return nil },
 		},
 	}
 
@@ -230,8 +239,8 @@ func TestVerifierMetadataContainsNoRun(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify the metadata type has no Run field
-	// This is a compile-time check via reflection
+	// Verify the metadata type has no Run field.
+	// This is a compile-time check via reflection.
 	// Access is intentionally omitted - VerifierMetadata has no Run field
 	_ = v.Name
 	_ = v.Authority
@@ -242,10 +251,11 @@ func TestInputMutationDoesNotAffectDispatcher(t *testing.T) {
 	originalEnvVars := []string{"ORIGINAL=value"}
 	verifiers := []registry.Verifier{
 		{
-			Name:      "test",
-			Lane:      registry.VerifierLaneFast,
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Scope:     registry.InvocationGate,
+			Name:       "test",
+			Lane:       registry.VerifierLaneFast,
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
 			Execution: registry.ExecutionDefinition{
 				EnvVars: originalEnvVars,
 			},

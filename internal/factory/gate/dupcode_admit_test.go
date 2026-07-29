@@ -4,9 +4,10 @@ package gate
 
 import (
 	"context"
+	"testing"
+
 	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
-	"testing"
 )
 
 // TestDupcodeVerifyAdmitted proves that an admitting authority runs each
@@ -47,8 +48,6 @@ func TestDupcodeVerifyAdmitted(t *testing.T) {
 	if got := r.compareCalls.Load(); got != 1 {
 		t.Errorf("compareCalls = %d, want 1", got)
 	}
-
-	// Verify the exact fake domain report and comparison survive DTO conversion.
 	if outcome.Report.Root != dir {
 		t.Errorf("Report.Root = %q, want %q", outcome.Report.Root, dir)
 	}
@@ -104,10 +103,12 @@ func TestDupcodeBaselineAdmitted(t *testing.T) {
 
 // TestDupcodeUpdateLocalAdmittedExactlyOnce proves the
 // dupcode-update-baseline lane admits a local-safe authority and runs
-// each protected operation exactly once, with the typed outcome Report
-// matching the report supplied to WriteBaseline.
+// each protected operation exactly once. The observer drives
+// DetectExecutionContext against a real temp git repository so the
+// local classification is recorded through the production observation
+// path.
 func TestDupcodeUpdateLocalAdmittedExactlyOnce(t *testing.T) {
-	dir := t.TempDir()
+	dir := initTempGitRepoForDupcodeUpdate(t)
 	baselinePath := dir + "/.factory/dupcode-baseline.json"
 	reportWritten := dupcode.Report{
 		Root: dir,
@@ -120,7 +121,7 @@ func TestDupcodeUpdateLocalAdmittedExactlyOnce(t *testing.T) {
 	outcome := dispatchDupcodeUpdateBaselineTypedWith(
 		context.Background(), dir, DupcodeUpdateBaselineSpec{
 			BaselinePath: baselinePath, MinLines: 40, MinTokens: 400,
-		}, &localSafeObserver{}, makeUpdateDeps(r),
+		}, newTempRepoObserver(dir), makeUpdateDeps(r),
 	)
 	if outcome.Dispatch.Error != nil {
 		t.Fatalf("expected admission: error=%v findings=%v", outcome.Dispatch.Error, outcome.Dispatch.Findings)
@@ -231,17 +232,18 @@ func TestDupcodeBaselineExactlyOnce(t *testing.T) {
 // TestDupcodeUpdateExactlyOnce is the behavioral exactly-once proof for
 // the update-baseline typed entry point under a local-safe authority.
 func TestDupcodeUpdateExactlyOnce(t *testing.T) {
+	dir := initTempGitRepoForDupcodeUpdate(t)
 	r := &countingDupcodeRunner{reportToReturn: dupcode.Report{
-		Root: ".",
+		Root: dir,
 		Findings: []dupcode.Finding{{
 			Fingerprint: "exactly-fp", TokenCount: 100, LineCount: 25, Occurrences: []dupcode.Occurrence{{Path: "u.go", StartLine: 1, EndLine: 25}},
 		}},
 		Thresholds: dupcode.BaselineThresholds{MinLines: 40, MinTokens: 400},
 	}}
 	outcome := dispatchDupcodeUpdateBaselineTypedWith(
-		context.Background(), ".", DupcodeUpdateBaselineSpec{
+		context.Background(), dir, DupcodeUpdateBaselineSpec{
 			BaselinePath: ".factory/dupcode-baseline.json", MinLines: 40, MinTokens: 400,
-		}, &localSafeObserver{}, makeUpdateDeps(r),
+		}, newTempRepoObserver(dir), makeUpdateDeps(r),
 	)
 	if outcome.Dispatch.Error != nil {
 		t.Fatalf("expected admission: error=%v findings=%v", outcome.Dispatch.Error, outcome.Dispatch.Findings)
@@ -257,9 +259,7 @@ func TestDupcodeUpdateExactlyOnce(t *testing.T) {
 	}
 }
 
-// TestDupcodeVerifyOutcomeTyped and friends verify the typed entry points
-// are reachable and return DupcodeVerifyOutcome etc. They guard against
-// accidental refactors that drop the typed surface.
+// TestDupcodeVerifyTyped verifies the typed entry point is reachable.
 func TestDupcodeVerifyTyped(t *testing.T) {
 	r := &countingDupcodeRunner{
 		baselineToReturn: dupcode.Baseline{},
@@ -270,7 +270,7 @@ func TestDupcodeVerifyTyped(t *testing.T) {
 			BaselinePath: "missing.json", MinLines: 40, MinTokens: 400,
 		}, &admittingObserver{}, makeVerifyDeps(r),
 	)
-	_ = out // outcome exists; if it didn't, the call would not compile
+	_ = out
 }
 
 func TestDupcodeBaselineTyped(t *testing.T) {

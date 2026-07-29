@@ -12,12 +12,19 @@ import (
 	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
+// verifyOnly returns the canonical ordinary verifier operation list.
+func verifyOnly() []verifierauthority.VerifierOperation {
+	return []verifierauthority.VerifierOperation{verifierauthority.OperationVerify}
+}
+
 func TestAuthorizedProfileRequestsAreDefensivelyCopied(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "fast-local",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "fast-local",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -43,10 +50,12 @@ func TestAuthorizedProfileRequestsAreDefensivelyCopied(t *testing.T) {
 
 func TestAuthorizedProfileVerifierIDsAreDefensivelyCopied(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "fast-local-ids",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "fast-local-ids",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -78,10 +87,12 @@ func (f *fakeObserverForDenial) Observe(ctx context.Context, root string) verifi
 
 func TestAuthorizedProfileDenialsAreDeepCopied(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "ci-fast",
-		Authority: verifierauthority.AuthorityCIExactCheckout,
-		Lane:      registry.VerifierLaneDupcode,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "ci-fast",
+		Authority:  verifierauthority.AuthorityCIExactCheckout,
+		Lane:       registry.VerifierLaneDupcode,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -112,10 +123,12 @@ func TestAuthorizedProfileDenialsAreDeepCopied(t *testing.T) {
 
 func TestAuthorizedProfileContextIsCloned(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "local-safe",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "local-safe",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -136,16 +149,18 @@ func TestAuthorizedProfileContextIsCloned(t *testing.T) {
 
 func TestProfileDigestChangesOnOperationDrift(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "local-test",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "local-test",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
 		t.Fatalf("NewDispatcher: %v", err)
 	}
-	obs := &profileLocalObserver{}
+	obs := &countingObserver{}
 	profile1, err := dispatcher.AuthorizeProfile(context.Background(), "/test",
 		[]ProfileRequest{{VerifierID: "local-test", Operation: verifierauthority.OperationVerify}}, obs)
 	if err != nil {
@@ -161,20 +176,13 @@ func TestProfileDigestChangesOnOperationDrift(t *testing.T) {
 	}
 }
 
-// profileLocalObserver returns a context classified as EnvironmentLocal
-// so the cheap local-safe verify path can run without Git observation.
-type profileLocalObserver struct{}
-
-func (f *profileLocalObserver) Observe(ctx context.Context, root string) verifierauthority.ExecutionContext {
-	return *verifierauthority.NewLocalOnlyContext()
-}
-
 func TestProfileDigestChangesOnImplementationDrift(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "verifier",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Scope:     registry.InvocationGate,
+		Name:       "verifier",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 		Execution: registry.ExecutionDefinition{
 			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "impl-v1",
@@ -206,10 +214,11 @@ func TestProfileDigestHasNoFixedSizePanic(t *testing.T) {
 	verifiers := make([]registry.Verifier, 100)
 	for i := 0; i < 100; i++ {
 		verifiers[i] = registry.Verifier{
-			Name:      fmt.Sprintf("verifier-stress-%03d", i),
-			Authority: verifierauthority.AuthorityLocalSafe,
-			Lane:      registry.VerifierLaneFast,
-			Scope:     registry.InvocationGate,
+			Name:       fmt.Sprintf("verifier-stress-%03d", i),
+			Authority:  verifierauthority.AuthorityLocalSafe,
+			Lane:       registry.VerifierLaneFast,
+			Scope:      registry.InvocationGate,
+			Operations: verifyOnly(),
 			Execution: registry.ExecutionDefinition{
 				Kind:             registry.ExecutionInProcess,
 				ImplementationID: "impl-with-very-long-name-that-adds-bytes",
@@ -239,10 +248,12 @@ func TestProfileDigestHasNoFixedSizePanic(t *testing.T) {
 
 func TestAuthorizeProfileRejectsNilObserverForRemoteAuthority(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "ci-only",
-		Authority: verifierauthority.AuthorityCIExactCheckout,
-		Lane:      registry.VerifierLaneDupcode,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "ci-only",
+		Authority:  verifierauthority.AuthorityCIExactCheckout,
+		Lane:       registry.VerifierLaneDupcode,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -257,10 +268,12 @@ func TestAuthorizeProfileRejectsNilObserverForRemoteAuthority(t *testing.T) {
 
 func TestAuthorizeProfileRejectsDuplicateRequests(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "local-test",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "local-test",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {
@@ -278,10 +291,12 @@ func TestAuthorizeProfileRejectsDuplicateRequests(t *testing.T) {
 
 func TestAuthorizeProfileRejectsEmptyRoot(t *testing.T) {
 	verifiers := []registry.Verifier{{
-		Name:      "local-test",
-		Authority: verifierauthority.AuthorityLocalSafe,
-		Lane:      registry.VerifierLaneFast,
-		Run:       func(root string) []checks.Finding { return nil }, Scope: registry.InvocationGate,
+		Name:       "local-test",
+		Authority:  verifierauthority.AuthorityLocalSafe,
+		Lane:       registry.VerifierLaneFast,
+		Run:        func(root string) []checks.Finding { return nil },
+		Scope:      registry.InvocationGate,
+		Operations: verifyOnly(),
 	}}
 	dispatcher, err := NewDispatcher(verifiers)
 	if err != nil {

@@ -239,9 +239,16 @@ func ClassifyExecutionEnvironment(ec ExecutionContext) ExecutionEnvironmentKind 
 	return EnvironmentUnknown
 }
 
-// ObservationCompleted reports whether the unexported observation
+// observationCompleted reports whether the unexported observation
 // provenance records a completed observation. It is package-private.
-func (ec ExecutionContext) ObservationCompleted() bool {
+//
+// External callers must use the production DetectExecutionContext and
+// read the observation result through ClassifyExecutionEnvironment.
+// There is intentionally no exported method that exposes the
+// observation provenance, since doing so would let an external
+// package forge a "completed observation" verdict by inspecting the
+// unexported field.
+func (ec ExecutionContext) observationCompleted() bool {
 	return ec.observation.completed
 }
 
@@ -305,19 +312,27 @@ func DetectExecutionContext(ctx context.Context, repoRoot string) ExecutionConte
 	return ec
 }
 
-// NewLocalOnlyContext returns an ExecutionContext classified as
+// newLocalOnlyContext returns an ExecutionContext classified as
 // EnvironmentLocal by ClassifyExecutionEnvironment. The classification
 // is set via the package-private observation provenance, so callers
 // outside the authority package cannot reach EnvironmentLocal by
 // writing exported fields.
 //
-// NewLocalOnlyContext is the only authority-package entry point that
-// produces a local classification without Git observation; it exists
+// newLocalOnlyContext is the authority-package-only entry point that
+// produces a local classification without Git observation. It exists
 // for callers that already know the context is local and want to skip
 // the Git observation round-trip. The canonical production path uses
 // DetectExecutionContext, which records the observation through
 // recordLocalObservation.
-func NewLocalOnlyContext() *ExecutionContext {
+//
+// External callers must NOT manufacture a local classification by
+// writing exported fields; the cheap non-mutating verification path
+// does not require a synthetic local context, and tests requiring a
+// local mutation context must drive DetectExecutionContext against a
+// real Git repository. Same-package tests may use this helper; tests
+// in other packages must use the *_ForTest accessors exported via
+// export_test.go.
+func newLocalOnlyContext() *ExecutionContext {
 	return &ExecutionContext{
 		observation: recordLocalObservation(true, true, true, false, true),
 	}
@@ -325,8 +340,7 @@ func NewLocalOnlyContext() *ExecutionContext {
 
 // newLocalContextFromObservedEnv is the package-internal helper used
 // by tests that need a local-classified context built from a known
-// observation status. Production callers must use DetectExecutionContext
-// or NewLocalOnlyContext.
+// observation status. Production callers must use DetectExecutionContext.
 func newLocalContextFromObservedEnv(headOK, statusOK, repoOK, workspaceLookup, workspaceOK bool) *ExecutionContext {
 	return &ExecutionContext{
 		observation: recordLocalObservation(headOK, statusOK, repoOK, workspaceLookup, workspaceOK),
