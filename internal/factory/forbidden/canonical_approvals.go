@@ -108,27 +108,35 @@ func approvalCallerIdentity(approval ApprovedCaller) CallerIdentity {
 	}
 }
 
+// validateObservedEdges enforces the observed-edge invariants in a strict
+// precedence order:
+//
+//  1. observed internal reference class — any edge carrying an invalid
+//     internal reference class is an internal analysis invariant
+//     violation that MUST run first. It poisons matching approval
+//     states and emits authority_policy_observed_reference_class_invalid.
+//     This holds even when the caller is a function literal: the
+//     internal invariant takes precedence over caller-policy naming.
+//
+//  2. anonymous caller — an edge whose caller is an anonymous function
+//     literal emits authority_policy_anonymous_caller and skips every
+//     approval-matching path. The outer approval is neither matched nor
+//     poisoned, and no duplicate cascade finding is emitted for the same
+//     edge.
+//
+//  3. valid named edge — the schema-valid, named-caller path runs the
+//     existing matching, reference-class mismatch, and ordinary bypass
+//     logic.
 func (a *canonicalAnalysis) validateObservedEdges() {
 	for edgeIndex := range a.observedEdges {
 		edge := &a.observedEdges[edgeIndex]
-		if edge.Caller.Kind == CallerKindFunctionLiteral {
-			// Protected use lives inside an anonymous function literal.
-			// The literal is its own execution scope; it MUST NOT
-			// inherit the approval of an outer named declaration, and
-			// it MUST NOT be configured by source coordinates. Emit
-			// the typed anonymous-caller finding and skip every other
-			// matching path. The outer approval is neither matched
-			// nor poisoned, and no duplicate bypass finding is
-			// emitted for the same edge.
-			a.anonymousCallerFinding(*edge)
-			continue
-		}
+
+		// Precedence 1: internal invalid reference class wins.
+		// This invariant is independent of the caller attribution and
+		// runs before any caller-policy decision so an anonymous
+		// function literal cannot conceal an impossible reference
+		// class.
 		if !validObservedReferenceClass(edge.ReferenceClass) {
-			// Poison every schema-valid approval whose resolved
-			// caller/callee objects match this edge. The internal
-			// invariant violation is independent of the configured
-			// approval class, so we never compare configured
-			// ReferenceClass here.
 			for index := range a.approvalStates {
 				state := &a.approvalStates[index]
 				if !state.valid {
@@ -146,6 +154,14 @@ func (a *canonicalAnalysis) validateObservedEdges() {
 			)
 			continue
 		}
+
+		// Precedence 2: anonymous caller policy.
+		if edge.Caller.Kind == CallerKindFunctionLiteral {
+			a.anonymousCallerFinding(*edge)
+			continue
+		}
+
+		// Precedence 3: valid named-edge matching.
 		var exact []*resolvedApproval
 		var wrongReference []*resolvedApproval
 		for index := range a.approvalStates {
@@ -221,6 +237,11 @@ func bypassFindingKind(edge ObservedEdge) string {
 // This is the preferred typed finding; layer-specific bypass findings
 // are not emitted for the same edge to avoid duplicate cascade
 // findings.
+//
+// This finding is only emitted for edges whose observed reference class
+// is internally valid. Invalid internal reference classes are reported
+// under authority_policy_observed_reference_class_invalid, which has
+// higher precedence.
 func (a *canonicalAnalysis) anonymousCallerFinding(edge ObservedEdge) {
 	outerStr := "<none>"
 	if edge.hasOuterCaller {
