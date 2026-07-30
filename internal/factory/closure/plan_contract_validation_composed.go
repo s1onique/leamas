@@ -14,13 +14,15 @@ import (
 // ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01 requires.
 
 // ComposedPlanValidationResult is the JSON-ready structured stage
-// model the future CLI consumes. Field names use json tags so the
-// result marshals deterministically. The legacy `Semantic error`
-// field is GONE; semantic stage outcomes live in SemanticErrors and
-// SemanticValid. The future CLI never marshals an error interface.
+// model the future CLI consumes. The result has four explicit
+// stages (structural / decode / semantic / verdict) with json
+// tags. Each diagnostic array is initialised non-nil so success
+// JSON serialises as [] not null. The legacy exported `Semantic
+// error` field is gone.
 type ComposedPlanValidationResult struct {
 	Structural     PlanValidationResult  `json:"structural"`
 	Decoded        bool                  `json:"decoded"`
+	DecodeErrors   []PlanValidationError `json:"decode_errors"`
 	SemanticValid  bool                  `json:"semantic_valid"`
 	SemanticErrors []PlanValidationError `json:"semantic_errors"`
 	Valid          bool                  `json:"valid"`
@@ -61,9 +63,7 @@ func validatePlanComposedWithObserver(data []byte, observer compositionObserver)
 	plan, err := decodeTypedPlanWithObserver(root, observer)
 	if err != nil {
 		result.Decoded = false
-		result.SemanticValid = false
-		result.SemanticErrors = []PlanValidationError{typedDecodeDiagnostic(err)}
-		result.SemanticErrors = []PlanValidationError{typedDecodeDiagnostic(err)}
+		result.DecodeErrors = []PlanValidationError{typedDecodeDiagnostic(err)}
 		result.SemanticValid = false
 		result.Valid = false
 		return result
@@ -74,8 +74,6 @@ func validatePlanComposedWithObserver(data []byte, observer compositionObserver)
 	if semErr != nil {
 		result.SemanticValid = false
 		result.SemanticErrors = []PlanValidationError{semanticDiagnostic(semErr)}
-		result.SemanticErrors = []PlanValidationError{semanticDiagnostic(semErr)}
-		result.SemanticValid = false
 		result.Valid = false
 	}
 	return result

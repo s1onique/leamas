@@ -25,11 +25,13 @@ var (
 const planExecutionModePath = "/execution/mode"
 
 // DecodePlan is the legacy public entry point. It preserves the
-// documented contract: parse, decode, and ValidatePlan in sequence.
-// The internal composed pipeline (validatePlanComposed) uses
-// parseClosurePlanDocument + decodeTypedPlan + ValidatePlan
-// exactly once, and counts the invocations via the plan* counters
-// exposed in plan_contract_validation.go.
+// documented contract: parse, decode, and ValidatePlan in
+// sequence. The internal composed pipeline routes the bytes
+// through parseBoundedClosurePlanDocument (the single bounded
+// syntactic authority) and the typed-decoder through
+// decodeTypedPlan; composition observability is invocation-local
+// via the compositionObserver interface in
+// plan_contract_validation.go.
 func DecodePlan(data []byte) (Plan, error) {
 	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
 	if len(parseDiagnostics) > 0 {
