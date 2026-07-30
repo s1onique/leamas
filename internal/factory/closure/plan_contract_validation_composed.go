@@ -87,12 +87,20 @@ func ValidatePlanComposed(data []byte) ComposedPlanValidationResult {
 }
 
 // ValidatePlanStructuralAndSemantic is a convenience wrapper
-// that runs structural validation and (only when it succeeds)
-// semantic validation.
+// that runs the composed pipeline and surfaces the diagnostic of
+// the actual failing stage. Stage precedence: structural -> typed
+// -> semantic. It never returns the generic "semantic validation
+// failed" for a structural or typed-decode failure.
 func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error) {
 	result := validatePlanComposedWithObserver(data, noopCompositionObserver{})
+	if !result.Structural.Valid {
+		return result.Structural, errorFromDiagnostics(result.Structural.Errors)
+	}
+	if !result.Decoded {
+		return result.Structural, errorFromDiagnostics(result.DecodeErrors)
+	}
 	if !result.SemanticValid {
-		return result.Structural, firstSemanticError(result)
+		return result.Structural, errorFromDiagnostics(result.SemanticErrors)
 	}
 	return result.Structural, nil
 }
