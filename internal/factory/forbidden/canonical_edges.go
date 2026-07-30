@@ -41,59 +41,80 @@ var AdapterProtectedSymbols = []ProtectedSymbol{
 // raw op.
 //
 // No wildcards. Function/Receiver must match exactly. Anonymous literals
-// (func@line:col) are NOT allowed as approvals.
+// (func@line:col) are NOT allowed as approvals. CallerKind, ReferenceClass,
+// and Cardinality are now explicit per record (no implicit normalization
+// at runtime). The exact effective values are frozen by the
+// TestApprovalCensusNormalizationOracleHashStable oracle.
 var ApprovedCallers = []ApprovedCaller{
 	// Layer 1: raw dupcode operations allowed only inside exact adapter methods.
 	// Each *DupcodeRunner method is the sole allowed caller of the matching raw op.
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "RunCheckRepo",
-		Receiver:    "DupcodeRunner",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "RunCheckRepo",
+		Receiver:       "DupcodeRunner",
+		CallerKind:     CallerKindMethod,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "CheckRepo", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "RunCheckReport",
-		Receiver:    "DupcodeRunner",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "RunCheckReport",
+		Receiver:       "DupcodeRunner",
+		CallerKind:     CallerKindMethod,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "CheckReport", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "LoadBaseline",
-		Receiver:    "DupcodeRunner",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "LoadBaseline",
+		Receiver:       "DupcodeRunner",
+		CallerKind:     CallerKindMethod,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "LoadBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "VerifyBaseline",
-		Receiver:    "DupcodeRunner",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "VerifyBaseline",
+		Receiver:       "DupcodeRunner",
+		CallerKind:     CallerKindMethod,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "VerifyBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "WriteBaseline",
-		Receiver:    "DupcodeRunner",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "WriteBaseline",
+		Receiver:       "DupcodeRunner",
+		CallerKind:     CallerKindMethod,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "WriteBaseline", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "CompareToBaseline",
-		Receiver:    "DupcodeRunner",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "CompareToBaseline",
+		Receiver:       "DupcodeRunner",
+		CallerKind:     CallerKindMethod,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "CompareToBaseline", Kind: ProtectedPackageFunction,
@@ -105,18 +126,24 @@ var ApprovedCallers = []ApprovedCaller{
 	// they are direct dupcode-package calls from a named adapter-package
 	// function, approved individually.
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "runSharedDupcodeBaseline",
-		Receiver:    "",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "runSharedDupcodeBaseline",
+		Receiver:       "",
+		CallerKind:     CallerKindPackageFunction,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "ValidateBaselineArtifact", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
-		Function:    "runSharedDupcodeBaseline",
-		Receiver:    "",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/protectedverifier",
+		Function:       "runSharedDupcodeBaseline",
+		Receiver:       "",
+		CallerKind:     CallerKindPackageFunction,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "CheckBaselineDriftFromReport", Kind: ProtectedPackageFunction,
@@ -126,34 +153,47 @@ var ApprovedCallers = []ApprovedCaller{
 
 // dupcodeInternalApprovedCallers records exact implementation-internal raw
 // edges. They are validated bidirectionally like every external edge.
+// CallerKind, ReferenceClass, and Cardinality are explicit per record.
 var dupcodeInternalApprovedCallers = []ApprovedCaller{
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-		Function:    "CheckReport",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/dupcode",
+		Function:       "CheckReport",
+		CallerKind:     CallerKindPackageFunction,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "CheckRepo", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-		Function:    "CheckBaselineDrift",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/dupcode",
+		Function:       "CheckBaselineDrift",
+		CallerKind:     CallerKindPackageFunction,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "CheckReport", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-		Function:    "VerifyBaseline",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/dupcode",
+		Function:       "VerifyBaseline",
+		CallerKind:     CallerKindPackageFunction,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "ValidateBaselineArtifact", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
-		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-		Function:    "CheckBaselineDrift",
+		PackagePath:    "github.com/s1onique/leamas/internal/factory/dupcode",
+		Function:       "CheckBaselineDrift",
+		CallerKind:     CallerKindPackageFunction,
+		ReferenceClass: refDirectCall,
+		Cardinality:    1,
 		Callee: ProtectedSymbol{
 			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 			Name: "CheckBaselineDriftFromReport", Kind: ProtectedPackageFunction,
