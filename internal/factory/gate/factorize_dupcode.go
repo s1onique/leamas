@@ -5,107 +5,197 @@ package gate
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
-	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/protectedverifier"
 	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
-// FactorizeVerifiersWithDupcodeContext returns all Factory policy verifiers for
-// a factorize invocation. The dupcode and dupcode-baseline verifiers share a single
-// analysis context so only one repository scan is performed.
-//
-// This function derives from AllVerifiers() and only replaces the Run functions
-// for dupcode and dupcode-baseline. This ensures metadata (name, lane, authority, execution,
-// cache, environment) stays in sync with the canonical registry.
-//
-// This function is used by RunFactorize. For direct commands like
-// `leamas factory verify dupcode`, use AllVerifiers instead which performs
-// independent scans per verifier.
-//
-// The analyzer passed in here is reserved for tests. Production callers
-// should use the post-authority binder path (factorizeVerifiersWithAnalyzer)
-// which constructs the analyzer inside an adapter wrapper, so the raw
-// dupcode.CheckRepo function value is never captured directly in this
-// package.
-func FactorizeVerifiersWithDupcodeContext(root string) ([]registry.Verifier, error) {
-	return factorizeVerifiersWithAnalyzer(root, nil)
+// factorizeDupcodeDeps is an immutable, invocation-local capability set.
+// Construction stores these functions but does not invoke them.
+type factorizeDupcodeDeps struct {
+	ReadThresholds func(string) (int, int, error)
+	NewAnalyzer    func() protectedverifier.DupcodeAnalyzer
+	NewProvider    func(
+		protectedverifier.DupcodeInput,
+		protectedverifier.DupcodeAnalyzer,
+	) *protectedverifier.DupcodeAnalysisProvider
 }
 
-// factorizeVerifiersWithAnalyzer wires a binder-local analyzer into the
-// shared analysis context. The analyzer is injected (not pulled from a global)
-// and is the only path through which the shared context performs a scan.
-//
-// Production callers MUST pass the analyzer returned by
-// protectedverifier.NewAnalyzerFromAdapter (constructed post-authority
-// inside the factory closure). Tests may pass any DupcodeAnalyzer.
-func factorizeVerifiersWithAnalyzer(root string, analyzer protectedverifier.DupcodeAnalyzer) ([]registry.Verifier, error) {
-	if analyzer == nil {
-		analyzer = protectedverifier.NewAnalyzerFromAdapter()
+func productionFactorizeDupcodeDeps() factorizeDupcodeDeps {
+	return factorizeDupcodeDeps{
+		ReadThresholds: readFactorizeDupcodeThresholds,
+		NewAnalyzer:    newFactorizeDupcodeAnalyzer,
+		NewProvider:    protectedverifier.NewDupcodeAnalysisProvider,
 	}
+}
 
-	// Narrow metadata-only read for threshold discovery — does not invoke
-	// the protected LoadBaseline operation. Setup-time metadata only.
-	minLines := protectedverifier.PolicyMinLines
-	minTokens := protectedverifier.PolicyMinTokens
+// readFactorizeDupcodeThresholds is the named production adapter edge. The
+// function is captured data-only and invoked by lifecycle initialization.
+func readFactorizeDupcodeThresholds(path string) (int, int, error) {
+	return protectedverifier.ReadBaselineThresholds(path)
+}
 
+// newFactorizeDupcodeAnalyzer is the named production adapter edge. Capturing
+// this wrapper does not construct the analyzer; initialization invokes it.
+func newFactorizeDupcodeAnalyzer() protectedverifier.DupcodeAnalyzer {
+	return protectedverifier.NewAnalyzerFromAdapter()
+}
+
+func (d factorizeDupcodeDeps) validate() error {
+	switch {
+	case d.ReadThresholds == nil:
+		return fmt.Errorf("factorize dupcode dependency ReadThresholds is nil")
+	case d.NewAnalyzer == nil:
+		return fmt.Errorf("factorize dupcode dependency NewAnalyzer is nil")
+	case d.NewProvider == nil:
+		return fmt.Errorf("factorize dupcode dependency NewProvider is nil")
+	default:
+		return nil
+	}
+}
+
+// factorizeAnalyzerConstructionError is the stable fail-closed result when an
+// analyzer factory returns no analyzer.
+type factorizeAnalyzerConstructionError struct{}
+
+func (factorizeAnalyzerConstructionError) Error() string {
+	return "factorize dupcode analyzer construction returned nil"
+}
+
+// factorizeProviderConstructionError is the stable fail-closed result when a
+// provider factory returns no provider.
+type factorizeProviderConstructionError struct{}
+
+func (factorizeProviderConstructionError) Error() string {
+	return "factorize dupcode provider construction returned nil"
+}
+
+// factorizeDupcodeLifecycle owns one lazy shared analysis per factorize call.
+type factorizeDupcodeLifecycle struct {
+	once sync.Once
+
+	root         string
+	baselinePath string
+	deps         factorizeDupcodeDeps
+
+	dupcodeRun  func(string) []checks.Finding
+	baselineRun func(string) []checks.Finding
+	initErr     error
+}
+
+func newFactorizeDupcodeLifecycle(root string, deps factorizeDupcodeDeps) *factorizeDupcodeLifecycle {
 	baselinePath := ".factory/dupcode-baseline.json"
 	if root != "." && root != "" {
 		baselinePath = filepath.Join(root, baselinePath)
 	}
+	return &factorizeDupcodeLifecycle{
+		root:         root,
+		baselinePath: baselinePath,
+		deps:         deps,
+	}
+}
 
-	if min, tok, err := protectedverifier.ReadBaselineThresholds(baselinePath); err == nil {
-		minLines = min
-		minTokens = tok
+// initialize performs every protected setup step. sync.Once publishes all
+// initialized fields before any concurrent caller continues.
+func (l *factorizeDupcodeLifecycle) initialize() {
+	minLines, minTokens, err := l.deps.ReadThresholds(l.baselinePath)
+	if err != nil {
+		l.initErr = fmt.Errorf("read dupcode thresholds: %w", err)
+		return
+	}
+	if minLines <= 0 || minTokens <= 0 {
+		l.initErr = fmt.Errorf("invalid dupcode thresholds: minLines=%d minTokens=%d", minLines, minTokens)
+		return
+	}
+
+	analyzer := l.deps.NewAnalyzer()
+	if analyzer == nil {
+		l.initErr = factorizeAnalyzerConstructionError{}
+		return
 	}
 
 	cfg := protectedverifier.DefaultConfig()
-	cfg.Root = root
+	cfg.Root = l.root
 	cfg.MinLines = minLines
 	cfg.MinTokens = minTokens
-
 	input := protectedverifier.DupcodeInput{
-		Root:      root,
+		Root:      l.root,
 		MinLines:  minLines,
 		MinTokens: minTokens,
 		Config:    cfg,
 	}
+	provider := l.deps.NewProvider(input, analyzer)
+	if provider == nil {
+		l.initErr = factorizeProviderConstructionError{}
+		return
+	}
 
-	provider := protectedverifier.NewDupcodeAnalysisProvider(input, analyzer)
-	ctx := protectedverifier.NewDupcodeAnalysisContext(provider)
-	factory := protectedverifier.NewDupcodeVerifierFactory(ctx)
-
-	sharedDupcodeVerifier := factory.SharedDupCodeVerifier()
-	sharedDupcodeBaselineVerifier := factory.SharedDupcodeBaselineVerifier()
-
-	verifiers := AllVerifiers()
-	return replaceDupcodeVerifierRuns(verifiers, sharedDupcodeVerifier, sharedDupcodeBaselineVerifier)
+	context := protectedverifier.NewDupcodeAnalysisContext(provider)
+	factory := protectedverifier.NewDupcodeVerifierFactory(context)
+	l.dupcodeRun = factory.SharedDupCodeVerifier()
+	l.baselineRun = factory.SharedDupcodeBaselineVerifier()
 }
 
-// factorizeVerifiersWithDupcodeAnalyzer is retained for backward
-// compatibility with existing tests that inject a custom analyzer
-// directly. New code MUST use factorizeVerifiersWithAnalyzer instead so
-// that the analyzer is always constructed via the adapter wrapper in
-// production. The bare dupcode.CheckRepo reference is permitted here only
-// because this function exists solely for test injection.
-//
-// Deprecated: prefer factorizeVerifiersWithAnalyzer with a nil analyzer,
-// which installs the post-authority adapter wrapper.
-func factorizeVerifiersWithDupcodeAnalyzer(root string, analyzer protectedverifier.DupcodeAnalyzer) ([]registry.Verifier, error) {
+func (l *factorizeDupcodeLifecycle) run(name string) []checks.Finding {
+	l.once.Do(l.initialize)
+	if l.initErr != nil {
+		return []checks.Finding{{
+			Path:     "dupcode",
+			Kind:     "dupcode_error",
+			Message:  fmt.Sprintf("duplicate code initialization failed: %v", l.initErr),
+			Severity: checks.SeverityError,
+		}}
+	}
+	if name == "dupcode" {
+		return l.dupcodeRun(l.root)
+	}
+	return l.baselineRun(l.root)
+}
+
+// FactorizeVerifiersWithDupcodeContext constructs one data-only factorize
+// registry. Protected setup starts only when an admitted returned Run closure
+// executes.
+func FactorizeVerifiersWithDupcodeContext(root string) ([]registry.Verifier, error) {
+	return factorizeVerifiersWithDeps(root, productionFactorizeDupcodeDeps())
+}
+
+func factorizeVerifiersWithDeps(root string, deps factorizeDupcodeDeps) ([]registry.Verifier, error) {
+	if err := deps.validate(); err != nil {
+		return nil, err
+	}
+	lifecycle := newFactorizeDupcodeLifecycle(root, deps)
+	return replaceDupcodeVerifierRuns(
+		AllVerifiers(),
+		func(string) []checks.Finding { return lifecycle.run("dupcode") },
+		func(string) []checks.Finding { return lifecycle.run("dupcode-baseline") },
+	)
+}
+
+// factorizeVerifiersWithAnalyzer is retained as a test compatibility seam. It
+// binds an injected analyzer lazily; nil selects production dependencies.
+func factorizeVerifiersWithAnalyzer(
+	root string,
+	analyzer protectedverifier.DupcodeAnalyzer,
+) ([]registry.Verifier, error) {
+	deps := productionFactorizeDupcodeDeps()
+	if analyzer != nil {
+		deps.NewAnalyzer = func() protectedverifier.DupcodeAnalyzer { return analyzer }
+	}
+	return factorizeVerifiersWithDeps(root, deps)
+}
+
+// Deprecated: use factorizeVerifiersWithDeps for lifecycle integration tests.
+func factorizeVerifiersWithDupcodeAnalyzer(
+	root string,
+	analyzer protectedverifier.DupcodeAnalyzer,
+) ([]registry.Verifier, error) {
 	return factorizeVerifiersWithAnalyzer(root, analyzer)
 }
 
-// Compile-time guard that the dupcode package is still imported (this file
-// documents why that import is required by the legacy analyzer path).
-var _ = dupcode.PolicyMinLines
-
-// replaceDupcodeVerifierRuns replaces the Run functions of the dupcode and
-// dupcode-baseline entries in the provided registry. The replacement is
-// failure-atomic: if either entry is missing the function returns an error
-// and the caller's input slice is not mutated. The function is pure with
-// respect to its inputs and is therefore the testable unit for the
-// fail-closed registry replacement invariant.
+// replaceDupcodeVerifierRuns returns a copy with exactly two Run replacements.
+// Missing or duplicate canonical identities fail atomically.
 func replaceDupcodeVerifierRuns(
 	verifiers []registry.Verifier,
 	dupcodeRun func(string) []checks.Finding,
@@ -113,21 +203,24 @@ func replaceDupcodeVerifierRuns(
 ) ([]registry.Verifier, error) {
 	dupcodeIndex := -1
 	baselineIndex := -1
+	dupcodeCount := 0
+	baselineCount := 0
 
 	for i := range verifiers {
 		switch verifiers[i].Name {
 		case "dupcode":
+			dupcodeCount++
 			dupcodeIndex = i
 		case "dupcode-baseline":
+			baselineCount++
 			baselineIndex = i
 		}
 	}
-
-	if dupcodeIndex < 0 || baselineIndex < 0 {
+	if dupcodeCount != 1 || baselineCount != 1 {
 		return nil, fmt.Errorf(
-			"shared dupcode registry replacement incomplete: dupcode=%t dupcode-baseline=%t",
-			dupcodeIndex >= 0,
-			baselineIndex >= 0,
+			"shared dupcode registry replacement requires exactly one entry each: dupcode=%d dupcode-baseline=%d",
+			dupcodeCount,
+			baselineCount,
 		)
 	}
 

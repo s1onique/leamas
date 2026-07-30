@@ -162,8 +162,9 @@ func RunGate(root string) int {
 // "dupcode" and "dupcode-baseline" verifiers perform only one scan of the
 // repository during a single factorize invocation.
 //
-// Authorization and execution are bound: the factory creates the shared context
-// ONLY after authorization passes, and all runners execute exactly once.
+// Authorization and execution are bound: the factory creates a data-only lazy
+// lifecycle only after authorization passes. Protected dupcode setup starts only
+// when an admitted bound dupcode-family runner executes.
 func RunFactorize(root string) int {
 	// Phase 1: Build the base verifier registry for authorization.
 	// Command-only definitions are excluded from factorize selection; they
@@ -200,12 +201,13 @@ func RunFactorize(root string) int {
 		})
 	}
 
-	// Phase 2: Authorize AND bind (factory creates shared context AFTER authorization passes)
-	// The factory is ONLY invoked after authorization succeeds.
+	// Phase 2: Authorize AND bind. The factory constructs only a lazy,
+	// data-only lifecycle and is invoked only after authorization succeeds.
 	binding, err := dispatcher.AuthorizeAndBindProfile(ctx, root, requests, observer,
 		func(authorized []verifierdispatch.VerifierMetadata) ([]verifierdispatch.FactoryRunner, error) {
-			// Create the shared dupcode context AFTER authorization
-			// This is the expensive operation that should only happen when authorized
+			// Construct the lazy shared lifecycle after authorization. Threshold
+			// reads, analyzer/provider setup, and scanning remain deferred until
+			// one of the bound dupcode-family Run functions executes.
 			factorizeVerifiers, err := FactorizeVerifiersWithDupcodeContext(root)
 			if err != nil {
 				return nil, err

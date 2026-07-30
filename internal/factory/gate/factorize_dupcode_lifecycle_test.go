@@ -3,299 +3,228 @@
 package gate
 
 import (
-	"errors"
+	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/s1onique/leamas/internal/factory/checks"
 	"github.com/s1onique/leamas/internal/factory/dupcode"
 	"github.com/s1onique/leamas/internal/factory/protectedverifier"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
-// countingAnalyzer returns the same fixed findings on every call and
-// records the call count atomically. Tests use it to verify lifecycle
-// invariants such as "the analyzer is called exactly once" or "the
-// analyzer is not called at registry construction time".
-func countingAnalyzer(findings []dupcode.Finding, calls *atomic.Int64) protectedverifier.DupcodeAnalyzer {
-	return func(root string, cfg dupcode.Config) ([]dupcode.Finding, error) {
-		calls.Add(1)
-		return findings, nil
+type factorizeDupcodeCounters struct {
+	thresholdReads    atomic.Int64
+	analyzerCreations atomic.Int64
+	providerCreations atomic.Int64
+	scans             atomic.Int64
+}
+
+type factorizeDupcodeTotals struct {
+	thresholdReads    int64
+	analyzerCreations int64
+	providerCreations int64
+	scans             int64
+}
+
+func (c *factorizeDupcodeCounters) totals() factorizeDupcodeTotals {
+	return factorizeDupcodeTotals{
+		thresholdReads:    c.thresholdReads.Load(),
+		analyzerCreations: c.analyzerCreations.Load(),
+		providerCreations: c.providerCreations.Load(),
+		scans:             c.scans.Load(),
 	}
 }
 
-// failingAnalyzer returns the configured error on every call. Tests
-// use it to verify that an analyzer failure is stable for the
-// invocation: subsequent ConsumedBy calls within the same provider
-// invocation still return the same error.
-func failingAnalyzer(err error, calls *atomic.Int64) protectedverifier.DupcodeAnalyzer {
-	return func(root string, cfg dupcode.Config) ([]dupcode.Finding, error) {
-		calls.Add(1)
-		return nil, err
+func (c *factorizeDupcodeCounters) assert(t *testing.T, want factorizeDupcodeTotals) {
+	t.Helper()
+	if got := c.totals(); got != want {
+		t.Fatalf("dependency totals = %+v, want %+v", got, want)
 	}
 }
 
-// dummyFindings returns a non-empty slice so analyzer invocations can
-// be observed in returned findings.
-func dummyFindings() []dupcode.Finding {
-	return []dupcode.Finding{
-		{
-			Fingerprint: "fp-a",
-			TokenCount:  100,
-			LineCount:   25,
-			Occurrences: []dupcode.Occurrence{{Path: "a.go", StartLine: 1, EndLine: 25}},
+func factorizeActualFindings(fingerprint string) []dupcode.Finding {
+	return []dupcode.Finding{{
+		Fingerprint:       fingerprint[:40],
+		StableFingerprint: fingerprint,
+		TokenCount:        400,
+		LineCount:         40,
+		Occurrences: []dupcode.Occurrence{{
+			Path:      "actual.go",
+			StartLine: 1,
+			EndLine:   40,
+		}},
+	}}
+}
+
+func countingFactorizeDeps(
+	counters *factorizeDupcodeCounters,
+	findings []dupcode.Finding,
+	scanErr error,
+) factorizeDupcodeDeps {
+	return factorizeDupcodeDeps{
+		ReadThresholds: func(string) (int, int, error) {
+			counters.thresholdReads.Add(1)
+			return 40, 400, nil
+		},
+		NewAnalyzer: func() protectedverifier.DupcodeAnalyzer {
+			counters.analyzerCreations.Add(1)
+			return func(string, dupcode.Config) ([]dupcode.Finding, error) {
+				counters.scans.Add(1)
+				return findings, scanErr
+			}
+		},
+		NewProvider: func(
+			input protectedverifier.DupcodeInput,
+			analyzer protectedverifier.DupcodeAnalyzer,
+		) *protectedverifier.DupcodeAnalysisProvider {
+			counters.providerCreations.Add(1)
+			return protectedverifier.NewDupcodeAnalysisProvider(input, analyzer)
 		},
 	}
 }
 
-// providerForTest constructs a fresh DupcodeAnalysisProvider with the
-// supplied analyzer so each test gets an isolated lifecycle.
-func providerForTest(analyzer protectedverifier.DupcodeAnalyzer) *protectedverifier.DupcodeAnalysisProvider {
-	input := protectedverifier.DupcodeInput{
-		Root:      ".",
-		MinLines:  40,
-		MinTokens: 400,
-		Config:    dupcode.DefaultConfig(),
+func factorizeDupcodeVerifier(t *testing.T, verifiers []registry.Verifier, name string) registry.Verifier {
+	t.Helper()
+	var matches []registry.Verifier
+	for _, verifier := range verifiers {
+		if verifier.Name == name {
+			matches = append(matches, verifier)
+		}
 	}
-	return protectedverifier.NewDupcodeAnalysisProvider(input, analyzer)
+	if len(matches) != 1 {
+		t.Fatalf("verifier %q matches = %d, want exactly 1", name, len(matches))
+	}
+	if matches[0].Run == nil {
+		t.Fatalf("verifier %q has nil Run", name)
+	}
+	return matches[0]
 }
 
-// TestFactorizeRegistryConstructionPerformsZeroProtectedWork proves the
-// factorize registry builder does NOT invoke the protected analyzer
-// during construction. The analyzer counter stays at zero until the
-// first consumer calls the analyzer through the provider.
-func TestFactorizeRegistryConstructionPerformsZeroProtectedWork(t *testing.T) {
-	calls := &atomic.Int64{}
-	analyzer := countingAnalyzer(dummyFindings(), calls)
-
-	provider := providerForTest(analyzer)
-
-	if got := calls.Load(); got != 0 {
-		t.Fatalf("analyzer calls during provider construction = %d, want 0", got)
+func assertFactorizeActualResult(t *testing.T, name string, findings []checks.Finding) {
+	t.Helper()
+	wantKind := "new_duplicate"
+	if name == "dupcode-baseline" {
+		wantKind = "dupcode_baseline_drift"
 	}
-	if _, err := provider.ConsumedBy("dupcode", protectedverifier.DupcodeInput{
-		Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
-	}); err != nil {
-		t.Fatalf("ConsumedBy: %v", err)
+	if len(findings) != 1 {
+		t.Fatalf("%s findings = %#v, want one %s finding", name, findings, wantKind)
 	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("analyzer calls after first consumer = %d, want 1", got)
+	if findings[0].Kind != wantKind {
+		t.Fatalf("%s finding kind = %q, want %q", name, findings[0].Kind, wantKind)
 	}
 }
 
-// TestFactorizeFirstConsumerInitializesOnce proves the first admitted
-// dupcode-family consumer invokes the analyzer exactly once and
-// produces a result the consumer can use.
-func TestFactorizeFirstConsumerInitializesOnce(t *testing.T) {
-	calls := &atomic.Int64{}
-	analyzer := countingAnalyzer(dummyFindings(), calls)
-	provider := providerForTest(analyzer)
-
-	analysis, err := provider.ConsumedBy("dupcode", protectedverifier.DupcodeInput{
-		Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
-	})
+func factorizeLifecycleRegistry(t *testing.T, counters *factorizeDupcodeCounters) []registry.Verifier {
+	t.Helper()
+	fingerprint := strings.Repeat("a", 64)
+	verifiers, err := factorizeVerifiersWithDeps(
+		findRepoRoot(t),
+		countingFactorizeDeps(counters, factorizeActualFindings(fingerprint), nil),
+	)
 	if err != nil {
-		t.Fatalf("ConsumedBy: %v", err)
+		t.Fatalf("factorizeVerifiersWithDeps: %v", err)
 	}
-	if analysis == nil {
-		t.Fatal("expected non-nil analysis after first consumer")
-	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("analyzer calls after first consumer = %d, want 1", got)
+	return verifiers
+}
+
+func TestFactorizeConstructionPerformsZeroProtectedSetup(t *testing.T) {
+	counters := &factorizeDupcodeCounters{}
+	verifiers := factorizeLifecycleRegistry(t, counters)
+	factorizeDupcodeVerifier(t, verifiers, "dupcode")
+	factorizeDupcodeVerifier(t, verifiers, "dupcode-baseline")
+	counters.assert(t, factorizeDupcodeTotals{})
+}
+
+func TestFactorizeFirstConsumerAndSecondConsumerUseOneLifecycle(t *testing.T) {
+	counters := &factorizeDupcodeCounters{}
+	verifiers := factorizeLifecycleRegistry(t, counters)
+	dupcodeVerifier := factorizeDupcodeVerifier(t, verifiers, "dupcode")
+	baselineVerifier := factorizeDupcodeVerifier(t, verifiers, "dupcode-baseline")
+
+	first := dupcodeVerifier.Run("ignored-caller-root")
+	assertFactorizeActualResult(t, "dupcode", first)
+	counters.assert(t, factorizeDupcodeTotals{1, 1, 1, 1})
+
+	beforeSecond := counters.totals()
+	second := baselineVerifier.Run("another-ignored-root")
+	assertFactorizeActualResult(t, "dupcode-baseline", second)
+	if additional := subtractFactorizeTotals(counters.totals(), beforeSecond); additional != (factorizeDupcodeTotals{}) {
+		t.Fatalf("second actual verifier additional totals = %+v, want zero", additional)
 	}
 }
 
-// TestFactorizeSecondConsumerReusesCachedResult proves a second
-// invocation of ConsumedBy returns an analysis derived from the
-// same underlying scan (single analyzer call) without invoking the
-// analyzer again. The result is a defensive copy so callers may
-// mutate their view without affecting siblings.
-func TestFactorizeSecondConsumerReusesCachedResult(t *testing.T) {
-	calls := &atomic.Int64{}
-	analyzer := countingAnalyzer(dummyFindings(), calls)
-	provider := providerForTest(analyzer)
-
-	input := protectedverifier.DupcodeInput{
-		Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
-	}
-	first, err := provider.ConsumedBy("dupcode", input)
-	if err != nil {
-		t.Fatalf("first ConsumedBy: %v", err)
-	}
-	second, err := provider.ConsumedBy("dupcode", input)
-	if err != nil {
-		t.Fatalf("second ConsumedBy: %v", err)
-	}
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("analyzer calls after two consumers = %d, want 1", got)
-	}
-	if first == second {
-		t.Fatalf("first=%p second=%p; expected defensive copies (no aliasing)", first, second)
-	}
-	if len(first.Findings) != len(second.Findings) {
-		t.Fatalf("first findings=%d second findings=%d; expected the same logical content",
-			len(first.Findings), len(second.Findings))
+func subtractFactorizeTotals(after, before factorizeDupcodeTotals) factorizeDupcodeTotals {
+	return factorizeDupcodeTotals{
+		thresholdReads:    after.thresholdReads - before.thresholdReads,
+		analyzerCreations: after.analyzerCreations - before.analyzerCreations,
+		providerCreations: after.providerCreations - before.providerCreations,
+		scans:             after.scans - before.scans,
 	}
 }
 
-// TestFactorizeConsumerResultIsolation proves that mutating one
-// consumer's analysis view does not affect another consumer's view.
-// The cache shares computation; consumer-visible results are isolated.
-func TestFactorizeConsumerResultIsolation(t *testing.T) {
-	calls := &atomic.Int64{}
-	analyzer := countingAnalyzer(dummyFindings(), calls)
-	provider := providerForTest(analyzer)
-
-	input := protectedverifier.DupcodeInput{
-		Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
+func TestFactorizeReverseOrderUsesOneLifecyclePerInvocation(t *testing.T) {
+	orders := [][]string{
+		{"dupcode", "dupcode-baseline"},
+		{"dupcode-baseline", "dupcode"},
 	}
-	first, err := provider.ConsumedBy("dupcode", input)
-	if err != nil {
-		t.Fatalf("first ConsumedBy: %v", err)
-	}
-	second, err := provider.ConsumedBy("dupcode", input)
-	if err != nil {
-		t.Fatalf("second ConsumedBy: %v", err)
-	}
-	originalLen := len(second.Findings)
-	first.Findings = append(first.Findings, dupcode.Finding{Fingerprint: "mutated"})
-	if len(second.Findings) != originalLen {
-		t.Fatalf("mutating first mutated second's view: first=%d second=%d (expected %d)",
-			len(first.Findings), len(second.Findings), originalLen)
-	}
-}
-
-// TestFactorizeDupcodeBaselineThenDupcodeOrderIndependent proves the
-// cache holds regardless of which shared-context consumer is admitted
-// first (dupcode or dupcode-baseline).
-func TestFactorizeDupcodeBaselineThenDupcodeOrderIndependent(t *testing.T) {
-	cases := []struct {
-		name  string
-		first string
-	}{
-		{name: "dupcode first", first: "dupcode"},
-		{name: "baseline first", first: "dupcode-baseline"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			calls := &atomic.Int64{}
-			analyzer := countingAnalyzer(dummyFindings(), calls)
-			provider := providerForTest(analyzer)
-
-			input := protectedverifier.DupcodeInput{
-				Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
+	for _, order := range orders {
+		t.Run(strings.Join(order, "-then-"), func(t *testing.T) {
+			counters := &factorizeDupcodeCounters{}
+			verifiers := factorizeLifecycleRegistry(t, counters)
+			for _, name := range order {
+				result := factorizeDupcodeVerifier(t, verifiers, name).Run("untrusted-root")
+				assertFactorizeActualResult(t, name, result)
 			}
-			// Admit the "first" consumer.
-			_, err := provider.ConsumedBy(tc.first, input)
-			if err != nil {
-				t.Fatalf("%s ConsumedBy: %v", tc.first, err)
-			}
-			// Admit the "second" consumer.
-			second := "dupcode-baseline"
-			if tc.first == "dupcode-baseline" {
-				second = "dupcode"
-			}
-			_, err = provider.ConsumedBy(second, input)
-			if err != nil {
-				t.Fatalf("%s ConsumedBy: %v", second, err)
-			}
-			if got := calls.Load(); got != 1 {
-				t.Fatalf("analyzer calls = %d, want 1 (reverse-order must still cache)", got)
-			}
+			counters.assert(t, factorizeDupcodeTotals{1, 1, 1, 1})
 		})
 	}
 }
 
-// TestFactorizeConcurrentConsumersRemainSingleInit proves that
-// concurrent consumers of the shared dupcode analyzer do not produce
-// duplicate initializations. The state machine admits exactly one
-// analyzer call even under concurrent pressure.
-func TestFactorizeConcurrentConsumersRemainSingleInit(t *testing.T) {
-	calls := &atomic.Int64{}
-	analyzer := countingAnalyzer(dummyFindings(), calls)
-	provider := providerForTest(analyzer)
+func TestFactorizeConcurrentActualClosuresShareOneInitialization(t *testing.T) {
+	counters := &factorizeDupcodeCounters{}
+	verifiers := factorizeLifecycleRegistry(t, counters)
+	dupcodeRun := factorizeDupcodeVerifier(t, verifiers, "dupcode").Run
+	baselineRun := factorizeDupcodeVerifier(t, verifiers, "dupcode-baseline").Run
 
-	const goroutines = 16
-	var wg sync.WaitGroup
+	const callers = 24
+	results := make([][]checks.Finding, callers)
 	start := make(chan struct{})
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	var wait sync.WaitGroup
+	for i := range results {
+		wait.Add(1)
+		go func(index int) {
+			defer wait.Done()
 			<-start
-			_, _ = provider.ConsumedBy("dupcode", protectedverifier.DupcodeInput{
-				Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
-			})
-		}()
+			if index%2 == 0 {
+				results[index] = dupcodeRun("concurrent-root")
+				return
+			}
+			results[index] = baselineRun("concurrent-root")
+		}(i)
 	}
 	close(start)
-	wg.Wait()
+	wait.Wait()
 
-	if got := calls.Load(); got != 1 {
-		t.Fatalf("analyzer calls after %d concurrent consumers = %d, want 1", goroutines, got)
+	counters.assert(t, factorizeDupcodeTotals{1, 1, 1, 1})
+	for i, result := range results {
+		name := "dupcode"
+		if i%2 != 0 {
+			name = "dupcode-baseline"
+		}
+		assertFactorizeActualResult(t, name, result)
+		if !reflect.DeepEqual(result, results[i%2]) {
+			t.Fatalf("caller %d result differs from equivalent %s result", i, name)
+		}
 	}
-}
-
-// TestFactorizeInitializationFailureStableForInvocation proves that an
-// analyzer failure during the first consumer's invocation remains the
-// same error for subsequent consumers within the same provider.
-// The analyzer is NOT retried on subsequent calls.
-func TestFactorizeInitializationFailureStableForInvocation(t *testing.T) {
-	calls := &atomic.Int64{}
-	boom := errors.New("dupcode analyzer boom")
-	analyzer := failingAnalyzer(boom, calls)
-	provider := providerForTest(analyzer)
-
-	input := protectedverifier.DupcodeInput{
-		Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
+	results[0][0].Message = "consumer mutation"
+	if results[2][0].Message == "consumer mutation" {
+		t.Fatal("concurrent dupcode result slices alias")
 	}
-	_, firstErr := provider.ConsumedBy("dupcode", input)
-	if firstErr == nil {
-		t.Fatal("expected analyzer failure to surface on first consumer")
-	}
-	if calls.Load() != 1 {
-		t.Fatalf("analyzer calls after first failed consumer = %d, want 1", calls.Load())
-	}
-
-	// Second consumer: must NOT retry the analyzer. It must remain the
-	// cached failure path with no new analyzer calls.
-	_, secondErr := provider.ConsumedBy("dupcode", input)
-	if secondErr == nil {
-		t.Fatal("expected the failure path to remain available on subsequent calls")
-	}
-	if calls.Load() != 1 {
-		t.Fatalf("analyzer calls after retry = %d, want 1 (failure must not re-trigger analyzer)", calls.Load())
-	}
-	if firstErr.Error() != secondErr.Error() {
-		t.Errorf("first=%q second=%q; expected the cached error to be stable",
-			firstErr.Error(), secondErr.Error())
-	}
-}
-
-// TestFactorizeNoProcessGlobalLifecycleCache proves that two
-// separately-constructed providers do NOT share cached analyses.
-// Each invocation of the factorize entry point must produce a fresh
-// provider so its analyzer is invoked independently of every other
-// provider.
-func TestFactorizeNoProcessGlobalLifecycleCache(t *testing.T) {
-	callsA := &atomic.Int64{}
-	callsB := &atomic.Int64{}
-	providerA := providerForTest(countingAnalyzer(dummyFindings(), callsA))
-	providerB := providerForTest(countingAnalyzer(dummyFindings(), callsB))
-
-	input := protectedverifier.DupcodeInput{
-		Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
-	}
-	_, _ = providerA.ConsumedBy("dupcode", input)
-	_, _ = providerB.ConsumedBy("dupcode", input)
-
-	if got := callsA.Load(); got != 1 {
-		t.Fatalf("provider A analyzer calls = %d, want 1", got)
-	}
-	if got := callsB.Load(); got != 1 {
-		t.Fatalf("provider B analyzer calls = %d, want 1", got)
-	}
-	// Each provider has its own analysis pointer; no global cache.
-	if providerA == providerB {
-		t.Fatal("providers A and B share the same pointer; expected distinct instances")
+	results[1][0].Message = "baseline consumer mutation"
+	if results[3][0].Message == "baseline consumer mutation" {
+		t.Fatal("concurrent baseline result slices alias")
 	}
 }

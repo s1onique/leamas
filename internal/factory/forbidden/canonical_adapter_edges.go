@@ -34,8 +34,8 @@ package forbidden
 //	dupCodeVerifier                         → NewDupcodeRunner, LoadBaseline,
 //	                                         RunCheckReport, CompareToBaseline
 //	dupcodeBaselineVerifier                 → NewDupcodeRunner, VerifyBaseline
-//	factorizeVerifiersWithAnalyzer          → NewAnalyzerFromAdapter,
-//	                                         ReadBaselineThresholds
+//	newFactorizeDupcodeAnalyzer             → NewAnalyzerFromAdapter
+//	readFactorizeDupcodeThresholds           → ReadBaselineThresholds
 //
 // Internal same-package adapter calls:
 //
@@ -294,11 +294,11 @@ var AdapterApprovedCallers = []ApprovedCaller{
 	},
 
 	// ────────────────────────────────────────────────────────────────────
-	// factorizeVerifiersWithAnalyzer (gate → adapter metadata reads)
+	// Named lazy factorize dependency wrappers (gate → adapter setup)
 	// ────────────────────────────────────────────────────────────────────
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
-		Function:    "factorizeVerifiersWithAnalyzer",
+		Function:    "newFactorizeDupcodeAnalyzer",
 		Receiver:    "",
 		Callee: ProtectedSymbol{
 			Layer:       AuthorityLayerAdapter,
@@ -308,7 +308,7 @@ var AdapterApprovedCallers = []ApprovedCaller{
 	},
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
-		Function:    "factorizeVerifiersWithAnalyzer",
+		Function:    "readFactorizeDupcodeThresholds",
 		Receiver:    "",
 		Callee: ProtectedSymbol{
 			Layer:       AuthorityLayerAdapter,

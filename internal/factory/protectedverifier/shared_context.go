@@ -92,25 +92,6 @@ func stringSlicesEqual(a, b []string) bool {
 	return true
 }
 
-// dupcodeAnalysisCopy returns a deep copy of the analysis so callers
-// can mutate their returned value without affecting siblings or the
-// cached provider state.
-func dupcodeAnalysisCopy(a *DupcodeAnalysis) *DupcodeAnalysis {
-	if a == nil {
-		return nil
-	}
-	out := &DupcodeAnalysis{
-		Config: a.Config,
-	}
-	out.Findings = make([]dupcode.Finding, len(a.Findings))
-	copy(out.Findings, a.Findings)
-	if len(a.Occurrences) > 0 {
-		out.Occurrences = make([]dupcode.Occurrence, len(a.Occurrences))
-		copy(out.Occurrences, a.Occurrences)
-	}
-	return out
-}
-
 // NewDupcodeAnalysisProvider creates a provider with the given input and analyzer.
 // The analyzer must be supplied explicitly; the package holds no global
 // analyzer state and never falls back to a default. The same analyzer is
@@ -122,7 +103,7 @@ func NewDupcodeAnalysisProvider(input DupcodeInput, analyzer DupcodeAnalyzer) *D
 	}
 	return &DupcodeAnalysisProvider{
 		state:    providerStateEmpty,
-		input:    input,
+		input:    cloneDupcodeInput(input),
 		analyzer: analyzer,
 	}
 }
@@ -147,7 +128,8 @@ func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*
 	switch p.state {
 	case providerStateEmpty:
 		p.state = providerStateConsuming
-		findings, err := p.analyzer(input.Root, input.Config)
+		bound := cloneDupcodeInput(p.input)
+		findings, err := p.analyzer(bound.Root, cloneDupcodeConfig(bound.Config))
 		if err != nil {
 			// Move to a terminal state so subsequent ConsumedBy calls
 			// return the same error without re-invoking the analyzer.
@@ -159,18 +141,20 @@ func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*
 			return nil, err
 		}
 
+		canonicalFindings := make([]dupcode.Finding, len(findings))
 		var occurrences []dupcode.Occurrence
-		for _, f := range findings {
-			occurrences = append(occurrences, f.Occurrences...)
+		for i := range findings {
+			canonicalFindings[i] = cloneDupcodeFinding(findings[i])
+			occurrences = append(occurrences, canonicalFindings[i].Occurrences...)
 		}
 
 		p.analysis = &DupcodeAnalysis{
-			Findings:    findings,
+			Findings:    canonicalFindings,
 			Occurrences: occurrences,
-			Config:      input.Config,
+			Config:      cloneDupcodeConfig(bound.Config),
 		}
 		p.state = providerStateConsumed
-		return p.analysis, nil
+		return cloneDupcodeAnalysis(p.analysis), nil
 
 	case providerStateConsuming:
 		return nil, fmt.Errorf("dupcode analysis: concurrent scan detected (programming error)")
@@ -183,7 +167,7 @@ func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*
 		// returned analysis without affecting siblings or the cached
 		// provider state. The computation is shared; the consumer-
 		// visible result is not aliased.
-		return dupcodeAnalysisCopy(p.analysis), nil
+		return cloneDupcodeAnalysis(p.analysis), nil
 
 	default:
 		return nil, fmt.Errorf("dupcode analysis: unexpected state %v", p.state)
@@ -296,10 +280,9 @@ func runSharedDupcodeVerify(ctx *DupcodeAnalysisContext, root string) []checks.F
 // performs the shared-context dupcode-baseline verify logic.
 func runSharedDupcodeBaseline(ctx *DupcodeAnalysisContext, root string) []checks.Finding {
 	policy := dupcode.DefaultBaselinePolicy()
+	// ValidateBaselineArtifact binds this repository-relative policy path to
+	// root. Pre-joining root here would bind it twice for absolute roots.
 	policy.Path = ".factory/dupcode-baseline.json"
-	if root != "." && root != "" {
-		policy.Path = filepath.Join(root, policy.Path)
-	}
 
 	validation, err := dupcode.ValidateBaselineArtifact(root, policy)
 	if err != nil {
