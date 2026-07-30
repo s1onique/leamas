@@ -27,6 +27,7 @@ import (
 // structural and typed paths cannot disagree on whether a document
 // is well-formed.
 func parseClosurePlanDocument(data []byte) (any, []PlanValidationError) {
+	planParserCalls++
 	var diagnostics []PlanValidationError
 	if len(data) == 0 {
 		diagnostics = append(diagnostics, PlanValidationError{
@@ -180,7 +181,7 @@ func parseDiagnosticFromErr(path string, err error) PlanValidationError {
 		return PlanValidationError{
 			InstancePath: canonicalJSONPointer(dup.Path, dup.Key),
 			SchemaPath:   dup.Path,
-			Code:         PlanCodeUnknownProperty,
+			Code:         PlanCodeDuplicateProperty,
 			Keyword:      KeywordAdditionalProp,
 			Message:      dup.Error(),
 			PropertyName: dup.Key,
@@ -191,7 +192,7 @@ func parseDiagnosticFromErr(path string, err error) PlanValidationError {
 		return PlanValidationError{
 			InstancePath: path,
 			SchemaPath:   path,
-			Code:         PlanCodeUnknownProperty,
+			Code:         PlanCodeDuplicateProperty,
 			Keyword:      KeywordAdditionalProp,
 			Message:      msg,
 		}
@@ -205,23 +206,18 @@ func parseDiagnosticFromErr(path string, err error) PlanValidationError {
 	}
 }
 
-// jsonNumberToInteger parses a JSON-number-shaped value into an int
-// without floating-point round-tripping. Returns (0, false) when
-// the value is not a numeric json.Number (or float64 from a plain
-// decoder). Strings are NOT accepted as integers; the directive ACT
-// requires that `"contract_version": "1"` fail with invalid_type.
+// jsonNumberToInteger parses a JSON-number-shaped value into an int.
+// The contract follows the typed Go decoder: only JSON number tokens
+// lexically valid for Go int fields are accepted. Forms like
+// "1.0", "1e0", or "1.5" are rejected with invalid_type. Strings are
+// also rejected. Returns (0, false) when the value is not a
+// lexically-valid integer.
 func jsonNumberToInteger(value any) (int, bool) {
 	switch v := value.(type) {
 	case json.Number:
-		if i, err := v.Int64(); err == nil {
+		s := string(v)
+		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
 			return int(i), true
-		}
-		if f, err := v.Float64(); err == nil && f == float64(int64(f)) {
-			return int(f), true
-		}
-	case float64:
-		if v == float64(int64(v)) {
-			return int(v), true
 		}
 	}
 	return 0, false

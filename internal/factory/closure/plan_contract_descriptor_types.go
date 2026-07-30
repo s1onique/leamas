@@ -52,21 +52,60 @@ type planObjectDescriptor struct {
 	Fields map[string]planFieldDescriptor
 }
 
+// PresenceRule is the documented conditional-presence outcome a
+// fieldApplicabilityRule applies when its sibling equals its Value.
+type PresenceRule int
+
+const (
+	// PresenceOptional is the default absence-of-rule: the field
+	// has no constraint beyond what the descriptor already says.
+	PresenceOptional PresenceRule = iota
+	// PresenceRequired means the field MUST be present.
+	PresenceRequired
+	// PresenceForbidden means the field MUST NOT be present.
+	PresenceForbidden
+)
+
+// String renders the presence rule as a stable lowercase label.
+func (p PresenceRule) String() string {
+	switch p {
+	case PresenceRequired:
+		return "required"
+	case PresenceForbidden:
+		return "forbidden"
+	}
+	return "optional"
+}
+
+// fieldApplicabilityRule is one (sibling, value, presence) rule. A
+// field may carry multiple rules so both branches of the same
+// condition (for example mode=run and mode=exclude) can be encoded
+// without inferring inverse behavior.
+type fieldApplicabilityRule struct {
+	// Sibling is the JSON name of the sibling field whose value
+	// decides applicability (for example "mode" on /checks[]).
+	Sibling string
+	// Value is the literal sibling value that activates this rule.
+	Value string
+	// Presence is the documented outcome.
+	Presence PresenceRule
+}
+
 // fieldApplicability describes the conditional applicability of a
 // field whose presence or value depends on a sibling field's value.
+// The single Applicability rule remains for backward compatibility
+// with the previous descriptor surface; new code should add
+// ApplicabilityRules so both branches are encoded explicitly.
 type fieldApplicability struct {
 	// Sibling is the JSON name of the sibling field whose value
 	// decides applicability (for example "mode" on /checks[]).
 	Sibling string
-
 	// Value is the literal sibling value that activates this
 	// applicability (for example "run" or "exclude").
 	Value string
-
 	// Required reports whether this field MUST appear when the
 	// sibling equals Value.
 	Required bool
-
 	// Forbidden reports whether this field MUST NOT appear when the
 	// sibling equals Value.
 	Forbidden bool
@@ -124,6 +163,13 @@ type planFieldDescriptor struct {
 	// Applicability, when non-nil, declares that this field applies
 	// only when the named sibling equals the named value.
 	Applicability *fieldApplicability
+
+	// ApplicabilityRules is the authoritative, exhaustive list of
+	// presence rules the applicability walker consults. A field with
+	// both Applicability (legacy single rule) and ApplicabilityRules
+	// (rule list) MUST have both encoded explicitly; the walker does
+	// not infer inverse behavior from a single rule.
+	ApplicabilityRules []fieldApplicabilityRule
 
 	// RejectedAliases are JSON names that LOOK like this field but
 	// MUST be rejected.

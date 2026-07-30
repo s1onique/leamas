@@ -8,13 +8,13 @@ package closure
 // description remains reviewable in one screen.
 //
 // Mode-dependent rules (recovered from validatePlanChecks /
-// validateRunnableCheck):
-//   - mode=run: argv MUST be present and non-empty; working_directory,
-//     timeout_seconds, environment governed by the runtime validators;
-//     reason MUST be absent.
-//   - mode=exclude: reason MUST be present and compact final prose;
-//     argv, working_directory, timeout_seconds, environment MUST be
-//     absent.
+// validateRunnableCheck) are encoded exhaustively via
+// ApplicabilityRules so both branches are documented:
+//
+//   - mode=run: argv required; working_directory/timeout_seconds/
+//     environment optional; reason forbidden.
+//   - mode=exclude: reason required; argv/working_directory/
+//     timeout_seconds/environment forbidden.
 func planContractV1ChecksField() planFieldDescriptor {
 	return planFieldDescriptor{
 		JSONName:     "checks",
@@ -68,13 +68,17 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindArray,
 						Required:     false,
 						SemanticRule: "validateRunnableCheck(Argv)",
-						Description:  "Command arguments. Required when sibling mode='run'.",
+						Description:  "Command arguments. Required when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: []any{"true"},
 						MinItems:     1,
 						Applicability: &fieldApplicability{
 							Sibling:  "mode",
 							Value:    CheckModeRun,
 							Required: true,
+						},
+						ApplicabilityRules: []fieldApplicabilityRule{
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
 						},
 						RejectedAliases: []string{
 							"command",
@@ -93,12 +97,16 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindString,
 						Required:     false,
 						SemanticRule: "validateRepositoryRelativePath",
-						Description:  "Repository-relative working directory.",
+						Description:  "Repository-relative working directory. Optional when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: ".",
 						Applicability: &fieldApplicability{
 							Sibling:  "mode",
 							Value:    CheckModeRun,
 							Required: false,
+						},
+						ApplicabilityRules: []fieldApplicabilityRule{
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
+							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
 						},
 						RejectedAliases: []string{
 							"cwd",
@@ -111,12 +119,16 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindInteger,
 						Required:     false,
 						SemanticRule: "validateRunnableCheck(TimeoutSeconds)",
-						Description:  "Per-check timeout in seconds.",
+						Description:  "Per-check timeout in seconds. Optional when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: 60,
 						Applicability: &fieldApplicability{
 							Sibling:  "mode",
 							Value:    CheckModeRun,
 							Required: false,
+						},
+						ApplicabilityRules: []fieldApplicabilityRule{
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
+							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
 						},
 					},
 					"environment": {
@@ -125,12 +137,16 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindObject,
 						Required:     false,
 						SemanticRule: "validateRunnableCheck(Environment)",
-						Description:  "Per-check environment overrides (free-form string map).",
+						Description:  "Per-check environment overrides (free-form string map). Optional when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: map[string]any{"FOO": "bar"},
 						Applicability: &fieldApplicability{
 							Sibling:  "mode",
 							Value:    CheckModeRun,
 							Required: false,
+						},
+						ApplicabilityRules: []fieldApplicabilityRule{
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
+							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
 						},
 						Children: &planObjectDescriptor{
 							Path: "/checks/[]/environment",
@@ -143,13 +159,17 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindString,
 						Required:     false,
 						SemanticRule: "validatePlanChecks(Exclude)",
-						Description:  "Compact prose explaining why the check is excluded.",
+						Description:  "Compact prose explaining why the check is excluded. Required when mode='exclude'; forbidden when mode='run'.",
 						ExampleValue: "No source or registration changed.",
 						Applicability: &fieldApplicability{
 							Sibling:   "mode",
 							Value:     CheckModeExclude,
 							Required:  true,
 							Forbidden: false,
+						},
+						ApplicabilityRules: []fieldApplicabilityRule{
+							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceRequired},
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceForbidden},
 						},
 					},
 				},

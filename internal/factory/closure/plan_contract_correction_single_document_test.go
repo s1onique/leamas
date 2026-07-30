@@ -63,7 +63,7 @@ func TestContractDuplicateRootKeyRejected(t *testing.T) {
 	}
 	found := false
 	for _, e := range result.Errors {
-		if e.Code == PlanCodeUnknownProperty && e.InstancePath == "/contract_version" {
+		if e.Code == PlanCodeDuplicateProperty && e.InstancePath == "/contract_version" {
 			found = true
 		}
 	}

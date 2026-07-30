@@ -1,6 +1,8 @@
 package closure
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -22,15 +24,60 @@ var (
 // aligned.
 const planExecutionModePath = "/execution/mode"
 
+// DecodePlan is the legacy public entry point. It preserves the
+// documented contract: parse, decode, and ValidatePlan in sequence.
+// The internal composed pipeline (validatePlanComposed) uses
+// parseClosurePlanDocument + decodeTypedPlan + ValidatePlan
+// exactly once, and counts the invocations via the plan* counters
+// exposed in plan_contract_validation.go.
 func DecodePlan(data []byte) (Plan, error) {
-	var plan Plan
-	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
+	if len(data) > MaxPlanBytes {
+		return Plan{}, fmt.Errorf("plan exceeds maximum size: %d > %d", len(data), MaxPlanBytes)
+	}
+	root, parseDiagnostics := parseClosurePlanDocument(data)
+	if len(parseDiagnostics) > 0 {
+		return Plan{}, errorFromDiagnostics(parseDiagnostics)
+	}
+	plan, err := decodeTypedPlan(root)
+	if err != nil {
 		return Plan{}, err
 	}
+	planSemanticValidateCalls++
 	if err := ValidatePlan(plan); err != nil {
 		return Plan{}, err
 	}
 	return plan, nil
+}
+
+// decodeTypedPlan turns the already-parsed document root into a
+// typed Plan. It uses the same canonical JSON encoder/decoder pair
+// as the parser so no second syntactic parse occurs. The typed
+// decoder uses DisallowUnknownFields so unknown JSON keys still
+// surface as a typed decode error even when the structural
+// validator has accepted the document.
+func decodeTypedPlan(root any) (Plan, error) {
+	planTypedDecodeCalls++
+	buf, err := json.Marshal(root)
+	if err != nil {
+		return Plan{}, fmt.Errorf("marshal parsed plan: %w", err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(buf))
+	dec.DisallowUnknownFields()
+	var plan Plan
+	if err := dec.Decode(&plan); err != nil {
+		return Plan{}, fmt.Errorf("typed decode: %w", err)
+	}
+	return plan, nil
+}
+
+// errorFromDiagnostics turns a list of structural diagnostics into
+// a Go error so the legacy DecodePlan preserves its (Plan{}, error)
+// return contract.
+func errorFromDiagnostics(diags []PlanValidationError) error {
+	if len(diags) == 0 {
+		return nil
+	}
+	return fmt.Errorf("plan rejected by structural validation: %s", diags[0].Message)
 }
 
 func LoadPlan(path string) (Plan, []byte, error) {
@@ -52,8 +99,12 @@ func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
 	if len(data) > MaxPlanBytes {
 		return Plan{}, nil, fmt.Errorf("plan exceeds maximum size: %d > %d", len(data), MaxPlanBytes)
 	}
-	var plan Plan
-	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
+	root, parseDiagnostics := parseClosurePlanDocument(data)
+	if len(parseDiagnostics) > 0 {
+		return Plan{}, nil, errorFromDiagnostics(parseDiagnostics)
+	}
+	plan, err := decodeTypedPlan(root)
+	if err != nil {
 		return Plan{}, nil, fmt.Errorf("decode closure plan: %w", err)
 	}
 	return plan, data, nil

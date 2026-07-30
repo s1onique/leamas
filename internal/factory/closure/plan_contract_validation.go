@@ -20,6 +20,7 @@ const (
 	PlanCodeInvalidType                PlanValidationCode = "invalid_type"
 	PlanCodeInvalidEnum                PlanValidationCode = "invalid_enum"
 	PlanCodeUnknownProperty            PlanValidationCode = "unknown_property"
+	PlanCodeDuplicateProperty          PlanValidationCode = "duplicate_property"
 	PlanCodeSemanticConstraintFailed   PlanValidationCode = "semantic_constraint_failed"
 )
 
@@ -62,27 +63,88 @@ type PlanValidationResult struct {
 // walks the parsed value against the v1 descriptor, producing a
 // deterministic, sorted diagnostic stream.
 //
+// After ordinary structural shape validation succeeds, the
+// applicability walker is invoked to enforce mode-dependent
+// required/forbidden rules. The walker iterates the DESCRIPTOR's
+// ApplicabilityRules, so a missing required field is reported
+// even when the producer simply omitted the key.
+//
 // The function does NOT cascade structural failures into semantic
 // failures: when the document fails structurally, semantic rules do
 // not run. This matches the directive ACT's "structural failures
 // must not cascade into semantic failures" requirement.
 func ValidatePlanStructural(data []byte) PlanValidationResult {
 	result := PlanValidationResult{Valid: true}
+	if len(data) > MaxPlanBytes {
+		result.Valid = false
+		result.Errors = append(result.Errors, PlanValidationError{
+			InstancePath: "",
+			SchemaPath:   "",
+			Code:         PlanCodeInvalidJSON,
+			Keyword:      KeywordType,
+			Message:      "plan exceeds " + itoa(MaxPlanBytes) + "-byte size limit",
+		})
+		return result
+	}
 	root, diagnostics := parseClosurePlanDocument(data)
 	if len(diagnostics) > 0 {
 		result.Valid = false
 		result.Errors = diagnostics
 		return result
 	}
+	return validatePlanStructuralFromRoot(root)
+}
+
+// validatePlanStructuralFromRoot runs the descriptor-driven structural
+// walker and the applicability walker on a root that has already
+// been produced by parseClosurePlanDocument. The internal entry
+// point exists so the composed pipeline can call the parser
+// exactly once and reuse the parsed root for structural validation
+// and typed decoding.
+func validatePlanStructuralFromRoot(root any) PlanValidationResult {
+	result := PlanValidationResult{Valid: true}
 	contract := planContractV1()
-	moreDiagnostics := validatePlanObject(contract.Root, root, contract, "")
+	diagnostics := validatePlanObject(contract.Root, root, contract, "")
 	result.ContractVersion = recoverContractVersion(root)
-	result.Errors = append(result.Errors, moreDiagnostics...)
+	if len(diagnostics) == 0 {
+		diagnostics = append(diagnostics, ValidateModeDependentApplicability(root, contract)...)
+	}
+	result.Errors = diagnostics
 	sortDiagnostics(result.Errors)
 	if len(result.Errors) > 0 {
 		result.Valid = false
 	}
 	return result
+}
+
+// planParserCalls and the counters below are used by the
+// composition tests to prove the new pipeline parses exactly once
+// and runs the semantic validator exactly once.
+var (
+	planParserCalls           int
+	planTypedDecodeCalls      int
+	planSemanticValidateCalls int
+)
+
+// PlanParserCalls returns the cumulative number of times the
+// syntactic authority has been invoked. The counter is process-wide
+// and resets via ResetCompositionCounters.
+func PlanParserCalls() int { return planParserCalls }
+
+// PlanTypedDecodeCalls returns the cumulative number of times the
+// typed decoder has been invoked from the composed pipeline.
+func PlanTypedDecodeCalls() int { return planTypedDecodeCalls }
+
+// PlanSemanticValidateCalls returns the cumulative number of times
+// the semantic validator has been invoked from the composed pipeline.
+func PlanSemanticValidateCalls() int { return planSemanticValidateCalls }
+
+// ResetCompositionCounters resets the composition counters; tests
+// call this at the start of each assertion block.
+func ResetCompositionCounters() {
+	planParserCalls = 0
+	planTypedDecodeCalls = 0
+	planSemanticValidateCalls = 0
 }
 
 // recoverContractVersion extracts the contract version from the
