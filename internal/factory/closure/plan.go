@@ -42,7 +42,6 @@ func DecodePlan(data []byte) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	planSemanticValidateCalls++
 	if err := ValidatePlan(plan); err != nil {
 		return Plan{}, err
 	}
@@ -56,7 +55,15 @@ func DecodePlan(data []byte) (Plan, error) {
 // surface as a typed decode error even when the structural
 // validator has accepted the document.
 func decodeTypedPlan(root any) (Plan, error) {
-	planTypedDecodeCalls++
+	return decodeTypedPlanWithObserver(root, noopCompositionObserver{})
+}
+
+// decodeTypedPlanWithObserver is the internal entry point the
+// composed pipeline uses. The observer is invocation-local; tests
+// pass a per-assertion counting observer and production passes the
+// noop observer.
+func decodeTypedPlanWithObserver(root any, observer compositionObserver) (Plan, error) {
+	observer.TypedDecoded()
 	buf, err := json.Marshal(root)
 	if err != nil {
 		return Plan{}, fmt.Errorf("marshal parsed plan: %w", err)

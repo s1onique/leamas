@@ -27,7 +27,6 @@ import (
 // structural and typed paths cannot disagree on whether a document
 // is well-formed.
 func parseClosurePlanDocument(data []byte) (any, []PlanValidationError) {
-	planParserCalls++
 	var diagnostics []PlanValidationError
 	if len(data) == 0 {
 		diagnostics = append(diagnostics, PlanValidationError{

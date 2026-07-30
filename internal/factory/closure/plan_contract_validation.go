@@ -74,6 +74,16 @@ type PlanValidationResult struct {
 // not run. This matches the directive ACT's "structural failures
 // must not cascade into semantic failures" requirement.
 func ValidatePlanStructural(data []byte) PlanValidationResult {
+	return validatePlanStructuralWithObserver(data, noopCompositionObserver{})
+}
+
+// See plan_contract_validation_bounded.go for parseBoundedClosurePlanDocument.
+
+// validatePlanStructuralWithObserver is the bounded internal entry
+// point that the public ValidatePlanStructural and the composed
+// pipeline call. The observer is invocation-local; production
+// passes noopCompositionObserver{}.
+func validatePlanStructuralWithObserver(data []byte, observer compositionObserver) PlanValidationResult {
 	result := PlanValidationResult{Valid: true}
 	if len(data) > MaxPlanBytes {
 		result.Valid = false
@@ -87,21 +97,20 @@ func ValidatePlanStructural(data []byte) PlanValidationResult {
 		return result
 	}
 	root, diagnostics := parseClosurePlanDocument(data)
+	observer.Parsed()
 	if len(diagnostics) > 0 {
 		result.Valid = false
 		result.Errors = diagnostics
 		return result
 	}
-	return validatePlanStructuralFromRoot(root)
+	return validatePlanStructuralFromRootWithObserver(root, observer)
 }
 
-// validatePlanStructuralFromRoot runs the descriptor-driven structural
+// validatePlanStructuralFromRootWithObserver runs the structural
 // walker and the applicability walker on a root that has already
-// been produced by parseClosurePlanDocument. The internal entry
-// point exists so the composed pipeline can call the parser
-// exactly once and reuse the parsed root for structural validation
-// and typed decoding.
-func validatePlanStructuralFromRoot(root any) PlanValidationResult {
+// been produced by parseClosurePlanDocument.
+func validatePlanStructuralFromRootWithObserver(root any, observer compositionObserver) PlanValidationResult {
+	_ = observer
 	result := PlanValidationResult{Valid: true}
 	contract := planContractV1()
 	diagnostics := validatePlanObject(contract.Root, root, contract, "")
@@ -117,35 +126,25 @@ func validatePlanStructuralFromRoot(root any) PlanValidationResult {
 	return result
 }
 
-// planParserCalls and the counters below are used by the
-// composition tests to prove the new pipeline parses exactly once
-// and runs the semantic validator exactly once.
-var (
-	planParserCalls           int
-	planTypedDecodeCalls      int
-	planSemanticValidateCalls int
-)
-
-// PlanParserCalls returns the cumulative number of times the
-// syntactic authority has been invoked. The counter is process-wide
-// and resets via ResetCompositionCounters.
-func PlanParserCalls() int { return planParserCalls }
-
-// PlanTypedDecodeCalls returns the cumulative number of times the
-// typed decoder has been invoked from the composed pipeline.
-func PlanTypedDecodeCalls() int { return planTypedDecodeCalls }
-
-// PlanSemanticValidateCalls returns the cumulative number of times
-// the semantic validator has been invoked from the composed pipeline.
-func PlanSemanticValidateCalls() int { return planSemanticValidateCalls }
-
-// ResetCompositionCounters resets the composition counters; tests
-// call this at the start of each assertion block.
-func ResetCompositionCounters() {
-	planParserCalls = 0
-	planTypedDecodeCalls = 0
-	planSemanticValidateCalls = 0
+// compositionObserver receives invocation-local events from the
+// composed validation pipeline. Production callers pass a noop; the
+// noop never mutates process-global state. Test callers construct
+// a fresh counting observer per assertion block to prove that
+// each composed invocation parses once, decodes once, and
+// validates semantically at most once.
+type compositionObserver interface {
+	Parsed()
+	TypedDecoded()
+	SemanticValidated()
 }
+
+// noopCompositionObserver satisfies compositionObserver without
+// mutating any state. Production callers pass this observer.
+type noopCompositionObserver struct{}
+
+func (noopCompositionObserver) Parsed()            {}
+func (noopCompositionObserver) TypedDecoded()      {}
+func (noopCompositionObserver) SemanticValidated() {}
 
 // recoverContractVersion extracts the contract version from the
 // already-parsed root. Returns 0 when the field is missing or

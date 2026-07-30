@@ -1,6 +1,6 @@
 package closure
 
-import "fmt"
+import "strings"
 
 // plan_contract_validation_composed.go contains the composed
 // validation pipeline (Phase 10) and the mode-dependent
@@ -10,114 +10,167 @@ import "fmt"
 // closure over the descriptor that
 // ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01 requires.
 
-// ComposedPlanValidationResult is the structured outcome of the
-// composed validation pipeline. It extends PlanValidationResult
-// with a typed-decoding verdict and a semantic-verdict summary so
-// the future CLI can render each stage independently.
-//
-// PlanValidationResult.Valid is the composed verdict: the document
-// passes ONLY when every stage passes. Structural failures MUST NOT
-// cascade into semantic failures.
+// ComposedPlanValidationResult is the structured stage model the
+// future CLI consumes. It separates:
+//   - Structural: deterministic descriptor-driven diagnostics
+//   - Decoded:     whether the typed Plan was successfully populated
+//   - SemanticValid: whether ValidatePlan accepted the typed value
+//   - SemanticErrors: stable semantic diagnostics with precise paths
+//   - Semantic:    human-readable cause (NOT a public CLI dependency)
+//   - Valid:       composed verdict
 type ComposedPlanValidationResult struct {
-	Structural PlanValidationResult
-	Decoded    bool
-	Semantic   error
-	Valid      bool
+	Structural     PlanValidationResult
+	Decoded        bool
+	SemanticValid  bool
+	SemanticErrors []PlanValidationError
+	Semantic       error
+	Valid          bool
 }
 
-// ValidatePlanComposed is the single internal entry point the
-// future CLI invokes. The composed pipeline proves the
-// syntax -> structural -> applicability -> typed decode ->
-// semantic chain runs each stage exactly once:
+// validatePlanComposedWithObserver is the single internal entry
+// point that owns the composed pipeline:
 //
-//   - parseClosurePlanDocument (single syntactic authority) counts
-//     planParserCalls.
-//   - decodeTypedPlan (typed decode via canonical marshal) counts
-//     planTypedDecodeCalls.
-//   - ValidatePlan (semantic validation) counts
-//     planSemanticValidateCalls.
+//  1. Bounded single parse via parseBoundedClosurePlanDocument
+//     (one syntactic authority; MaxPlanBytes cap; trailing
+//     rejection; duplicate-key rejection).
+//  2. Structural + applicability validation via
+//     validatePlanStructuralFromRootWithObserver.
+//  3. Typed decode via decodeTypedPlanWithObserver.
+//  4. Semantic validation via ValidatePlan (called at most once).
 //
-// Structural failure short-circuits the pipeline so semantic rules
-// never run on a malformed document. A semantic-only failure keeps
-// Decoded=true so callers can see the typed value was successfully
-// populated.
-func ValidatePlanComposed(data []byte) ComposedPlanValidationResult {
-	result := ComposedPlanValidationResult{Valid: true, Decoded: true}
-	if len(data) > MaxPlanBytes {
-		result.Structural = PlanValidationResult{Valid: false, ContractVersion: 0, Errors: []PlanValidationError{{
-			InstancePath: "",
-			SchemaPath:   "",
-			Code:         PlanCodeInvalidJSON,
-			Keyword:      KeywordType,
-			Message:      "plan exceeds " + itoa(MaxPlanBytes) + "-byte size limit",
-		}}}
-		result.Decoded = false
-		result.Valid = false
-		return result
-	}
-	root, parseDiagnostics := parseClosurePlanDocument(data)
+// The observer is invocation-local: production passes
+// noopCompositionObserver{}; tests pass a per-assertion counting
+// observer. There is no package-global mutable counter.
+func validatePlanComposedWithObserver(data []byte, observer compositionObserver) ComposedPlanValidationResult {
+	result := ComposedPlanValidationResult{Valid: true, Decoded: true, SemanticValid: true}
+	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
+	observer.Parsed()
 	if len(parseDiagnostics) > 0 {
 		result.Structural = PlanValidationResult{Valid: false, ContractVersion: 0, Errors: parseDiagnostics}
 		result.Decoded = false
+		result.SemanticValid = false
 		result.Valid = false
 		return result
 	}
-	result.Structural = validatePlanStructuralFromRoot(root)
+	result.Structural = validatePlanStructuralFromRootWithObserver(root, observer)
 	if !result.Structural.Valid {
 		result.Decoded = false
+		result.SemanticValid = false
 		result.Valid = false
 		return result
 	}
-	plan, err := decodeTypedPlan(root)
+	plan, err := decodeTypedPlanWithObserver(root, observer)
 	if err != nil {
 		result.Decoded = false
+		result.SemanticValid = false
+		result.SemanticErrors = []PlanValidationError{typedDecodeDiagnostic(err)}
 		result.Semantic = err
 		result.Valid = false
 		return result
 	}
 	result.Decoded = true
-	planSemanticValidateCalls++
-	if err := ValidatePlan(plan); err != nil {
-		result.Semantic = err
+	semErr := ValidatePlan(plan)
+	observer.SemanticValidated()
+	if semErr != nil {
+		result.SemanticValid = false
+		result.SemanticErrors = []PlanValidationError{semanticDiagnostic(semErr)}
+		result.Semantic = semErr
 		result.Valid = false
 	}
 	return result
 }
 
-// ValidatePlanStructuralAndSemantic is a convenience wrapper that
-// runs structural validation first and only attempts semantic
-// validation when the structural pass succeeds. The semantic
-// validator is the typed ValidatePlan which already enforces every
-// semantic rule documented by the descriptor's SemanticRule
-// fields.
+// ValidatePlanComposed is the public single internal entry point
+// the future CLI invokes. It uses the noop observer so production
+// has no mutable composition state.
+func ValidatePlanComposed(data []byte) ComposedPlanValidationResult {
+	return validatePlanComposedWithObserver(data, noopCompositionObserver{})
+}
+
+// ValidatePlanStructuralAndSemantic is a convenience wrapper
+// that runs structural validation and (only when it succeeds)
+// semantic validation.
 func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error) {
-	root, parseDiagnostics := parseClosurePlanDocument(data)
-	if len(parseDiagnostics) > 0 {
-		return PlanValidationResult{Valid: false, ContractVersion: 0, Errors: parseDiagnostics},
-			errorFromDiagnostics(parseDiagnostics)
+	result := validatePlanComposedWithObserver(data, noopCompositionObserver{})
+	if result.Semantic != nil {
+		return result.Structural, result.Semantic
 	}
-	structural := validatePlanStructuralFromRoot(root)
-	if !structural.Valid {
-		return structural, nil
+	return result.Structural, nil
+}
+
+// typedDecodeDiagnostic wraps a typed-decode error as a stable
+// semantic_constraint_failed diagnostic with the precise path the
+// future CLI can render.
+func typedDecodeDiagnostic(err error) PlanValidationError {
+	return PlanValidationError{
+		InstancePath: "",
+		SchemaPath:   "",
+		Code:         PlanCodeSemanticConstraintFailed,
+		Keyword:      KeywordType,
+		Message:      "typed decode: " + err.Error(),
 	}
-	plan, err := decodeTypedPlan(root)
-	if err != nil {
-		return structural, fmt.Errorf("typed decode: %w", err)
+}
+
+// semanticDiagnostic maps a semantic Go error to a structured
+// diagnostic. The path is /act_id for ActID errors, /baseline for
+// baseline errors, /execution/mode for execution mode errors, and
+// the root for everything else; the field/codename is preserved in
+// the message for human readers.
+func semanticDiagnostic(err error) PlanValidationError {
+	msg := err.Error()
+	path := semanticPathFromError(msg)
+	return PlanValidationError{
+		InstancePath: path,
+		SchemaPath:   path,
+		Code:         PlanCodeSemanticConstraintFailed,
+		Keyword:      KeywordType,
+		Message:      msg,
 	}
-	planSemanticValidateCalls++
-	if err := ValidatePlan(plan); err != nil {
-		return structural, err
+}
+
+// semanticPathFromError extracts the most precise instance path
+// documented in the error message. The mapping is conservative;
+// unknown forms fall back to the root.
+func semanticPathFromError(msg string) string {
+	switch {
+	case strings.HasPrefix(msg, "invalid act_id"):
+		return "/act_id"
+	case strings.HasPrefix(msg, "baseline.commit_oid"), strings.HasPrefix(msg, "baseline.tree_oid"):
+		return "/" + strings.SplitN(msg, " ", 2)[0]
+	case strings.HasPrefix(msg, "checks[") && strings.Contains(msg, "duplicate check id"):
+		// duplicate check id "<id>": caller extracts <id> from the message.
+		return extractDuplicateCheckIDPath(msg)
+	case strings.HasPrefix(msg, "unsupported closure plan contract_version"):
+		return "/contract_version"
 	}
-	return structural, nil
+	return ""
+}
+
+func extractDuplicateCheckIDPath(msg string) string {
+	const marker = "duplicate check id \""
+	i := strings.Index(msg, marker)
+	if i < 0 {
+		return ""
+	}
+	rest := msg[i+len(marker):]
+	j := strings.Index(rest, "\"")
+	if j < 0 {
+		return ""
+	}
+	return "/checks/" + rest[:j]
 }
 
 // ValidateModeDependentApplicability walks every check item
-// and consults the descriptor's ApplicabilityRules (with the legacy
-// Applicability as a derived single rule) for each field. Unlike
-// the previous implementation, this walker iterates the DESCRIPTOR
-// fields, not only the JSON members present in the document, so it
-// can detect missing-required and present-forbidden conditions
+// and consults the descriptor's ApplicabilityRules for each
+// field. The walker iterates the DESCRIPTOR's fields (not only the
+// JSON members present in the document) so it can detect both
+// missing-required and present-forbidden conditions
 // deterministically.
+//
+// Presence semantics are key-existence only. A forbidden field
+// is rejected whenever the JSON key is present at all (the value
+// may be empty, null, an empty string, or a zero-length
+// collection).
 //
 // Diagnostics:
 //
@@ -169,10 +222,10 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 				if rule.Value != modeStr {
 					continue
 				}
-				value, present := check[fieldName]
+				_, keyPresent := check[fieldName]
 				switch rule.Presence {
 				case PresenceRequired:
-					if !present || isAbsentValue(value) {
+					if !keyPresent {
 						diagnostics = append(diagnostics, PlanValidationError{
 							InstancePath: "/checks/" + itoa(index) + "/" + fieldName,
 							SchemaPath:   "/checks/" + itoa(index) + "/" + fieldName,
@@ -183,7 +236,7 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 						})
 					}
 				case PresenceForbidden:
-					if present && !isAbsentValue(value) {
+					if keyPresent {
 						diagnostics = append(diagnostics, PlanValidationError{
 							InstancePath:  "/checks/" + itoa(index) + "/" + fieldName,
 							SchemaPath:    "/checks/" + itoa(index) + "/" + fieldName,
@@ -191,7 +244,7 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 							Keyword:       KeywordIfThenElse,
 							Message:       "property \"" + fieldName + "\" is forbidden when mode=\"" + modeStr + "\"",
 							PropertyName:  fieldName,
-							RejectedValue: value,
+							RejectedValue: check[fieldName],
 						})
 					}
 				}
@@ -201,10 +254,10 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 	return diagnostics
 }
 
-// applicabilityRulesFor returns the descriptor's rule list for a
-// field, derived from the new ApplicabilityRules slice and the
-// legacy single Applicability pointer. When both are present, both
-// rule sets are consulted; duplicates are not collapsed.
+// applicabilityRulesFor returns the descriptor's authoritative rule
+// list for a field. The new ApplicabilityRules slice is the only
+// authority; the legacy Applicability pointer (if present) is
+// derived into a single rule for back-compat.
 func applicabilityRulesFor(field planFieldDescriptor) []fieldApplicabilityRule {
 	if len(field.ApplicabilityRules) > 0 {
 		return field.ApplicabilityRules
@@ -222,23 +275,4 @@ func applicabilityRulesFor(field planFieldDescriptor) []fieldApplicabilityRule {
 		rule.Presence = PresenceOptional
 	}
 	return []fieldApplicabilityRule{rule}
-}
-
-// isAbsentValue reports whether a parsed JSON value should be
-// treated as absent for required-field purposes.
-
-func isAbsentValue(value any) bool {
-	if value == nil {
-		return true
-	}
-	if str, ok := value.(string); ok && str == "" {
-		return true
-	}
-	if arr, ok := value.([]any); ok && len(arr) == 0 {
-		return true
-	}
-	if obj, ok := value.(map[string]any); ok && len(obj) == 0 {
-		return true
-	}
-	return false
 }
