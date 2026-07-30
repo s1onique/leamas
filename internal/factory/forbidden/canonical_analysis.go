@@ -40,6 +40,10 @@ type canonicalResult struct {
 }
 
 // ObservedEdge is one globally typed protected source reference.
+//
+// When the caller is an anonymous function literal, outerCaller carries
+// the enclosing named declaration (if any) for diagnostic purposes only.
+// It NEVER participates in approval matching or cardinality accounting.
 type ObservedEdge struct {
 	Caller         CallerIdentity
 	Callee         ProtectedSymbol
@@ -47,8 +51,10 @@ type ObservedEdge struct {
 	Path           string
 	Position       token.Position
 
-	callerObject types.Object
-	calleeObject types.Object
+	callerObject   types.Object
+	calleeObject   types.Object
+	outerCaller    CallerIdentity
+	hasOuterCaller bool
 }
 
 type sourceRange struct {

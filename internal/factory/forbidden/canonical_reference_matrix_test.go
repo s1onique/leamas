@@ -4,6 +4,7 @@ package forbidden
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -78,19 +79,43 @@ func Dot() { Cap() }
 		t.Fatalf("reference classes = %v, want %v", got, wantClasses)
 	}
 
-	assertReferenceCaller(t, result.ObservedEdges, "Outer", CallerKindPackageFunction, refDirectCall)
+	// The function literal case is now its own caller scope. It must
+	// NOT be attributed to the outer named function Outer. The
+	// CallerKind is function_literal and the outer caller is captured
+	// on the edge for diagnostics only.
+	functionLiteralCount := 0
+	for _, edge := range result.ObservedEdges {
+		if edge.Caller.Kind == CallerKindFunctionLiteral {
+			functionLiteralCount++
+			if !edge.hasOuterCaller || edge.outerCaller.Function != "Outer" {
+				t.Fatalf("function literal edge missing outer Outer: %#v", edge)
+			}
+			if !strings.HasPrefix(edge.Caller.Function, "<func-literal:") {
+				t.Fatalf("function literal identifier not stable: %#v", edge.Caller)
+			}
+		}
+		if edge.Caller.Function == "Outer" && edge.Caller.Kind == CallerKindPackageFunction {
+			t.Fatalf("outer Outer must not be attributed to function literal use: %#v", edge)
+		}
+	}
+	if functionLiteralCount != 1 {
+		t.Fatalf("function literal callers = %d, want 1", functionLiteralCount)
+	}
+
+	// The function literal case below Outer's body now produces an
+	// authority_policy_anonymous_caller finding instead of attributed to
+	// Outer.
+	requireFindingKind(t, result.Findings, "authority_policy_anonymous_caller")
+	requireFindingKind(t, result.Findings, "dupcode_dot_import")
+
 	assertReferenceCaller(t, result.ObservedEdges, "<var-init:Captured>", CallerKindVariableInitializer, refFunctionValue)
 	assertReferenceCaller(t, result.ObservedEdges, "<init>", CallerKindPackageInit, refDirectCall)
 	assertReferenceCaller(t, result.ObservedEdges, "Internal", CallerKindPackageFunction, refDirectCall)
 	assertReferenceCaller(t, result.ObservedEdges, "Dot", CallerKindPackageFunction, refDotImport)
 
-	requireFindingKind(t, result.Findings, "dupcode_dot_import")
 	for _, edge := range result.ObservedEdges {
 		if edge.Caller.Function == "ShadowedPackageName" {
 			t.Fatalf("shadowed identifier produced protected edge: %#v", edge)
-		}
-		if edge.Caller.Kind == CallerKindFunctionLiteral {
-			t.Fatalf("line-coordinate function literal identity escaped: %#v", edge.Caller)
 		}
 	}
 }

@@ -111,6 +111,18 @@ func approvalCallerIdentity(approval ApprovedCaller) CallerIdentity {
 func (a *canonicalAnalysis) validateObservedEdges() {
 	for edgeIndex := range a.observedEdges {
 		edge := &a.observedEdges[edgeIndex]
+		if edge.Caller.Kind == CallerKindFunctionLiteral {
+			// Protected use lives inside an anonymous function literal.
+			// The literal is its own execution scope; it MUST NOT
+			// inherit the approval of an outer named declaration, and
+			// it MUST NOT be configured by source coordinates. Emit
+			// the typed anonymous-caller finding and skip every other
+			// matching path. The outer approval is neither matched
+			// nor poisoned, and no duplicate bypass finding is
+			// emitted for the same edge.
+			a.anonymousCallerFinding(*edge)
+			continue
+		}
 		if !validObservedReferenceClass(edge.ReferenceClass) {
 			// Poison every schema-valid approval whose resolved
 			// caller/callee objects match this edge. The internal
@@ -199,6 +211,31 @@ func bypassFindingKind(edge ObservedEdge) string {
 		return "dupcode_adapter_bypass"
 	}
 	return "dupcode_bypass"
+}
+
+// anonymousCallerFinding emits one typed authority_policy_anonymous_caller
+// finding per protected use that lives inside an anonymous function
+// literal. The message includes the outer named declaration (when
+// present), the protected callee identity, the reference class, the
+// source path and position, and the anonymous scope classification.
+// This is the preferred typed finding; layer-specific bypass findings
+// are not emitted for the same edge to avoid duplicate cascade
+// findings.
+func (a *canonicalAnalysis) anonymousCallerFinding(edge ObservedEdge) {
+	outerStr := "<none>"
+	if edge.hasOuterCaller {
+		outerStr = callerIdentityString(edge.outerCaller)
+	}
+	message := fmt.Sprintf(
+		"line %d:%d: %s -> %s [%s]: anonymous caller (function literal) inside outer=%s; outer approval not inherited",
+		edge.Position.Line,
+		edge.Position.Column,
+		callerIdentityString(edge.Caller),
+		protectedSymbolString(edge.Callee),
+		edge.ReferenceClass,
+		outerStr,
+	)
+	a.addFinding(edge.Path, "authority_policy_anonymous_caller", message, edge.Position, edge.Caller, edge.Callee, edge.ReferenceClass)
 }
 
 func (a *canonicalAnalysis) approvalFinding(kind string, approval ApprovedCaller, detail string) {

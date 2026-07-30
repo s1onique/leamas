@@ -106,6 +106,11 @@ func objectFromDotImport(object types.Object, dotImports map[string]bool) bool {
 	return object != nil && object.Pkg() != nil && dotImports[object.Pkg().Path()]
 }
 
+// observeEdge records one globally typed protected source reference.
+// When the resolved caller is an anonymous function literal, the
+// enclosing named declaration (if any) is captured on the edge for
+// diagnostic purposes only. The outer caller NEVER participates in
+// approval matching, cardinality accounting, or stale-approval checks.
 func (a *canonicalAnalysis) observeEdge(
 	pkg *packages.Package,
 	path string,
@@ -116,7 +121,7 @@ func (a *canonicalAnalysis) observeEdge(
 	class ReferenceClass,
 ) {
 	caller, callerObject := a.callerForUse(pkg, ancestors, position)
-	a.observedEdges = append(a.observedEdges, ObservedEdge{
+	edge := ObservedEdge{
 		Caller:         caller,
 		Callee:         callee,
 		ReferenceClass: class,
@@ -124,7 +129,14 @@ func (a *canonicalAnalysis) observeEdge(
 		Position:       pkg.Fset.PositionFor(position, true),
 		callerObject:   callerObject,
 		calleeObject:   calleeObject,
-	})
+	}
+	if caller.Kind == CallerKindFunctionLiteral {
+		if outer, ok := outerNamedCallerFromAncestors(pkg, ancestors); ok {
+			edge.outerCaller = outer
+			edge.hasOuterCaller = true
+		}
+	}
+	a.observedEdges = append(a.observedEdges, edge)
 }
 
 func (a *canonicalAnalysis) markDirectCallee(fileSet *token.FileSet, expression ast.Expr) {

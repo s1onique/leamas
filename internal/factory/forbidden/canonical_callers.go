@@ -3,6 +3,7 @@
 package forbidden
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -83,21 +84,41 @@ func (a *canonicalAnalysis) addCallerCandidate(identity CallerIdentity, object t
 	a.callerCandidates[identity] = append(a.callerCandidates[identity], object)
 }
 
+// callerForUse finds the nearest enclosing executable scope for a
+// protected source reference. The semantic boundary is fixed:
+//
+//	named declaration      → exact configured approval
+//	anonymous function literal → separate execution scope
+//	                            cannot inherit outer approval
+//	                            cannot be configured by source coordinates
+//	                            protected use fails closed
+//
+// When a *ast.FuncLit occurs between the protected use and an outer
+// *ast.FuncDecl, the function literal is the caller scope. The traversal
+// MUST NOT skip the FuncLit and attribute the use to the outer function.
 func (a *canonicalAnalysis) callerForUse(
 	pkg *packages.Package,
 	ancestors []ast.Node,
 	position token.Pos,
 ) (CallerIdentity, types.Object) {
 	for index := len(ancestors) - 1; index >= 0; index-- {
-		declaration, ok := ancestors[index].(*ast.FuncDecl)
-		if !ok {
-			continue
+		switch typed := ancestors[index].(type) {
+		case *ast.FuncLit:
+			// Anonymous function literal is the nearest enclosing
+			// executable scope. It never inherits the approval of an
+			// outer named declaration. The returned Function field
+			// carries a position-based identifier for diagnostics
+			// only; the strict approval schema rejects CallerKind =
+			// function_literal outright, so this identifier can never
+			// be a configurable approval key.
+			return functionLiteralCallerIdentity(pkg, typed), nil
+		case *ast.FuncDecl:
+			function, _ := pkg.TypesInfo.Defs[typed.Name].(*types.Func)
+			if function == nil {
+				break
+			}
+			return callerIdentityFromFunction(pkg.PkgPath, function), function
 		}
-		function, _ := pkg.TypesInfo.Defs[declaration.Name].(*types.Func)
-		if function == nil {
-			break
-		}
-		return callerIdentityFromFunction(pkg.PkgPath, function), function
 	}
 	for index := len(ancestors) - 1; index >= 0; index-- {
 		value, ok := ancestors[index].(*ast.ValueSpec)
@@ -120,6 +141,44 @@ func (a *canonicalAnalysis) callerForUse(
 		return identity, variable
 	}
 	return CallerIdentity{PackagePath: pkg.PkgPath, Function: "<unknown>", Kind: CallerKindFunctionLiteral}, nil
+}
+
+// functionLiteralCallerIdentity returns the observed CallerIdentity for
+// an anonymous function literal. The Function field encodes the literal's
+// source position as a stable diagnostic identifier. The identifier is
+// rejected by the strict approval schema because CallerKind is
+// CallerKindFunctionLiteral; it is therefore observable but never
+// configurable.
+func functionLiteralCallerIdentity(pkg *packages.Package, lit *ast.FuncLit) CallerIdentity {
+	position := pkg.Fset.PositionFor(lit.Pos(), true)
+	return CallerIdentity{
+		PackagePath: pkg.PkgPath,
+		Function:    fmt.Sprintf("<func-literal:%d:%d>", position.Line, position.Column),
+		Kind:        CallerKindFunctionLiteral,
+	}
+}
+
+// outerNamedCallerFromAncestors walks the ancestor stack from the
+// innermost node outward, returning the first named *ast.FuncDecl that
+// would have been the caller had the function literal not been present.
+// The result is used for diagnostics only; it never affects approval
+// matching for the anonymous edge.
+func outerNamedCallerFromAncestors(
+	pkg *packages.Package,
+	ancestors []ast.Node,
+) (CallerIdentity, bool) {
+	for index := len(ancestors) - 1; index >= 0; index-- {
+		declaration, ok := ancestors[index].(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		function, _ := pkg.TypesInfo.Defs[declaration.Name].(*types.Func)
+		if function == nil {
+			break
+		}
+		return callerIdentityFromFunction(pkg.PkgPath, function), true
+	}
+	return CallerIdentity{}, false
 }
 
 func initializerNameIndex(value *ast.ValueSpec, position token.Pos) int {
