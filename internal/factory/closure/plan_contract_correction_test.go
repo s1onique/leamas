@@ -263,7 +263,7 @@ func TestContractComposedPipelineValidatesCanonicalPlan(t *testing.T) {
 	composed := ValidatePlanComposed(data)
 	if !composed.Valid {
 		t.Fatalf("canonical plan must compose-validate: structural=%v semantic=%v",
-			composed.Structural.Errors, composed.Semantic)
+			composed.Structural.Errors, composed.SemanticErrors)
 	}
 }
 

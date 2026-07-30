@@ -73,6 +73,9 @@ type PlanValidationResult struct {
 // failures: when the document fails structurally, semantic rules do
 // not run. This matches the directive ACT's "structural failures
 // must not cascade into semantic failures" requirement.
+// ValidatePlanStructural is the public single-internal entry
+// point. The bounded parser is the single authority; the caller
+// never needs to enforce MaxPlanBytes separately.
 func ValidatePlanStructural(data []byte) PlanValidationResult {
 	return validatePlanStructuralWithObserver(data, noopCompositionObserver{})
 }
@@ -85,18 +88,7 @@ func ValidatePlanStructural(data []byte) PlanValidationResult {
 // passes noopCompositionObserver{}.
 func validatePlanStructuralWithObserver(data []byte, observer compositionObserver) PlanValidationResult {
 	result := PlanValidationResult{Valid: true}
-	if len(data) > MaxPlanBytes {
-		result.Valid = false
-		result.Errors = append(result.Errors, PlanValidationError{
-			InstancePath: "",
-			SchemaPath:   "",
-			Code:         PlanCodeInvalidJSON,
-			Keyword:      KeywordType,
-			Message:      "plan exceeds " + itoa(MaxPlanBytes) + "-byte size limit",
-		})
-		return result
-	}
-	root, diagnostics := parseClosurePlanDocument(data)
+	root, diagnostics := parseBoundedClosurePlanDocument(data)
 	observer.Parsed()
 	if len(diagnostics) > 0 {
 		result.Valid = false

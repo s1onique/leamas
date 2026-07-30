@@ -101,11 +101,10 @@ func isExampleSkip(v any) bool {
 // always a "run" check; any field whose applicability says it is
 // only required when mode=exclude is skipped.
 func skipForCheckItemRunMode(name string, field planFieldDescriptor) bool {
-	if field.Applicability == nil {
-		return false
-	}
-	if field.Applicability.Value == CheckModeExclude && field.Applicability.Required {
-		return true
+	for _, rule := range field.ApplicabilityRules {
+		if rule.Value == CheckModeExclude && rule.Presence == PresenceRequired {
+			return true
+		}
 	}
 	return false
 }

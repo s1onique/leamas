@@ -1,6 +1,9 @@
 package closure
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // plan_contract_validation_composed.go contains the composed
 // validation pipeline (Phase 10) and the mode-dependent
@@ -10,21 +13,17 @@ import "strings"
 // closure over the descriptor that
 // ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01 requires.
 
-// ComposedPlanValidationResult is the structured stage model the
-// future CLI consumes. It separates:
-//   - Structural: deterministic descriptor-driven diagnostics
-//   - Decoded:     whether the typed Plan was successfully populated
-//   - SemanticValid: whether ValidatePlan accepted the typed value
-//   - SemanticErrors: stable semantic diagnostics with precise paths
-//   - Semantic:    human-readable cause (NOT a public CLI dependency)
-//   - Valid:       composed verdict
+// ComposedPlanValidationResult is the JSON-ready structured stage
+// model the future CLI consumes. Field names use json tags so the
+// result marshals deterministically. The legacy `Semantic error`
+// field is GONE; semantic stage outcomes live in SemanticErrors and
+// SemanticValid. The future CLI never marshals an error interface.
 type ComposedPlanValidationResult struct {
-	Structural     PlanValidationResult
-	Decoded        bool
-	SemanticValid  bool
-	SemanticErrors []PlanValidationError
-	Semantic       error
-	Valid          bool
+	Structural     PlanValidationResult  `json:"structural"`
+	Decoded        bool                  `json:"decoded"`
+	SemanticValid  bool                  `json:"semantic_valid"`
+	SemanticErrors []PlanValidationError `json:"semantic_errors"`
+	Valid          bool                  `json:"valid"`
 }
 
 // validatePlanComposedWithObserver is the single internal entry
@@ -64,7 +63,8 @@ func validatePlanComposedWithObserver(data []byte, observer compositionObserver)
 		result.Decoded = false
 		result.SemanticValid = false
 		result.SemanticErrors = []PlanValidationError{typedDecodeDiagnostic(err)}
-		result.Semantic = err
+		result.SemanticErrors = []PlanValidationError{typedDecodeDiagnostic(err)}
+		result.SemanticValid = false
 		result.Valid = false
 		return result
 	}
@@ -74,7 +74,8 @@ func validatePlanComposedWithObserver(data []byte, observer compositionObserver)
 	if semErr != nil {
 		result.SemanticValid = false
 		result.SemanticErrors = []PlanValidationError{semanticDiagnostic(semErr)}
-		result.Semantic = semErr
+		result.SemanticErrors = []PlanValidationError{semanticDiagnostic(semErr)}
+		result.SemanticValid = false
 		result.Valid = false
 	}
 	return result
@@ -92,10 +93,23 @@ func ValidatePlanComposed(data []byte) ComposedPlanValidationResult {
 // semantic validation.
 func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error) {
 	result := validatePlanComposedWithObserver(data, noopCompositionObserver{})
-	if result.Semantic != nil {
-		return result.Structural, result.Semantic
+	if !result.SemanticValid {
+		return result.Structural, firstSemanticError(result)
 	}
 	return result.Structural, nil
+}
+
+// firstSemanticError returns the first error message of the typed
+// semantic diagnostics so the legacy DecodePlan (Plan, error)
+// wrapper continues to work. The structured JSON result exposes
+// the full diagnostics; this helper only produces a one-line
+// summary for the legacy error-returning path.
+func firstSemanticError(result ComposedPlanValidationResult) error {
+	if len(result.SemanticErrors) == 0 {
+		return fmt.Errorf("semantic validation failed")
+	}
+	d := result.SemanticErrors[0]
+	return fmt.Errorf("%s: %s", d.InstancePath, d.Message)
 }
 
 // typedDecodeDiagnostic wraps a typed-decode error as a stable
@@ -254,25 +268,9 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 	return diagnostics
 }
 
-// applicabilityRulesFor returns the descriptor's authoritative rule
-// list for a field. The new ApplicabilityRules slice is the only
-// authority; the legacy Applicability pointer (if present) is
-// derived into a single rule for back-compat.
+// applicabilityRulesFor returns the descriptor's authoritative
+// rule list for a field. The ApplicabilityRules slice is the sole
+// authority; the walker does not infer behavior from a single rule.
 func applicabilityRulesFor(field planFieldDescriptor) []fieldApplicabilityRule {
-	if len(field.ApplicabilityRules) > 0 {
-		return field.ApplicabilityRules
-	}
-	if field.Applicability == nil {
-		return nil
-	}
-	rule := fieldApplicabilityRule{Sibling: field.Applicability.Sibling, Value: field.Applicability.Value}
-	switch {
-	case field.Applicability.Required:
-		rule.Presence = PresenceRequired
-	case field.Applicability.Forbidden:
-		rule.Presence = PresenceForbidden
-	default:
-		rule.Presence = PresenceOptional
-	}
-	return []fieldApplicabilityRule{rule}
+	return field.ApplicabilityRules
 }

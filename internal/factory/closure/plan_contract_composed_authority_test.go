@@ -34,7 +34,7 @@ func TestComposedParserRunsOnce(t *testing.T) {
 	composed := validatePlanComposedWithObserver(canonicalComposedPlan(), obs)
 	if !composed.Valid {
 		t.Fatalf("canonical plan must compose-validate: structural=%v semantic=%v",
-			composed.Structural.Errors, composed.Semantic)
+			composed.Structural.Errors, composed.SemanticErrors)
 	}
 	if obs.parsedCount != 1 {
 		t.Fatalf("parsed count = %d, want exactly 1", obs.parsedCount)

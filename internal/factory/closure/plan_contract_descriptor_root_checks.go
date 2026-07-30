@@ -71,11 +71,6 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Description:  "Command arguments. Required when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: []any{"true"},
 						MinItems:     1,
-						Applicability: &fieldApplicability{
-							Sibling:  "mode",
-							Value:    CheckModeRun,
-							Required: true,
-						},
 						ApplicabilityRules: []fieldApplicabilityRule{
 							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
@@ -99,11 +94,6 @@ func planContractV1ChecksField() planFieldDescriptor {
 						SemanticRule: "validateRepositoryRelativePath",
 						Description:  "Repository-relative working directory. Optional when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: ".",
-						Applicability: &fieldApplicability{
-							Sibling:  "mode",
-							Value:    CheckModeRun,
-							Required: false,
-						},
 						ApplicabilityRules: []fieldApplicabilityRule{
 							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
@@ -121,11 +111,6 @@ func planContractV1ChecksField() planFieldDescriptor {
 						SemanticRule: "validateRunnableCheck(TimeoutSeconds)",
 						Description:  "Per-check timeout in seconds. Optional when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: 60,
-						Applicability: &fieldApplicability{
-							Sibling:  "mode",
-							Value:    CheckModeRun,
-							Required: false,
-						},
 						ApplicabilityRules: []fieldApplicabilityRule{
 							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
@@ -139,11 +124,6 @@ func planContractV1ChecksField() planFieldDescriptor {
 						SemanticRule: "validateRunnableCheck(Environment)",
 						Description:  "Per-check environment overrides (free-form string map). Optional when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: map[string]any{"FOO": "bar"},
-						Applicability: &fieldApplicability{
-							Sibling:  "mode",
-							Value:    CheckModeRun,
-							Required: false,
-						},
 						ApplicabilityRules: []fieldApplicabilityRule{
 							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
@@ -161,12 +141,6 @@ func planContractV1ChecksField() planFieldDescriptor {
 						SemanticRule: "validatePlanChecks(Exclude)",
 						Description:  "Compact prose explaining why the check is excluded. Required when mode='exclude'; forbidden when mode='run'.",
 						ExampleValue: "No source or registration changed.",
-						Applicability: &fieldApplicability{
-							Sibling:   "mode",
-							Value:     CheckModeExclude,
-							Required:  true,
-							Forbidden: false,
-						},
 						ApplicabilityRules: []fieldApplicabilityRule{
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceRequired},
 							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceForbidden},

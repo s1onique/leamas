@@ -103,10 +103,7 @@ func LoadPlan(path string) (Plan, []byte, error) {
 // It enforces the size bound and strict JSON syntax only; callers that need
 // an executable plan must subsequently invoke ValidatePlan explicitly.
 func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
-	if len(data) > MaxPlanBytes {
-		return Plan{}, nil, fmt.Errorf("plan exceeds maximum size: %d > %d", len(data), MaxPlanBytes)
-	}
-	root, parseDiagnostics := parseClosurePlanDocument(data)
+	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
 	if len(parseDiagnostics) > 0 {
 		return Plan{}, nil, errorFromDiagnostics(parseDiagnostics)
 	}
