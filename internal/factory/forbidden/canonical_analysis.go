@@ -51,10 +51,11 @@ type ObservedEdge struct {
 	Path           string
 	Position       token.Position
 
-	callerObject   types.Object
-	calleeObject   types.Object
-	outerCaller    CallerIdentity
-	hasOuterCaller bool
+	callerObject      types.Object
+	calleeObject      types.Object
+	outerCaller       CallerIdentity
+	hasOuterCaller    bool
+	outerCallerObject types.Object
 }
 
 type sourceRange struct {

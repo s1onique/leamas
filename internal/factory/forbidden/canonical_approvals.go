@@ -108,6 +108,25 @@ func approvalCallerIdentity(approval ApprovedCaller) CallerIdentity {
 	}
 }
 
+// poisoningObjectForEdge returns the caller object that should be used
+// to poison matching approval states. For an anonymous edge whose
+// caller object is nil (the natural traversal state), the outer
+// caller object is used instead. This is the only path that allows
+// cascade isolation to operate on genuine anonymous edges.
+//
+// The edge's actual caller identity is never substituted for the
+// outer caller identity. The outer object is used only as a
+// cascade-isolation object.
+func poisoningObjectForEdge(edge *ObservedEdge) types.Object {
+	if edge.callerObject != nil {
+		return edge.callerObject
+	}
+	if edge.Caller.Kind == CallerKindFunctionLiteral {
+		return edge.outerCallerObject
+	}
+	return nil
+}
+
 // validateObservedEdges enforces the observed-edge invariants in a strict
 // precedence order:
 //
@@ -117,6 +136,8 @@ func approvalCallerIdentity(approval ApprovedCaller) CallerIdentity {
 //     states and emits authority_policy_observed_reference_class_invalid.
 //     This holds even when the caller is a function literal: the
 //     internal invariant takes precedence over caller-policy naming.
+//     For an anonymous edge whose caller object is nil, the outer
+//     caller object is used as the poisoning object.
 //
 //  2. anonymous caller — an edge whose caller is an anonymous function
 //     literal emits authority_policy_anonymous_caller and skips every
@@ -135,14 +156,16 @@ func (a *canonicalAnalysis) validateObservedEdges() {
 		// This invariant is independent of the caller attribution and
 		// runs before any caller-policy decision so an anonymous
 		// function literal cannot conceal an impossible reference
-		// class.
+		// class. The outer caller object is used to poison matching
+		// approval states when the actual caller object is nil.
 		if !validObservedReferenceClass(edge.ReferenceClass) {
+			poisonObject := poisoningObjectForEdge(edge)
 			for index := range a.approvalStates {
 				state := &a.approvalStates[index]
 				if !state.valid {
 					continue
 				}
-				if state.callerObject == edge.callerObject &&
+				if state.callerObject == poisonObject &&
 					state.calleeObject == edge.calleeObject {
 					state.observedInvariantFailure = true
 				}

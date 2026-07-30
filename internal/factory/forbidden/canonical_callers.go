@@ -96,6 +96,12 @@ func (a *canonicalAnalysis) addCallerCandidate(identity CallerIdentity, object t
 // When a *ast.FuncLit occurs between the protected use and an outer
 // *ast.FuncDecl, the function literal is the caller scope. The traversal
 // MUST NOT skip the FuncLit and attribute the use to the outer function.
+//
+// The returned types.Object is non-nil only for named declarations:
+// package functions, methods, and variable initializers. For a function
+// literal the caller has no declaration object; the caller object is
+// nil. The outerCallerObject on the edge is the only object that may
+// be used for cascade isolation.
 func (a *canonicalAnalysis) callerForUse(
 	pkg *packages.Package,
 	ancestors []ast.Node,
@@ -110,7 +116,9 @@ func (a *canonicalAnalysis) callerForUse(
 			// carries a position-based identifier for diagnostics
 			// only; the strict approval schema rejects CallerKind =
 			// function_literal outright, so this identifier can never
-			// be a configurable approval key.
+			// be a configurable approval key. The caller object is
+			// intentionally nil — a function literal has no
+			// declaration object to reuse as its caller identity.
 			return functionLiteralCallerIdentity(pkg, typed), nil
 		case *ast.FuncDecl:
 			function, _ := pkg.TypesInfo.Defs[typed.Name].(*types.Func)
@@ -161,12 +169,20 @@ func functionLiteralCallerIdentity(pkg *packages.Package, lit *ast.FuncLit) Call
 // outerNamedCallerFromAncestors walks the ancestor stack from the
 // innermost node outward, returning the first named *ast.FuncDecl that
 // would have been the caller had the function literal not been present.
-// The result is used for diagnostics only; it never affects approval
-// matching for the anonymous edge.
+// The returned identity is used for diagnostics; the returned object is
+// used only for invariant-cascade isolation (e.g. to poison matching
+// approval states when an anonymous edge carries an invalid internal
+// reference class). The outer object never participates in ordinary
+// approval matching, cardinality accounting, or stale-approval checks.
+//
+// For an enclosing named package function or method, the returned
+// object is the exact resolved *types.Func. For a package variable
+// initializer with no enclosing FuncDecl, the returned object is nil
+// and the boolean is false.
 func outerNamedCallerFromAncestors(
 	pkg *packages.Package,
 	ancestors []ast.Node,
-) (CallerIdentity, bool) {
+) (CallerIdentity, types.Object, bool) {
 	for index := len(ancestors) - 1; index >= 0; index-- {
 		declaration, ok := ancestors[index].(*ast.FuncDecl)
 		if !ok {
@@ -176,9 +192,9 @@ func outerNamedCallerFromAncestors(
 		if function == nil {
 			break
 		}
-		return callerIdentityFromFunction(pkg.PkgPath, function), true
+		return callerIdentityFromFunction(pkg.PkgPath, function), function, true
 	}
-	return CallerIdentity{}, false
+	return CallerIdentity{}, nil, false
 }
 
 func initializerNameIndex(value *ast.ValueSpec, position token.Pos) int {

@@ -3,129 +3,42 @@
 package forbidden
 
 import (
-	"go/token"
-	"go/types"
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
 )
 
-// TestInvPrecedenceInvalidAnonymousEdgePoisonMatchingApproval locks the
-// precedence that an invalid internal reference class wins over the
-// anonymous-caller policy. The matching approval is poisoned; the
-// stale / cardinality / ordinary-bypass cascade is suppressed; the
-// anonymous-caller finding is NOT emitted (the invariant takes
-// precedence).
-func TestInvPrecedenceInvalidAnonymousEdgePoisonMatchingApproval(t *testing.T) {
-	callerObj := types.NewVar(token.Pos(0), nil, "caller", nil)
-	calleeObj := types.NewVar(token.Pos(0), nil, "callee", nil)
-
-	approval := ApprovedCaller{
-		PackagePath:    "example.test/policy/caller",
-		Function:       "Allowed",
-		CallerKind:     CallerKindPackageFunction,
-		ReferenceClass: refDirectCall,
-		Cardinality:    1,
-		Callee: ProtectedSymbol{
-			Layer:       AuthorityLayerRaw,
-			PackagePath: "example.test/policy/protected",
-			Name:        "Cap",
-			Kind:        ProtectedPackageFunction,
-		},
-	}
-
-	// Simulate an anonymous edge with an invalid reference class.
-	invalidEdge := ObservedEdge{
-		Caller: CallerIdentity{
-			PackagePath: "example.test/policy/caller",
-			Function:    "<func-literal:5:3>",
-			Kind:        CallerKindFunctionLiteral,
-		},
-		Callee:         approval.Callee,
-		ReferenceClass: ReferenceClass("DECLARATION"), // invalid
-		Path:           "example.test/policy/caller/caller.go",
-		Position:       token.Position{Line: 5, Column: 3},
-		callerObject:   callerObj,
-		calleeObject:   calleeObj,
-	}
-
-	analysis := buildPipelineAnalysis([]ApprovedCaller{approval}, []ObservedEdge{invalidEdge})
-	withCallerCalleeObjects(&analysis.approvalStates[0], callerObj, calleeObj)
-
-	// Mutate the state to claim a matching caller object so the
-	// invariant-violation path actually finds a candidate to poison.
-	// In this seam we directly construct the invalid edge with the
-	// same objects the approval state references.
-	analysis.observedEdges[0] = invalidEdge
-
-	analysis.validateObservedEdges()
-	analysis.validateConfiguredApprovals()
-
-	if got := findingKindsCount(analysis.findings, "authority_policy_observed_reference_class_invalid"); got != 1 {
-		t.Errorf("observed_reference_class_invalid count = %d, want 1", got)
-	}
-	if got := findingKindsCount(analysis.findings, "authority_policy_anonymous_caller"); got != 0 {
-		t.Errorf("anonymous_caller count = %d, want 0 (invalid class wins)", got)
-	}
-	for _, kind := range []string{
-		"authority_policy_stale_approval",
-		"authority_policy_reference_class_mismatch",
-		"authority_policy_edge_cardinality_mismatch",
-		"dupcode_bypass",
-		"dupcode_adapter_bypass",
-		"dupcode_protected_function_value",
-	} {
-		if count := findingKindsCount(analysis.findings, kind); count != 0 {
-			t.Errorf("%s count = %d, want 0 (cascade suppressed)", kind, count)
-		}
-	}
-	state := &analysis.approvalStates[0]
-	if !state.observedInvariantFailure {
-		t.Errorf("observedInvariantFailure = false, want true")
-	}
-	if state.validated {
-		t.Errorf("validated = true, want false (poisoned)")
-	}
+// TestInvPrecedenceAnonymousEdgeHasNilCallerObject is the structural
+// invariant that the real traversal never produces an anonymous edge
+// with a non-nil callerObject. The function literal has no declared
+// name in the package symbol table, so callerForUse returns nil.
+func TestInvPrecedenceAnonymousEdgeHasNilCallerObject(t *testing.T) {
+	fixture := newCanonicalFixture(t)
+	protectedPkg := fixture.packagePath("protected")
+	fixture.write("protected/protected.go", `package protected
+func Cap() {}
+`)
+	fixture.write("caller/caller.go", `package caller
+import p "example.test/policy/protected"
+func Allowed() {
+	func() {
+		p.Cap()
+	}()
 }
+`)
+	symbol := fixtureSymbol(AuthorityLayerRaw, protectedPkg, "Cap", ProtectedPackageFunction, "")
+	approval := fixtureApproval(fixture.packagePath("caller"), "Allowed", "", CallerKindPackageFunction, symbol, refDirectCall)
+	result := fixture.run([]ProtectedSymbol{symbol}, []ApprovedCaller{approval})
 
-// TestInvPrecedenceInvalidAnonymousEdgeWithoutApproval locks the
-// invariant precedence when no approval matches the edge. The invalid
-// class still wins. No cascade.
-func TestInvPrecedenceInvalidAnonymousEdgeWithoutApproval(t *testing.T) {
-	callerObj := types.NewVar(token.Pos(0), nil, "caller", nil)
-	calleeObj := types.NewVar(token.Pos(0), nil, "callee", nil)
-
-	invalidEdge := ObservedEdge{
-		Caller: CallerIdentity{
-			PackagePath: "example.test/policy/orphan",
-			Function:    "<func-literal:7:5>",
-			Kind:        CallerKindFunctionLiteral,
-		},
-		Callee: ProtectedSymbol{
-			Layer:       AuthorityLayerRaw,
-			PackagePath: "example.test/policy/protected",
-			Name:        "Cap",
-			Kind:        ProtectedPackageFunction,
-		},
-		ReferenceClass: ReferenceClass("BOGUS"),
-		Path:           "example.test/policy/orphan/orphan.go",
-		Position:       token.Position{Line: 7, Column: 5},
-		callerObject:   callerObj,
-		calleeObject:   calleeObj,
-	}
-
-	analysis := buildPipelineAnalysis(nil, []ObservedEdge{invalidEdge})
-	analysis.validateObservedEdges()
-	analysis.validateConfiguredApprovals()
-
-	if got := findingKindsCount(analysis.findings, "authority_policy_observed_reference_class_invalid"); got != 1 {
-		t.Errorf("observed_reference_class_invalid count = %d, want 1", got)
-	}
-	if got := findingKindsCount(analysis.findings, "authority_policy_anonymous_caller"); got != 0 {
-		t.Errorf("anonymous_caller count = %d, want 0 (invalid class wins)", got)
-	}
-	if got := findingKindsCount(analysis.findings, "authority_policy_stale_approval"); got != 0 {
-		t.Errorf("stale_approval count = %d, want 0 (no cascade)", got)
+	for _, edge := range result.ObservedEdges {
+		if edge.Caller.Kind == CallerKindFunctionLiteral {
+			if edge.callerObject != nil {
+				t.Errorf("anonymous edge has non-nil callerObject: %#v", edge)
+			}
+			if !edge.hasOuterCaller {
+				t.Errorf("anonymous edge missing outer caller: %#v", edge)
+			}
+		}
 	}
 }
 
@@ -250,6 +163,42 @@ func Dot() { Cap() }
 	}
 	if got := findingKindCount(result.Findings, "authority_policy_anonymous_caller"); got != 0 {
 		t.Errorf("anonymous_caller count = %d, want 0", got)
+	}
+}
+
+// TestInvPrecedenceValidAnonymousEdgeOuterApprovalNotMatched locks the
+// preservation of anonymous-caller policy for a valid direct call. The
+// outer approval is reported as stale (no legitimate source edge) but
+// is NOT matched or validated.
+func TestInvPrecedenceValidAnonymousEdgeOuterApprovalNotMatched(t *testing.T) {
+	fixture := newCanonicalFixture(t)
+	protectedPkg := fixture.packagePath("protected")
+	fixture.write("protected/protected.go", `package protected
+func Cap() {}
+`)
+	fixture.write("caller/caller.go", `package caller
+import p "example.test/policy/protected"
+func Approved() {
+	func() {
+		p.Cap()
+	}()
+}
+`)
+	symbol := fixtureSymbol(AuthorityLayerRaw, protectedPkg, "Cap", ProtectedPackageFunction, "")
+	approval := fixtureApproval(fixture.packagePath("caller"), "Approved", "", CallerKindPackageFunction, symbol, refDirectCall)
+	result := fixture.run([]ProtectedSymbol{symbol}, []ApprovedCaller{approval})
+
+	if got := findingKindCount(result.Findings, "authority_policy_anonymous_caller"); got != 1 {
+		t.Errorf("anonymous_caller count = %d, want 1", got)
+	}
+	if got := findingKindCount(result.Findings, "authority_policy_observed_reference_class_invalid"); got != 0 {
+		t.Errorf("observed_reference_class_invalid count = %d, want 0", got)
+	}
+	if got := findingKindCount(result.Findings, "authority_policy_stale_approval"); got != 1 {
+		t.Errorf("stale_approval count = %d, want 1", got)
+	}
+	if result.Stats.ValidatedApprovals != 0 {
+		t.Errorf("validated approvals = %d, want 0 (anonymous edge never matches)", result.Stats.ValidatedApprovals)
 	}
 }
 

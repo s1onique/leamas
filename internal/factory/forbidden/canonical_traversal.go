@@ -107,10 +107,19 @@ func objectFromDotImport(object types.Object, dotImports map[string]bool) bool {
 }
 
 // observeEdge records one globally typed protected source reference.
-// When the resolved caller is an anonymous function literal, the
-// enclosing named declaration (if any) is captured on the edge for
-// diagnostic purposes only. The outer caller NEVER participates in
-// approval matching, cardinality accounting, or stale-approval checks.
+// When the resolved caller is an anonymous function literal:
+//
+//   - the actual caller identity remains CallerKindFunctionLiteral
+//     with a nil callerObject (a function literal has no declared
+//     name in the package symbol table and therefore no caller
+//     authority object);
+//   - the enclosing named declaration (if any) is captured separately
+//     on the edge for diagnostic and cascade-isolation purposes only.
+//
+// The outer caller identity and outer caller object NEVER participate
+// in ordinary approval matching, cardinality accounting, or
+// stale-approval checks. They are used only when the edge's internal
+// reference class is invalid, to poison matching approval states.
 func (a *canonicalAnalysis) observeEdge(
 	pkg *packages.Package,
 	path string,
@@ -131,9 +140,10 @@ func (a *canonicalAnalysis) observeEdge(
 		calleeObject:   calleeObject,
 	}
 	if caller.Kind == CallerKindFunctionLiteral {
-		if outer, ok := outerNamedCallerFromAncestors(pkg, ancestors); ok {
+		if outer, outerObject, ok := outerNamedCallerFromAncestors(pkg, ancestors); ok {
 			edge.outerCaller = outer
 			edge.hasOuterCaller = true
+			edge.outerCallerObject = outerObject
 		}
 	}
 	a.observedEdges = append(a.observedEdges, edge)
