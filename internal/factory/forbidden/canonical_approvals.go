@@ -110,6 +110,14 @@ func approvalCallerIdentity(approval ApprovedCaller) CallerIdentity {
 func (a *canonicalAnalysis) validateObservedEdges() {
 	for edgeIndex := range a.observedEdges {
 		edge := &a.observedEdges[edgeIndex]
+		if !validObservedReferenceClass(edge.ReferenceClass) {
+			a.edgeFinding(
+				"authority_policy_observed_reference_class_invalid",
+				*edge,
+				"observed edge carries an invalid internal reference class",
+			)
+			continue
+		}
 		var exact []*resolvedApproval
 		var wrongReference []*resolvedApproval
 		for index := range a.approvalStates {

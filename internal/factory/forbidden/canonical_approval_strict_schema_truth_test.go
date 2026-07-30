@@ -290,6 +290,7 @@ func TestSchemaFailuresMatchValidatorIssues(t *testing.T) {
 				CallerKind:     "",
 				ReferenceClass: refDirectCall,
 				Cardinality:    1,
+				Callee:         protectedSymbolFixture(),
 			},
 			want: []approvalSchemaIssue{{
 				Kind: "authority_policy_approval_caller_kind_invalid", Field: "CallerKind", Message: "caller_kind_empty",
@@ -302,6 +303,7 @@ func TestSchemaFailuresMatchValidatorIssues(t *testing.T) {
 				Function:    "Allowed",
 				CallerKind:  CallerKindPackageFunction,
 				Cardinality: 1,
+				Callee:      protectedSymbolFixture(),
 			},
 			want: []approvalSchemaIssue{{
 				Kind: "authority_policy_approval_reference_class_invalid", Field: "ReferenceClass", Message: "reference_class_empty",
@@ -315,6 +317,7 @@ func TestSchemaFailuresMatchValidatorIssues(t *testing.T) {
 				CallerKind:     CallerKindPackageFunction,
 				ReferenceClass: refDotImport,
 				Cardinality:    1,
+				Callee:         protectedSymbolFixture(),
 			},
 			want: []approvalSchemaIssue{{
 				Kind: "authority_policy_approval_reference_class_invalid", Field: "ReferenceClass", Message: "reference_class_dot_import",
@@ -328,6 +331,7 @@ func TestSchemaFailuresMatchValidatorIssues(t *testing.T) {
 				CallerKind:     CallerKindPackageFunction,
 				ReferenceClass: refDirectCall,
 				Cardinality:    0,
+				Callee:         protectedSymbolFixture(),
 			},
 			want: []approvalSchemaIssue{{
 				Kind: "authority_policy_approval_cardinality_invalid", Field: "Cardinality", Message: "cardinality_zero",
@@ -341,6 +345,7 @@ func TestSchemaFailuresMatchValidatorIssues(t *testing.T) {
 				CallerKind:     CallerKindMethod,
 				ReferenceClass: refDirectCall,
 				Cardinality:    1,
+				Callee:         protectedSymbolFixture(),
 			},
 			want: []approvalSchemaIssue{{
 				Kind: "authority_policy_approval_receiver_invalid", Field: "Receiver", Message: "receiver_required_for_method",
@@ -355,6 +360,7 @@ func TestSchemaFailuresMatchValidatorIssues(t *testing.T) {
 				CallerKind:     CallerKindPackageFunction,
 				ReferenceClass: refDirectCall,
 				Cardinality:    1,
+				Callee:         protectedSymbolFixture(),
 			},
 			want: []approvalSchemaIssue{{
 				Kind: "authority_policy_approval_receiver_invalid", Field: "Receiver", Message: "receiver_must_be_empty",
@@ -368,6 +374,7 @@ func TestSchemaFailuresMatchValidatorIssues(t *testing.T) {
 				CallerKind:     CallerKindPackageFunction,
 				ReferenceClass: refDirectCall,
 				Cardinality:    1,
+				Callee:         protectedSymbolFixture(),
 			},
 			want: []approvalSchemaIssue{{
 				Kind: "authority_policy_approval_identity_invalid", Field: "Function", Message: "function_wildcard",
