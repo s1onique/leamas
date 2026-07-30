@@ -162,7 +162,6 @@ type planFieldDescriptor struct {
 
 	// Applicability, when non-nil, declares that this field applies
 	// only when the named sibling equals the named value.
-	Applicability *fieldApplicability
 
 	// ApplicabilityRules is the authoritative, exhaustive list of
 	// presence rules the applicability walker consults. A field with

@@ -127,7 +127,7 @@ func buildExampleField(field planFieldDescriptor) any {
 	// emit a runnable example so argv, environment, etc. are
 	// demonstrated. Only one applicability per field is supported
 	// (the v1 wire shape).
-	if field.Applicability != nil && field.Applicability.Required {
+	if applicabilityPresenceForMode(field, "run") == PresenceRequired {
 		return buildApplicabilityExample(field)
 	}
 	if field.Kind == kindObject && field.Children != nil {

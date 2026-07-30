@@ -270,7 +270,21 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 
 // applicabilityRulesFor returns the descriptor's authoritative
 // rule list for a field. The ApplicabilityRules slice is the sole
-// authority; the walker does not infer behavior from a single rule.
+// authority.
 func applicabilityRulesFor(field planFieldDescriptor) []fieldApplicabilityRule {
 	return field.ApplicabilityRules
+}
+
+// applicabilityPresenceForMode resolves the presence rule for a
+// given field under a specific mode value. The canonical example
+// generator uses this helper to decide whether to emit a field in
+// the run-mode fixture. The default is PresenceOptional so
+// the helper is total.
+func applicabilityPresenceForMode(field planFieldDescriptor, mode string) PresenceRule {
+	for _, rule := range field.ApplicabilityRules {
+		if rule.Sibling == "mode" && rule.Value == mode {
+			return rule.Presence
+		}
+	}
+	return PresenceOptional
 }
