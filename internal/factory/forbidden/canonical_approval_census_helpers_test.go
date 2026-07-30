@@ -15,13 +15,13 @@ import (
 //
 // The census deliberately uses only _test.go state so production callers see
 // no new API. The record correlates each configured approval against the
-// resolved caller declaration from the canonical package graph and the
-// current permissive normalizeApproval output.
+// resolved caller declaration from the canonical package graph. There is no
+// Effective field: validateApprovalSchema guarantees that the configured
+// record equals the value the runtime would have used.
 type approvalCensusRecord struct {
 	Index int
 
 	Configured ApprovedCaller
-	Effective  ApprovedCaller
 
 	ResolvedCallerPackage  string
 	ResolvedCallerFunction string
@@ -31,10 +31,6 @@ type approvalCensusRecord struct {
 	CallerResolved  bool
 	KindMatches     bool
 	ReceiverMatches bool
-
-	ImplicitCallerKind     bool
-	ImplicitReferenceClass bool
-	ImplicitCardinality    bool
 }
 
 // runProductionCanonicalAnalysisForCensus runs the production canonical
@@ -74,19 +70,18 @@ func runProductionCanonicalAnalysisForCensus(t *testing.T) (canonicalResult, *ca
 }
 
 // buildApprovalCensus assembles one approvalCensusRecord per configured
-// approval, correlating configured -> effective -> resolved declaration.
+// approval, correlating the configured approval with its resolved
+// declaration.
 func buildApprovalCensus(analysis *canonicalAnalysis) []approvalCensusRecord {
 	configured := analysis.config.approvals
 	records := make([]approvalCensusRecord, len(configured))
 	for index, approval := range configured {
-		effective := normalizeApproval(approval)
-		identity := approvalCallerIdentity(effective)
+		identity := approvalCallerIdentity(approval)
 		resolved := analysis.callersByIdentity[identity]
 
 		record := approvalCensusRecord{
 			Index:      index,
 			Configured: approval,
-			Effective:  effective,
 		}
 		if resolved != nil {
 			record.CallerResolved = true
@@ -113,13 +108,9 @@ func buildApprovalCensus(analysis *canonicalAnalysis) []approvalCensusRecord {
 		}
 
 		record.KindMatches = record.CallerResolved &&
-			record.ResolvedCallerKind == effective.CallerKind
+			record.ResolvedCallerKind == approval.CallerKind
 		record.ReceiverMatches = record.CallerResolved &&
-			record.ResolvedCallerReceiver == effective.Receiver
-
-		record.ImplicitCallerKind = approval.CallerKind == ""
-		record.ImplicitReferenceClass = approval.ReferenceClass == ""
-		record.ImplicitCardinality = approval.Cardinality <= 0
+			record.ResolvedCallerReceiver == approval.Receiver
 
 		records[index] = record
 	}
@@ -129,25 +120,26 @@ func buildApprovalCensus(analysis *canonicalAnalysis) []approvalCensusRecord {
 // declarationObjectForRecord returns the resolved types.Object for the
 // caller identity that the record was built from.
 func declarationObjectForRecord(analysis *canonicalAnalysis, record approvalCensusRecord) types.Object {
-	identity := approvalCallerIdentity(record.Effective)
+	identity := approvalCallerIdentity(record.Configured)
 	return analysis.callersByIdentity[identity]
 }
 
 // serializeCensusRecord emits the deterministic normalized representation
-// of one record used to compute the frozen effective-policy oracle hash.
+// of one record used to compute the frozen strict-schema oracle hash.
 func serializeCensusRecord(record approvalCensusRecord) string {
+	approval := record.Configured
 	parts := []string{
-		record.Effective.PackagePath,
-		record.Effective.Function,
-		record.Effective.Receiver,
-		record.Effective.CallerKind,
-		string(record.Effective.Callee.Layer),
-		record.Effective.Callee.PackagePath,
-		string(record.Effective.Callee.Kind),
-		record.Effective.Callee.Receiver,
-		record.Effective.Callee.Name,
-		string(record.Effective.ReferenceClass),
-		censusItoa(record.Effective.Cardinality),
+		approval.PackagePath,
+		approval.Function,
+		approval.Receiver,
+		approval.CallerKind,
+		string(approval.Callee.Layer),
+		approval.Callee.PackagePath,
+		string(approval.Callee.Kind),
+		approval.Callee.Receiver,
+		approval.Callee.Name,
+		string(approval.ReferenceClass),
+		censusItoa(approval.Cardinality),
 	}
 	return strings.Join(parts, "|")
 }
@@ -177,23 +169,24 @@ func censusItoa(value int) string {
 // censusRecordIdentity returns the canonical sort key for one record
 // based on the complete approval identity.
 func censusRecordIdentity(record approvalCensusRecord) []string {
+	approval := record.Configured
 	return []string{
-		record.Effective.PackagePath,
-		record.Effective.Function,
-		record.Effective.Receiver,
-		record.Effective.CallerKind,
-		string(record.Effective.Callee.Layer),
-		record.Effective.Callee.PackagePath,
-		string(record.Effective.Callee.Kind),
-		record.Effective.Callee.Receiver,
-		record.Effective.Callee.Name,
-		string(record.Effective.ReferenceClass),
-		censusItoa(record.Effective.Cardinality),
+		approval.PackagePath,
+		approval.Function,
+		approval.Receiver,
+		approval.CallerKind,
+		string(approval.Callee.Layer),
+		approval.Callee.PackagePath,
+		string(approval.Callee.Kind),
+		approval.Callee.Receiver,
+		approval.Callee.Name,
+		string(approval.ReferenceClass),
+		censusItoa(approval.Cardinality),
 	}
 }
 
 // hashCensusRecords produces the deterministic SHA-256 hash of the
-// frozen normalized approval set in canonical sorted order.
+// frozen explicit approval set in canonical sorted order.
 func hashCensusRecords(records []approvalCensusRecord) string {
 	sorted := make([]approvalCensusRecord, len(records))
 	copy(sorted, records)
@@ -241,9 +234,9 @@ func countByKind(records []approvalCensusRecord, getter func(approvalCensusRecor
 	return count
 }
 
-// effectiveCallerKind reads the normalized caller kind for a record.
-func effectiveCallerKind(record approvalCensusRecord) string {
-	return record.Effective.CallerKind
+// configuredCallerKind reads the configured caller kind for a record.
+func configuredCallerKind(record approvalCensusRecord) string {
+	return record.Configured.CallerKind
 }
 
 // resolvedCallerKind reads the resolved caller kind for a record.

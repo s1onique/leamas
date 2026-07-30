@@ -294,6 +294,7 @@ func TestIsApprovedCaller_RejectsWrongReceiver(t *testing.T) {
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
 		Function:    "LoadBaseline",
 		Receiver:    "protectedDupcodeRunnerAdapter",
+		Kind:        "method",
 	}
 	wrong := ProtectedSymbol{
 		Layer:       AuthorityLayerAdapter,

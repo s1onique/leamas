@@ -109,14 +109,14 @@ func Twice() { p.Cap(); p.Cap() }
 			wantKind: "authority_policy_edge_cardinality_mismatch",
 		},
 		{
-			name: "wildcard caller",
+			name: "wildcard caller identity",
 			source: `package caller
 func Existing() {}
 `,
 			approvals: func(pkg string, protected ProtectedSymbol) []ApprovedCaller {
 				return []ApprovedCaller{fixtureApproval(pkg, "*", "", CallerKindPackageFunction, protected, refDirectCall)}
 			},
-			wantKind: "authority_policy_caller_missing",
+			wantKind: "authority_policy_approval_identity_invalid",
 		},
 	}
 

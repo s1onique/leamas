@@ -214,16 +214,21 @@ func allApprovedCallers() []ApprovedCaller {
 // IsApprovedCaller remains a strict declarative query for callers outside the
 // full analysis pipeline. The canonical analysis additionally requires exact
 // types.Object and reference-class identity.
+//
+// IsApprovedCaller does NOT infer the caller kind. An empty CallerIdentity.Kind
+// is rejected, and a method/package-function mismatch on the receiver is
+// rejected. The function iterates the configured approvals directly: any
+// configured record that fails validateApprovalSchema is skipped defensively
+// (the production inventory tests guarantee zero such records).
 func IsApprovedCaller(caller CallerIdentity, callee ProtectedSymbol) bool {
 	if caller.Kind == "" {
-		caller.Kind = CallerKindPackageFunction
-		if caller.Receiver != "" {
-			caller.Kind = CallerKindMethod
-		}
+		return false
 	}
 	for _, configured := range allApprovedCallers() {
-		approval := normalizeApproval(configured)
-		if approvalCallerIdentity(approval) == caller && approval.Callee == callee {
+		if len(validateApprovalSchema(configured)) != 0 {
+			continue
+		}
+		if approvalCallerIdentity(configured) == caller && configured.Callee == callee {
 			return true
 		}
 	}

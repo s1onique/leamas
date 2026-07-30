@@ -2,14 +2,12 @@
 
 package forbidden
 
-import (
-	"reflect"
-	"testing"
-)
+import "testing"
 
 // frozenNormalizationOracleHash is the SHA-256 oracle produced by the
-// caller census for the production approval set. The explicit-inventory
-// migration must preserve this exact value.
+// caller census for the production approval set. The strict-schema
+// migration must preserve this exact value because the configured
+// records are already explicit.
 const frozenNormalizationOracleHash = "dc21de26d1a0abfdaaf60523ae551056a66c508a12de73a647d60b8cdb2b2b25"
 
 // approvalInventorySource ties an inventory name to its configured
@@ -60,26 +58,34 @@ func TestProductionApprovalInventoryIsExplicit(t *testing.T) {
 	}
 }
 
-// TestProductionApprovalsRemainNormalizationInvariant asserts each
-// production approval's explicit form equals the effective form
-// produced by normalizeApproval. This proves the migration introduced
-// no behavioral change: every record already carries the value the
-// runtime would have filled in.
-func TestProductionApprovalsRemainNormalizationInvariant(t *testing.T) {
+// TestProductionApprovalInventoryPassesStrictSchema asserts every
+// configured approval in every production inventory passes
+// validateApprovalSchema with zero issues. This is the strict-schema
+// regression gate: any record whose configured form would fail the
+// schema is a migration bug and breaks the 34/34 production truth.
+func TestProductionApprovalInventoryPassesStrictSchema(t *testing.T) {
+	total := 0
 	for _, source := range productionApprovalInventorySources() {
 		for index, approval := range source.records {
-			effective := normalizeApproval(approval)
-			if !reflect.DeepEqual(effective, approval) {
-				t.Errorf("%s[%d] %s.%s explicit != effective:\n  explicit = %+v\n  effective = %+v",
-					source.name, index, approval.PackagePath, approval.Function,
-					approval, effective)
+			total++
+			issues := validateApprovalSchema(approval)
+			if len(issues) != 0 {
+				for _, issue := range issues {
+					t.Errorf("%s[%d] %s.%s schema issue field=%s kind=%s message=%s",
+						source.name, index,
+						approval.PackagePath, approval.Function,
+						issue.Field, issue.Kind, issue.Message)
+				}
 			}
 		}
+	}
+	if total != 34 {
+		t.Fatalf("total approval count = %d, want 34", total)
 	}
 }
 
 // TestExplicitApprovalInventoryPreservesOracleHash asserts the frozen
-// normalized oracle hash is unchanged after the explicit-inventory
+// strict-schema oracle hash is unchanged after the schema validation
 // migration. Any drift in record order, field values, or record count
 // breaks the hash and fails this test.
 func TestExplicitApprovalInventoryPreservesOracleHash(t *testing.T) {

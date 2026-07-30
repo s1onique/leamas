@@ -55,11 +55,11 @@ func TestApprovalCensusRunSharedDupcodeBaselineIsPackageFunction(t *testing.T) {
 		if signature.Recv() != nil {
 			t.Fatalf("record %d resolved declaration is a method (recv=%v); runSharedDupcodeBaseline is a package function", index, signature.Recv())
 		}
-		if record.Effective.CallerKind != CallerKindPackageFunction {
-			t.Errorf("record %d normalized caller kind = %q, want %q", index, record.Effective.CallerKind, CallerKindPackageFunction)
+		if record.Configured.CallerKind != CallerKindPackageFunction {
+			t.Errorf("record %d configured caller kind = %q, want %q", index, record.Configured.CallerKind, CallerKindPackageFunction)
 		}
-		if record.Effective.Receiver != "" {
-			t.Errorf("record %d normalized receiver = %q, want empty", index, record.Effective.Receiver)
+		if record.Configured.Receiver != "" {
+			t.Errorf("record %d configured receiver = %q, want empty", index, record.Configured.Receiver)
 		}
 		if record.ResolvedCallerKind != CallerKindPackageFunction {
 			t.Errorf("record %d resolved caller kind = %q, want %q", index, record.ResolvedCallerKind, CallerKindPackageFunction)
@@ -68,10 +68,10 @@ func TestApprovalCensusRunSharedDupcodeBaselineIsPackageFunction(t *testing.T) {
 			t.Errorf("record %d resolved receiver = %q, want empty", index, record.ResolvedCallerReceiver)
 		}
 		if !record.KindMatches {
-			t.Errorf("record %d kind mismatch: effective=%q resolved=%q", index, record.Effective.CallerKind, record.ResolvedCallerKind)
+			t.Errorf("record %d kind mismatch: configured=%q resolved=%q", index, record.Configured.CallerKind, record.ResolvedCallerKind)
 		}
 		if !record.ReceiverMatches {
-			t.Errorf("record %d receiver mismatch: effective=%q resolved=%q", index, record.Effective.Receiver, record.ResolvedCallerReceiver)
+			t.Errorf("record %d receiver mismatch: configured=%q resolved=%q", index, record.Configured.Receiver, record.ResolvedCallerReceiver)
 		}
 
 		explicit := ApprovedCaller{
@@ -80,11 +80,11 @@ func TestApprovalCensusRunSharedDupcodeBaselineIsPackageFunction(t *testing.T) {
 			Receiver:       "",
 			CallerKind:     CallerKindPackageFunction,
 			ReferenceClass: refDirectCall,
-			Cardinality:    record.Effective.Cardinality,
+			Cardinality:    record.Configured.Cardinality,
 			Callee:         record.Configured.Callee,
 		}
-		if !reflect.DeepEqual(explicit, record.Effective) {
-			t.Errorf("record %d explicit form does not match effective: explicit=%+v effective=%+v", index, explicit, record.Effective)
+		if !reflect.DeepEqual(explicit, record.Configured) {
+			t.Errorf("record %d explicit form does not match configured: explicit=%+v configured=%+v", index, explicit, record.Configured)
 		}
 	}
 }
@@ -101,46 +101,34 @@ func TestApprovalCensusMatchesResolvedDeclarations(t *testing.T) {
 
 	records := buildApprovalCensus(analysis)
 
-	implicitKind := 0
-	implicitRef := 0
-	nonpositiveCard := 0
 	for _, record := range records {
-		if record.ImplicitCallerKind {
-			implicitKind++
-		}
-		if record.ImplicitReferenceClass {
-			implicitRef++
-		}
-		if record.ImplicitCardinality {
-			nonpositiveCard++
-		}
 		if !record.CallerResolved {
 			t.Errorf("index %d caller did not resolve: %+v", record.Index, record.Configured)
 			continue
 		}
 		if !record.KindMatches {
-			t.Errorf("index %d kind mismatch: effective=%q resolved=%q receiver=%q",
-				record.Index, record.Effective.CallerKind, record.ResolvedCallerKind, record.Effective.Receiver)
+			t.Errorf("index %d kind mismatch: configured=%q resolved=%q receiver=%q",
+				record.Index, record.Configured.CallerKind, record.ResolvedCallerKind, record.Configured.Receiver)
 		}
 		if !record.ReceiverMatches {
-			t.Errorf("index %d receiver mismatch: effective=%q resolved=%q",
-				record.Index, record.Effective.Receiver, record.ResolvedCallerReceiver)
+			t.Errorf("index %d receiver mismatch: configured=%q resolved=%q",
+				record.Index, record.Configured.Receiver, record.ResolvedCallerReceiver)
 		}
-		if record.Effective.Cardinality <= 0 {
-			t.Errorf("index %d effective cardinality = %d, want positive", record.Index, record.Effective.Cardinality)
+		if record.Configured.Cardinality <= 0 {
+			t.Errorf("index %d configured cardinality = %d, want positive", record.Index, record.Configured.Cardinality)
 		}
-		if !validApprovalReferenceClass(record.Effective.ReferenceClass) {
-			t.Errorf("index %d reference class %q is not approvable", record.Index, record.Effective.ReferenceClass)
+		if !validApprovalReferenceClass(record.Configured.ReferenceClass) {
+			t.Errorf("index %d reference class %q is not approvable", record.Index, record.Configured.ReferenceClass)
 		}
 	}
 
-	normalizedPackageFunctions := countByKind(records, effectiveCallerKind, CallerKindPackageFunction)
-	normalizedMethods := countByKind(records, effectiveCallerKind, CallerKindMethod)
-	normalizedVariableInits := countByKind(records, effectiveCallerKind, CallerKindVariableInitializer)
-	normalizedPackageInits := countByKind(records, effectiveCallerKind, CallerKindPackageInit)
-	if normalizedPackageFunctions+normalizedMethods+normalizedVariableInits+normalizedPackageInits != 34 {
-		t.Fatalf("normalized kind total = %d, want 34",
-			normalizedPackageFunctions+normalizedMethods+normalizedVariableInits+normalizedPackageInits)
+	configuredPackageFunctions := countByKind(records, configuredCallerKind, CallerKindPackageFunction)
+	configuredMethods := countByKind(records, configuredCallerKind, CallerKindMethod)
+	configuredVariableInits := countByKind(records, configuredCallerKind, CallerKindVariableInitializer)
+	configuredPackageInits := countByKind(records, configuredCallerKind, CallerKindPackageInit)
+	if configuredPackageFunctions+configuredMethods+configuredVariableInits+configuredPackageInits != 34 {
+		t.Fatalf("configured kind total = %d, want 34",
+			configuredPackageFunctions+configuredMethods+configuredVariableInits+configuredPackageInits)
 	}
 
 	resolvedPackageFunctions := countByKind(records, resolvedCallerKind, CallerKindPackageFunction)
@@ -152,28 +140,29 @@ func TestApprovalCensusMatchesResolvedDeclarations(t *testing.T) {
 			resolvedPackageFunctions+resolvedMethods+resolvedVariableInits+resolvedPackageInits)
 	}
 
-	if normalizedPackageFunctions != resolvedPackageFunctions ||
-		normalizedMethods != resolvedMethods ||
-		normalizedVariableInits != resolvedVariableInits ||
-		normalizedPackageInits != resolvedPackageInits {
-		t.Errorf("normalized/resolved mismatch: pkg=%d/%d method=%d/%d var=%d/%d init=%d/%d",
-			normalizedPackageFunctions, resolvedPackageFunctions,
-			normalizedMethods, resolvedMethods,
-			normalizedVariableInits, resolvedVariableInits,
-			normalizedPackageInits, resolvedPackageInits)
+	if configuredPackageFunctions != resolvedPackageFunctions ||
+		configuredMethods != resolvedMethods ||
+		configuredVariableInits != resolvedVariableInits ||
+		configuredPackageInits != resolvedPackageInits {
+		t.Errorf("configured/resolved mismatch: pkg=%d/%d method=%d/%d var=%d/%d init=%d/%d",
+			configuredPackageFunctions, resolvedPackageFunctions,
+			configuredMethods, resolvedMethods,
+			configuredVariableInits, resolvedVariableInits,
+			configuredPackageInits, resolvedPackageInits)
 	}
 
-	t.Logf("census: implicit_kind=%d implicit_ref=%d nonpositive_card=%d", implicitKind, implicitRef, nonpositiveCard)
-	t.Logf("census: normalized pkg=%d method=%d var=%d init=%d",
-		normalizedPackageFunctions, normalizedMethods, normalizedVariableInits, normalizedPackageInits)
+	t.Logf("census: configured pkg=%d method=%d var=%d init=%d",
+		configuredPackageFunctions, configuredMethods, configuredVariableInits, configuredPackageInits)
 	t.Logf("census: resolved   pkg=%d method=%d var=%d init=%d",
 		resolvedPackageFunctions, resolvedMethods, resolvedVariableInits, resolvedPackageInits)
 }
 
-// TestApprovalCensusNormalizationOracleHashStable verifies the
-// deterministic normalized oracle hash is reproducible across repeated
-// runs and counts exactly 20 records, all equal.
-func TestApprovalCensusNormalizationOracleHashStable(t *testing.T) {
+// TestApprovalCensusExplicitOracleHashStable verifies the deterministic
+// explicit oracle hash is reproducible across repeated runs and counts
+// exactly 34 records, all equal. The hash is computed directly from the
+// configured records, which the strict schema guarantees are
+// already-explicit.
+func TestApprovalCensusExplicitOracleHashStable(t *testing.T) {
 	_, analysis := runProductionCanonicalAnalysisForCensus(t)
 	records := buildApprovalCensus(analysis)
 	if len(records) != 34 {
@@ -190,12 +179,12 @@ func TestApprovalCensusNormalizationOracleHashStable(t *testing.T) {
 	t.Logf("oracle hash stable across 20 runs: %s", first)
 }
 
-// TestApprovalCensusExplicitRecordEquivalence proves that constructing
-// each normalized approval explicitly with the documented effective
-// fields reproduces the current normalizeApproval output. This is the
-// oracle for the future explicit-inventory migration: any record whose
-// explicit form does not match the effective form is a migration bug.
-func TestApprovalCensusExplicitRecordEquivalence(t *testing.T) {
+// TestExplicitApprovalRecordEquivalence asserts the configured approval
+// already carries the value validateApprovalSchema would require, so the
+// configured form is structurally identical to the value the runtime
+// uses. The strict schema is the migration target: any record whose
+// configured form would fail the schema is a migration bug.
+func TestExplicitApprovalRecordEquivalence(t *testing.T) {
 	_, analysis := runProductionCanonicalAnalysisForCensus(t)
 	records := buildApprovalCensus(analysis)
 
@@ -206,7 +195,7 @@ func TestApprovalCensusExplicitRecordEquivalence(t *testing.T) {
 			categories["package_function"]++
 			continue
 		}
-		switch record.Effective.CallerKind {
+		switch record.Configured.CallerKind {
 		case CallerKindPackageFunction:
 			verifyExplicitEquivalence(t, index, record)
 			categories["package_function"]++
@@ -229,24 +218,14 @@ func TestApprovalCensusExplicitRecordEquivalence(t *testing.T) {
 
 func verifyExplicitEquivalence(t *testing.T, index int, record approvalCensusRecord) {
 	t.Helper()
-	explicit := ApprovedCaller{
-		PackagePath:    record.Configured.PackagePath,
-		Function:       record.Configured.Function,
-		Receiver:       record.Configured.Receiver,
-		CallerKind:     record.Effective.CallerKind,
-		ReferenceClass: record.Effective.ReferenceClass,
-		Cardinality:    record.Effective.Cardinality,
-		Callee:         record.Configured.Callee,
+	approval := record.Configured
+	if approval.CallerKind == CallerKindMethod && approval.Receiver == "" {
+		t.Errorf("index %d method has empty receiver", index)
 	}
-	if explicit.Receiver == "" && record.Effective.Receiver == "" {
-		// package-function / variable-init path
-	} else if explicit.Receiver != record.Effective.Receiver {
-		t.Errorf("index %d receiver drifted: explicit=%q effective=%q", index, explicit.Receiver, record.Effective.Receiver)
+	if approval.CallerKind != CallerKindMethod && approval.Receiver != "" {
+		t.Errorf("index %d non-method has non-empty receiver %q", index, approval.Receiver)
 	}
-	if explicit.CallerKind != record.Effective.CallerKind {
-		t.Errorf("index %d caller kind drifted: explicit=%q effective=%q", index, explicit.CallerKind, record.Effective.CallerKind)
-	}
-	if !reflect.DeepEqual(explicit, record.Effective) {
-		t.Errorf("index %d explicit form does not match effective: explicit=%+v effective=%+v", index, explicit, record.Effective)
+	if len(validateApprovalSchema(approval)) != 0 {
+		t.Errorf("index %d configured record fails strict schema: %+v", index, approval)
 	}
 }

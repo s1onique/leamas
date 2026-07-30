@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"go/token"
 	"go/types"
-	"strings"
 )
 
 type resolvedApproval struct {
@@ -20,79 +19,83 @@ type resolvedApproval struct {
 	validated         bool
 }
 
+// resolveConfiguredApprovals validates every configured approval against the
+// strict schema, marks malformed records as invalid without inferring any
+// field, then resolves only the schema-valid records against the canonical
+// package graph.
+//
+// The required order is fixed:
+//
+//	allocate one approval state per configured record
+//	→ validate schema (no mutation, no inference)
+//	→ mark malformed states invalid and emit typed schema findings
+//	→ count exact schema-valid records
+//	→ detect exact duplicates
+//	→ resolve callers
+//	→ resolve callees
+//	→ mark valid
+//
+// Malformed approvals MUST NOT participate in:
+//   - duplicate normalization / duplicate detection
+//   - caller candidate lookup
+//   - callee lookup
+//   - observed-edge matching
+//   - stale-approval checking
+//   - cardinality checking
+//
+// A malformed schema finding MUST NOT cascade into caller_missing,
+// callee_missing, stale_approval, or edge_cardinality_mismatch findings.
 func (a *canonicalAnalysis) resolveConfiguredApprovals() {
-	normalized := make([]ApprovedCaller, len(a.config.approvals))
+	a.approvalStates = make([]resolvedApproval, len(a.config.approvals))
+	schemaValid := make([]bool, len(a.config.approvals))
 	counts := make(map[ApprovedCaller]int)
+
+	// Phase 1: allocate, validate schema, count schema-valid records.
 	for index, approval := range a.config.approvals {
-		normalized[index] = normalizeApproval(approval)
-		counts[normalized[index]]++
+		a.approvalStates[index] = resolvedApproval{approval: approval}
+		issues := validateApprovalSchema(approval)
+		if len(issues) > 0 {
+			for _, issue := range issues {
+				a.schemaApprovalFinding(issue, approval)
+			}
+			schemaValid[index] = false
+			continue
+		}
+		schemaValid[index] = true
+		counts[approval]++
 	}
 
-	a.approvalStates = make([]resolvedApproval, len(normalized))
-	for index, approval := range normalized {
-		state := resolvedApproval{approval: approval}
+	// Phase 2: duplicate detection, caller/callee resolution for the
+	// schema-valid records only.
+	for index, approval := range a.config.approvals {
+		if !schemaValid[index] {
+			continue
+		}
+		state := &a.approvalStates[index]
 		if counts[approval] > 1 {
 			state.duplicate = true
 			a.approvalFinding("authority_policy_duplicate_approval", approval, "approval appears more than once")
-			a.approvalStates[index] = state
-			continue
-		}
-		if invalidCallerApproval(approval) {
-			a.approvalFinding("authority_policy_caller_missing", approval, "caller identity is empty, wildcarded, or unstable")
-			a.approvalStates[index] = state
 			continue
 		}
 		candidates := a.callerCandidates[approvalCallerIdentity(approval)]
 		switch len(candidates) {
 		case 0:
 			a.approvalFinding("authority_policy_caller_missing", approval, "configured caller declaration not found")
-			a.approvalStates[index] = state
 			continue
 		case 1:
 			state.callerObject = candidates[0]
 		default:
 			a.approvalFinding("authority_policy_caller_ambiguous", approval, "configured caller resolves more than once")
-			a.approvalStates[index] = state
 			continue
 		}
 		calleeObject := a.objectByProtected[approval.Callee]
 		if calleeObject == nil {
 			a.approvalFinding("authority_policy_callee_missing", approval, "configured callee declaration did not resolve")
-			a.approvalStates[index] = state
-			continue
-		}
-		if !validApprovalReferenceClass(approval.ReferenceClass) {
-			a.approvalFinding("authority_policy_reference_class_mismatch", approval, "unknown or declaration-only reference class")
-			a.approvalStates[index] = state
 			continue
 		}
 		state.calleeObject = calleeObject
 		state.valid = true
-		a.approvalStates[index] = state
 	}
-}
-
-func normalizeApproval(approval ApprovedCaller) ApprovedCaller {
-	if approval.CallerKind == "" {
-		approval.CallerKind = CallerKindPackageFunction
-		if approval.Receiver != "" {
-			approval.CallerKind = CallerKindMethod
-		}
-	}
-	if approval.ReferenceClass == "" {
-		approval.ReferenceClass = refDirectCall
-	}
-	if approval.Cardinality <= 0 {
-		approval.Cardinality = 1
-	}
-	return approval
-}
-
-func invalidCallerApproval(approval ApprovedCaller) bool {
-	return approval.PackagePath == "" || approval.Function == "" ||
-		strings.ContainsAny(approval.Function, "*@") ||
-		strings.Contains(approval.PackagePath, "*") ||
-		strings.Contains(approval.Receiver, "*")
 }
 
 func approvalCallerIdentity(approval ApprovedCaller) CallerIdentity {
@@ -101,15 +104,6 @@ func approvalCallerIdentity(approval ApprovedCaller) CallerIdentity {
 		Function:    approval.Function,
 		Receiver:    approval.Receiver,
 		Kind:        approval.CallerKind,
-	}
-}
-
-func validApprovalReferenceClass(class ReferenceClass) bool {
-	switch class {
-	case refDirectCall, refFunctionValue, refMethodValue, refMethodExpression, refPackageVariable, refDotImport:
-		return true
-	default:
-		return false
 	}
 }
 
@@ -185,6 +179,21 @@ func (a *canonicalAnalysis) approvalFinding(kind string, approval ApprovedCaller
 	caller := approvalCallerIdentity(approval)
 	message := fmt.Sprintf("approval %s -> %s [%s]: %s", callerIdentityString(caller), protectedSymbolString(approval.Callee), approval.ReferenceClass, detail)
 	a.addFinding(approval.PackagePath, kind, message, token.Position{}, caller, approval.Callee, approval.ReferenceClass)
+}
+
+// schemaApprovalFinding emits a typed schema finding without mutating or
+// normalizing the supplied approval. The detail field is the message category
+// from validateApprovalSchema so the emitted finding is deterministic.
+func (a *canonicalAnalysis) schemaApprovalFinding(issue approvalSchemaIssue, approval ApprovedCaller) {
+	caller := approvalCallerIdentity(approval)
+	message := fmt.Sprintf(
+		"approval %s -> %s: field=%s %s",
+		callerIdentityString(caller),
+		protectedSymbolString(approval.Callee),
+		issue.Field,
+		issue.Message,
+	)
+	a.addFinding(approval.PackagePath, issue.Kind, message, token.Position{}, caller, approval.Callee, approval.ReferenceClass)
 }
 
 func (a *canonicalAnalysis) edgeFinding(kind string, edge ObservedEdge, detail string) {
