@@ -87,7 +87,9 @@ func ValidatePlanStructural(data []byte) PlanValidationResult {
 // pipeline call. The observer is invocation-local; production
 // passes noopCompositionObserver{}.
 func validatePlanStructuralWithObserver(data []byte, observer compositionObserver) PlanValidationResult {
-	result := PlanValidationResult{Valid: true}
+	// Errors is initialised to a non-nil empty slice so success
+	// JSON encodes Errors as [] rather than null.
+	result := PlanValidationResult{Valid: true, Errors: []PlanValidationError{}}
 	root, diagnostics := parseBoundedClosurePlanDocument(data)
 	observer.Parsed()
 	if len(diagnostics) > 0 {
@@ -103,16 +105,20 @@ func validatePlanStructuralWithObserver(data []byte, observer compositionObserve
 // been produced by parseClosurePlanDocument.
 func validatePlanStructuralFromRootWithObserver(root any, observer compositionObserver) PlanValidationResult {
 	_ = observer
-	result := PlanValidationResult{Valid: true}
+	// Errors is initialised to a non-nil empty slice so success
+	// JSON encodes Errors as [] rather than null. The structural
+	// Errors array is assigned only when at least one diagnostic
+	// was found, so the empty slice is preserved on success.
+	result := PlanValidationResult{Valid: true, Errors: []PlanValidationError{}}
 	contract := planContractV1()
 	diagnostics := validatePlanObject(contract.Root, root, contract, "")
 	result.ContractVersion = recoverContractVersion(root)
 	if len(diagnostics) == 0 {
 		diagnostics = append(diagnostics, ValidateModeDependentApplicability(root, contract)...)
 	}
-	result.Errors = diagnostics
-	sortDiagnostics(result.Errors)
-	if len(result.Errors) > 0 {
+	if len(diagnostics) > 0 {
+		sortDiagnostics(diagnostics)
+		result.Errors = diagnostics
 		result.Valid = false
 	}
 	return result

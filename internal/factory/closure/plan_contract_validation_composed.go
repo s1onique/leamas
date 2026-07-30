@@ -1,7 +1,6 @@
 package closure
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -44,7 +43,7 @@ type ComposedPlanValidationResult struct {
 // observer. There is no package-global mutable counter.
 func validatePlanComposedWithObserver(data []byte, observer compositionObserver) ComposedPlanValidationResult {
 	result := ComposedPlanValidationResult{
-		Structural: PlanValidationResult{Errors: []PlanValidationError{}},
+		Structural:     PlanValidationResult{Errors: []PlanValidationError{}},
 		DecodeErrors:   []PlanValidationError{},
 		SemanticErrors: []PlanValidationError{},
 	}
@@ -110,19 +109,6 @@ func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error
 		return result.Structural, errorFromDiagnostics(result.SemanticErrors)
 	}
 	return result.Structural, nil
-}
-
-// firstSemanticError returns the first error message of the typed
-// semantic diagnostics so the legacy DecodePlan (Plan, error)
-// wrapper continues to work. The structured JSON result exposes
-// the full diagnostics; this helper only produces a one-line
-// summary for the legacy error-returning path.
-func firstSemanticError(result ComposedPlanValidationResult) error {
-	if len(result.SemanticErrors) == 0 {
-		return fmt.Errorf("semantic validation failed")
-	}
-	d := result.SemanticErrors[0]
-	return fmt.Errorf("%s: %s", d.InstancePath, d.Message)
 }
 
 // typedDecodeDiagnostic wraps a typed-decode error as a
