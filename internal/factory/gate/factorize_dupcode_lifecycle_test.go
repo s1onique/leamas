@@ -105,8 +105,10 @@ func TestFactorizeFirstConsumerInitializesOnce(t *testing.T) {
 }
 
 // TestFactorizeSecondConsumerReusesCachedResult proves a second
-// invocation of ConsumedBy returns the cached analysis without
-// invoking the analyzer again.
+// invocation of ConsumedBy returns an analysis derived from the
+// same underlying scan (single analyzer call) without invoking the
+// analyzer again. The result is a defensive copy so callers may
+// mutate their view without affecting siblings.
 func TestFactorizeSecondConsumerReusesCachedResult(t *testing.T) {
 	calls := &atomic.Int64{}
 	analyzer := countingAnalyzer(dummyFindings(), calls)
@@ -126,8 +128,39 @@ func TestFactorizeSecondConsumerReusesCachedResult(t *testing.T) {
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("analyzer calls after two consumers = %d, want 1", got)
 	}
-	if first != second {
-		t.Fatalf("first=%p second=%p; expected the same cached pointer", first, second)
+	if first == second {
+		t.Fatalf("first=%p second=%p; expected defensive copies (no aliasing)", first, second)
+	}
+	if len(first.Findings) != len(second.Findings) {
+		t.Fatalf("first findings=%d second findings=%d; expected the same logical content",
+			len(first.Findings), len(second.Findings))
+	}
+}
+
+// TestFactorizeConsumerResultIsolation proves that mutating one
+// consumer's analysis view does not affect another consumer's view.
+// The cache shares computation; consumer-visible results are isolated.
+func TestFactorizeConsumerResultIsolation(t *testing.T) {
+	calls := &atomic.Int64{}
+	analyzer := countingAnalyzer(dummyFindings(), calls)
+	provider := providerForTest(analyzer)
+
+	input := protectedverifier.DupcodeInput{
+		Root: ".", MinLines: 40, MinTokens: 400, Config: dupcode.DefaultConfig(),
+	}
+	first, err := provider.ConsumedBy("dupcode", input)
+	if err != nil {
+		t.Fatalf("first ConsumedBy: %v", err)
+	}
+	second, err := provider.ConsumedBy("dupcode", input)
+	if err != nil {
+		t.Fatalf("second ConsumedBy: %v", err)
+	}
+	originalLen := len(second.Findings)
+	first.Findings = append(first.Findings, dupcode.Finding{Fingerprint: "mutated"})
+	if len(second.Findings) != originalLen {
+		t.Fatalf("mutating first mutated second's view: first=%d second=%d (expected %d)",
+			len(first.Findings), len(second.Findings), originalLen)
 	}
 }
 

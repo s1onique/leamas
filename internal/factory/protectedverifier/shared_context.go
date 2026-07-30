@@ -56,6 +56,61 @@ type DupcodeAnalysis struct {
 	Config      dupcode.Config
 }
 
+// dupcodeInputsEqual compares two DupcodeInput values across every
+// field that influences scan behavior. Two inputs are equal only when
+// the analyzer would produce identical results for both.
+func dupcodeInputsEqual(a, b DupcodeInput) bool {
+	if a.Root != b.Root || a.MinLines != b.MinLines || a.MinTokens != b.MinTokens {
+		return false
+	}
+	ac, bc := a.Config, b.Config
+	if ac.Root != bc.Root || ac.MinLines != bc.MinLines || ac.MinTokens != bc.MinTokens {
+		return false
+	}
+	if ac.IgnoreGenerated != bc.IgnoreGenerated {
+		return false
+	}
+	if !stringSlicesEqual(ac.ExcludeDirs, bc.ExcludeDirs) {
+		return false
+	}
+	if !stringSlicesEqual(ac.ExcludeFileSuffixes, bc.ExcludeFileSuffixes) {
+		return false
+	}
+	return true
+}
+
+// stringSlicesEqual compares two []string values element-by-element.
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// dupcodeAnalysisCopy returns a deep copy of the analysis so callers
+// can mutate their returned value without affecting siblings or the
+// cached provider state.
+func dupcodeAnalysisCopy(a *DupcodeAnalysis) *DupcodeAnalysis {
+	if a == nil {
+		return nil
+	}
+	out := &DupcodeAnalysis{
+		Config: a.Config,
+	}
+	out.Findings = make([]dupcode.Finding, len(a.Findings))
+	copy(out.Findings, a.Findings)
+	if len(a.Occurrences) > 0 {
+		out.Occurrences = make([]dupcode.Occurrence, len(a.Occurrences))
+		copy(out.Occurrences, a.Occurrences)
+	}
+	return out
+}
+
 // NewDupcodeAnalysisProvider creates a provider with the given input and analyzer.
 // The analyzer must be supplied explicitly; the package holds no global
 // analyzer state and never falls back to a default. The same analyzer is
@@ -76,11 +131,14 @@ func NewDupcodeAnalysisProvider(input DupcodeInput, analyzer DupcodeAnalyzer) *D
 // The analysis is performed exactly once, with subsequent calls returning
 // the cached result (success or failure).
 func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*DupcodeAnalysis, error) {
-	if input.Root != p.input.Root || input.MinLines != p.input.MinLines || input.MinTokens != p.input.MinTokens {
+	if !dupcodeInputsEqual(p.input, input) {
 		return nil, fmt.Errorf("dupcode analysis input mismatch for %s: "+
-			"got root=%s minLines=%d minTokens=%d, want root=%s minLines=%d minTokens=%d",
+			"got root=%s minLines=%d minTokens=%d excludeDirs=%v excludeSuffixes=%v ignoreGenerated=%v, "+
+			"want root=%s minLines=%d minTokens=%d excludeDirs=%v excludeSuffixes=%v ignoreGenerated=%v",
 			name, input.Root, input.MinLines, input.MinTokens,
-			p.input.Root, p.input.MinLines, p.input.MinTokens)
+			input.Config.ExcludeDirs, input.Config.ExcludeFileSuffixes, input.Config.IgnoreGenerated,
+			p.input.Root, p.input.MinLines, p.input.MinTokens,
+			p.input.Config.ExcludeDirs, p.input.Config.ExcludeFileSuffixes, p.input.Config.IgnoreGenerated)
 	}
 
 	p.mu.Lock()
@@ -121,7 +179,11 @@ func (p *DupcodeAnalysisProvider) ConsumedBy(name string, input DupcodeInput) (*
 		if p.initialFailure != nil {
 			return nil, p.initialFailure.err
 		}
-		return p.analysis, nil
+		// Return a defensive deep copy so callers may mutate the
+		// returned analysis without affecting siblings or the cached
+		// provider state. The computation is shared; the consumer-
+		// visible result is not aliased.
+		return dupcodeAnalysisCopy(p.analysis), nil
 
 	default:
 		return nil, fmt.Errorf("dupcode analysis: unexpected state %v", p.state)
