@@ -124,69 +124,68 @@ var ApprovedCallers = []ApprovedCaller{
 	},
 }
 
-// dupcodeInternalApprovedCallers defines approved callers inside the dupcode
-// package itself for its own intra-package helpers. These are legitimate
-// internal implementation edges. The dupcode package is fully protected, so
-// ANY caller — internal or external — is matched against this list.
+// dupcodeInternalApprovedCallers records exact implementation-internal raw
+// edges. They are validated bidirectionally like every external edge.
 var dupcodeInternalApprovedCallers = []ApprovedCaller{
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 		Function:    "CheckReport",
-		Receiver:    "",
 		Callee: ProtectedSymbol{
-			Layer:       AuthorityLayerRaw,
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "CheckRepo",
-			Kind:        ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "CheckRepo", Kind: ProtectedPackageFunction,
 		},
 	},
 	{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
 		Function:    "CheckBaselineDrift",
-		Receiver:    "",
 		Callee: ProtectedSymbol{
-			Layer:       AuthorityLayerRaw,
-			PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
-			Name:        "CheckReport",
-			Kind:        ProtectedPackageFunction,
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "CheckReport", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+		Function:    "VerifyBaseline",
+		Callee: ProtectedSymbol{
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "ValidateBaselineArtifact", Kind: ProtectedPackageFunction,
+		},
+	},
+	{
+		PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+		Function:    "CheckBaselineDrift",
+		Callee: ProtectedSymbol{
+			Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode",
+			Name: "CheckBaselineDriftFromReport", Kind: ProtectedPackageFunction,
 		},
 	},
 }
 
-// IsApprovedCaller checks if a caller-callee edge is approved for EITHER layer.
-// Function and Receiver must match exactly. Empty Function is invalid.
-//
-// No wildcards. Every approved edge must correspond to an exact named caller
-// declaration in ApprovedCallers or AdapterApprovedCallers. Internal
-// implementation-package edges (e.g., helper functions inside dupcode) must
-// be listed explicitly when needed.
+func allApprovedCallers() []ApprovedCaller {
+	capacity := len(ApprovedCallers) + len(dupcodeInternalApprovedCallers) + len(AdapterApprovedCallers) + len(GateApprovedCallers)
+	out := make([]ApprovedCaller, 0, capacity)
+	out = append(out, ApprovedCallers...)
+	out = append(out, dupcodeInternalApprovedCallers...)
+	out = append(out, AdapterApprovedCallers...)
+	out = append(out, GateApprovedCallers...)
+	return out
+}
+
+// IsApprovedCaller remains a strict declarative query for callers outside the
+// full analysis pipeline. The canonical analysis additionally requires exact
+// types.Object and reference-class identity.
 func IsApprovedCaller(caller CallerIdentity, callee ProtectedSymbol) bool {
-	approved := ApprovedCallers
-	if callee.Layer == AuthorityLayerAdapter {
-		approved = AdapterApprovedCallers
+	if caller.Kind == "" {
+		caller.Kind = CallerKindPackageFunction
+		if caller.Receiver != "" {
+			caller.Kind = CallerKindMethod
+		}
 	}
-	if callee.Layer == AuthorityLayerRaw && caller.PackagePath == callee.PackagePath {
-		// Internal dupcode-package calls require explicit intra-package approval.
-		approved = append(approved, dupcodeInternalApprovedCallers...)
-	}
-	for _, ac := range approved {
-		if ac.PackagePath != caller.PackagePath {
-			continue
+	for _, configured := range allApprovedCallers() {
+		approval := normalizeApproval(configured)
+		if approvalCallerIdentity(approval) == caller && approval.Callee == callee {
+			return true
 		}
-		if ac.Callee.PackagePath != callee.PackagePath ||
-			ac.Callee.Name != callee.Name ||
-			ac.Callee.Kind != callee.Kind ||
-			ac.Callee.Receiver != callee.Receiver ||
-			ac.Callee.Layer != callee.Layer {
-			continue
-		}
-		if ac.Function == "" || ac.Function != caller.Function {
-			continue
-		}
-		if ac.Receiver != caller.Receiver {
-			continue
-		}
-		return true
 	}
 	return false
 }

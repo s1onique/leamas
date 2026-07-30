@@ -139,6 +139,18 @@ func (l *factorizeDupcodeLifecycle) initialize() {
 }
 
 func (l *factorizeDupcodeLifecycle) run(name string) []checks.Finding {
+	if name != "dupcode" && name != "dupcode-baseline" {
+		return []checks.Finding{{
+			Path:     "dupcode",
+			Kind:     "factorize_internal_invariant",
+			Message:  fmt.Sprintf("unknown factorize dupcode lifecycle consumer: %q", name),
+			Severity: checks.SeverityError,
+		}}
+	}
+
+	// Dependency panics intentionally propagate. sync.Once therefore marks a
+	// panicking initialization complete; panic containment remains a separate
+	// policy decision and is not silently introduced at this boundary.
 	l.once.Do(l.initialize)
 	if l.initErr != nil {
 		return []checks.Finding{{
@@ -148,10 +160,14 @@ func (l *factorizeDupcodeLifecycle) run(name string) []checks.Finding {
 			Severity: checks.SeverityError,
 		}}
 	}
-	if name == "dupcode" {
+	switch name {
+	case "dupcode":
 		return l.dupcodeRun(l.root)
+	case "dupcode-baseline":
+		return l.baselineRun(l.root)
+	default:
+		panic("unreachable factorize dupcode lifecycle consumer")
 	}
-	return l.baselineRun(l.root)
 }
 
 // FactorizeVerifiersWithDupcodeContext constructs one data-only factorize

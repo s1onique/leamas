@@ -7,240 +7,149 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
-	"path/filepath"
 	"strconv"
 
-	"github.com/s1onique/leamas/internal/factory/checks"
 	"golang.org/x/tools/go/packages"
 )
 
-// callerIdentity derives the enclosing caller using the ancestor stack.
-func callerIdentity(pkgPath string, ancestors []ast.Node, fset *token.FileSet) CallerIdentity {
-	for i := len(ancestors) - 1; i >= 0; i-- {
-		switch a := ancestors[i].(type) {
-		case *ast.FuncLit:
-			pos := fset.Position(a.Pos())
-			return CallerIdentity{
-				PackagePath: pkgPath,
-				Function:    fmt.Sprintf("func@%d:%d", pos.Line, pos.Column),
-				Kind:        "function_literal",
-			}
-		case *ast.FuncDecl:
-			id := CallerIdentity{
-				PackagePath: pkgPath,
-				Function:    a.Name.Name,
-				Kind:        "package_function",
-			}
-			if a.Recv != nil {
-				id.Receiver = recvTypeNameFromAST(a.Recv)
-				id.Kind = "method"
-			}
-			return id
+func (a *canonicalAnalysis) scanProtectedReferences() {
+	for _, pkg := range a.packages {
+		for _, syntax := range a.syntaxFiles(pkg) {
+			a.scanFile(pkg, syntax.filename, syntax.file)
 		}
 	}
-	for i := len(ancestors) - 1; i >= 0; i-- {
-		if gd, ok := ancestors[i].(*ast.GenDecl); ok {
-			if gd.Tok == token.VAR {
-				for _, spec := range gd.Specs {
-					if vspec, ok := spec.(*ast.ValueSpec); ok && vspec.Values != nil {
-						if len(vspec.Names) > 0 {
-							return CallerIdentity{
-								PackagePath: pkgPath,
-								Function:    "<var-init:" + vspec.Names[0].Name + ">",
-								Kind:        "variable_initializer",
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return CallerIdentity{PackagePath: pkgPath, Function: "<init>", Kind: "package_init"}
 }
 
-func recvTypeNameFromAST(recv *ast.FieldList) string {
-	if recv == nil || len(recv.List) == 0 {
-		return ""
-	}
-	switch t := recv.List[0].Type.(type) {
-	case *ast.Ident:
-		return t.Name
-	case *ast.StarExpr:
-		if id, ok := t.X.(*ast.Ident); ok {
-			return id.Name
-		}
-	}
-	return ""
-}
+func (a *canonicalAnalysis) scanFile(pkg *packages.Package, filename string, file *ast.File) {
+	path := a.relativePath(filename)
+	dotImports := a.classifyDotImports(pkg, path, file)
 
-// analyzeFile uses PreorderStack to track caller via ancestor stack and to
-// structurally classify protected references.
-func (p *DupcodeBypassPolicy) analyzeFile(pkg *packages.Package, filename string, file *ast.File) []checks.Finding {
-	var findings []checks.Finding
-	relPath, _ := filepath.Rel(p.repoRoot, filename)
-
-	// Phase 0: validate configured protected declarations before any use scan.
-	findings = append(findings, p.resolveProtectedDeclarations(pkg, file)...)
-
-	// Phase 1: detect dot imports with proper Go-literal decoding.
-	for _, imp := range file.Imports {
-		if imp.Name != nil && imp.Name.Name == "." {
-			path, err := strconv.Unquote(imp.Path.Value)
-			if err != nil {
-				findings = append(findings, checks.Finding{
-					Path: relPath, Kind: "dupcode_import_path_error",
-					Message: fmt.Sprintf("line %d: malformed import literal: %v",
-						pkg.Fset.Position(imp.Pos()).Line, err),
-					Severity: checks.SeverityError,
-				})
-				continue
-			}
-			if isProtectedPackage(path) || isAdapterProtectedPackage(path) {
-				findings = append(findings, checks.Finding{
-					Path: relPath, Kind: "dupcode_dot_import",
-					Message: fmt.Sprintf("line %d: dot import of protected package %s is forbidden",
-						pkg.Fset.Position(imp.Pos()).Line, path),
-					Severity: checks.SeverityError,
-				})
-			}
-		}
-	}
-
-	// Phase 2: classify protected references with structural parent-role detection.
-	ast.PreorderStack(file, nil, func(n ast.Node, ancestors []ast.Node) bool {
-		switch node := n.(type) {
+	ast.PreorderStack(file, nil, func(node ast.Node, ancestors []ast.Node) bool {
+		switch typed := node.(type) {
 		case *ast.CallExpr:
-			caller := callerIdentity(pkg.PkgPath, ancestors, pkg.Fset)
-
-			class := refDirectCall
-			if sel, ok := node.Fun.(*ast.SelectorExpr); ok {
-				if s, ok := pkg.TypesInfo.Selections[sel]; ok && s.Kind() == types.MethodExpr {
-					class = refMethodExpression
-				}
-			}
-
-			callee, ok := p.resolveProtectedUse(pkg, node.Fun, class)
-			if !ok {
+			object, symbol, protected := a.protectedObjectForExpr(pkg, typed.Fun)
+			if !protected {
 				return true
 			}
-			// Same-package skip REMOVED. Every legitimate same-package
-			// protected use must be approved via an exact edge in
-			// ApprovedCallers / AdapterApprovedCallers.
-			if IsApprovedCaller(caller, callee) {
+			a.markDirectCallee(pkg.Fset, typed.Fun)
+			class := referenceClassFor(pkg, typed.Fun, object, true)
+			if objectFromDotImport(object, dotImports) {
+				class = refDotImport
+			}
+			a.observeEdge(pkg, path, typed.Fun.Pos(), ancestors, object, symbol, class)
+		case *ast.SelectorExpr:
+			if a.insideDirectCallee(pkg.Fset, typed.Pos()) {
 				return true
 			}
-			line := pkg.Fset.Position(node.Pos()).Line
-			kind := "dupcode_bypass"
-			if callee.Layer == AuthorityLayerAdapter {
-				kind = "dupcode_adapter_bypass"
-			}
-			findings = append(findings, checks.Finding{
-				Path: relPath, Kind: kind,
-				Message: fmt.Sprintf("line %d: %s.%s called by %s.%s",
-					line, callee.PackagePath, callee.Name,
-					caller.PackagePath, caller.Function),
-				Severity: checks.SeverityError,
-			})
-			// Mark the entire CallExpr.Fun subtree as belonging to this
-			// direct call, so children are not reclassified as function
-			// values. Do NOT prune call arguments.
-			markDirectCalleeSubtree(pkg.Fset, node)
-			return true
-
-		case *ast.SelectorExpr, *ast.Ident:
-			if isInsideDirectCalleeSubtree(pkg, node) {
+			object, symbol, protected := a.protectedObjectForExpr(pkg, typed)
+			if !protected {
 				return true
 			}
-			caller := callerIdentity(pkg.PkgPath, ancestors, pkg.Fset)
-
-			var class referenceClass
-			switch node.(type) {
-			case *ast.SelectorExpr:
-				class = refMethodValue
-			case *ast.Ident:
-				class = refFunctionValue
-			default:
+			class := referenceClassFor(pkg, typed, object, false)
+			if objectFromDotImport(object, dotImports) {
+				class = refDotImport
+			}
+			a.observeEdge(pkg, path, typed.Pos(), ancestors, object, symbol, class)
+		case *ast.Ident:
+			if a.insideDirectCallee(pkg.Fset, typed.Pos()) || identifierIsSelectorChild(typed, ancestors) {
 				return true
 			}
-
-			callee, ok := p.resolveProtectedUse(pkg, node.(ast.Expr), class)
-			if !ok {
+			object, symbol, protected := a.protectedObjectForExpr(pkg, typed)
+			if !protected {
 				return true
 			}
-			if IsApprovedCaller(caller, callee) {
-				return true
+			class := referenceClassFor(pkg, typed, object, false)
+			if objectFromDotImport(object, dotImports) {
+				class = refDotImport
 			}
-			line := pkg.Fset.Position(node.Pos()).Line
-			kind := "dupcode_protected_function_value"
-			if callee.Layer == AuthorityLayerAdapter {
-				kind = "dupcode_adapter_function_value"
-			}
-			findings = append(findings, checks.Finding{
-				Path: relPath, Kind: kind,
-				Message: fmt.Sprintf("line %d: protected function value %s.%s captured by %s.%s",
-					line, callee.PackagePath, callee.Name,
-					caller.PackagePath, caller.Function),
-				Severity: checks.SeverityError,
-			})
+			a.observeEdge(pkg, path, typed.Pos(), ancestors, object, symbol, class)
 		}
 		return true
 	})
-
-	return findings
 }
 
-// directCalleeRange represents the byte range of a CallExpr.Fun subtree.
-type directCalleeRange struct {
-	start token.Pos
-	end   token.Pos
+func (a *canonicalAnalysis) classifyDotImports(
+	pkg *packages.Package,
+	path string,
+	file *ast.File,
+) map[string]bool {
+	dotImports := make(map[string]bool)
+	for _, declaration := range file.Imports {
+		if declaration.Name == nil || declaration.Name.Name != "." {
+			continue
+		}
+		importPath, err := strconv.Unquote(declaration.Path.Value)
+		position := pkg.Fset.PositionFor(declaration.Pos(), true)
+		if err != nil {
+			a.addFinding(path, "dupcode_import_path_error", fmt.Sprintf("malformed import literal: %v", err), position, CallerIdentity{}, ProtectedSymbol{}, refDotImport)
+			continue
+		}
+		if !a.configuresPackage(importPath) {
+			continue
+		}
+		dotImports[importPath] = true
+		a.addFinding(path, "dupcode_dot_import", fmt.Sprintf("dot import of protected package %s is forbidden", importPath), position, CallerIdentity{}, ProtectedSymbol{PackagePath: importPath}, refDotImport)
+	}
+	return dotImports
 }
 
-// perFileSetCalleeRanges tracks direct-callee ranges per FileSet.
-type perFileSetCalleeRanges struct {
-	ranges []directCalleeRange
-}
-
-func (d *perFileSetCalleeRanges) contains(p token.Pos) bool {
-	for _, r := range d.ranges {
-		if p >= r.start && p <= r.end {
+func (a *canonicalAnalysis) configuresPackage(path string) bool {
+	for _, symbol := range a.config.protected {
+		if symbol.PackagePath == path {
 			return true
 		}
 	}
 	return false
 }
 
-// packageDirectCalleeRanges stores per-package direct-callee ranges,
-// keyed by *token.FileSet (a pointer comparable type).
-var packageDirectCalleeRanges = map[*token.FileSet]*perFileSetCalleeRanges{}
+func objectFromDotImport(object types.Object, dotImports map[string]bool) bool {
+	return object != nil && object.Pkg() != nil && dotImports[object.Pkg().Path()]
+}
 
-func markDirectCalleeSubtree(fset *token.FileSet, call *ast.CallExpr) {
-	if fset == nil || call == nil || call.Fun == nil {
-		return
-	}
-	d, ok := packageDirectCalleeRanges[fset]
-	if !ok {
-		d = &perFileSetCalleeRanges{}
-		packageDirectCalleeRanges[fset] = d
-	}
-	d.ranges = append(d.ranges, directCalleeRange{
-		start: call.Fun.Pos(),
-		end:   call.Fun.End(),
+func (a *canonicalAnalysis) observeEdge(
+	pkg *packages.Package,
+	path string,
+	position token.Pos,
+	ancestors []ast.Node,
+	calleeObject types.Object,
+	callee ProtectedSymbol,
+	class ReferenceClass,
+) {
+	caller, callerObject := a.callerForUse(pkg, ancestors, position)
+	a.observedEdges = append(a.observedEdges, ObservedEdge{
+		Caller:         caller,
+		Callee:         callee,
+		ReferenceClass: class,
+		Path:           path,
+		Position:       pkg.Fset.PositionFor(position, true),
+		callerObject:   callerObject,
+		calleeObject:   calleeObject,
 	})
 }
 
-func isInsideDirectCalleeSubtree(pkg *packages.Package, n ast.Node) bool {
-	if pkg == nil || pkg.Fset == nil || n == nil {
-		return false
+func (a *canonicalAnalysis) markDirectCallee(fileSet *token.FileSet, expression ast.Expr) {
+	if fileSet == nil || expression == nil {
+		return
 	}
-	d, ok := packageDirectCalleeRanges[pkg.Fset]
-	if !ok {
-		return false
-	}
-	return d.contains(n.Pos())
+	a.directCalleeRanges[fileSet] = append(a.directCalleeRanges[fileSet], sourceRange{
+		start: expression.Pos(),
+		end:   expression.End(),
+	})
 }
 
-// resetDirectCalleeRanges clears the per-file-set ranges. Tests may call this
-// between scans to keep state isolated.
-func resetDirectCalleeRanges() {
-	packageDirectCalleeRanges = map[*token.FileSet]*perFileSetCalleeRanges{}
+func (a *canonicalAnalysis) insideDirectCallee(fileSet *token.FileSet, position token.Pos) bool {
+	for _, source := range a.directCalleeRanges[fileSet] {
+		if position >= source.start && position <= source.end {
+			return true
+		}
+	}
+	return false
+}
+
+func identifierIsSelectorChild(identifier *ast.Ident, ancestors []ast.Node) bool {
+	if len(ancestors) == 0 {
+		return false
+	}
+	selector, ok := ancestors[len(ancestors)-1].(*ast.SelectorExpr)
+	return ok && (selector.Sel == identifier || selector.X == identifier)
 }

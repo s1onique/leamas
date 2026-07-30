@@ -127,14 +127,13 @@ func TestProtectedKindValidation_AdapterMethodKindRejected(t *testing.T) {
 	}
 }
 
-// TestAdapterApprovedCallers_ContainsBinderEdges proves that AdapterApprovedCallers
-// contains edges for the named post-authority binders.
-func TestAdapterApprovedCallers_ContainsBinderEdges(t *testing.T) {
+// TestAdapterApprovedCallers_ContainsObservedEdges proves that the configured
+// inventory contains real source edges rather than dynamic-interface fiction.
+func TestAdapterApprovedCallers_ContainsObservedEdges(t *testing.T) {
 	expected := []ApprovedCaller{
 		{
 			PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
-			Function:    "run",
-			Receiver:    "DupcodeVerifyBinder",
+			Function:    "newProtectedDupcodeRunner",
 			Callee: ProtectedSymbol{
 				Layer:       AuthorityLayerAdapter,
 				PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
@@ -155,8 +154,8 @@ func TestAdapterApprovedCallers_ContainsBinderEdges(t *testing.T) {
 		},
 		{
 			PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
-			Function:    "run",
-			Receiver:    "DupcodeBaselineBinder",
+			Function:    "VerifyBaseline",
+			Receiver:    "protectedDupcodeRunnerAdapter",
 			Callee: ProtectedSymbol{
 				Layer:       AuthorityLayerAdapter,
 				PackagePath: "github.com/s1onique/leamas/internal/factory/protectedverifier",
@@ -293,8 +292,8 @@ func TestIsApprovedCaller_RejectsWrongKind(t *testing.T) {
 func TestIsApprovedCaller_RejectsWrongReceiver(t *testing.T) {
 	caller := CallerIdentity{
 		PackagePath: "github.com/s1onique/leamas/internal/factory/gate",
-		Function:    "run",
-		Receiver:    "DupcodeVerifyBinder",
+		Function:    "LoadBaseline",
+		Receiver:    "protectedDupcodeRunnerAdapter",
 	}
 	wrong := ProtectedSymbol{
 		Layer:       AuthorityLayerAdapter,

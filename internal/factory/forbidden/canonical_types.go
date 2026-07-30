@@ -7,61 +7,68 @@ import (
 	"strings"
 )
 
-// AuthorityLayer distinguishes between raw protected operations and adapter capabilities.
+// AuthorityLayer identifies one protected capability boundary.
 type AuthorityLayer string
 
 const (
-	// AuthorityLayerRaw protects raw dupcode package-level operations.
-	AuthorityLayerRaw AuthorityLayer = "raw_dupcode"
-	// AuthorityLayerAdapter protects protectedverifier adapter capabilities.
+	AuthorityLayerRaw     AuthorityLayer = "raw_dupcode"
 	AuthorityLayerAdapter AuthorityLayer = "protected_adapter"
+	AuthorityLayerGate    AuthorityLayer = "factorize_gate"
 )
 
-// ProtectedSymbolKind is the kind of a protected symbol.
+// ProtectedSymbolKind is the configured declaration class.
 type ProtectedSymbolKind string
 
 const (
 	ProtectedPackageFunction ProtectedSymbolKind = "package_function"
 	ProtectedMethod          ProtectedSymbolKind = "method"
-	// ProtectedPackageVariable is a package-level variable holding a function value.
 	ProtectedPackageVariable ProtectedSymbolKind = "package_variable"
 )
 
-// ProtectedSymbol represents an exact protected declaration.
+// ReferenceClass describes how source refers to a protected declaration.
+type ReferenceClass string
+
+type referenceClass = ReferenceClass
+
+const (
+	refDirectCall       ReferenceClass = "DIRECT_CALL"
+	refFunctionValue    ReferenceClass = "FUNCTION_VALUE"
+	refMethodValue      ReferenceClass = "METHOD_VALUE"
+	refMethodExpression ReferenceClass = "METHOD_EXPRESSION"
+	refPackageVariable  ReferenceClass = "PACKAGE_VARIABLE_REFERENCE"
+	refDotImport        ReferenceClass = "DOT_IMPORT"
+	refDeclaration      ReferenceClass = "DECLARATION"
+)
+
+const (
+	CallerKindPackageFunction     = "package_function"
+	CallerKindMethod              = "method"
+	CallerKindVariableInitializer = "variable_initializer"
+	CallerKindPackageInit         = "package_init"
+	CallerKindFunctionLiteral     = "function_literal"
+)
+
+// ProtectedSymbol is the declarative identity of one protected object.
 type ProtectedSymbol struct {
 	Layer       AuthorityLayer
 	PackagePath string
 	Name        string
 	Kind        ProtectedSymbolKind
-	// Receiver is required for ProtectedMethod.
-	Receiver string
-}
-
-// ApprovedCaller defines an exact approved caller edge.
-type ApprovedCaller struct {
-	PackagePath string
-	Function    string
 	Receiver    string
-	Callee      ProtectedSymbol
 }
 
-// DupcodeProtectedPrefixes defines protected package prefixes.
-var DupcodeProtectedPrefixes = []string{
-	"github.com/s1onique/leamas/internal/factory/dupcode",
+// ApprovedCaller declares one exact caller/callee/reference edge.
+type ApprovedCaller struct {
+	PackagePath    string
+	Function       string
+	Receiver       string
+	CallerKind     string
+	Callee         ProtectedSymbol
+	ReferenceClass ReferenceClass
+	Cardinality    int
 }
 
-// ProtectedSymbols defines exact raw-layer protected symbols.
-// Source of truth: internal/factory/dupcode
-var ProtectedSymbols = []ProtectedSymbol{
-	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
-	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckReport", Kind: ProtectedPackageFunction},
-	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "LoadBaseline", Kind: ProtectedPackageFunction},
-	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "VerifyBaseline", Kind: ProtectedPackageFunction},
-	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "WriteBaseline", Kind: ProtectedPackageFunction},
-	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CompareToBaseline", Kind: ProtectedPackageFunction},
-}
-
-// CallerIdentity identifies an enclosing caller.
+// CallerIdentity identifies a stable enclosing declaration.
 type CallerIdentity struct {
 	PackagePath string
 	Function    string
@@ -69,42 +76,72 @@ type CallerIdentity struct {
 	Kind        string
 }
 
-// ProtectedSymbolsMap returns a map for fast lookup.
+var DupcodeProtectedPrefixes = []string{
+	"github.com/s1onique/leamas/internal/factory/dupcode",
+}
+
+// ProtectedSymbols is the raw-layer declaration inventory.
+var ProtectedSymbols = []ProtectedSymbol{
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckRepo", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckReport", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "LoadBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "VerifyBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "WriteBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CompareToBaseline", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "ValidateBaselineArtifact", Kind: ProtectedPackageFunction},
+	{Layer: AuthorityLayerRaw, PackagePath: "github.com/s1onique/leamas/internal/factory/dupcode", Name: "CheckBaselineDriftFromReport", Kind: ProtectedPackageFunction},
+}
+
+var AdapterProtectedPrefixes = []string{
+	"github.com/s1onique/leamas/internal/factory/protectedverifier",
+}
+
+var GateProtectedPrefixes = []string{
+	"github.com/s1onique/leamas/internal/factory/gate",
+}
+
+func allProtectedSymbols() []ProtectedSymbol {
+	out := make([]ProtectedSymbol, 0, len(ProtectedSymbols)+len(AdapterProtectedSymbols)+len(GateProtectedSymbols))
+	out = append(out, ProtectedSymbols...)
+	out = append(out, AdapterProtectedSymbols...)
+	out = append(out, GateProtectedSymbols...)
+	return out
+}
+
+// ProtectedSymbolsMap returns configured package/name identities.
 func ProtectedSymbolsMap() map[string]bool {
 	result := make(map[string]bool)
-	for _, sym := range ProtectedSymbols {
-		key := sym.PackagePath + "." + sym.Name
-		result[key] = true
+	for _, symbol := range allProtectedSymbols() {
+		result[symbol.PackagePath+"."+symbol.Name] = true
 	}
 	return result
 }
 
-// FindProtectedSymbol finds a protected symbol by package path and name.
+// FindProtectedSymbol finds an exact configured package/name identity.
 func FindProtectedSymbol(pkgPath, name string) *ProtectedSymbol {
-	for _, sym := range ProtectedSymbols {
-		if sym.PackagePath == pkgPath && sym.Name == name {
-			return &sym
+	for _, symbol := range allProtectedSymbols() {
+		if symbol.PackagePath == pkgPath && symbol.Name == name {
+			copy := symbol
+			return &copy
 		}
 	}
 	return nil
 }
 
 func isProtectedPackage(path string) bool {
-	for _, prefix := range DupcodeProtectedPrefixes {
-		if path == prefix || strings.HasPrefix(path, prefix+"/") {
-			return true
-		}
-	}
-	return false
-}
-
-// AdapterProtectedPrefixes defines protected adapter package prefixes.
-var AdapterProtectedPrefixes = []string{
-	"github.com/s1onique/leamas/internal/factory/protectedverifier",
+	return pathMatchesPrefixes(path, DupcodeProtectedPrefixes)
 }
 
 func isAdapterProtectedPackage(path string) bool {
-	for _, prefix := range AdapterProtectedPrefixes {
+	return pathMatchesPrefixes(path, AdapterProtectedPrefixes)
+}
+
+func isGateProtectedPackage(path string) bool {
+	return pathMatchesPrefixes(path, GateProtectedPrefixes)
+}
+
+func pathMatchesPrefixes(path string, prefixes []string) bool {
+	for _, prefix := range prefixes {
 		if path == prefix || strings.HasPrefix(path, prefix+"/") {
 			return true
 		}
@@ -116,13 +153,12 @@ func recvTypeNameFromSig(recv *types.Var) string {
 	if recv == nil {
 		return ""
 	}
-	if named, ok := recv.Type().(*types.Named); ok {
-		return named.Obj().Name()
+	typeOf := recv.Type()
+	if pointer, ok := typeOf.(*types.Pointer); ok {
+		typeOf = pointer.Elem()
 	}
-	if ptr, ok := recv.Type().(*types.Pointer); ok {
-		if named, ok := ptr.Elem().(*types.Named); ok {
-			return named.Obj().Name()
-		}
+	if named, ok := typeOf.(*types.Named); ok {
+		return named.Obj().Name()
 	}
 	return ""
 }
