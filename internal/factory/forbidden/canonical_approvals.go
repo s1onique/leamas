@@ -9,14 +9,15 @@ import (
 )
 
 type resolvedApproval struct {
-	approval          ApprovedCaller
-	callerObject      types.Object
-	calleeObject      types.Object
-	matches           int
-	valid             bool
-	duplicate         bool
-	referenceMismatch bool
-	validated         bool
+	approval                 ApprovedCaller
+	callerObject             types.Object
+	calleeObject             types.Object
+	matches                  int
+	valid                    bool
+	duplicate                bool
+	referenceMismatch        bool
+	validated                bool
+	observedInvariantFailure bool
 }
 
 // resolveConfiguredApprovals validates every configured approval against the
@@ -111,6 +112,21 @@ func (a *canonicalAnalysis) validateObservedEdges() {
 	for edgeIndex := range a.observedEdges {
 		edge := &a.observedEdges[edgeIndex]
 		if !validObservedReferenceClass(edge.ReferenceClass) {
+			// Poison every schema-valid approval whose resolved
+			// caller/callee objects match this edge. The internal
+			// invariant violation is independent of the configured
+			// approval class, so we never compare configured
+			// ReferenceClass here.
+			for index := range a.approvalStates {
+				state := &a.approvalStates[index]
+				if !state.valid {
+					continue
+				}
+				if state.callerObject == edge.callerObject &&
+					state.calleeObject == edge.calleeObject {
+					state.observedInvariantFailure = true
+				}
+			}
 			a.edgeFinding(
 				"authority_policy_observed_reference_class_invalid",
 				*edge,
@@ -149,7 +165,9 @@ func (a *canonicalAnalysis) validateObservedEdges() {
 func (a *canonicalAnalysis) validateConfiguredApprovals() {
 	for index := range a.approvalStates {
 		state := &a.approvalStates[index]
-		if !state.valid || state.referenceMismatch {
+		if !state.valid ||
+			state.referenceMismatch ||
+			state.observedInvariantFailure {
 			continue
 		}
 		switch {

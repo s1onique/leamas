@@ -53,12 +53,12 @@ func TestValidApprovalReferenceClassRejectsDotImport(t *testing.T) {
 	}
 }
 
-// TestValidateObservedEdgesRejectsInvalidClasses wires
-// validObservedReferenceClass into the per-edge validation loop. The
-// invariant check must run before approval matching so an internal edge
-// with an invalid class never participates in reference-class or
-// cardinality accounting.
-func TestValidateObservedEdgesRejectsInvalidClasses(t *testing.T) {
+// TestValidObservedReferenceClassMatrix locks the allow-list matrix
+// used by the observed-edge invariant. It only exercises the helper and
+// does not invoke the analysis pipeline; the pipeline-level cascade
+// isolation is covered by TestObservedReferenceClassPipelineIsolation in
+// canonical_observed_reference_pipeline_test.go.
+func TestValidObservedReferenceClassMatrix(t *testing.T) {
 	cases := []struct {
 		name  string
 		class ReferenceClass
