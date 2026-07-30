@@ -18,9 +18,10 @@ import (
 type packageLoader func(*packages.Config, ...string) ([]*packages.Package, error)
 
 type canonicalConfig struct {
-	protected []ProtectedSymbol
-	approvals []ApprovedCaller
-	loader    packageLoader
+	protected    []ProtectedSymbol
+	approvals    []ApprovedCaller
+	layerDomains authorityLayerDomains
+	loader       packageLoader
 }
 
 type canonicalStats struct {
@@ -64,9 +65,10 @@ type canonicalFinding struct {
 }
 
 type canonicalAnalysis struct {
-	policy   *DupcodeBypassPolicy
-	config   canonicalConfig
-	packages []*packages.Package
+	policy       *DupcodeBypassPolicy
+	config       canonicalConfig
+	packages     []*packages.Package
+	layerDomains authorityLayerDomains
 
 	protectedByObject map[types.Object]ProtectedSymbol
 	objectByProtected map[ProtectedSymbol]types.Object
@@ -85,8 +87,9 @@ type canonicalAnalysis struct {
 
 func productionCanonicalConfig() canonicalConfig {
 	return canonicalConfig{
-		protected: append([]ProtectedSymbol(nil), allProtectedSymbols()...),
-		approvals: append([]ApprovedCaller(nil), allApprovedCallers()...),
+		protected:    append([]ProtectedSymbol(nil), allProtectedSymbols()...),
+		approvals:    append([]ApprovedCaller(nil), allApprovedCallers()...),
+		layerDomains: productionAuthorityLayerDomains(),
 	}
 }
 
@@ -124,6 +127,7 @@ func newCanonicalAnalysis(policy *DupcodeBypassPolicy, config canonicalConfig) *
 	return &canonicalAnalysis{
 		policy:             policy,
 		config:             config,
+		layerDomains:       config.layerDomains,
 		protectedByObject:  make(map[types.Object]ProtectedSymbol),
 		objectByProtected:  make(map[ProtectedSymbol]types.Object),
 		callersByIdentity:  make(map[CallerIdentity]types.Object),

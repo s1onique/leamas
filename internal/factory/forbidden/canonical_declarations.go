@@ -24,6 +24,15 @@ func (a *canonicalAnalysis) resolveProtectedDeclarations() {
 			a.symbolFinding("authority_policy_kind_mismatch", symbol, nil, "unknown authority layer")
 			continue
 		}
+		if a.layerDomains.isEmpty() {
+			a.symbolFinding("authority_policy_layer_policy_missing", symbol, nil, "no layer domain policy was supplied to the analysis")
+			continue
+		}
+		if !a.layerDomains.allows(symbol.Layer, symbol.PackagePath) {
+			detail := fmt.Sprintf("configured layer %s does not allow package %s", symbol.Layer, symbol.PackagePath)
+			a.symbolFinding("authority_policy_layer_mismatch", symbol, nil, detail)
+			continue
+		}
 
 		packages := a.packagesByPath(symbol.PackagePath)
 		if len(packages) == 0 {
@@ -50,15 +59,6 @@ func (a *canonicalAnalysis) resolveProtectedDeclarations() {
 		default:
 			a.symbolFinding("authority_policy_symbol_ambiguous", symbol, exact[0], "configured symbol resolves to multiple declaration objects")
 		}
-	}
-}
-
-func validAuthorityLayer(layer AuthorityLayer) bool {
-	switch layer {
-	case AuthorityLayerRaw, AuthorityLayerAdapter, AuthorityLayerGate:
-		return true
-	default:
-		return false
 	}
 }
 
@@ -116,6 +116,15 @@ func objectMatchesSymbol(pkg *packages.Package, object types.Object, symbol Prot
 	case ProtectedPackageVariable:
 		variable, ok := object.(*types.Var)
 		return ok && variable.Parent() == pkg.Types.Scope()
+	default:
+		return false
+	}
+}
+
+func validAuthorityLayer(layer AuthorityLayer) bool {
+	switch layer {
+	case AuthorityLayerRaw, AuthorityLayerAdapter, AuthorityLayerGate:
+		return true
 	default:
 		return false
 	}

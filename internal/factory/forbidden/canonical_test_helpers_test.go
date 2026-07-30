@@ -51,10 +51,19 @@ func (f *canonicalFixture) packagePath(rel string) string {
 }
 
 func (f *canonicalFixture) run(symbols []ProtectedSymbol, approvals []ApprovedCaller) canonicalResult {
+	return f.runWithLayerDomains(symbols, approvals, fixtureAuthorityLayerDomains(symbols))
+}
+
+func (f *canonicalFixture) runWithLayerDomains(
+	symbols []ProtectedSymbol,
+	approvals []ApprovedCaller,
+	domains authorityLayerDomains,
+) canonicalResult {
 	f.t.Helper()
 	return runCanonicalAnalysis(f.root, f.module, canonicalConfig{
-		protected: symbols,
-		approvals: approvals,
+		protected:    symbols,
+		approvals:    approvals,
+		layerDomains: domains,
 	})
 }
 

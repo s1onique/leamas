@@ -21,7 +21,7 @@ func deterministicFixture(t *testing.T) (*canonicalFixture, canonicalConfig) {
 import p "example.test/policy/protected"
 func Unapproved() { p.Cap() }
 `)
-	return fixture, canonicalConfig{protected: []ProtectedSymbol{protected}}
+	return fixture, canonicalConfig{protected: []ProtectedSymbol{protected}, layerDomains: fixtureAuthorityLayerDomains([]ProtectedSymbol{protected})}
 }
 
 func TestCanonicalDeterministicNormalizedFindings(t *testing.T) {
