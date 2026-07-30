@@ -43,7 +43,11 @@ type ComposedPlanValidationResult struct {
 // noopCompositionObserver{}; tests pass a per-assertion counting
 // observer. There is no package-global mutable counter.
 func validatePlanComposedWithObserver(data []byte, observer compositionObserver) ComposedPlanValidationResult {
-	result := ComposedPlanValidationResult{Valid: true, Decoded: true, SemanticValid: true}
+	result := ComposedPlanValidationResult{
+		Structural: PlanValidationResult{Errors: []PlanValidationError{}},
+		DecodeErrors:   []PlanValidationError{},
+		SemanticErrors: []PlanValidationError{},
+	}
 	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
 	observer.Parsed()
 	if len(parseDiagnostics) > 0 {
@@ -75,7 +79,10 @@ func validatePlanComposedWithObserver(data []byte, observer compositionObserver)
 		result.SemanticValid = false
 		result.SemanticErrors = []PlanValidationError{semanticDiagnostic(semErr)}
 		result.Valid = false
+		return result
 	}
+	result.SemanticValid = true
+	result.Valid = true
 	return result
 }
 
@@ -118,14 +125,15 @@ func firstSemanticError(result ComposedPlanValidationResult) error {
 	return fmt.Errorf("%s: %s", d.InstancePath, d.Message)
 }
 
-// typedDecodeDiagnostic wraps a typed-decode error as a stable
-// semantic_constraint_failed diagnostic with the precise path the
-// future CLI can render.
+// typedDecodeDiagnostic wraps a typed-decode error as a
+// decode-stage diagnostic. The typed-decode failure lives in the
+// decode_errors stage array of the composed result; precise paths
+// are deferred to a later correction.
 func typedDecodeDiagnostic(err error) PlanValidationError {
 	return PlanValidationError{
 		InstancePath: "",
 		SchemaPath:   "",
-		Code:         PlanCodeSemanticConstraintFailed,
+		Code:         PlanCodeInvalidType,
 		Keyword:      KeywordType,
 		Message:      "typed decode: " + err.Error(),
 	}
