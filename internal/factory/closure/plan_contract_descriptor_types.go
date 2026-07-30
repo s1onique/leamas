@@ -91,25 +91,10 @@ type fieldApplicabilityRule struct {
 	Presence PresenceRule
 }
 
-// fieldApplicability describes the conditional applicability of a
 // field whose presence or value depends on a sibling field's value.
 // The single Applicability rule remains for backward compatibility
 // with the previous descriptor surface; new code should add
 // ApplicabilityRules so both branches are encoded explicitly.
-type fieldApplicability struct {
-	// Sibling is the JSON name of the sibling field whose value
-	// decides applicability (for example "mode" on /checks[]).
-	Sibling string
-	// Value is the literal sibling value that activates this
-	// applicability (for example "run" or "exclude").
-	Value string
-	// Required reports whether this field MUST appear when the
-	// sibling equals Value.
-	Required bool
-	// Forbidden reports whether this field MUST NOT appear when the
-	// sibling equals Value.
-	Forbidden bool
-}
 
 // planFieldDescriptor declares the shape of a single field.
 type planFieldDescriptor struct {

@@ -31,10 +31,7 @@ const planExecutionModePath = "/execution/mode"
 // exactly once, and counts the invocations via the plan* counters
 // exposed in plan_contract_validation.go.
 func DecodePlan(data []byte) (Plan, error) {
-	if len(data) > MaxPlanBytes {
-		return Plan{}, fmt.Errorf("plan exceeds maximum size: %d > %d", len(data), MaxPlanBytes)
-	}
-	root, parseDiagnostics := parseClosurePlanDocument(data)
+	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
 	if len(parseDiagnostics) > 0 {
 		return Plan{}, errorFromDiagnostics(parseDiagnostics)
 	}
