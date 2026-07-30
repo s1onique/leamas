@@ -22,24 +22,6 @@ var (
 // aligned.
 const planExecutionModePath = "/execution/mode"
 
-// planPolicyFieldPath is the canonical JSON-pointer prefix used in
-// every diagnostic that names a /policy field. Centralising the
-// string keeps the runtime, JSON Schema, and CLI subprocess tests
-// aligned with the descriptor's policy field set.
-const planPolicyFieldPath = "/policy"
-
-// planPolicyFields is the ordered, closed set of policy sibling
-// names. The slice is the runtime authority that
-// validatePlanPolicyMirrorsDescriptor reads to confirm parity with
-// the descriptor; tests pin the relationship. Order matters for
-// deterministic diagnostics.
-var planPolicyFields = []string{
-	"require_clean_before",
-	"require_clean_after",
-	"forbid_tracked_full_digests",
-	"require_diff_check",
-}
-
 func DecodePlan(data []byte) (Plan, error) {
 	var plan Plan
 	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
@@ -133,8 +115,10 @@ func validatePlanPolicy(policy PlanPolicy) error {
 }
 
 // missingPlanPolicyFields returns the ordered list of /policy
-// sibling names whose value is missing. The list is in the same
-// order as planPolicyFields so diagnostics are deterministic.
+// sibling names whose value is missing. The order is read from
+// the descriptor's /policy.Required set (via PolicyFieldOrder)
+// so the descriptor remains the single authority; the typed
+// PlanPolicy struct's pointer fields are the value source.
 func missingPlanPolicyFields(policy PlanPolicy) []string {
 	values := map[string]*bool{
 		"require_clean_before":        policy.RequireCleanBefore,
@@ -142,8 +126,9 @@ func missingPlanPolicyFields(policy PlanPolicy) []string {
 		"forbid_tracked_full_digests": policy.ForbidTrackedFullDigests,
 		"require_diff_check":          policy.RequireDiffCheck,
 	}
-	missing := make([]string, 0, len(planPolicyFields))
-	for _, name := range planPolicyFields {
+	order := PolicyFieldOrder()
+	missing := make([]string, 0, len(order))
+	for _, name := range order {
 		if values[name] == nil {
 			missing = append(missing, name)
 		}

@@ -6,6 +6,15 @@ package closure
 // the LLM-friendly 400-line threshold while every field's required
 // status, mode-dependent applicability, enum authority, and
 // description remains reviewable in one screen.
+//
+// Mode-dependent rules (recovered from validatePlanChecks /
+// validateRunnableCheck):
+//   - mode=run: argv MUST be present and non-empty; working_directory,
+//     timeout_seconds, environment governed by the runtime validators;
+//     reason MUST be absent.
+//   - mode=exclude: reason MUST be present and compact final prose;
+//     argv, working_directory, timeout_seconds, environment MUST be
+//     absent.
 func planContractV1ChecksField() planFieldDescriptor {
 	return planFieldDescriptor{
 		JSONName:     "checks",
@@ -22,7 +31,7 @@ func planContractV1ChecksField() planFieldDescriptor {
 				"argv":              []any{"true"},
 				"working_directory": ".",
 				"timeout_seconds":   60,
-				"environment":       map[string]any{},
+				"environment":       map[string]any{"FOO": "bar"},
 			},
 		},
 		ItemDescriptor: &planFieldDescriptor{
@@ -31,6 +40,7 @@ func planContractV1ChecksField() planFieldDescriptor {
 			Required: true,
 			Children: &planObjectDescriptor{
 				Path:     "/checks",
+				Kind:     objectClosed,
 				Required: []string{"id", "mode"},
 				Fields: map[string]planFieldDescriptor{
 					"id": {
@@ -53,68 +63,94 @@ func planContractV1ChecksField() planFieldDescriptor {
 						ExampleValue:  CheckModeRun,
 					},
 					"argv": {
-						JSONName:      "argv",
-						GoName:        "Argv",
-						Kind:          kindArray,
-						Required:      false,
-						SemanticRule:  "validateRunnableCheck(Argv)",
-						Description:   "Command arguments. Required when sibling mode='run'.",
-						ExampleValue:  []any{"true"},
-						MinItems:      1,
-						ModeDependent: []string{"mode"},
+						JSONName:     "argv",
+						GoName:       "Argv",
+						Kind:         kindArray,
+						Required:     false,
+						SemanticRule: "validateRunnableCheck(Argv)",
+						Description:  "Command arguments. Required when sibling mode='run'.",
+						ExampleValue: []any{"true"},
+						MinItems:     1,
+						Applicability: &fieldApplicability{
+							Sibling:  "mode",
+							Value:    CheckModeRun,
+							Required: true,
+						},
 						RejectedAliases: []string{
 							"command",
 							"cmd",
 						},
+						ItemDescriptor: &planFieldDescriptor{
+							JSONName:     "argv[]",
+							Kind:         kindString,
+							Description:  "Command-line argument (string).",
+							ExampleValue: "true",
+						},
 					},
 					"working_directory": {
-						JSONName:      "working_directory",
-						GoName:        "WorkingDirectory",
-						Kind:          kindString,
-						Required:      false,
-						SemanticRule:  "validateRepositoryRelativePath",
-						Description:   "Repository-relative working directory.",
-						ExampleValue:  ".",
-						ModeDependent: []string{"mode"},
+						JSONName:     "working_directory",
+						GoName:       "WorkingDirectory",
+						Kind:         kindString,
+						Required:     false,
+						SemanticRule: "validateRepositoryRelativePath",
+						Description:  "Repository-relative working directory.",
+						ExampleValue: ".",
+						Applicability: &fieldApplicability{
+							Sibling:  "mode",
+							Value:    CheckModeRun,
+							Required: false,
+						},
 						RejectedAliases: []string{
 							"cwd",
 							"dir",
 						},
 					},
 					"timeout_seconds": {
-						JSONName:      "timeout_seconds",
-						GoName:        "TimeoutSeconds",
-						Kind:          kindInteger,
-						Required:      false,
-						SemanticRule:  "validateRunnableCheck(TimeoutSeconds)",
-						Description:   "Per-check timeout in seconds.",
-						ExampleValue:  60,
-						ModeDependent: []string{"mode"},
+						JSONName:     "timeout_seconds",
+						GoName:       "TimeoutSeconds",
+						Kind:         kindInteger,
+						Required:     false,
+						SemanticRule: "validateRunnableCheck(TimeoutSeconds)",
+						Description:  "Per-check timeout in seconds.",
+						ExampleValue: 60,
+						Applicability: &fieldApplicability{
+							Sibling:  "mode",
+							Value:    CheckModeRun,
+							Required: false,
+						},
 					},
 					"environment": {
-						JSONName:      "environment",
-						GoName:        "Environment",
-						Kind:          kindObject,
-						Required:      false,
-						SemanticRule:  "validateRunnableCheck(Environment)",
-						Description:   "Per-check environment overrides (free-form string map).",
-						ExampleValue:  map[string]any{},
-						ModeDependent: []string{"mode"},
+						JSONName:     "environment",
+						GoName:       "Environment",
+						Kind:         kindObject,
+						Required:     false,
+						SemanticRule: "validateRunnableCheck(Environment)",
+						Description:  "Per-check environment overrides (free-form string map).",
+						ExampleValue: map[string]any{"FOO": "bar"},
+						Applicability: &fieldApplicability{
+							Sibling:  "mode",
+							Value:    CheckModeRun,
+							Required: false,
+						},
 						Children: &planObjectDescriptor{
-							Path:     "/checks/[]/environment",
-							Fields:   map[string]planFieldDescriptor{},
-							Required: []string{},
+							Path: "/checks/[]/environment",
+							Kind: objectStringMap,
 						},
 					},
 					"reason": {
-						JSONName:      "reason",
-						GoName:        "Reason",
-						Kind:          kindString,
-						Required:      false,
-						SemanticRule:  "validatePlanChecks(Exclude)",
-						Description:   "Compact prose explaining why the check is excluded.",
-						ExampleValue:  "No source or registration changed.",
-						ModeDependent: []string{"mode"},
+						JSONName:     "reason",
+						GoName:       "Reason",
+						Kind:         kindString,
+						Required:     false,
+						SemanticRule: "validatePlanChecks(Exclude)",
+						Description:  "Compact prose explaining why the check is excluded.",
+						ExampleValue: "No source or registration changed.",
+						Applicability: &fieldApplicability{
+							Sibling:   "mode",
+							Value:     CheckModeExclude,
+							Required:  true,
+							Forbidden: false,
+						},
 					},
 				},
 			},

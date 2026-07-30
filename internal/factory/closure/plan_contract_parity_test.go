@@ -187,11 +187,11 @@ func TestParityRequiredFieldsMatchRuntime(t *testing.T) {
 	}
 	// /policy: all four siblings are required.
 	policy := contract.Root.Fields["policy"].Children
-	wantPolicy := planPolicyFields
+	wantPolicy := PolicyFieldOrder()
 	if !reflect.DeepEqual(policy.Required, wantPolicy) {
 		t.Fatalf("/policy.Required = %v, want %v", policy.Required, wantPolicy)
 	}
-	// The runtime mirror in plan.go uses planPolicyFields; the
+	// The runtime mirror in plan.go uses PolicyFieldOrder(); the
 	// parity assertion catches drift between the descriptor and
 	// the runtime mirror.
 	// /checks[]: id and mode are required.

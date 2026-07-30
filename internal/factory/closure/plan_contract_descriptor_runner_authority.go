@@ -19,6 +19,7 @@ func planContractV1RunnerAuthorityField() planFieldDescriptor {
 		Kind:         kindObject,
 		Required:     false,
 		Pointer:      true,
+		Nullable:     true,
 		SemanticRule: "VerifyRunnerBinding (V2 portable runner authority)",
 		Description:  "Optional runner authority declaration for Closure Protocol v2 portable runner authority.",
 		ExampleValue: map[string]any{
@@ -44,6 +45,7 @@ func planContractV1RunnerAuthorityField() planFieldDescriptor {
 					Kind:         kindObject,
 					Required:     false,
 					Pointer:      true,
+					Nullable:     true,
 					SemanticRule: "tool_release_exact required tool block",
 					Description:  "Tool authority block.",
 					Children: &planObjectDescriptor{

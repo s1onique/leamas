@@ -70,8 +70,8 @@ func TestParityPolicyRequiredErrorAllMissing(t *testing.T) {
 	if !ok {
 		t.Fatalf("error type = %T, want *PlanPolicyRequiredError", err)
 	}
-	if !reflect.DeepEqual(missing.Missing, planPolicyFields) {
-		t.Fatalf("Missing = %v, want %v", missing.Missing, planPolicyFields)
+	if !reflect.DeepEqual(missing.Missing, PolicyFieldOrder()) {
+		t.Fatalf("Missing = %v, want %v", missing.Missing, PolicyFieldOrder())
 	}
 }
 
