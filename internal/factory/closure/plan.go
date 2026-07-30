@@ -22,6 +22,24 @@ var (
 // aligned.
 const planExecutionModePath = "/execution/mode"
 
+// planPolicyFieldPath is the canonical JSON-pointer prefix used in
+// every diagnostic that names a /policy field. Centralising the
+// string keeps the runtime, JSON Schema, and CLI subprocess tests
+// aligned with the descriptor's policy field set.
+const planPolicyFieldPath = "/policy"
+
+// planPolicyFields is the ordered, closed set of policy sibling
+// names. The slice is the runtime authority that
+// validatePlanPolicyMirrorsDescriptor reads to confirm parity with
+// the descriptor; tests pin the relationship. Order matters for
+// deterministic diagnostics.
+var planPolicyFields = []string{
+	"require_clean_before",
+	"require_clean_after",
+	"forbid_tracked_full_digests",
+	"require_diff_check",
+}
+
 func DecodePlan(data []byte) (Plan, error) {
 	var plan Plan
 	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
@@ -87,17 +105,86 @@ func ValidatePlan(plan Plan) error {
 	if err := validatePlanArtifacts(plan.Artifacts); err != nil {
 		return err
 	}
-	if plan.Policy.RequireCleanBefore == nil || plan.Policy.RequireCleanAfter == nil ||
-		plan.Policy.ForbidTrackedFullDigests == nil || plan.Policy.RequireDiffCheck == nil {
-		return fmt.Errorf("all policy fields are required")
-	}
-	if !*plan.Policy.RequireCleanBefore || !*plan.Policy.RequireCleanAfter {
-		return fmt.Errorf("closure v1 requires clean worktree before and after")
+	if err := validatePlanPolicy(plan.Policy); err != nil {
+		return err
 	}
 	if err := validatePlanAuthority(plan); err != nil {
 		return err
 	}
 	return nil
+}
+
+// validatePlanPolicy replaces the previous "all policy fields are
+// required" generic message with exact per-sibling diagnostics. The
+// validator reports each missing sibling under its /policy/<name>
+// JSON pointer so callers can fix every gap in a single edit. The
+// validator also keeps the historical "closure v1 requires clean
+// worktree before and after" diagnostic, which is a semantic
+// constraint rather than a missing-property diagnostic.
+func validatePlanPolicy(policy PlanPolicy) error {
+	missing := missingPlanPolicyFields(policy)
+	if len(missing) > 0 {
+		return &PlanPolicyRequiredError{Missing: missing}
+	}
+	if !*policy.RequireCleanBefore || !*policy.RequireCleanAfter {
+		return fmt.Errorf("closure v1 requires clean worktree before and after")
+	}
+	return nil
+}
+
+// missingPlanPolicyFields returns the ordered list of /policy
+// sibling names whose value is missing. The list is in the same
+// order as planPolicyFields so diagnostics are deterministic.
+func missingPlanPolicyFields(policy PlanPolicy) []string {
+	values := map[string]*bool{
+		"require_clean_before":        policy.RequireCleanBefore,
+		"require_clean_after":         policy.RequireCleanAfter,
+		"forbid_tracked_full_digests": policy.ForbidTrackedFullDigests,
+		"require_diff_check":          policy.RequireDiffCheck,
+	}
+	missing := make([]string, 0, len(planPolicyFields))
+	for _, name := range planPolicyFields {
+		if values[name] == nil {
+			missing = append(missing, name)
+		}
+	}
+	return missing
+}
+
+// PlanPolicyRequiredError is the typed diagnostic the policy
+// validator emits when one or more policy siblings are absent. The
+// error is JSON-marshallable so future CLI flags can render it
+// directly. The Missing slice is the ordered list of sibling names
+// that were absent.
+type PlanPolicyRequiredError struct {
+	Missing []string
+}
+
+// Error implements the error interface. The message format lists
+// every missing sibling, separated by ", ", so consumers that print
+// the error see all gaps at once.
+func (e *PlanPolicyRequiredError) Error() string {
+	if len(e.Missing) == 0 {
+		return "policy fields missing"
+	}
+	return fmt.Sprintf("missing required policy field(s): %s", strings.Join(e.Missing, ", "))
+}
+
+// IsPlanPolicyRequiredError reports whether err (or any wrapped
+// error) is a *PlanPolicyRequiredError. The helper lets callers
+// route the diagnostic through a dedicated path without exposing
+// the concrete error type.
+func IsPlanPolicyRequiredError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if _, ok := err.(*PlanPolicyRequiredError); ok {
+		return true
+	}
+	if unwrap, ok := err.(interface{ Unwrap() error }); ok {
+		return IsPlanPolicyRequiredError(unwrap.Unwrap())
+	}
+	return false
 }
 
 // validatePlanExecutionMode is the single, authoritative entry point
