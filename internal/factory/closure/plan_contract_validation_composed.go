@@ -27,21 +27,53 @@ type ComposedPlanValidationResult struct {
 	Valid          bool                  `json:"valid"`
 }
 
-// validatePlanComposedWithObserver is the single internal entry
-// point that owns the composed pipeline:
+// composedValidationDeps is the invocation-local dependency bundle
+// the composed pipeline routes through. Production binds
+// DecodeTyped to decodeTypedPlanWithObserver; tests inject a
+// sentinel decoder to exercise typed-stage failure paths. The
+// struct is intentionally narrow: only the typed decode step is
+// parameterised because the structural parse and semantic
+// validation paths are not separable without changing their
+// contract.
+type composedValidationDeps struct {
+	DecodeTyped func(root any, observer compositionObserver) (Plan, error)
+}
+
+// defaultComposedValidationDeps returns the production binding
+// for composedValidationDeps. The single binding is a package-
+// local constant function; there is no mutable global state.
+func defaultComposedValidationDeps() composedValidationDeps {
+	return composedValidationDeps{
+		DecodeTyped: decodeTypedPlanWithObserver,
+	}
+}
+
+// validatePlanComposedWithObserver is the production entry point
+// that owns the composed pipeline using the default dependency
+// bundle:
 //
 //  1. Bounded single parse via parseBoundedClosurePlanDocument
 //     (one syntactic authority; MaxPlanBytes cap; trailing
 //     rejection; duplicate-key rejection).
 //  2. Structural + applicability validation via
 //     validatePlanStructuralFromRootWithObserver.
-//  3. Typed decode via decodeTypedPlanWithObserver.
+//  3. Typed decode via the supplied deps.DecodeTyped binding.
 //  4. Semantic validation via ValidatePlan (called at most once).
 //
 // The observer is invocation-local: production passes
 // noopCompositionObserver{}; tests pass a per-assertion counting
 // observer. There is no package-global mutable counter.
 func validatePlanComposedWithObserver(data []byte, observer compositionObserver) ComposedPlanValidationResult {
+	return validatePlanComposedWithObserverAndDeps(data, observer, defaultComposedValidationDeps())
+}
+
+// validatePlanComposedWithObserverAndDeps is the dep-injection
+// entry point tests use to drive the typed decode stage with a
+// sentinel decoder. Production callers go through
+// validatePlanComposedWithObserver (which uses the default deps).
+// The dependency bundle is invocation-local; no package-global
+// mutable state is shared between calls.
+func validatePlanComposedWithObserverAndDeps(data []byte, observer compositionObserver, deps composedValidationDeps) ComposedPlanValidationResult {
 	result := ComposedPlanValidationResult{
 		Structural:     PlanValidationResult{Errors: []PlanValidationError{}},
 		DecodeErrors:   []PlanValidationError{},
@@ -63,7 +95,11 @@ func validatePlanComposedWithObserver(data []byte, observer compositionObserver)
 		result.Valid = false
 		return result
 	}
-	plan, err := decodeTypedPlanWithObserver(root, observer)
+	decodeTyped := deps.DecodeTyped
+	if decodeTyped == nil {
+		decodeTyped = decodeTypedPlanWithObserver
+	}
+	plan, err := decodeTyped(root, observer)
 	if err != nil {
 		result.Decoded = false
 		result.DecodeErrors = []PlanValidationError{typedDecodeDiagnostic(err)}

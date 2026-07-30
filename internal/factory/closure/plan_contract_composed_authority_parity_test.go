@@ -17,6 +17,118 @@ import (
 // ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01-CORRECTION02-
 // COMPOSED-AUTHORITY-TRUTH01. Splitting them keeps every file
 // under the LLM-friendly 400-line threshold.
+
+// duplicateRootPlan returns a document that repeats
+// contract_version at the root. The strict parser rejects it
+// with a duplicate_property diagnostic at /contract_version.
+func duplicateRootPlan() []byte {
+	return []byte(duplicateRootPlanJSON)
+}
+
+const duplicateRootPlanJSON = `{
+  "contract_version": 1,
+  "contract_version": 1,
+  "act_id": "ACT-DUP",
+  "baseline": {
+    "commit_oid": "1111111111111111111111111111111111111111",
+    "tree_oid": "2222222222222222222222222222222222222222"
+  },
+  "execution": {"mode": "serial_fail_fast"},
+  "checks": [
+    {"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", "timeout_seconds": 60, "environment": {}}
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}`
+
+// duplicateNestedCommitOIDPlan returns a document that repeats
+// commit_oid under /baseline. The strict parser rejects it
+// with a duplicate_property diagnostic at /baseline/commit_oid.
+func duplicateNestedCommitOIDPlan() []byte {
+	return []byte(duplicateNestedCommitOIDPlanJSON)
+}
+
+const duplicateNestedCommitOIDPlanJSON = `{
+  "contract_version": 1,
+  "act_id": "ACT-DUP-N",
+  "baseline": {
+    "commit_oid": "1111111111111111111111111111111111111111",
+    "commit_oid": "1111111111111111111111111111111111111111",
+    "tree_oid": "2222222222222222222222222222222222222222"
+  },
+  "execution": {"mode": "serial_fail_fast"},
+  "checks": [
+    {"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", "timeout_seconds": 60, "environment": {}}
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}`
+
+// unsupportedVersionPlan returns a document whose contract_version
+// is 2; the strict parser must reject it with
+// unsupported_contract_version at /contract_version.
+func unsupportedVersionPlan() []byte {
+	return []byte(unsupportedVersionPlanJSON)
+}
+
+const unsupportedVersionPlanJSON = `{
+  "contract_version": 2,
+  "act_id": "ACT-CONC",
+  "baseline": {
+    "commit_oid": "1111111111111111111111111111111111111111",
+    "tree_oid": "2222222222222222222222222222222222222222"
+  },
+  "execution": {"mode": "serial_fail_fast"},
+  "checks": [
+    {"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", "timeout_seconds": 60, "environment": {}}
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}`
+
+// multiDiagnosticPlan returns a document that produces multiple
+// distinct structural diagnostics (unknown + required-missing +
+// integer-typed-as-string). The fixture is deterministic.
+func multiDiagnosticPlan() []byte {
+	return []byte(multiDiagnosticPlanJSON)
+}
+
+const multiDiagnosticPlanJSON = `{
+  "contract_version": "1",
+  "surprise": true,
+  "act_id": "ACT-DET",
+  "baseline": {
+    "commit_oid": "1111111111111111111111111111111111111111",
+    "tree_oid": "2222222222222222222222222222222222222222"
+  },
+  "execution": {"mode": "serial_fail_fast"},
+  "checks": [
+    {"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", "timeout_seconds": 60, "environment": {}}
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}`
+
 // --- Phase 6: recursive reflection parity ---
 
 func TestRecursiveGoModelParity(t *testing.T) {
@@ -156,19 +268,19 @@ func collectDescriptorNames(object planObjectDescriptor) map[string]bool {
 func TestDuplicateDiagnosticTaxonomy(t *testing.T) {
 	cases := []struct {
 		name        string
-		data        string
+		data        []byte
 		wantPath    string
 		notWantCode PlanValidationCode
 	}{
 		{
 			name:        "duplicate-root",
-			data:        `{"contract_version": 1, "contract_version": 1, "act_id": "ACT-DUP", "baseline": {"commit_oid": "1111111111111111111111111111111111111111", "tree_oid": "2222222222222222222222222222222222222222"}, 			"execution": {"mode": "serial_fail_fast"}, "checks": [{"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", "timeout_seconds": 60, "environment": {}}], "artifacts": [], 			"policy": {"require_clean_before": true, "require_clean_after": true, "forbid_tracked_full_digests": true, "require_diff_check": true}}`,
+			data:        duplicateRootPlan(),
 			wantPath:    "/contract_version",
 			notWantCode: PlanCodeUnknownProperty,
 		},
 		{
 			name:        "duplicate-nested",
-			data:        `{"contract_version": 1, "act_id": "ACT-DUP-N", "baseline": {"commit_oid": "1111111111111111111111111111111111111111", "commit_oid": "1111111111111111111111111111111111111111", 			"tree_oid": "2222222222222222222222222222222222222222"}, "execution": {"mode": "serial_fail_fast"}, "checks": [{"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", 			"timeout_seconds": 60, "environment": {}}], "artifacts": [], "policy": {"require_clean_before": true, "require_clean_after": true, "forbid_tracked_full_digests": true, "require_diff_check": true}}`,
+			data:        duplicateNestedCommitOIDPlan(),
 			wantPath:    "/baseline/commit_oid",
 			notWantCode: PlanCodeUnknownProperty,
 		},
@@ -176,7 +288,7 @@ func TestDuplicateDiagnosticTaxonomy(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			result := ValidatePlanStructural([]byte(tc.data))
+			result := ValidatePlanStructural(tc.data)
 			if result.Valid {
 				t.Fatalf("duplicate must be rejected")
 			}
@@ -227,16 +339,7 @@ func TestStructuralSizeBound(t *testing.T) {
 func TestInvalidDiagnosticDeterminism(t *testing.T) {
 	// Build a document that produces MULTIPLE different diagnostics
 	// (unknown + required-missing + integer-typed-as-string).
-	plan := []byte(`{
-		"contract_version": "1",
-		"surprise": true,
-		"act_id": "ACT-DET",
-		"baseline": {"commit_oid": "1111111111111111111111111111111111111111", "tree_oid": "2222222222222222222222222222222222222222"},
-		"execution": {"mode": "serial_fail_fast"},
-		"checks": [{"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", "timeout_seconds": 60, "environment": {}}],
-		"artifacts": [],
-		"policy": {"require_clean_before": true, "require_clean_after": true, "forbid_tracked_full_digests": true, "require_diff_check": true}
-	}`)
+	plan := multiDiagnosticPlan()
 	prev := ""
 	for i := 0; i < 20; i++ {
 		result := ValidatePlanStructural(plan)
@@ -248,8 +351,13 @@ func TestInvalidDiagnosticDeterminism(t *testing.T) {
 	}
 }
 
+// TestConcurrentInvalidDiagnosticDeterminism launches 8
+// overlapping goroutines and asserts that every iteration
+// produces the same diagnostic hash for the same document.
+// The previous serial "concurrent" tests in this package are
+// renamed; this one really does run overlapping goroutines.
 func TestConcurrentInvalidDiagnosticDeterminism(t *testing.T) {
-	plan := []byte(`{"contract_version": 2, "act_id": "ACT-CONC", "baseline": {"commit_oid": "1111111111111111111111111111111111111111", "tree_oid": "2222222222222222222222222222222222222222"}, 	"execution": {"mode": "serial_fail_fast"}, "checks": [{"id": "noop", "mode": "run", "argv": ["true"], "working_directory": ".", "timeout_seconds": 60, "environment": {}}], "artifacts": [], 	"policy": {"require_clean_before": true, "require_clean_after": true, "forbid_tracked_full_digests": true, "require_diff_check": true}}`)
+	plan := unsupportedVersionPlan()
 	results := make(chan string, 8)
 	var wg sync.WaitGroup
 	for w := 0; w < 8; w++ {
