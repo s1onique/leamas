@@ -1,10 +1,10 @@
 package closure
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"os"
 	"strings"
 	"testing"
 )
@@ -13,7 +13,9 @@ import (
 // single-caller invariant for parseClosurePlanDocument and the
 // no-duplicate-size-check invariant for every public byte-entry
 // API. It walks every Go source file in the package via go/ast
-// and asserts the documented caller topology.
+// and asserts the documented caller topology. The companion
+// plan_contract_bounded_parser_authority_pkg_test.go holds the
+// shared AST inspection helpers the tests rely on.
 
 // TestBoundedParserAuthoritySingleCaller proves that the only
 // production caller of parseClosurePlanDocument is
@@ -56,24 +58,115 @@ func TestBoundedParserAuthorityNoPublicDuplicateSizeCheck(t *testing.T) {
 
 // TestBoundedParserAuthorityNoDuplicateSizeCheck walks every
 // production byte-entry and internal pipeline entry point and
-// asserts the function body contains no comparison equivalent
-// to `len(data) > MaxPlanBytes`. The only place that size check
-// is allowed is the bounded parser itself.
+// asserts the original *ast.FuncDecl.Body contains no binary
+// comparison equivalent to `len(data) > MaxPlanBytes`. The
+// detector fails closed on a missing declaration, duplicate
+// declarations, a nil body, or a parser error. The only place
+// that size check is allowed is the bounded parser itself.
 func TestBoundedParserAuthorityNoDuplicateSizeCheck(t *testing.T) {
 	entries := sizeBoundCandidateEntries()
+	roots, err := loadClosureSources(t)
+	if err != nil {
+		t.Fatalf("load sources: %v", err)
+	}
 	for _, entry := range entries {
 		if entry == "parseBoundedClosurePlanDocument" {
 			continue
 		}
-		body, err := loadFunctionBody(entry)
+		fn, err := loadUniqueFunctionDecl(roots, entry)
 		if err != nil {
-			t.Fatalf("load function %s: %v", entry, err)
+			t.Fatalf("function %s: %v", entry, err)
 		}
-		if containsMaxPlanBytesComparison(body) {
+		if containsMaxPlanBytesComparison(fn.Body) {
 			t.Fatalf("function %s contains a duplicate MaxPlanBytes comparison; route through parseBoundedClosurePlanDocument instead",
 				entry)
 		}
 	}
+}
+
+// TestBoundedParserAuthorityAdversarialSizeCheckFixtures exercises
+// four adversarial comparison orientations to prove the
+// detector rejects each form independently. The fixtures are
+// constructed in-memory; they never enter the production source
+// tree.
+func TestBoundedParserAuthorityAdversarialSizeCheckFixtures(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "len-data-greater",
+			src: `package fixture
+func F(data []byte) {
+	if len(data) > MaxPlanBytes {
+		return
+	}
+}`,
+		},
+		{
+			name: "len-data-greater-equal",
+			src: `package fixture
+func F(data []byte) {
+	if len(data) >= MaxPlanBytes {
+		return
+	}
+}`,
+		},
+		{
+			name: "max-less-len",
+			src: `package fixture
+func F(data []byte) {
+	if MaxPlanBytes < len(data) {
+		return
+	}
+}`,
+		},
+		{
+			name: "max-less-equal-len",
+			src: `package fixture
+func F(data []byte) {
+	if MaxPlanBytes <= len(data) {
+		return
+	}
+}`,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			body := parseFixtureBody(t, tc.src)
+			if !containsMaxPlanBytesComparison(body) {
+				t.Fatalf("detector must reject %s orientation", tc.name)
+			}
+		})
+	}
+}
+
+// parseFixtureBody parses a Go source fragment into an AST body
+// for adversarial testing. The fragment must declare exactly one
+// function named `F`; the returned body is `F`'s body.
+func parseFixtureBody(t *testing.T, src string) *ast.BlockStmt {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "fixture.go", src, 0)
+	if err != nil {
+		t.Fatalf("parse fixture: %v", err)
+	}
+	for _, decl := range file.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			continue
+		}
+		if fn.Name.Name != "F" {
+			continue
+		}
+		if fn.Body == nil {
+			t.Fatalf("fixture %q has no body", src)
+		}
+		return fn.Body
+	}
+	t.Fatalf("fixture %q declares no function F", src)
+	return nil
 }
 
 // sizeBoundCandidateEntries returns every entry point the ACT
@@ -94,302 +187,40 @@ func sizeBoundCandidateEntries() []string {
 	}
 }
 
-// loadFunctionBody returns the textual body of the named
-// function. The body is the concatenation of the function's
-// AST identifiers and basic literals so the comparison audit
-// is independent of comment/whitespace changes.
-func loadFunctionBody(name string) (string, error) {
-	roots, err := loadClosureSources()
-	if err != nil {
-		return "", err
-	}
+// loadUniqueFunctionDecl returns the unique function declaration
+// with the given name across the supplied source roots. It fails
+// closed when zero declarations match, when more than one
+// declaration matches, or when the matched declaration has a
+// nil body. The fail-closed contract guarantees the test cannot
+// silently pass on a missing or duplicated entry point.
+func loadUniqueFunctionDecl(roots []*ast.File, name string) (*ast.FuncDecl, error) {
+	var matches []*ast.FuncDecl
 	for _, file := range roots {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Body == nil {
+			if !ok {
 				continue
 			}
 			if fn.Name.Name != name {
 				continue
 			}
-			return funcBodyText(fn), nil
+			matches = append(matches, fn)
 		}
 	}
-	return "", nil
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("function %s not found", name)
+	}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("function %s has %d declarations, want exactly 1", name, len(matches))
+	}
+	fn := matches[0]
+	if fn.Body == nil {
+		return nil, fmt.Errorf("function %s has no body", name)
+	}
+	return fn, nil
 }
 
-// containsMaxPlanBytesComparison walks the AST of the function
-// body and reports whether it contains a binary comparison
-// involving `MaxPlanBytes` and a length expression. The check
-// accepts the four documented comparison forms:
-//
-//	len(data) > MaxPlanBytes
-//	len(data) >= MaxPlanBytes
-//	MaxPlanBytes < len(data)
-//	MaxPlanBytes <= len(data)
-func containsMaxPlanBytesComparison(body string) bool {
-	if !strings.Contains(body, "MaxPlanBytes") {
-		return false
-	}
-	if !strings.Contains(body, "len") {
-		return false
-	}
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "body.go", body, 0)
-	if err != nil {
-		return false
-	}
-	cmpOps := map[token.Token]bool{
-		token.GTR: true, token.GEQ: true,
-		token.LSS: true, token.LEQ: true,
-	}
-	var found bool
-	ast.Inspect(file, func(n ast.Node) bool {
-		if found {
-			return false
-		}
-		bin, ok := n.(*ast.BinaryExpr)
-		if !ok {
-			return true
-		}
-		if !cmpOps[bin.Op] {
-			return true
-		}
-		leftText := exprText(bin.X)
-		rightText := exprText(bin.Y)
-		if !strings.Contains(leftText, "MaxPlanBytes") && !strings.Contains(rightText, "MaxPlanBytes") {
-			return true
-		}
-		// Confirm the comparison references the size limit
-		// and a length expression. The audit tolerates either
-		// side carrying the length expression.
-		hasLen := strings.Contains(leftText, "len") || strings.Contains(rightText, "len")
-		if !hasLen {
-			return true
-		}
-		found = true
-		return false
-	})
-	return found
-}
-
-// funcBodyText returns the textual body of a function. The
-// definition lives in source_structure_test.go so the package
-// has exactly one implementation. The text is the
-// concatenation of identifier names and basic literal values
-// from the function body.
-
-// exprText reconstructs the textual form of an AST expression.
-// Identifiers are emitted as their names; call expressions
-// include the function name plus a trailing "(". The result is
-// robust enough for the audit's textual checks without
-// requiring full source reconstruction.
-func exprText(expr ast.Expr) string {
-	var b strings.Builder
-	ast.Inspect(expr, func(n ast.Node) bool {
-		switch v := n.(type) {
-		case *ast.Ident:
-			b.WriteString(v.Name)
-		case *ast.CallExpr:
-			if ident, ok := v.Fun.(*ast.Ident); ok {
-				b.WriteString(ident.Name)
-				b.WriteString("(")
-			}
-		}
-		return true
-	})
-	return b.String()
-}
-
-// loadClosureSources parses every non-test Go file in the
-// closure package directory and returns the AST roots.
-func loadClosureSources() ([]*ast.File, error) {
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		return nil, err
-	}
-	var paths []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
-			paths = append(paths, name)
-		}
-	}
-	var roots []*ast.File
-	fset := token.NewFileSet()
-	for _, path := range paths {
-		file, err := parser.ParseFile(fset, path, nil, 0)
-		if err != nil {
-			return nil, err
-		}
-		roots = append(roots, file)
-	}
-	return roots, nil
-}
-
-// callSite records the function and file of a single call-site
-// for a target identifier.
-type callSite struct {
-	function string
-	file     string
-}
-
-// functionInfo records a function's name, file, and the set of
-// identifier-named callees inside its body.
-type functionInfo struct {
-	name  string
-	file  string
-	calls []string
-}
-
-// collectCallsInPackage returns every call site of `target` in
-// the closure package. The file is parsed as Go source so the
-// result is unaffected by reflection or build tags.
-func collectCallsInPackage(t *testing.T, target string) []callSite {
-	t.Helper()
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", closureFilter, parser.ParseComments)
-	if err != nil {
-		t.Fatalf("parse package: %v", err)
-	}
-	var sites []callSite
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			ast.Inspect(file, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok {
-					return true
-				}
-				if !callExprNamesTarget(call, target) {
-					return true
-				}
-				enclosing := enclosingFunctionName(file, call.Pos(), call.End())
-				sites = append(sites, callSite{function: enclosing, file: shortFile(fset, file)})
-				return true
-			})
-		}
-	}
-	return sites
-}
-
-// collectPublicByteEntryFunctions returns every exported function
-// whose first parameter is []byte. The call list is the set of
-// identifier-named callees inside its body.
-func collectPublicByteEntryFunctions(t *testing.T) []functionInfo {
-	t.Helper()
-	fset := token.NewFileSet()
-	pkgs, err := parser.ParseDir(fset, ".", closureFilter, parser.ParseComments)
-	if err != nil {
-		t.Fatalf("parse package: %v", err)
-	}
-	var out []functionInfo
-	for _, pkg := range pkgs {
-		for _, file := range pkg.Files {
-			for _, decl := range file.Decls {
-				fn, ok := decl.(*ast.FuncDecl)
-				if !ok || fn.Recv != nil || !ast.IsExported(fn.Name.Name) {
-					continue
-				}
-				if fn.Type.Params == nil || len(fn.Type.Params.List) == 0 {
-					continue
-				}
-				first := fn.Type.Params.List[0]
-				if !isByteSliceType(first.Type) {
-					continue
-				}
-				out = append(out, functionInfo{
-					name:  fn.Name.Name,
-					file:  shortFile(fset, file),
-					calls: collectCallTargets(fn),
-				})
-			}
-		}
-	}
-	return out
-}
-
-// closureFilter is the parser filter: include every non-test Go
-// file in the package root. The schema sub-package is in a
-// separate directory so ParseDir does not traverse it.
-func closureFilter(info os.FileInfo) bool {
-	name := info.Name()
-	if strings.HasSuffix(name, "_test.go") {
-		return false
-	}
-	return strings.HasSuffix(name, ".go")
-}
-
-// callExprNamesTarget reports whether a call expression's
-// function expression resolves to the bare identifier `target`.
-func callExprNamesTarget(call *ast.CallExpr, target string) bool {
-	ident, ok := call.Fun.(*ast.Ident)
-	if !ok {
-		return false
-	}
-	return ident.Name == target
-}
-
-// enclosingFunctionName finds the innermost function declaration
-// enclosing a node positioned between start and end. Returns
-// "<top-level>" when no function encloses the node.
-func enclosingFunctionName(file *ast.File, start, end token.Pos) string {
-	for _, decl := range file.Decls {
-		fn, ok := decl.(*ast.FuncDecl)
-		if !ok {
-			continue
-		}
-		if fn.Pos() <= start && end <= fn.End() {
-			return fn.Name.Name
-		}
-	}
-	return "<top-level>"
-}
-
-// collectCallTargets returns the set of identifier-named
-// functions called within the given function declaration body.
-func collectCallTargets(fn *ast.FuncDecl) []string {
-	var out []string
-	ast.Inspect(fn, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		ident, ok := call.Fun.(*ast.Ident)
-		if !ok {
-			return true
-		}
-		out = append(out, ident.Name)
-		return true
-	})
-	return out
-}
-
-// isByteSliceType reports whether an AST expression denotes
-// []byte or []uint8 (byte is an alias for uint8 in Go).
-func isByteSliceType(expr ast.Expr) bool {
-	arr, ok := expr.(*ast.ArrayType)
-	if !ok {
-		return false
-	}
-	return isByteType(arr.Elt)
-}
-
-// isByteType reports whether an AST expression is the
-// predeclared `byte` or its alias `uint8`.
-func isByteType(expr ast.Expr) bool {
-	ident, ok := expr.(*ast.Ident)
-	if !ok {
-		return false
-	}
-	return ident.Name == "byte" || ident.Name == "uint8"
-}
-
-// shortFile returns the relative file path recorded in the
-// FileSet for the given file node.
-func shortFile(fset *token.FileSet, file *ast.File) string {
-	tok := fset.File(file.Pos())
-	if tok == nil {
-		return "<unknown>"
-	}
-	return tok.Name()
-}
+// strings is imported indirectly via collectCallsInPackage which
+// uses strings.HasSuffix. Importing strings here keeps the test
+// file self-contained even when its helpers move.
+var _ = strings.HasSuffix

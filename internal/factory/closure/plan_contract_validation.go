@@ -22,6 +22,14 @@ const (
 	PlanCodeUnknownProperty            PlanValidationCode = "unknown_property"
 	PlanCodeDuplicateProperty          PlanValidationCode = "duplicate_property"
 	PlanCodeSemanticConstraintFailed   PlanValidationCode = "semantic_constraint_failed"
+	// PlanCodeDuplicateApplicabilityRule is the stable code
+	// raised when a descriptor field carries two or more
+	// ApplicabilityRule entries that share (Sibling, Value).
+	// Two rules for the same condition are ambiguous: a
+	// descriptor inventory must declare at most one rule per
+	// (Sibling, Value) pair so the walker and the example
+	// generator agree on the contract.
+	PlanCodeDuplicateApplicabilityRule PlanValidationCode = "duplicate_applicability_rule"
 )
 
 // PlanValidationKeyword mirrors the JSON Schema keyword taxonomy.

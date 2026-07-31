@@ -258,12 +258,23 @@ func extractDuplicateCheckIDPath(msg string) string {
 // missing-required and present-forbidden conditions
 // deterministically.
 //
+// The walker first runs the descriptor-level applicability rule
+// identity validator so a field that carries two ApplicabilityRule
+// entries sharing (Sibling, Value) cannot silently produce
+// ambiguous diagnostics. The validator emits one duplicate
+// diagnostic per offending rule and the walker then skips that
+// field's per-check processing entirely; the field is treated as
+// a closed-path until the descriptor is repaired.
+//
 // Presence semantics are key-existence only. A forbidden field
 // is rejected whenever the JSON key is present at all (the value
 // may be empty, null, an empty string, or a zero-length
 // collection).
 //
 // Diagnostics:
+//
+//	duplicate applicability rule (descriptor level):
+//	  duplicate_applicability_rule at the field path
 //
 //	missing required under sibling:
 //	  required_property_missing at the exact instance path
@@ -276,6 +287,8 @@ func extractDuplicateCheckIDPath(msg string) string {
 // never triggers applicability noise).
 func ValidateModeDependentApplicability(root any, contract planContractV1Descriptor) []PlanValidationError {
 	var diagnostics []PlanValidationError
+	diagnostics = append(diagnostics, validateDescriptorApplicabilityIdentity(contract)...)
+	duplicateFields := collectDuplicateApplicabilityFields(contract)
 	checksRaw, ok := root.(map[string]any)["checks"]
 	if !ok {
 		return diagnostics
@@ -302,6 +315,9 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 			continue
 		}
 		for fieldName, childField := range checksField.ItemDescriptor.Children.Fields {
+			if duplicateFields[fieldName] {
+				continue
+			}
 			rules := applicabilityRulesFor(childField)
 			if len(rules) == 0 {
 				continue
@@ -343,6 +359,22 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 		}
 	}
 	return diagnostics
+}
+
+// collectDuplicateApplicabilityFields returns the set of field
+// names that carry at least one duplicate (Sibling, Value) rule.
+// The walker uses the set to skip per-check processing for
+// those fields and treat them as a closed path. The set is
+// derived from the same descriptor validator the walker runs so
+// the two stay in lockstep.
+func collectDuplicateApplicabilityFields(contract planContractV1Descriptor) map[string]bool {
+	fields := make(map[string]bool)
+	for _, diag := range validateDescriptorApplicabilityIdentity(contract) {
+		if diag.Code == PlanCodeDuplicateApplicabilityRule {
+			fields[diag.PropertyName] = true
+		}
+	}
+	return fields
 }
 
 // applicabilityRulesFor returns the descriptor's authoritative

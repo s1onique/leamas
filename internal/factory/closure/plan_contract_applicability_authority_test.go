@@ -1,6 +1,7 @@
 package closure
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -178,67 +179,120 @@ func TestApplicabilityAuthorityMultipleModeRules(t *testing.T) {
 	}
 }
 
-// TestApplicabilityAuthorityDuplicateSameModeRule proves the
-// applicability walker produces a deterministic result for a
-// field carrying two rules that share (Sibling="mode",
-// Value="run") but conflict on presence. The walker iterates
-// every matching rule and emits one diagnostic per rule whose
-// presence check matches the document. The two presence checks
-// (PresenceRequired and PresenceForbidden) are mutually
-// exclusive on the same field, so the walker never emits
-// contradictory diagnostics for the same field under one mode.
-// The pinned behaviour is documented inline.
-func TestApplicabilityAuthorityDuplicateSameModeRule(t *testing.T) {
+// TestApplicabilityRuleIdentityDuplicateConflictingRules proves
+// the descriptor identity validator rejects a field that
+// carries two rules sharing (Sibling="mode", Value="run") but
+// with conflicting presence values. The validator emits a
+// duplicate_applicability_rule diagnostic before the walker
+// ever inspects the document, and the walker skips per-check
+// processing for the offending field.
+func TestApplicabilityRuleIdentityDuplicateConflictingRules(t *testing.T) {
 	contract := minimalChecksField(
 		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
 		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeRun, Presence: PresenceForbidden},
 	)
-	// Documented contract: the walker iterates every matching
-	// rule in slice order. The presence checks are mutually
-	// exclusive (Required fires only when the field is absent,
-	// Forbidden fires only when the field is present), so the
-	// walker emits exactly one diagnostic per document for a
-	// given field under a given mode. The walker therefore never
-	// produces contradictory diagnostics for the same field.
-
-	// Field absent under mode=run: exactly one PresenceRequired diagnostic.
+	diags := validateDescriptorApplicabilityIdentity(contract)
+	found := false
+	for _, d := range diags {
+		if d.Code == PlanCodeDuplicateApplicabilityRule && d.PropertyName == "argv" {
+			found = true
+			if d.InstancePath != "/checks/argv" {
+				t.Fatalf("duplicate diagnostic path = %q, want %q", d.InstancePath, "/checks/argv")
+			}
+			if !strings.Contains(d.Message, "Sibling=\"mode\"") || !strings.Contains(d.Message, "Value=\"run\"") {
+				t.Fatalf("duplicate diagnostic message must identify (Sibling, Value): %q", d.Message)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected duplicate_applicability_rule for argv; got %v", diags)
+	}
+	// The walker must NOT emit any per-check diagnostic for
+	// argv; the field is closed-path until the descriptor is
+	// repaired.
 	absentRoot := map[string]any{
 		"checks": []any{
 			map[string]any{"id": "noop", "mode": CheckModeRun},
 		},
 	}
-	absentDiags := ValidateModeDependentApplicability(absentRoot, contract)
-	if len(absentDiags) != 1 {
-		t.Fatalf("field absent under conflicting rules: expected exactly 1 diagnostic, got %d: %v",
-			len(absentDiags), absentDiags)
+	walk := ValidateModeDependentApplicability(absentRoot, contract)
+	for _, d := range walk {
+		if d.Code == PlanCodeRequiredPropertyMissing || d.Code == PlanCodeSemanticConstraintFailed {
+			t.Fatalf("walker must skip argv after duplicate-rule diagnostic; got %v", d)
+		}
 	}
-	if absentDiags[0].Code != PlanCodeRequiredPropertyMissing {
-		t.Fatalf("field absent under conflicting rules: expected PresenceRequired diagnostic, got %v",
-			absentDiags[0])
-	}
-	if absentDiags[0].InstancePath != "/checks/0/argv" {
-		t.Fatalf("field absent under conflicting rules: expected /checks/0/argv path, got %q",
-			absentDiags[0].InstancePath)
-	}
+}
 
-	// Field present under mode=run: exactly one PresenceForbidden diagnostic.
-	presentRoot := map[string]any{
+// TestApplicabilityRuleIdentityDuplicateIdenticalRules proves
+// the descriptor identity validator also rejects two rules that
+// share (Sibling, Value, Presence) verbatim. Identical
+// duplicates would emit two copies of the same diagnostic and
+// must be rejected at descriptor time.
+func TestApplicabilityRuleIdentityDuplicateIdenticalRules(t *testing.T) {
+	contract := minimalChecksField(
+		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+	)
+	diags := validateDescriptorApplicabilityIdentity(contract)
+	found := false
+	for _, d := range diags {
+		if d.Code == PlanCodeDuplicateApplicabilityRule && d.PropertyName == "argv" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected duplicate_applicability_rule for identical duplicates; got %v", diags)
+	}
+}
+
+// TestApplicabilityRuleIdentityDistinctRulesAccepted proves
+// the production-shaped "one rule per (Sibling, Value)" pattern
+// passes validation. Two distinct (Sibling="mode") rules with
+// different Value strings (run vs exclude) are unique.
+func TestApplicabilityRuleIdentityDistinctRulesAccepted(t *testing.T) {
+	contract := minimalChecksField(
+		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
+	)
+	diags := validateDescriptorApplicabilityIdentity(contract)
+	if len(diags) != 0 {
+		t.Fatalf("distinct (Sibling, Value) rules must pass identity validation; got %v", diags)
+	}
+	// Run-mode document, argv missing: walker still emits the
+	// required_property_missing diagnostic.
+	runRoot := map[string]any{
 		"checks": []any{
-			map[string]any{"id": "noop", "mode": CheckModeRun, "argv": []any{"true"}},
+			map[string]any{"id": "noop", "mode": CheckModeRun},
 		},
 	}
-	presentDiags := ValidateModeDependentApplicability(presentRoot, contract)
-	if len(presentDiags) != 1 {
-		t.Fatalf("field present under conflicting rules: expected exactly 1 diagnostic, got %d: %v",
-			len(presentDiags), presentDiags)
+	runDiags := ValidateModeDependentApplicability(runRoot, contract)
+	if !hasDiagnosticAt(runDiags, "/checks/0/argv", PlanCodeRequiredPropertyMissing) {
+		t.Fatalf("mode=run, argv missing must emit required_property_missing; got %v", runDiags)
 	}
-	if presentDiags[0].Code != PlanCodeSemanticConstraintFailed {
-		t.Fatalf("field present under conflicting rules: expected PresenceForbidden diagnostic, got %v",
-			presentDiags[0])
+	// Exclude-mode document, argv present: walker emits the
+	// semantic_constraint_failed diagnostic.
+	excludeRoot := map[string]any{
+		"checks": []any{
+			map[string]any{"id": "noop", "mode": CheckModeExclude, "argv": []any{}},
+		},
 	}
-	if presentDiags[0].InstancePath != "/checks/0/argv" {
-		t.Fatalf("field present under conflicting rules: expected /checks/0/argv path, got %q",
-			presentDiags[0].InstancePath)
+	excludeDiags := ValidateModeDependentApplicability(excludeRoot, contract)
+	if !hasDiagnosticAt(excludeDiags, "/checks/0/argv", PlanCodeSemanticConstraintFailed) {
+		t.Fatalf("mode=exclude, argv present must emit semantic_constraint_failed; got %v", excludeDiags)
+	}
+}
+
+// TestApplicabilityRuleIdentityProductionDescriptorAccepted
+// proves the production v1 descriptor inventory passes identity
+// validation unchanged. The fixture pins the production contract
+// so a future descriptor rewrite cannot silently introduce
+// duplicate (Sibling, Value) rules.
+func TestApplicabilityRuleIdentityProductionDescriptorAccepted(t *testing.T) {
+	diags := validateDescriptorApplicabilityIdentity(planContractV1())
+	for _, d := range diags {
+		if d.Code == PlanCodeDuplicateApplicabilityRule {
+			t.Fatalf("production descriptor must not carry duplicate applicability rules: %v", d)
+		}
 	}
 }
 

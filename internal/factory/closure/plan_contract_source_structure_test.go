@@ -2,6 +2,7 @@ package closure
 
 import (
 	"bufio"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -12,10 +13,11 @@ import (
 )
 
 // plan_contract_source_structure_test.go enforces the package's
-// own LLM-friendly invariants at test-time. The directive ACT
-// requires splitting long inline fixtures into small focused
-// files; this file proves that outcome and guards against
-// future regressions.
+// own LLM-friendly invariants at test-time and provides a
+// fail-closed naming audit for the typed-stage seam. The audit
+// walks every test function in the package and reports any
+// function whose name carries the typed-stage marker but whose
+// body does not provide AST evidence of the typed-decoder seam.
 
 // maxLineLength mirrors the LLM-friendly gate threshold (240
 // chars per line). Any test file in the closure package whose
@@ -30,14 +32,17 @@ const maxLineLength = 240
 // the camelCase, snake_case, and space-separated forms.
 var typedStageNamingMarkers = []string{"TypedFailure", "typed_failure", "typed failure"}
 
-// typedStageDecodeMarkers are the substrings whose presence in
-// a function body proves the function actually exercises the
-// typed-decoder seam. A test whose name claims a typed-stage
-// scenario MUST mention at least one of these tokens.
-var typedStageDecodeMarkers = []string{
-	"DecodeTyped",
-	"decodeTypedPlan",
-	"composedValidationDeps",
+// AST identifiers that prove the function actually exercises
+// the typed-decoder seam. The audit inspects the body for
+// these AST nodes directly; substring matching alone is
+// insufficient because a function may contain the marker text
+// in a comment without exercising any decoder.
+var typedStageSeamNodes = []string{
+	"composedValidationDeps", // composite-literal type
+	"DecodeTyped",            // field selector
+	"validatePlanComposedWithObserverAndDeps",
+	"validatePlanStructuralAndSemanticWith",
+	"decodeTypedPlanWithObserver",
 	"sentinelTypedDecode",
 }
 
@@ -85,13 +90,14 @@ func TestSourceStructureNoAllowlistInLLMFriendly(t *testing.T) {
 }
 
 // TestSourceStructureNamingAudit audits every test function in
-// the closure package whose name carries a typed-stage marker.
+// the closure package whose name carries the typed-stage marker.
 // Each such test MUST reach the typed-decode stage by referring
-// to a typed-decoder binding (typedStageDecodeMarkers). The
-// audit walks the raw function body so a misleading name without
-// a typed decoder reference is reported. The audit's own name
-// does not contain the typed-stage marker, so it does not trip
-// its own filter.
+// to a typed-decoder binding. The audit walks the parsed AST
+// directly so a misleading name without AST evidence of the
+// seam is reported. The audit's own name does not contain the
+// typed-stage marker, so it does not trip its own filter.
+// Parser errors fail the audit; the audit cannot silently pass
+// on a malformed source.
 func TestSourceStructureNamingAudit(t *testing.T) {
 	files, err := filepath.Glob("./*_test.go")
 	if err != nil {
@@ -102,66 +108,228 @@ func TestSourceStructureNamingAudit(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
-		misleading := findNamingViolations(string(body))
-		if len(misleading) > 0 {
-			t.Fatalf("%s contains naming violations %v", path, misleading)
+		violations, err := findNamingViolations(string(body))
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		if len(violations) > 0 {
+			t.Fatalf("%s contains naming violations %v", path, violations)
 		}
 	}
 }
 
-// findNamingViolations parses the file body, finds every
-// function declaration whose name contains a typed-stage
-// marker, and returns the names that DO NOT mention a
-// typed-decoder binding from the typedStageDecodeMarkers set.
-func findNamingViolations(body string) []string {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, "body.go", body, 0)
-	if err != nil {
-		// Parser errors are not the audit's concern; AST guards
-		// for syntax errors live in the compiler.
-		return nil
+// TestSourceStructureNamingAuditAdversarialFixtures exercises
+// the four documented audit outcomes. Each fixture is parsed
+// in-memory; they never enter the production source tree.
+func TestSourceStructureNamingAuditAdversarialFixtures(t *testing.T) {
+	t.Run("fake-typed-failure-rejected", func(t *testing.T) {
+		src := `package fixture
+import "testing"
+func TestFakeTypedFailure(t *testing.T) {
+}`
+		violations := mustRunAudit(t, src)
+		if !containsStringInList(violations, "TestFakeTypedFailure") {
+			t.Fatalf("expected TestFakeTypedFailure to be rejected; got %v", violations)
+		}
+	})
+	t.Run("real-typed-failure-accepted", func(t *testing.T) {
+		src := `package fixture
+import "testing"
+func TestRealTypedFailure(t *testing.T) {
+	_ = composedValidationDeps{DecodeTyped: nil}
+}`
+		violations := mustRunAudit(t, src)
+		if containsStringInList(violations, "TestRealTypedFailure") {
+			t.Fatalf("expected TestRealTypedFailure to be accepted; got %v", violations)
+		}
+	})
+	t.Run("ordinary-structural-failure-ignored", func(t *testing.T) {
+		src := `package fixture
+import "testing"
+func TestSomeStructuralFailure(t *testing.T) {
+}`
+		violations := mustRunAudit(t, src)
+		if len(violations) != 0 {
+			t.Fatalf("ordinary structural failure name should be ignored; got %v", violations)
+		}
+	})
+	t.Run("duplicate-declaration-rejected", func(t *testing.T) {
+		src := `package fixture
+import "testing"
+func TestDuplicateTypedFailure(t *testing.T) {
+	_ = composedValidationDeps{DecodeTyped: nil}
+}
+func TestDuplicateTypedFailure(t *testing.T) {
+}`
+		violations := mustRunAudit(t, src)
+		if !containsStringInList(violations, "TestDuplicateTypedFailure") {
+			t.Fatalf("expected TestDuplicateTypedFailure to be rejected; got %v", violations)
+		}
+	})
+	t.Run("parse-failure-rejected", func(t *testing.T) {
+		src := `package fixture
+this is not valid Go {`
+		_, err := findNamingViolations(src)
+		if err == nil {
+			t.Fatalf("parse failure must return error")
+		}
+	})
+}
+
+// TestSourceStructureNamingAuditNilBodyRejected constructs a
+// fake FuncDecl with Body=nil and asserts the audit rejects it.
+// This case cannot arise from parsing real Go source because
+// every parsed FuncDecl has a body; the audit must still be
+// fail-closed so a future tooling change that constructs
+// body-less declarations is caught.
+func TestSourceStructureNamingAuditNilBodyRejected(t *testing.T) {
+	fakeDecl := &ast.FuncDecl{
+		Name: &ast.Ident{Name: "TestNilBodyTypedFailure"},
+		Type: &ast.FuncType{
+			Params: &ast.FieldList{List: []*ast.Field{{
+				Names: []*ast.Ident{{Name: "t"}},
+				Type:  &ast.Ident{Name: "testingT"},
+			}}},
+		},
+		Body: nil,
 	}
+	violations := findNamingViolationsInDecls([]ast.Decl{fakeDecl})
+	if !containsStringInList(violations, "TestNilBodyTypedFailure") {
+		t.Fatalf("expected TestNilBodyTypedFailure to be rejected; got %v", violations)
+	}
+}
+
+// findNamingViolations parses the file body and returns every
+// function declaration whose name carries the typed-stage
+// marker but whose body fails the seam, duplicate, or nil-body
+// checks. Parser errors fail closed.
+func findNamingViolations(body string) ([]string, error) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "body.go", body, parser.ParseComments)
+	if err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+	return findNamingViolationsInDecls(file.Decls), nil
+}
+
+// findNamingViolationsInDecls inspects every function
+// declaration in decls. The audit fails closed when a function
+// whose name carries the typed-stage marker:
+//   - has a duplicate declaration (more than one FuncDecl
+//     sharing the name);
+//   - has a nil body (the audit cannot prove seam usage);
+//   - has a body whose AST does not exercise the typed-decoder
+//     seam.
+//
+// The audit does NOT require the body to repeat the marker
+// text — a function whose name claims a typed-stage scenario
+// must show AST evidence of the seam regardless of how the body
+// is written.
+func findNamingViolationsInDecls(decls []ast.Decl) []string {
 	var violations []string
-	for _, decl := range file.Decls {
+	nameCount := make(map[string]int)
+	for _, decl := range decls {
 		fn, ok := decl.(*ast.FuncDecl)
-		if !ok || fn.Body == nil {
+		if !ok {
+			continue
+		}
+		nameCount[fn.Name.Name]++
+	}
+	for _, decl := range decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok {
 			continue
 		}
 		name := fn.Name.Name
 		if !containsAny(name, typedStageNamingMarkers...) {
 			continue
 		}
-		bodyText := funcBodyText(fn)
-		if !containsAny(bodyText, typedStageNamingMarkers...) {
+		if nameCount[name] > 1 {
+			violations = append(violations, name)
 			continue
 		}
-		if !containsAny(bodyText, typedStageDecodeMarkers...) {
+		if fn.Body == nil {
+			violations = append(violations, name)
+			continue
+		}
+		if !bodyExercisesTypedDecoder(fn.Body) {
 			violations = append(violations, name)
 		}
 	}
 	return violations
 }
 
-// funcBodyText returns the textual body of a function. The text
-// is reconstructed from the AST so the audit is robust to
-// whitespace and comment changes.
-func funcBodyText(fn *ast.FuncDecl) string {
-	if fn.Body == nil {
-		return ""
+// bodyExercisesTypedDecoder walks the AST of body and reports
+// whether the function references a typed-decoder binding. The
+// audit inspects the original AST nodes directly: a
+// composite literal of type composedValidationDeps, a
+// selector expression on the DecodeTyped field, or a call to
+// one of the dep-injection entry points. Substring matching
+// alone would let a function whose comment merely mentions the
+// marker pass the audit.
+func bodyExercisesTypedDecoder(body *ast.BlockStmt) bool {
+	if body == nil {
+		return false
 	}
-	var b strings.Builder
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
+	var found bool
+	ast.Inspect(body, func(n ast.Node) bool {
+		if found {
+			return false
+		}
 		switch v := n.(type) {
-		case *ast.Ident:
-			b.WriteString(v.Name)
-			b.WriteString("\n")
-		case *ast.BasicLit:
-			b.WriteString(v.Value)
-			b.WriteString("\n")
+		case *ast.CompositeLit:
+			ident, ok := v.Type.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if ident.Name == "composedValidationDeps" {
+				found = true
+				return false
+			}
+		case *ast.SelectorExpr:
+			if v.Sel != nil && v.Sel.Name == "DecodeTyped" {
+				found = true
+				return false
+			}
+		case *ast.CallExpr:
+			ident, ok := v.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if ident.Name == "validatePlanComposedWithObserverAndDeps" ||
+				ident.Name == "validatePlanStructuralAndSemanticWith" ||
+				ident.Name == "decodeTypedPlanWithObserver" ||
+				ident.Name == "sentinelTypedDecode" {
+				found = true
+				return false
+			}
 		}
 		return true
 	})
-	return b.String()
+	return found
+}
+
+// mustRunAudit parses src and returns the violations. Parse
+// errors fail the test.
+func mustRunAudit(t *testing.T, src string) []string {
+	t.Helper()
+	violations, err := findNamingViolations(src)
+	if err != nil {
+		t.Fatalf("audit parse error: %v", err)
+	}
+	return violations
+}
+
+// containsStringInList reports whether needle is present in
+// haystack. The name is verbose to avoid a conflict with a
+// different containsString helper in run_v2_authority_integration_test.go.
+func containsStringInList(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // containsAny reports whether haystack contains any of the
