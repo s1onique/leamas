@@ -233,8 +233,16 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 // is the only signal the field emits.
 func validateModeDependentApplicabilityWithObserver(root any, contract planContractV1Descriptor, observer descriptorValidationObserver) []PlanValidationError {
 	identityDiagnostics := validateDescriptorApplicabilityIdentity(contract)
-	observer.DescriptorIdentityValidated(identityDiagnostics)
+	// Derive suppression BEFORE invoking the observer so the
+	// observer cannot change which fields the walker processes.
 	duplicatePaths := duplicateApplicabilityFieldPaths(identityDiagnostics)
+	// Pass a defensive copy of the diagnostics stream to the
+	// observer. The observer receives an immutable snapshot so
+	// it cannot mutate the canonical diagnostics the walker is
+	// about to surface to its caller.
+	snapshot := make([]PlanValidationError, len(identityDiagnostics))
+	copy(snapshot, identityDiagnostics)
+	observer.DescriptorIdentityValidated(snapshot)
 	var diagnostics []PlanValidationError
 	diagnostics = append(diagnostics, identityDiagnostics...)
 	checksRaw, ok := root.(map[string]any)["checks"]
