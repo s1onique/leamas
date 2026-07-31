@@ -17,16 +17,51 @@ import "strings"
 // Every required field is emitted, every pointer-backed policy
 // boolean is set to true (matching the constant value constraint),
 // and the example passes both structural and semantic validation.
+//
+// DescriptorExample delegates to descriptorExampleWithContract
+// using the production descriptor. The descriptor identity
+// validator runs before any example is generated; a malformed
+// production descriptor would yield an empty map. The
+// production descriptor is currently valid so the existing
+// example output is unchanged.
 func DescriptorExample() map[string]any {
-	contract := planContractV1()
+	example, _ := descriptorExampleWithContract(planContractV1())
+	return example
+}
+
+// descriptorExampleWithContract is the result-bearing internal
+// example path the future CLI and tests consume. The descriptor
+// applicability-identity validator runs before any example is
+// generated; a malformed descriptor receives an empty map plus
+// the validator's diagnostic stream and never a partial example.
+//
+// Returned diagnostics are sorted deterministically. The
+// example returned for a valid production descriptor matches
+// the original DescriptorExample output byte-for-byte.
+func descriptorExampleWithContract(contract planContractV1Descriptor) (map[string]any, []PlanValidationError) {
+	identityDiagnostics := validateDescriptorApplicabilityIdentity(contract)
+	if hasDuplicateApplicabilityDiagnostic(identityDiagnostics) {
+		return map[string]any{}, identityDiagnostics
+	}
 	example := buildExampleObject(contract.Root)
 	out, ok := example.(map[string]any)
 	if !ok {
-		// A non-object root cannot satisfy the contract. Fall back to
-		// an empty map so callers see a deterministic, typed result.
-		return map[string]any{}
+		return map[string]any{}, identityDiagnostics
 	}
-	return out
+	return out, identityDiagnostics
+}
+
+// hasDuplicateApplicabilityDiagnostic reports whether the
+// diagnostic stream carries any duplicate_applicability_rule
+// diagnostic. A malformed descriptor cannot reach the example
+// generator; this is the gate that enforces the contract.
+func hasDuplicateApplicabilityDiagnostic(diagnostics []PlanValidationError) bool {
+	for _, diag := range diagnostics {
+		if diag.Code == PlanCodeDuplicateApplicabilityRule {
+			return true
+		}
+	}
+	return false
 }
 
 // buildExampleObject walks the descriptor and emits a JSON-shaped

@@ -142,6 +142,65 @@ func F(data []byte) {
 	}
 }
 
+// TestBoundedParserAuthorityNonMaxPlanBytesFixtures exercises
+// AST shapes the detector must reject. Each fixture mimics a
+// real-world near-miss that a substring-based detector would
+// accept; the AST-predicate detector must reject all four.
+func TestBoundedParserAuthorityNonMaxPlanBytesFixtures(t *testing.T) {
+	cases := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "len-other-not-data",
+			src: `package fixture
+func F(other []byte) {
+	if len(other) > MaxPlanBytes {
+		return
+	}
+}`,
+		},
+		{
+			name: "lenData-not-a-call",
+			src: `package fixture
+func F(data []byte) {
+	var lenData int = len(data)
+	if lenData > MaxPlanBytes {
+		return
+	}
+}`,
+		},
+		{
+			name: "otherMaxPlanBytes-not-authority",
+			src: `package fixture
+func F(data []byte, otherMaxPlanBytes int) {
+	if len(data) > otherMaxPlanBytes {
+		return
+	}
+}`,
+		},
+		{
+			name: "wrapper-call-not-direct",
+			src: `package fixture
+func check(x int) bool { return x > 0 }
+func F(data []byte) {
+	if check(len(data)) > MaxPlanBytes {
+		return
+	}
+}`,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			body := parseFixtureBody(t, tc.src)
+			if containsMaxPlanBytesComparison(body) {
+				t.Fatalf("detector must NOT match %s shape", tc.name)
+			}
+		})
+	}
+}
+
 // parseFixtureBody parses a Go source fragment into an AST body
 // for adversarial testing. The fragment must declare exactly one
 // function named `F`; the returned body is `F`'s body.

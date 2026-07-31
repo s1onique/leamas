@@ -1,9 +1,5 @@
 package closure
 
-import (
-	"strings"
-)
-
 // plan_contract_validation_composed.go contains the composed
 // validation pipeline (Phase 10) and the mode-dependent
 // applicability walker (Phase 9). Splitting it from
@@ -188,69 +184,6 @@ func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error
 	return validatePlanStructuralAndSemanticWith(data, noopCompositionObserver{}, defaultComposedValidationDeps())
 }
 
-// typedDecodeDiagnostic wraps a typed-decode error as a
-// decode-stage diagnostic. The typed-decode failure lives in the
-// decode_errors stage array of the composed result; precise paths
-// are deferred to a later correction.
-func typedDecodeDiagnostic(err error) PlanValidationError {
-	return PlanValidationError{
-		InstancePath: "",
-		SchemaPath:   "",
-		Code:         PlanCodeInvalidType,
-		Keyword:      KeywordType,
-		Message:      "typed decode: " + err.Error(),
-	}
-}
-
-// semanticDiagnostic maps a semantic Go error to a structured
-// diagnostic. The path is /act_id for ActID errors, /baseline for
-// baseline errors, /execution/mode for execution mode errors, and
-// the root for everything else; the field/codename is preserved in
-// the message for human readers.
-func semanticDiagnostic(err error) PlanValidationError {
-	msg := err.Error()
-	path := semanticPathFromError(msg)
-	return PlanValidationError{
-		InstancePath: path,
-		SchemaPath:   path,
-		Code:         PlanCodeSemanticConstraintFailed,
-		Keyword:      KeywordType,
-		Message:      msg,
-	}
-}
-
-// semanticPathFromError extracts the most precise instance path
-// documented in the error message. The mapping is conservative;
-// unknown forms fall back to the root.
-func semanticPathFromError(msg string) string {
-	switch {
-	case strings.HasPrefix(msg, "invalid act_id"):
-		return "/act_id"
-	case strings.HasPrefix(msg, "baseline.commit_oid"), strings.HasPrefix(msg, "baseline.tree_oid"):
-		return "/" + strings.SplitN(msg, " ", 2)[0]
-	case strings.HasPrefix(msg, "checks[") && strings.Contains(msg, "duplicate check id"):
-		// duplicate check id "<id>": caller extracts <id> from the message.
-		return extractDuplicateCheckIDPath(msg)
-	case strings.HasPrefix(msg, "unsupported closure plan contract_version"):
-		return "/contract_version"
-	}
-	return ""
-}
-
-func extractDuplicateCheckIDPath(msg string) string {
-	const marker = "duplicate check id \""
-	i := strings.Index(msg, marker)
-	if i < 0 {
-		return ""
-	}
-	rest := msg[i+len(marker):]
-	j := strings.Index(rest, "\"")
-	if j < 0 {
-		return ""
-	}
-	return "/checks/" + rest[:j]
-}
-
 // ValidateModeDependentApplicability walks every check item
 // and consults the descriptor's ApplicabilityRules for each
 // field. The walker iterates the DESCRIPTOR's fields (not only the
@@ -286,9 +219,24 @@ func extractDuplicateCheckIDPath(msg string) string {
 // structural shape validation succeeds (so a malformed check array
 // never triggers applicability noise).
 func ValidateModeDependentApplicability(root any, contract planContractV1Descriptor) []PlanValidationError {
+	return validateModeDependentApplicabilityWithObserver(root, contract, noopDescriptorValidationObserver{})
+}
+
+// validateModeDependentApplicabilityWithObserver is the
+// invocation-local entry point that owns the descriptor
+// applicability validator and the per-check walker. The
+// observer receives the validator's diagnostic stream so a
+// counting observer can prove the validator runs exactly once
+// per applicability invocation. The walker skips per-check
+// processing for any field whose descriptor path is in
+// duplicatePaths so the duplicate_applicability_rule diagnostic
+// is the only signal the field emits.
+func validateModeDependentApplicabilityWithObserver(root any, contract planContractV1Descriptor, observer descriptorValidationObserver) []PlanValidationError {
+	identityDiagnostics := validateDescriptorApplicabilityIdentity(contract)
+	observer.DescriptorIdentityValidated(identityDiagnostics)
+	duplicatePaths := duplicateApplicabilityFieldPaths(identityDiagnostics)
 	var diagnostics []PlanValidationError
-	diagnostics = append(diagnostics, validateDescriptorApplicabilityIdentity(contract)...)
-	duplicateFields := collectDuplicateApplicabilityFields(contract)
+	diagnostics = append(diagnostics, identityDiagnostics...)
 	checksRaw, ok := root.(map[string]any)["checks"]
 	if !ok {
 		return diagnostics
@@ -315,7 +263,15 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 			continue
 		}
 		for fieldName, childField := range checksField.ItemDescriptor.Children.Fields {
-			if duplicateFields[fieldName] {
+			fieldPath := "/checks/" + itoa(index) + "/" + fieldName
+			// The duplicate diagnostic's InstancePath is the
+			// descriptor field path (/checks/<fieldName>);
+			// the walker's runtime field path includes the
+			// per-item index. Suppress when the descriptor
+			// field path is in the duplicate set so the two
+			// keys stay aligned.
+			descriptorFieldPath := "/checks/" + fieldName
+			if _, suppressed := duplicatePaths[descriptorFieldPath]; suppressed {
 				continue
 			}
 			rules := applicabilityRulesFor(childField)
@@ -334,8 +290,8 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 				case PresenceRequired:
 					if !keyPresent {
 						diagnostics = append(diagnostics, PlanValidationError{
-							InstancePath: "/checks/" + itoa(index) + "/" + fieldName,
-							SchemaPath:   "/checks/" + itoa(index) + "/" + fieldName,
+							InstancePath: fieldPath,
+							SchemaPath:   fieldPath,
 							Code:         PlanCodeRequiredPropertyMissing,
 							Keyword:      KeywordIfThenElse,
 							Message:      "property \"" + fieldName + "\" is required when mode=\"" + modeStr + "\"",
@@ -345,8 +301,8 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 				case PresenceForbidden:
 					if keyPresent {
 						diagnostics = append(diagnostics, PlanValidationError{
-							InstancePath:  "/checks/" + itoa(index) + "/" + fieldName,
-							SchemaPath:    "/checks/" + itoa(index) + "/" + fieldName,
+							InstancePath:  fieldPath,
+							SchemaPath:    fieldPath,
 							Code:          PlanCodeSemanticConstraintFailed,
 							Keyword:       KeywordIfThenElse,
 							Message:       "property \"" + fieldName + "\" is forbidden when mode=\"" + modeStr + "\"",
@@ -359,22 +315,6 @@ func ValidateModeDependentApplicability(root any, contract planContractV1Descrip
 		}
 	}
 	return diagnostics
-}
-
-// collectDuplicateApplicabilityFields returns the set of field
-// names that carry at least one duplicate (Sibling, Value) rule.
-// The walker uses the set to skip per-check processing for
-// those fields and treat them as a closed path. The set is
-// derived from the same descriptor validator the walker runs so
-// the two stay in lockstep.
-func collectDuplicateApplicabilityFields(contract planContractV1Descriptor) map[string]bool {
-	fields := make(map[string]bool)
-	for _, diag := range validateDescriptorApplicabilityIdentity(contract) {
-		if diag.Code == PlanCodeDuplicateApplicabilityRule {
-			fields[diag.PropertyName] = true
-		}
-	}
-	return fields
 }
 
 // applicabilityRulesFor returns the descriptor's authoritative

@@ -17,17 +17,22 @@ import (
 // threshold while every helper remains reviewable in one place.
 
 // containsMaxPlanBytesComparison walks the AST of body and
-// reports whether any binary comparison involves MaxPlanBytes
-// and a length expression. The check accepts the four
-// documented comparison forms:
+// reports whether any binary comparison has exactly
+// MaxPlanBytes on one side and `len(data)` on the other. The
+// check accepts the four documented comparison forms:
 //
 //	len(data) > MaxPlanBytes
 //	len(data) >= MaxPlanBytes
 //	MaxPlanBytes < len(data)
 //	MaxPlanBytes <= len(data)
 //
-// The walk inspects the original AST nodes directly; it never
-// round-trips through string concatenation or re-parses.
+// The detector uses AST predicates (isMaxPlanBytes,
+// isLenOfData) instead of substring matching so it cannot be
+// fooled by:
+//   - len(other) > MaxPlanBytes
+//   - lenData > MaxPlanBytes
+//   - len(data) > otherMaxPlanBytes
+//   - helper(len(data)) > MaxPlanBytes
 func containsMaxPlanBytesComparison(body ast.Node) bool {
 	if body == nil {
 		return false
@@ -48,11 +53,11 @@ func containsMaxPlanBytesComparison(body ast.Node) bool {
 		if !cmpOps[bin.Op] {
 			return true
 		}
-		left := exprText(bin.X)
-		right := exprText(bin.Y)
-		hasMaxPlanBytes := strings.Contains(left, "MaxPlanBytes") || strings.Contains(right, "MaxPlanBytes")
-		hasLen := strings.Contains(left, "len") || strings.Contains(right, "len")
-		if hasMaxPlanBytes && hasLen {
+		leftIsAuth := isMaxPlanBytes(bin.X)
+		rightIsAuth := isMaxPlanBytes(bin.Y)
+		leftIsLen := isLenOfData(bin.X)
+		rightIsLen := isLenOfData(bin.Y)
+		if (leftIsAuth && rightIsLen) || (rightIsAuth && leftIsLen) {
 			found = true
 			return false
 		}
@@ -61,26 +66,42 @@ func containsMaxPlanBytesComparison(body ast.Node) bool {
 	return found
 }
 
-// exprText reconstructs the textual form of an AST expression.
-// Identifiers are emitted as their names; call expressions
-// include the function name plus a trailing "(". The result is
-// robust enough for the audit's textual checks without
-// requiring full source reconstruction.
-func exprText(expr ast.Expr) string {
-	var b strings.Builder
-	ast.Inspect(expr, func(n ast.Node) bool {
-		switch v := n.(type) {
-		case *ast.Ident:
-			b.WriteString(v.Name)
-		case *ast.CallExpr:
-			if ident, ok := v.Fun.(*ast.Ident); ok {
-				b.WriteString(ident.Name)
-				b.WriteString("(")
-			}
-		}
-		return true
-	})
-	return b.String()
+// isMaxPlanBytes reports whether expr is the identifier
+// MaxPlanBytes. The detector requires the exact authority
+// constant; any other identifier is rejected.
+func isMaxPlanBytes(expr ast.Expr) bool {
+	ident, ok := expr.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return ident.Name == "MaxPlanBytes"
+}
+
+// isLenOfData reports whether expr is exactly a call
+// `len(data)`: an *ast.CallExpr with Fun = identifier "len"
+// and exactly one argument that is the identifier "data".
+// Anything else, including wrapper calls like helper(len(data)),
+// isLen(other), or lenData, is rejected.
+func isLenOfData(expr ast.Expr) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	ident, ok := call.Fun.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	if ident.Name != "len" {
+		return false
+	}
+	if len(call.Args) != 1 {
+		return false
+	}
+	argIdent, ok := call.Args[0].(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return argIdent.Name == "data"
 }
 
 // loadClosureSources parses every non-test Go file in the

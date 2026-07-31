@@ -32,20 +32,6 @@ const maxLineLength = 240
 // the camelCase, snake_case, and space-separated forms.
 var typedStageNamingMarkers = []string{"TypedFailure", "typed_failure", "typed failure"}
 
-// AST identifiers that prove the function actually exercises
-// the typed-decoder seam. The audit inspects the body for
-// these AST nodes directly; substring matching alone is
-// insufficient because a function may contain the marker text
-// in a comment without exercising any decoder.
-var typedStageSeamNodes = []string{
-	"composedValidationDeps", // composite-literal type
-	"DecodeTyped",            // field selector
-	"validatePlanComposedWithObserverAndDeps",
-	"validatePlanStructuralAndSemanticWith",
-	"decodeTypedPlanWithObserver",
-	"sentinelTypedDecode",
-}
-
 // TestSourceStructureNoLongLines walks every Go file in the
 // closure package directory and asserts that no line exceeds
 // the LLM-friendly line-length threshold. This proves the
@@ -119,34 +105,65 @@ func TestSourceStructureNamingAudit(t *testing.T) {
 }
 
 // TestSourceStructureNamingAuditAdversarialFixtures exercises
-// the four documented audit outcomes. Each fixture is parsed
-// in-memory; they never enter the production source tree.
+// the documented audit outcomes. Each fixture is parsed
+// in-memory; they never enter the production source tree. The
+// audit accepts a typed-failure test only when the body
+// actually invokes the dep-aware composed pipeline; the
+// test rejects any test that merely constructs a dependency
+// bundle or calls a sentinel decoder.
 func TestSourceStructureNamingAuditAdversarialFixtures(t *testing.T) {
-	t.Run("fake-typed-failure-rejected", func(t *testing.T) {
+	t.Run("deps-declaration-only-rejected", func(t *testing.T) {
 		src := `package fixture
 import "testing"
-func TestFakeTypedFailure(t *testing.T) {
-}`
-		violations := mustRunAudit(t, src)
-		if !containsStringInList(violations, "TestFakeTypedFailure") {
-			t.Fatalf("expected TestFakeTypedFailure to be rejected; got %v", violations)
-		}
-	})
-	t.Run("real-typed-failure-accepted", func(t *testing.T) {
-		src := `package fixture
-import "testing"
-func TestRealTypedFailure(t *testing.T) {
+func TestDepsOnlyTypedFailure(t *testing.T) {
 	_ = composedValidationDeps{DecodeTyped: nil}
 }`
 		violations := mustRunAudit(t, src)
-		if containsStringInList(violations, "TestRealTypedFailure") {
-			t.Fatalf("expected TestRealTypedFailure to be accepted; got %v", violations)
+		if !containsStringInList(violations, "TestDepsOnlyTypedFailure") {
+			t.Fatalf("expected TestDepsOnlyTypedFailure to be rejected; got %v", violations)
 		}
 	})
-	t.Run("ordinary-structural-failure-ignored", func(t *testing.T) {
+	t.Run("sentinel-call-only-rejected", func(t *testing.T) {
 		src := `package fixture
 import "testing"
-func TestSomeStructuralFailure(t *testing.T) {
+func TestSentinelOnlyTypedFailure(t *testing.T) {
+	sentinelTypedDecode(nil, noopCompositionObserver{})
+}`
+		violations := mustRunAudit(t, src)
+		if !containsStringInList(violations, "TestSentinelOnlyTypedFailure") {
+			t.Fatalf("expected TestSentinelOnlyTypedFailure to be rejected; got %v", violations)
+		}
+	})
+	t.Run("dependency-aware-composed-call-accepted", func(t *testing.T) {
+		src := `package fixture
+import "testing"
+func TestComposedCallTypedFailure(t *testing.T) {
+	deps := composedValidationDeps{DecodeTyped: sentinelTypedDecode}
+	obs := noopCompositionObserver{}
+	_ = validatePlanComposedWithObserverAndDeps(nil, obs, deps)
+}`
+		violations := mustRunAudit(t, src)
+		if containsStringInList(violations, "TestComposedCallTypedFailure") {
+			t.Fatalf("expected TestComposedCallTypedFailure to be accepted; got %v", violations)
+		}
+	})
+	t.Run("dependency-aware-wrapper-call-accepted", func(t *testing.T) {
+		src := `package fixture
+import "testing"
+func TestWrapperCallTypedFailure(t *testing.T) {
+	deps := composedValidationDeps{DecodeTyped: sentinelTypedDecode}
+	obs := noopCompositionObserver{}
+	_, _ = validatePlanStructuralAndSemanticWith(nil, obs, deps)
+}`
+		violations := mustRunAudit(t, src)
+		if containsStringInList(violations, "TestWrapperCallTypedFailure") {
+			t.Fatalf("expected TestWrapperCallTypedFailure to be accepted; got %v", violations)
+		}
+	})
+	t.Run("structural-test-without-typed-failure-ignored", func(t *testing.T) {
+		src := `package fixture
+import "testing"
+func TestOrdinaryStructuralFailure(t *testing.T) {
 }`
 		violations := mustRunAudit(t, src)
 		if len(violations) != 0 {
@@ -157,9 +174,10 @@ func TestSomeStructuralFailure(t *testing.T) {
 		src := `package fixture
 import "testing"
 func TestDuplicateTypedFailure(t *testing.T) {
-	_ = composedValidationDeps{DecodeTyped: nil}
+	_ = validatePlanComposedWithObserverAndDeps(nil, noopCompositionObserver{}, composedValidationDeps{})
 }
 func TestDuplicateTypedFailure(t *testing.T) {
+	_ = validatePlanComposedWithObserverAndDeps(nil, noopCompositionObserver{}, composedValidationDeps{})
 }`
 		violations := mustRunAudit(t, src)
 		if !containsStringInList(violations, "TestDuplicateTypedFailure") {
@@ -260,13 +278,14 @@ func findNamingViolationsInDecls(decls []ast.Decl) []string {
 }
 
 // bodyExercisesTypedDecoder walks the AST of body and reports
-// whether the function references a typed-decoder binding. The
-// audit inspects the original AST nodes directly: a
-// composite literal of type composedValidationDeps, a
-// selector expression on the DecodeTyped field, or a call to
-// one of the dep-injection entry points. Substring matching
-// alone would let a function whose comment merely mentions the
-// marker pass the audit.
+// whether the function actually invokes the dep-aware composed
+// pipeline. A test that merely constructs a
+// composedValidationDeps composite literal, references the
+// DecodeTyped selector, or calls a sentinel decoder does NOT
+// prove the typed stage ran; the audit requires an actual call
+// to validatePlanComposedWithObserverAndDeps or
+// validatePlanStructuralAndSemanticWith so the test proves it
+// executed the seam.
 func bodyExercisesTypedDecoder(body *ast.BlockStmt) bool {
 	if body == nil {
 		return false
@@ -276,33 +295,17 @@ func bodyExercisesTypedDecoder(body *ast.BlockStmt) bool {
 		if found {
 			return false
 		}
-		switch v := n.(type) {
-		case *ast.CompositeLit:
-			ident, ok := v.Type.(*ast.Ident)
-			if !ok {
-				return true
-			}
-			if ident.Name == "composedValidationDeps" {
-				found = true
-				return false
-			}
-		case *ast.SelectorExpr:
-			if v.Sel != nil && v.Sel.Name == "DecodeTyped" {
-				found = true
-				return false
-			}
-		case *ast.CallExpr:
-			ident, ok := v.Fun.(*ast.Ident)
-			if !ok {
-				return true
-			}
-			if ident.Name == "validatePlanComposedWithObserverAndDeps" ||
-				ident.Name == "validatePlanStructuralAndSemanticWith" ||
-				ident.Name == "decodeTypedPlanWithObserver" ||
-				ident.Name == "sentinelTypedDecode" {
-				found = true
-				return false
-			}
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		ident, ok := call.Fun.(*ast.Ident)
+		if !ok {
+			return true
+		}
+		if ident.Name == "validatePlanComposedWithObserverAndDeps" ||
+			ident.Name == "validatePlanStructuralAndSemanticWith" {
+			found = true
 		}
 		return true
 	})
