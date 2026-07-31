@@ -110,10 +110,18 @@ func TestComposedStructuralFailureKeepsDecodedFalse(t *testing.T) {
 	}
 }
 
-func TestComposedTypedFailureKeepsDecodedFalse(t *testing.T) {
-	// A structural failure (unknown_property) keeps Decoded=false
-	// and the typed decoder is NOT called. This proves the
-	// pipeline short-circuits on structural failure.
+// TestComposedTrailingDocumentFailsBeforeTypedDecode proves
+// that a trailing-document structural failure keeps Decoded=false
+// and never reaches the typed decoder. The previous test name
+// "TestComposedTypedFailureKeepsDecodedFalse" was misleading
+// because the body exercised a structural failure path, not a
+// typed-decode failure. The rename pins the actual scenario so
+// future readers cannot mistake this test for typed-stage proof.
+func TestComposedTrailingDocumentFailsBeforeTypedDecode(t *testing.T) {
+	// A structural failure (trailing document + unknown field)
+	// keeps Decoded=false and the typed decoder is NOT called.
+	// This proves the pipeline short-circuits on structural
+	// failure.
 	plan := append(canonicalComposedPlan(), []byte(` {"surprise": true}`)...)
 	obs := &countingObserver{}
 	composed := validatePlanComposedWithObserver(plan, obs)

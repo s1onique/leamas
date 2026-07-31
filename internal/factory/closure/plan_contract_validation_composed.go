@@ -35,6 +35,12 @@ type ComposedPlanValidationResult struct {
 // parameterised because the structural parse and semantic
 // validation paths are not separable without changing their
 // contract.
+//
+// A nil DecodeTyped is treated as a closed-path invariant:
+// the pipeline emits a single deterministic decode-stage
+// diagnostic and never falls back to the production decoder.
+// The fail-closed contract means a malformed dependency bundle
+// cannot silently substitute the real typed decoder.
 type composedValidationDeps struct {
 	DecodeTyped func(root any, observer compositionObserver) (Plan, error)
 }
@@ -47,6 +53,20 @@ func defaultComposedValidationDeps() composedValidationDeps {
 		DecodeTyped: decodeTypedPlanWithObserver,
 	}
 }
+
+// typedDecodeMissingDependencyError is the deterministic sentinel
+// raised when a caller passes a composedValidationDeps bundle
+// without a DecodeTyped binding. Production always supplies the
+// canonical binding via defaultComposedValidationDeps; the error
+// is the only path through which a missing-binding diagnostic is
+// emitted.
+type typedDecodeMissingDependencyError struct{}
+
+func (typedDecodeMissingDependencyError) Error() string {
+	return "composed validation dependency bundle has no DecodeTyped binding"
+}
+
+var errTypedDecodeMissingDependency typedDecodeMissingDependencyError
 
 // validatePlanComposedWithObserver is the production entry point
 // that owns the composed pipeline using the default dependency
@@ -73,6 +93,12 @@ func validatePlanComposedWithObserver(data []byte, observer compositionObserver)
 // validatePlanComposedWithObserver (which uses the default deps).
 // The dependency bundle is invocation-local; no package-global
 // mutable state is shared between calls.
+//
+// A nil deps.DecodeTyped closes the typed-decode path
+// deterministically: the pipeline emits a single decode-stage
+// diagnostic whose message is the closed-path invariant and
+// short-circuits before semantic validation. The pipeline
+// never falls back to the production decoder.
 func validatePlanComposedWithObserverAndDeps(data []byte, observer compositionObserver, deps composedValidationDeps) ComposedPlanValidationResult {
 	result := ComposedPlanValidationResult{
 		Structural:     PlanValidationResult{Errors: []PlanValidationError{}},
@@ -95,11 +121,14 @@ func validatePlanComposedWithObserverAndDeps(data []byte, observer compositionOb
 		result.Valid = false
 		return result
 	}
-	decodeTyped := deps.DecodeTyped
-	if decodeTyped == nil {
-		decodeTyped = decodeTypedPlanWithObserver
+	if deps.DecodeTyped == nil {
+		result.Decoded = false
+		result.DecodeErrors = []PlanValidationError{typedDecodeDiagnostic(errTypedDecodeMissingDependency)}
+		result.SemanticValid = false
+		result.Valid = false
+		return result
 	}
-	plan, err := decodeTyped(root, observer)
+	plan, err := deps.DecodeTyped(root, observer)
 	if err != nil {
 		result.Decoded = false
 		result.DecodeErrors = []PlanValidationError{typedDecodeDiagnostic(err)}
@@ -128,13 +157,16 @@ func ValidatePlanComposed(data []byte) ComposedPlanValidationResult {
 	return validatePlanComposedWithObserver(data, noopCompositionObserver{})
 }
 
-// ValidatePlanStructuralAndSemantic is a convenience wrapper
-// that runs the composed pipeline and surfaces the diagnostic of
-// the actual failing stage. Stage precedence: structural -> typed
-// -> semantic. It never returns the generic "semantic validation
-// failed" for a structural or typed-decode failure.
-func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error) {
-	result := validatePlanComposedWithObserver(data, noopCompositionObserver{})
+// validatePlanStructuralAndSemanticWith is the dep-aware
+// convenience wrapper that runs the composed pipeline and
+// surfaces the diagnostic of the actual failing stage. Stage
+// precedence: structural -> typed -> semantic. It never returns
+// the generic "semantic validation failed" for a structural or
+// typed-decode failure. Production
+// ValidatePlanStructuralAndSemantic delegates to this function
+// using defaultComposedValidationDeps.
+func validatePlanStructuralAndSemanticWith(data []byte, observer compositionObserver, deps composedValidationDeps) (PlanValidationResult, error) {
+	result := validatePlanComposedWithObserverAndDeps(data, observer, deps)
 	if !result.Structural.Valid {
 		return result.Structural, errorFromDiagnostics(result.Structural.Errors)
 	}
@@ -145,6 +177,15 @@ func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error
 		return result.Structural, errorFromDiagnostics(result.SemanticErrors)
 	}
 	return result.Structural, nil
+}
+
+// ValidatePlanStructuralAndSemantic is a convenience wrapper
+// that runs the composed pipeline and surfaces the diagnostic of
+// the actual failing stage. Stage precedence: structural -> typed
+// -> semantic. It never returns the generic "semantic validation
+// failed" for a structural or typed-decode failure.
+func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error) {
+	return validatePlanStructuralAndSemanticWith(data, noopCompositionObserver{}, defaultComposedValidationDeps())
 }
 
 // typedDecodeDiagnostic wraps a typed-decode error as a

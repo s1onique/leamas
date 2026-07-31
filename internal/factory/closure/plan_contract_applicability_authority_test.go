@@ -178,6 +178,70 @@ func TestApplicabilityAuthorityMultipleModeRules(t *testing.T) {
 	}
 }
 
+// TestApplicabilityAuthorityDuplicateSameModeRule proves the
+// applicability walker produces a deterministic result for a
+// field carrying two rules that share (Sibling="mode",
+// Value="run") but conflict on presence. The walker iterates
+// every matching rule and emits one diagnostic per rule whose
+// presence check matches the document. The two presence checks
+// (PresenceRequired and PresenceForbidden) are mutually
+// exclusive on the same field, so the walker never emits
+// contradictory diagnostics for the same field under one mode.
+// The pinned behaviour is documented inline.
+func TestApplicabilityAuthorityDuplicateSameModeRule(t *testing.T) {
+	contract := minimalChecksField(
+		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+		fieldApplicabilityRule{Sibling: "mode", Value: CheckModeRun, Presence: PresenceForbidden},
+	)
+	// Documented contract: the walker iterates every matching
+	// rule in slice order. The presence checks are mutually
+	// exclusive (Required fires only when the field is absent,
+	// Forbidden fires only when the field is present), so the
+	// walker emits exactly one diagnostic per document for a
+	// given field under a given mode. The walker therefore never
+	// produces contradictory diagnostics for the same field.
+
+	// Field absent under mode=run: exactly one PresenceRequired diagnostic.
+	absentRoot := map[string]any{
+		"checks": []any{
+			map[string]any{"id": "noop", "mode": CheckModeRun},
+		},
+	}
+	absentDiags := ValidateModeDependentApplicability(absentRoot, contract)
+	if len(absentDiags) != 1 {
+		t.Fatalf("field absent under conflicting rules: expected exactly 1 diagnostic, got %d: %v",
+			len(absentDiags), absentDiags)
+	}
+	if absentDiags[0].Code != PlanCodeRequiredPropertyMissing {
+		t.Fatalf("field absent under conflicting rules: expected PresenceRequired diagnostic, got %v",
+			absentDiags[0])
+	}
+	if absentDiags[0].InstancePath != "/checks/0/argv" {
+		t.Fatalf("field absent under conflicting rules: expected /checks/0/argv path, got %q",
+			absentDiags[0].InstancePath)
+	}
+
+	// Field present under mode=run: exactly one PresenceForbidden diagnostic.
+	presentRoot := map[string]any{
+		"checks": []any{
+			map[string]any{"id": "noop", "mode": CheckModeRun, "argv": []any{"true"}},
+		},
+	}
+	presentDiags := ValidateModeDependentApplicability(presentRoot, contract)
+	if len(presentDiags) != 1 {
+		t.Fatalf("field present under conflicting rules: expected exactly 1 diagnostic, got %d: %v",
+			len(presentDiags), presentDiags)
+	}
+	if presentDiags[0].Code != PlanCodeSemanticConstraintFailed {
+		t.Fatalf("field present under conflicting rules: expected PresenceForbidden diagnostic, got %v",
+			presentDiags[0])
+	}
+	if presentDiags[0].InstancePath != "/checks/0/argv" {
+		t.Fatalf("field present under conflicting rules: expected /checks/0/argv path, got %q",
+			presentDiags[0].InstancePath)
+	}
+}
+
 // TestApplicabilityAuthorityPresenceForMode proves the
 // descriptor-driven helper resolves the right PresenceRule for
 // known modes and defaults to PresenceOptional when the mode is

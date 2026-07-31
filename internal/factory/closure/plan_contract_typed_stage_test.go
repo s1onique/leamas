@@ -3,6 +3,7 @@ package closure
 import (
 	"encoding/json"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -152,5 +153,87 @@ func TestTypedStageJSONShapeKeysAndArrays(t *testing.T) {
 	}
 	if len(decodeErrors) != 1 {
 		t.Fatalf("decode_errors length = %d, want 1", len(decodeErrors))
+	}
+}
+
+// TestTypedStageNilDependencyFailsClosed proves the typed-decode
+// stage closes deterministically when the dependency bundle has
+// no DecodeTyped binding. The pipeline must NOT fall back to the
+// production decoder; instead, it emits a single decode-stage
+// diagnostic with the documented closed-path invariant message.
+func TestTypedStageNilDependencyFailsClosed(t *testing.T) {
+	deps := composedValidationDeps{DecodeTyped: nil}
+	obs := &countingObserver{}
+	composed := validatePlanComposedWithObserverAndDeps(canonicalComposedPlan(), obs, deps)
+	if !composed.Structural.Valid {
+		t.Fatalf("structural must succeed before typed runs: %+v", composed.Structural.Errors)
+	}
+	if composed.Decoded {
+		t.Fatalf("Decoded must be false on nil-dependency failure")
+	}
+	if len(composed.DecodeErrors) != 1 {
+		t.Fatalf("DecodeErrors length = %d, want exactly 1", len(composed.DecodeErrors))
+	}
+	diag := composed.DecodeErrors[0]
+	if diag.Code != PlanCodeInvalidType {
+		t.Fatalf("decode code = %q, want %q", diag.Code, PlanCodeInvalidType)
+	}
+	if diag.Keyword != KeywordType {
+		t.Fatalf("decode keyword = %q, want %q", diag.Keyword, KeywordType)
+	}
+	if diag.InstancePath != "" {
+		t.Fatalf("decode path = %q, want empty", diag.InstancePath)
+	}
+	if !strings.Contains(diag.Message, "composed validation dependency bundle has no DecodeTyped binding") {
+		t.Fatalf("decode message must contain the closed-path invariant: %q", diag.Message)
+	}
+	if composed.SemanticValid {
+		t.Fatalf("SemanticValid must be false on nil-dependency failure")
+	}
+	if composed.Valid {
+		t.Fatalf("Valid must be false on nil-dependency failure")
+	}
+}
+
+// TestTypedStageNilDependencyDoesNotRunSemantic proves the
+// typed-decode stage short-circuits before semantic validation
+// when the dependency bundle has no DecodeTyped binding. The
+// observer must record zero SemanticValidated events.
+func TestTypedStageNilDependencyDoesNotRunSemantic(t *testing.T) {
+	deps := composedValidationDeps{DecodeTyped: nil}
+	obs := &countingObserver{}
+	composed := validatePlanComposedWithObserverAndDeps(canonicalComposedPlan(), obs, deps)
+	if composed.Valid {
+		t.Fatalf("nil-dependency must yield Valid=false: %+v", composed)
+	}
+	if obs.semanticValidatedCount != 0 {
+		t.Fatalf("semantic must NOT be invoked on nil-dependency failure: got %d", obs.semanticValidatedCount)
+	}
+	if obs.typedDecodedCount != 0 {
+		t.Fatalf("typed decode must NOT be invoked on nil-dependency failure: got %d", obs.typedDecodedCount)
+	}
+	if len(composed.SemanticErrors) != 0 {
+		t.Fatalf("SemanticErrors length = %d, want 0", len(composed.SemanticErrors))
+	}
+}
+
+// TestTypedStageDepAwareWrapperReturnsDecodeError proves the
+// dependency-aware convenience wrapper
+// (validatePlanStructuralAndSemanticWith) returns the decode-stage
+// error verbatim and never invokes semantic validation. The
+// wrapper is the production-replacement entry point; tests must
+// exercise it directly, not merely inspect a composed result.
+func TestTypedStageDepAwareWrapperReturnsDecodeError(t *testing.T) {
+	deps := composedValidationDeps{DecodeTyped: sentinelTypedDecode}
+	obs := &countingObserver{}
+	_, err := validatePlanStructuralAndSemanticWith(canonicalComposedPlan(), obs, deps)
+	if err == nil {
+		t.Fatalf("dep-aware wrapper must return error on typed-stage failure")
+	}
+	if !strings.Contains(err.Error(), "sentinel typed decode failure") {
+		t.Fatalf("wrapper error must contain sentinel: %q", err.Error())
+	}
+	if obs.semanticValidatedCount != 0 {
+		t.Fatalf("semantic must NOT be invoked on typed failure via wrapper: got %d", obs.semanticValidatedCount)
 	}
 }

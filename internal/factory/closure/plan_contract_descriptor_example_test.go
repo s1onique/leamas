@@ -79,3 +79,29 @@ func TestDescriptorExampleRegressionPassesAllStages(t *testing.T) {
 		t.Fatalf("DescriptorExample must pass semantic validation; errors=%v", composed.SemanticErrors)
 	}
 }
+
+// TestDescriptorExampleRegressionDirectStageProof exercises the
+// canonical DecodePlan and ValidatePlan entry points directly
+// against the generated example, in addition to the composed
+// pipeline assertion. The direct stages form the production
+// contract that the future CLI consumers depend on.
+func TestDescriptorExampleRegressionDirectStageProof(t *testing.T) {
+	example := DescriptorExample()
+	raw, err := json.Marshal(example)
+	if err != nil {
+		t.Fatalf("marshal example: %v", err)
+	}
+	plan, err := DecodePlan(raw)
+	if err != nil {
+		t.Fatalf("DecodePlan returned error: %v", err)
+	}
+	if err := ValidatePlan(plan); err != nil {
+		t.Fatalf("ValidatePlan returned error: %v", err)
+	}
+	if plan.ContractVersion != ContractVersionV1 {
+		t.Fatalf("plan.ContractVersion = %d, want %d", plan.ContractVersion, ContractVersionV1)
+	}
+	if len(plan.Checks) == 0 {
+		t.Fatalf("DescriptorExample must yield a plan with at least one check")
+	}
+}
