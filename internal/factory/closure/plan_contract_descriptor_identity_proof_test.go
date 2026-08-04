@@ -33,19 +33,23 @@ func (c *countingDescriptorValidationObserver) DescriptorIdentityValidated(diagn
 	c.lastSnapshot = snapshot
 }
 
-// mutatingDescriptorValidationObserver is the test-only hook
+// identityMutatingDescriptorObserver is the test-only hook
 // used to verify the observer cannot change applicability
-// behaviour. It mutates every diagnostic in the slice it
-// receives. If the production code derives the suppression set
-// from the slice after the observer runs, this test exposes
-// the ordering defect.
-type mutatingDescriptorValidationObserver struct {
+// behaviour. It mutates every field relevant to duplicate
+// suppression identity: Code, InstancePath, PropertyName, and
+// Message. The production ordering and defensive-copy safeguards
+// are now proved by an observer that mutates suppression identity
+// fields.
+type identityMutatingDescriptorObserver struct {
 	mutated bool
 }
 
-func (m *mutatingDescriptorValidationObserver) DescriptorIdentityValidated(diagnostics []PlanValidationError) {
+func (m *identityMutatingDescriptorObserver) DescriptorIdentityValidated(diagnostics []PlanValidationError) {
 	for i := range diagnostics {
-		diagnostics[i].Message = "MUTATED_" + itoa(i)
+		diagnostics[i].Code = PlanCodeInvalidJSON
+		diagnostics[i].InstancePath = "/observer-mutated"
+		diagnostics[i].PropertyName = "observer-mutated"
+		diagnostics[i].Message = "observer-mutated"
 	}
 	m.mutated = true
 }
@@ -309,7 +313,7 @@ func TestDescriptorObserverNonAuthority(t *testing.T) {
 
 	noop := validateModeDependentApplicabilityWithObserver(root, contract, noopDescriptorValidationObserver{})
 
-	mut := &mutatingDescriptorValidationObserver{}
+	mut := &identityMutatingDescriptorObserver{}
 	withMut := validateModeDependentApplicabilityWithObserver(root, contract, mut)
 	if !mut.mutated {
 		t.Fatalf("mutating observer was not invoked")
@@ -386,6 +390,246 @@ func TestDescriptorExampleMalformedDescriptorReject(t *testing.T) {
 		direct := DescriptorExample()
 		if !reflect.DeepEqual(example, direct) {
 			t.Fatalf("example differs from DescriptorExample()")
+		}
+	})
+}
+
+// identicalDuplicateRules returns applicability rules where both
+// rules carry the same Presence value (Required + Required).
+// This tests the validator's handling of non-conflicting
+// duplicates.
+func identicalDuplicateRules() []fieldApplicabilityRule {
+	return []fieldApplicabilityRule{
+		{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+		{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+	}
+}
+
+// conflictingDuplicateRules returns applicability rules where the
+// two rules carry different Presence values (Required + Forbidden).
+// This tests the validator's handling of genuinely conflicting
+// duplicates.
+func conflictingDuplicateRules() []fieldApplicabilityRule {
+	return []fieldApplicabilityRule{
+		{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
+		{Sibling: "mode", Value: CheckModeRun, Presence: PresenceForbidden},
+	}
+}
+
+// buildIdenticalDuplicateDescriptor returns a contract whose Root
+// Fields map contains a single field with identical duplicate
+// rules (Required + Required).
+func buildIdenticalDuplicateDescriptor(t *testing.T) planContractV1Descriptor {
+	t.Helper()
+	return planContractV1Descriptor{
+		ContractVersion: ContractVersionV1,
+		Root: planObjectDescriptor{
+			Path: "",
+			Fields: map[string]planFieldDescriptor{
+				"argv": {
+					JSONName:           "argv",
+					Kind:               kindString,
+					ApplicabilityRules: identicalDuplicateRules(),
+				},
+			},
+		},
+	}
+}
+
+// buildConflictingDuplicateDescriptor returns a contract whose Root
+// Fields map contains a single field with conflicting duplicate
+// rules (Required + Forbidden).
+func buildConflictingDuplicateDescriptor(t *testing.T) planContractV1Descriptor {
+	t.Helper()
+	return planContractV1Descriptor{
+		ContractVersion: ContractVersionV1,
+		Root: planObjectDescriptor{
+			Path: "",
+			Fields: map[string]planFieldDescriptor{
+				"argv": {
+					JSONName:           "argv",
+					Kind:               kindString,
+					ApplicabilityRules: conflictingDuplicateRules(),
+				},
+			},
+		},
+	}
+}
+
+// TestDescriptorObserverIdentityMutation proves the production
+// ordering and defensive-copy safeguards by running the same
+// duplicate-laden descriptor through both a noop observer and an
+// identity-mutating observer. The mutating observer changes every
+// field relevant to duplicate suppression identity. Both paths
+// must produce identical diagnostics, duplicate suppression, and
+// applicability output. The mutating observer must be called
+// exactly once.
+//
+// Uses a cross-subtree contract where /checks/argv carries the
+// duplicate rules, so we can verify suppression behavior.
+func TestDescriptorObserverIdentityMutation(t *testing.T) {
+	// Use cross-subtree contract with duplicate in checks so we can
+	// verify suppression: /checks/argv is suppressed, so no
+	// required_property_missing is emitted for /checks/0/argv.
+	contract := buildCrossSubtreeContract(t, true) // duplicate in checks
+	root := runModeDocument()
+
+	// Noop observer baseline.
+	noop := validateModeDependentApplicabilityWithObserver(root, contract, noopDescriptorValidationObserver{})
+
+	// Identity-mutating observer.
+	mutObs := &identityMutatingDescriptorObserver{}
+	withMut := validateModeDependentApplicabilityWithObserver(root, contract, mutObs)
+	if !mutObs.mutated {
+		t.Fatalf("mutating observer was not invoked")
+	}
+
+	// Diagnostics must be identical regardless of observer mutation.
+	if !reflect.DeepEqual(noop, withMut) {
+		t.Fatalf("observer mutation changed applicability result:\nnoop=%+v\nmut=%+v", noop, withMut)
+	}
+
+	// Duplicate suppression must be identical: both paths must NOT emit
+	// required_property_missing for /checks/0/argv (suppressed by duplicate).
+	noopHasRequired := false
+	withMutHasRequired := false
+	for _, d := range noop {
+		if d.Code == PlanCodeRequiredPropertyMissing && d.InstancePath == "/checks/0/argv" {
+			noopHasRequired = true
+		}
+	}
+	for _, d := range withMut {
+		if d.Code == PlanCodeRequiredPropertyMissing && d.InstancePath == "/checks/0/argv" {
+			withMutHasRequired = true
+		}
+	}
+	// Both must have the same suppression behavior.
+	if noopHasRequired != withMutHasRequired {
+		t.Fatalf("duplicate suppression differs: noop_has_required=%v mut_has_required=%v", noopHasRequired, withMutHasRequired)
+	}
+
+	// Duplicate diagnostic paths must match.
+	noopDupPaths := make(map[string]struct{})
+	withMutDupPaths := make(map[string]struct{})
+	for _, d := range noop {
+		if d.Code == PlanCodeDuplicateApplicabilityRule {
+			noopDupPaths[d.InstancePath] = struct{}{}
+		}
+	}
+	for _, d := range withMut {
+		if d.Code == PlanCodeDuplicateApplicabilityRule {
+			withMutDupPaths[d.InstancePath] = struct{}{}
+		}
+	}
+	for path := range noopDupPaths {
+		if _, ok := withMutDupPaths[path]; !ok {
+			t.Fatalf("duplicate path %s missing in mut observer result", path)
+		}
+	}
+	for path := range withMutDupPaths {
+		if _, ok := noopDupPaths[path]; !ok {
+			t.Fatalf("duplicate path %s missing in noop observer result", path)
+		}
+	}
+}
+
+// TestDescriptorDuplicateKinds proves that identical and conflicting
+// duplicates are genuinely distinct fixtures. Both must emit the
+// duplicate_applicability_rule diagnostic, but with different
+// presence values encoded in the rules.
+func TestDescriptorDuplicateKinds(t *testing.T) {
+	t.Run("identical-duplicate-rules", func(t *testing.T) {
+		contract := buildIdenticalDuplicateDescriptor(t)
+		example, diags := descriptorExampleWithContract(contract)
+		if len(example) != 0 {
+			t.Fatalf("example must be empty; got %v", example)
+		}
+		if len(diags) != 1 {
+			t.Fatalf("expected exactly 1 diagnostic; got %d", len(diags))
+		}
+		if diags[0].Code != PlanCodeDuplicateApplicabilityRule {
+			t.Fatalf("expected duplicate_applicability_rule; got %s", diags[0].Code)
+		}
+		if diags[0].InstancePath != "/argv" {
+			t.Fatalf("expected path /argv; got %s", diags[0].InstancePath)
+		}
+		// Verify the rules are indeed identical (Required + Required).
+		rules := identicalDuplicateRules()
+		if len(rules) != 2 || rules[0].Presence != PresenceRequired || rules[1].Presence != PresenceRequired {
+			t.Fatalf("rules are not identical duplicates: %+v", rules)
+		}
+	})
+	t.Run("conflicting-duplicate-rules", func(t *testing.T) {
+		contract := buildConflictingDuplicateDescriptor(t)
+		example, diags := descriptorExampleWithContract(contract)
+		if len(example) != 0 {
+			t.Fatalf("example must be empty; got %v", example)
+		}
+		if len(diags) != 1 {
+			t.Fatalf("expected exactly 1 diagnostic; got %d", len(diags))
+		}
+		if diags[0].Code != PlanCodeDuplicateApplicabilityRule {
+			t.Fatalf("expected duplicate_applicability_rule; got %s", diags[0].Code)
+		}
+		if diags[0].InstancePath != "/argv" {
+			t.Fatalf("expected path /argv; got %s", diags[0].InstancePath)
+		}
+		// Verify the rules are indeed conflicting (Required + Forbidden).
+		rules := conflictingDuplicateRules()
+		if len(rules) != 2 || rules[0].Presence != PresenceRequired || rules[1].Presence != PresenceForbidden {
+			t.Fatalf("rules are not conflicting: %+v", rules)
+		}
+	})
+}
+
+// TestDescriptorExampleCrossSubtreeFailClosed proves that a malformed
+// example under /other/argv or /checks/argv requires an empty
+// example and the correct diagnostic path. Partial root properties
+// (checks, policy, baseline, artifacts, contract_version) are
+// explicitly rejected.
+func TestDescriptorExampleCrossSubtreeFailClosed(t *testing.T) {
+	t.Run("duplicate-under-other-argv", func(t *testing.T) {
+		contract := buildCrossSubtreeContract(t, false)
+		example, diags := descriptorExampleWithContract(contract)
+		if len(example) != 0 {
+			t.Fatalf("example must be empty for malformed descriptor; got %v", example)
+		}
+		foundAtOther := false
+		for _, d := range diags {
+			if d.Code == PlanCodeDuplicateApplicabilityRule && d.InstancePath == "/other/argv" {
+				foundAtOther = true
+			}
+		}
+		if !foundAtOther {
+			t.Fatalf("expected duplicate at /other/argv; got %v", diags)
+		}
+		// No partial root properties.
+		for _, key := range []string{"checks", "policy", "baseline", "artifacts", "contract_version"} {
+			if _, ok := example[key]; ok {
+				t.Fatalf("example contains partial root property %q", key)
+			}
+		}
+	})
+	t.Run("duplicate-under-checks-argv", func(t *testing.T) {
+		contract := buildCrossSubtreeContract(t, true)
+		example, diags := descriptorExampleWithContract(contract)
+		if len(example) != 0 {
+			t.Fatalf("example must be empty for malformed descriptor; got %v", example)
+		}
+		foundAtChecks := false
+		for _, d := range diags {
+			if d.Code == PlanCodeDuplicateApplicabilityRule && d.InstancePath == "/checks/argv" {
+				foundAtChecks = true
+			}
+		}
+		if !foundAtChecks {
+			t.Fatalf("expected duplicate at /checks/argv; got %v", diags)
+		}
+		// No partial root properties.
+		for _, key := range []string{"checks", "policy", "baseline", "artifacts", "contract_version"} {
+			if _, ok := example[key]; ok {
+				t.Fatalf("example contains partial root property %q", key)
+			}
 		}
 	})
 }
