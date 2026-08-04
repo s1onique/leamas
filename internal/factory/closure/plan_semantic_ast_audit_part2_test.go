@@ -6,7 +6,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -193,6 +192,7 @@ var forbiddenStringFuncs = map[string]bool{
 	"Contains":  true,
 	"Index":     true,
 	"Split":     true,
+	"SplitN":    true,
 	// Note: ToUpper, ToLower, Trim, etc. are allowed as they don't
 	// extract semantic information from the error message structure.
 }
@@ -265,5 +265,30 @@ func loadSemanticAuditSources(t *testing.T) ([]*ast.File, error) {
 	return roots, nil
 }
 
-// keep lint happy
-var _ = regexp.Compile
+// ----------------------------------------------------------------------------
+// Local Alias Taint Tracking
+//
+// This section implements function-local taint tracking for error message
+// sources. Within each function body, we track identifiers that have been
+// directly assigned from err.Error() as "tainted". Tainted identifiers remain
+// tainted until they are reassigned from a non-tainted expression.
+//
+// This is NOT whole-program taint analysis. It is bounded to:
+//   - Direct assignments within the same function scope
+//   - Simple identifier-to-identifier reassignments
+//   - Does not track data flow across function boundaries
+//   - Does not handle aliasing through map/chan/slice operations
+//   - Does not propagate through type conversions like []byte(msg)
+//
+// The purpose is to catch common patterns like:
+//   msg := err.Error()
+//   if strings.Contains(msg, "...") { ... }
+// ----------------------------------------------------------------------------
+
+// taintTracker tracks identifiers tainted by err.Error() assignments.
+type taintTracker struct {
+	// tainted contains identifiers known to hold values derived from err.Error()
+	tainted map[string]bool
+}
+
+// newTaintTracker creates a fresh taint tracker for a function body.
