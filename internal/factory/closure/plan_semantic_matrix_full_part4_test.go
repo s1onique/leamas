@@ -16,6 +16,9 @@ import (
 // - policy_require_clean_before
 // - policy_require_clean_after
 // - policy_require_diff_check
+// - policy_profile/unknown
+// - policy_profile/not_implemented
+// - policy_profile/missing_check
 func TestValidatePlanSemanticMatrixFull_Part4(t *testing.T) {
 	validateSourceCase(t, buildSourceMatrixCasesPart4())
 }
@@ -336,14 +339,9 @@ func buildSourceMatrixCasesPart4() []testCase {
 				},
 			},
 		},
-	}
-}
 
-// buildPlainMatrixCases constructs test cases that return plain fmt.Errorf errors.
-func buildPlainMatrixCases() []plainTestCase {
-	return []plainTestCase{
 		// =================================================================
-		// POLICY_PROFILE - returns plain fmt.Errorf
+		// POLICY_PROFILE - typed errors (PolicyProfileError)
 		// =================================================================
 
 		{
@@ -351,14 +349,30 @@ func buildPlainMatrixCases() []plainTestCase {
 			mutate: func(p *Plan) {
 				p.PolicyProfile = "unknown-profile"
 			},
-			wantMessageSubstr: "is unknown",
+			wantCount: 1,
+			wantDiags: []wantDiag{
+				{
+					InstancePath:  "/policy_profile",
+					Code:          PlanCodeSemanticConstraintFailed,
+					Keyword:       KeywordEnum,
+					MessageSubstr: "is unknown",
+				},
+			},
 		},
 		{
 			name: "policy_profile/not_implemented",
 			mutate: func(p *Plan) {
 				p.PolicyProfile = "indeep-act-v1"
 			},
-			wantMessageSubstr: "not yet implemented",
+			wantCount: 1,
+			wantDiags: []wantDiag{
+				{
+					InstancePath:  "/policy_profile",
+					Code:          PlanCodeSemanticConstraintFailed,
+					Keyword:       KeywordEnum,
+					MessageSubstr: "not yet implemented",
+				},
+			},
 		},
 		{
 			name: "policy_profile/missing_check",
@@ -368,7 +382,16 @@ func buildPlainMatrixCases() []plainTestCase {
 					{ID: "compile", Mode: CheckModeRun, Argv: []string{"go", "build", "./..."}, WorkingDirectory: ".", TimeoutSeconds: 300, Environment: map[string]string{}},
 				}
 			},
-			wantMessageSubstr: "missing or non-matching check",
+			wantCount: 1,
+			wantDiags: []wantDiag{
+				{
+					InstancePath:  "/checks",
+					Code:          PlanCodeSemanticConstraintFailed,
+					Keyword:       KeywordMinItems,
+					PropertyName:  "focused-count-1",
+					MessageSubstr: "missing or non-matching check",
+				},
+			},
 		},
 	}
 }

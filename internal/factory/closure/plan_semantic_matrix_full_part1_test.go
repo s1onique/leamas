@@ -11,7 +11,6 @@ import (
 // - baseline_tree_oid
 func TestValidatePlanSemanticMatrixFull_Part1(t *testing.T) {
 	validateSourceCase(t, buildSourceMatrixCasesPart1())
-	validatePlainCase(t, buildPlainMatrixCases())
 }
 
 // buildSourceMatrixCasesPart1 returns test cases for Part 1.

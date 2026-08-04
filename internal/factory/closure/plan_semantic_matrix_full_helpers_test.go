@@ -23,13 +23,6 @@ type wantDiag struct {
 	MessageSubstr string
 }
 
-// plainTestCase represents a test case that returns plain error.
-type plainTestCase struct {
-	name              string
-	mutate            func(*Plan)
-	wantMessageSubstr string
-}
-
 // validateSourceCase validates a case that returns planDiagnosticSource.
 func validateSourceCase(t *testing.T, cases []testCase) {
 	for _, tc := range cases {
@@ -74,32 +67,6 @@ func validateSourceCase(t *testing.T, cases []testCase) {
 				if !strings.Contains(d.Message, want.MessageSubstr) {
 					t.Errorf("Message = %q, want substring %q for %s", d.Message, want.MessageSubstr, tc.name)
 				}
-			}
-		})
-	}
-}
-
-// validatePlainCase validates a case that returns plain error (not planDiagnosticSource).
-func validatePlainCase(t *testing.T, cases []plainTestCase) {
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			plan := validSemanticPlanFixture(t)
-			tc.mutate(&plan)
-
-			err := ValidatePlan(plan)
-			if err == nil {
-				t.Fatalf("ValidatePlan() = nil, want error for %s", tc.name)
-			}
-
-			// Assert it does NOT implement planDiagnosticSource
-			var source planDiagnosticSource
-			if errors.As(err, &source) {
-				t.Fatalf("errors.As(err, &planDiagnosticSource) = true, want false for %s", tc.name)
-			}
-
-			// Check error message contains expected substring
-			if !strings.Contains(err.Error(), tc.wantMessageSubstr) {
-				t.Errorf("Error() = %q, want substring %q for %s", err.Error(), tc.wantMessageSubstr, tc.name)
 			}
 		})
 	}
