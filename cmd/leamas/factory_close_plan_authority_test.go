@@ -73,7 +73,9 @@ func TestAuthorityOneSchemaImplementation(t *testing.T) {
 }
 
 func TestAuthorityOneExampleImplementation(t *testing.T) {
-	// Prove: exactly one example implementation exists
+	// Prove: exactly two example implementations exist:
+	// - runFactoryClosePlanExample (production adapter)
+	// - runFactoryClosePlanExampleWith (testable handler)
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, "factory_close_plan_example.go", nil, parser.ParseComments)
 	if err != nil {
@@ -89,8 +91,8 @@ func TestAuthorityOneExampleImplementation(t *testing.T) {
 		}
 	}
 
-	if exampleFuncs != 1 {
-		t.Errorf("exampleFuncs = %d, want 1", exampleFuncs)
+	if exampleFuncs != 2 {
+		t.Errorf("exampleFuncs = %d, want 2 (adapter + handler)", exampleFuncs)
 	}
 }
 
@@ -140,6 +142,46 @@ func TestAuthoritySchemaGeneratorCalledOnce(t *testing.T) {
 
 	if jsonSchemaCalls != 1 {
 		t.Errorf("JSONSchema calls = %d, want 1", jsonSchemaCalls)
+	}
+}
+
+func TestAuthorityExampleValidateComposedCalledOnce(t *testing.T) {
+	// Prove: ValidatePlanComposed is called exactly once in the example handler body
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "factory_close_plan_example.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Find the runFactoryClosePlanExampleWith function
+	var handlerFunc *ast.FuncDecl
+	for _, decl := range node.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			if fn.Name.Name == "runFactoryClosePlanExampleWith" {
+				handlerFunc = fn
+				break
+			}
+		}
+	}
+
+	if handlerFunc == nil {
+		t.Fatal("runFactoryClosePlanExampleWith not found")
+	}
+
+	var validateCalls int
+	ast.Inspect(handlerFunc.Body, func(n ast.Node) bool {
+		if ce, ok := n.(*ast.CallExpr); ok {
+			if sel, ok := ce.Fun.(*ast.SelectorExpr); ok {
+				if sel.Sel.Name == "Validate" {
+					validateCalls++
+				}
+			}
+		}
+		return true
+	})
+
+	if validateCalls != 1 {
+		t.Errorf("Validate calls in runFactoryClosePlanExampleWith = %d, want 1", validateCalls)
 	}
 }
 
@@ -202,43 +244,142 @@ func TestAuthorityZeroOsExitInHandlers(t *testing.T) {
 	}
 }
 
-func TestAuthorityZeroOsStdinBelowAdapter(t *testing.T) {
-	// Prove: zero os.Stdin access in internal handlers
-	for _, file := range []string{
-		"factory_close_plan_schema.go",
-		"factory_close_plan_example.go",
-		"factory_close_plan_validate.go",
-	} {
-		fset := token.NewFileSet()
+func TestAuthorityOsStdinScoped(t *testing.T) {
+	// Prove: os.Stdin is only used in the production adapter, not handlers
+	// runFactoryClosePlanValidate should have exactly one os.Stdin
+	// runFactoryClosePlanValidateWith should have zero
+	// schema/example handlers should have zero
+
+	// Check production adapter has exactly one os.Stdin
+	fset := token.NewFileSet()
+	validateFile, err := parser.ParseFile(fset, "factory_close_plan_validate.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var adapterStdin, handlerStdin int
+	for _, decl := range validateFile.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			countStdin := func(node *ast.FuncDecl) int {
+				var count int
+				ast.Inspect(node.Body, func(n ast.Node) bool {
+					if sel, ok := n.(*ast.SelectorExpr); ok {
+						if ident, ok := sel.X.(*ast.Ident); ok {
+							if ident.Name == "os" && sel.Sel.Name == "Stdin" {
+								count++
+							}
+						}
+					}
+					return true
+				})
+				return count
+			}
+
+			switch fn.Name.Name {
+			case "runFactoryClosePlanValidate":
+				adapterStdin = countStdin(fn)
+			case "runFactoryClosePlanValidateWith":
+				handlerStdin = countStdin(fn)
+			}
+		}
+	}
+
+	if adapterStdin != 1 {
+		t.Errorf("runFactoryClosePlanValidate has %d os.Stdin, want 1", adapterStdin)
+	}
+	if handlerStdin != 0 {
+		t.Errorf("runFactoryClosePlanValidateWith has %d os.Stdin, want 0", handlerStdin)
+	}
+
+	// Check schema and example handlers have zero os.Stdin
+	for _, file := range []string{"factory_close_plan_schema.go", "factory_close_plan_example.go"} {
 		node, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		var osStdinAccess int
+		var stdinCount int
 		ast.Inspect(node, func(n ast.Node) bool {
-			if ce, ok := n.(*ast.CallExpr); ok {
-				if sel, ok := ce.Fun.(*ast.SelectorExpr); ok {
-					if ident, ok := sel.X.(*ast.Ident); ok {
-						if ident.Name == "os" && sel.Sel.Name == "Stdin" {
-							osStdinAccess++
-						}
+			if sel, ok := n.(*ast.SelectorExpr); ok {
+				if ident, ok := sel.X.(*ast.Ident); ok {
+					if ident.Name == "os" && sel.Sel.Name == "Stdin" {
+						stdinCount++
 					}
 				}
 			}
 			return true
 		})
 
-		if osStdinAccess > 0 {
-			t.Errorf("%s accesses os.Stdin, want zero", filepath.Base(file))
+		if stdinCount > 0 {
+			t.Errorf("%s has %d os.Stdin, want 0", filepath.Base(file), stdinCount)
 		}
 	}
 }
 
-func TestAuthorityZeroAndTwoCallFixtures(t *testing.T) {
-	// Prove: zero-call and two-call adversarial fixtures are handled
-	// This is tested implicitly by the tests above proving single-call patterns.
-	// Adversarial zero-call: help-only args
-	// Adversarial two-call: repeated flags (handled by parser)
-	t.Log("Authority tests prove single-call patterns; adversarial cases handled by argument parser")
+func TestAuthorityExactDeclarationNames(t *testing.T) {
+	// Prove: exact declaration names are used
+	fset := token.NewFileSet()
+
+	// Schema: must have runFactoryClosePlanSchema (production)
+	schemaFile, err := parser.ParseFile(fset, "factory_close_plan_schema.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hasSchemaAdapter bool
+	for _, decl := range schemaFile.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			if fn.Name.Name == "runFactoryClosePlanSchema" && fn.Body != nil {
+				hasSchemaAdapter = true
+			}
+		}
+	}
+	if !hasSchemaAdapter {
+		t.Error("missing runFactoryClosePlanSchema with non-nil body")
+	}
+
+	// Example: must have runFactoryClosePlanExample (production) and runFactoryClosePlanExampleWith (handler)
+	exampleFile, err := parser.ParseFile(fset, "factory_close_plan_example.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hasExampleAdapter, hasExampleHandler bool
+	for _, decl := range exampleFile.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			if fn.Name.Name == "runFactoryClosePlanExample" && fn.Body != nil {
+				hasExampleAdapter = true
+			}
+			if fn.Name.Name == "runFactoryClosePlanExampleWith" && fn.Body != nil {
+				hasExampleHandler = true
+			}
+		}
+	}
+	if !hasExampleAdapter {
+		t.Error("missing runFactoryClosePlanExample with non-nil body")
+	}
+	if !hasExampleHandler {
+		t.Error("missing runFactoryClosePlanExampleWith with non-nil body")
+	}
+
+	// Validate: must have runFactoryClosePlanValidate (production) and runFactoryClosePlanValidateWith (handler)
+	validateFile, err := parser.ParseFile(fset, "factory_close_plan_validate.go", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hasValidateAdapter, hasValidateHandler bool
+	for _, decl := range validateFile.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok {
+			if fn.Name.Name == "runFactoryClosePlanValidate" && fn.Body != nil {
+				hasValidateAdapter = true
+			}
+			if fn.Name.Name == "runFactoryClosePlanValidateWith" && fn.Body != nil {
+				hasValidateHandler = true
+			}
+		}
+	}
+	if !hasValidateAdapter {
+		t.Error("missing runFactoryClosePlanValidate with non-nil body")
+	}
+	if !hasValidateHandler {
+		t.Error("missing runFactoryClosePlanValidateWith with non-nil body")
+	}
 }

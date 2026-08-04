@@ -8,10 +8,16 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure"
 )
 
-// runFactoryClosePlanExample outputs a valid example plan.
+// planExampleDeps encapsulates dependencies for testing.
+type planExampleDeps struct {
+	Example  func() map[string]any
+	Validate func([]byte) closure.ComposedPlanValidationResult
+}
+
+// runFactoryClosePlanExampleWith outputs a valid example plan.
 // Before emitting, it validates the example through the composed pipeline
 // to guarantee it passes all structural, decode, and semantic checks.
-func runFactoryClosePlanExample(args []string, stdout, stderr io.Writer) int {
+func runFactoryClosePlanExampleWith(args []string, stdout, stderr io.Writer, deps planExampleDeps) int {
 	// Help must be the sole argument
 	if len(args) == 1 && isHelpFlag(args[0]) {
 		fmt.Fprintln(stderr, "Usage: leamas factory close plan example")
@@ -23,14 +29,14 @@ func runFactoryClosePlanExample(args []string, stdout, stderr io.Writer) int {
 	}
 
 	// Generate example plan
-	plan := closure.DescriptorExample()
+	plan := deps.Example()
 	data, err := json.MarshalIndent(plan, "", "  ")
 	if err != nil {
 		return closeUsageError(stderr, "factory close plan example", "marshal failed: "+err.Error())
 	}
 
 	// Fail-closed validation: verify example passes composed validation
-	result := closure.ValidatePlanComposed(data)
+	result := deps.Validate(data)
 	if !result.Valid {
 		return closeUsageError(stderr, "factory close plan example", "example validation failed: example is not a valid plan")
 	}
@@ -40,4 +46,13 @@ func runFactoryClosePlanExample(args []string, stdout, stderr io.Writer) int {
 		return closeUsageError(stderr, "factory close plan example", "output failed")
 	}
 	return 0
+}
+
+// runFactoryClosePlanExample is the production adapter binding canonical functions.
+func runFactoryClosePlanExample(args []string, stdout, stderr io.Writer) int {
+	deps := planExampleDeps{
+		Example:  closure.DescriptorExample,
+		Validate: closure.ValidatePlanComposed,
+	}
+	return runFactoryClosePlanExampleWith(args, stdout, stderr, deps)
 }
