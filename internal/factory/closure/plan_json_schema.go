@@ -160,9 +160,13 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 		schema["examples"] = []any{field.ExampleValue}
 	}
 
-	// Handle applicability rules as extension
+	// Handle applicability rules as extension.
+	// The public wire uses snake_case keys and string-valued
+	// presence to avoid leaking the internal Go enum and field
+	// naming into the discovery schema.
 	if len(field.ApplicabilityRules) > 0 {
-		// Validate applicability identity: each (sibling, value) pair must be unique
+		// Validate applicability identity: each (sibling, value)
+		// pair must be unique.
 		seen := make(map[string]bool)
 		for _, rule := range field.ApplicabilityRules {
 			key := rule.Sibling + "=" + rule.Value
@@ -171,8 +175,34 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 			}
 			seen[key] = true
 		}
-		schema["x-applicability"] = field.ApplicabilityRules
+		schema["x-applicability"] = toApplicabilityDTOs(field.ApplicabilityRules)
 	}
 
 	return schema, nil
+}
+
+// applicabilityDTO is the frozen public wire shape for the
+// x-applicability extension. snake_case keys and string-valued
+// presence avoid leaking the internal Go enum and field naming
+// into the discovery schema.
+type applicabilityDTO struct {
+	Sibling  string `json:"sibling"`
+	Value    string `json:"value"`
+	Presence string `json:"presence"`
+}
+
+// toApplicabilityDTOs converts internal applicability rules to
+// the public DTO. Presence enum values become stable strings:
+// PresenceOptional -> "optional", PresenceRequired -> "required",
+// PresenceForbidden -> "forbidden".
+func toApplicabilityDTOs(rules []fieldApplicabilityRule) []applicabilityDTO {
+	out := make([]applicabilityDTO, len(rules))
+	for i, rule := range rules {
+		out[i] = applicabilityDTO{
+			Sibling:  rule.Sibling,
+			Value:    rule.Value,
+			Presence: rule.Presence.String(),
+		}
+	}
+	return out
 }

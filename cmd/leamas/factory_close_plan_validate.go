@@ -213,14 +213,17 @@ type planStructuralDTO struct {
 // Cause, observer, and implementation-only fields are
 // intentionally absent.
 type planDiagnosticDTO struct {
+	// All eight keys are always present in the public wire.
+	// rejected_value is null when absent; property_name is ""
+	// when absent. ClineMM consumes the object as a fixed shape.
 	InstancePath   string `json:"instance_path"`
 	SchemaPath     string `json:"schema_path"`
 	Code           string `json:"code"`
 	Keyword        string `json:"keyword"`
 	Message        string `json:"message"`
-	RejectedValue  any    `json:"rejected_value,omitempty"`
+	RejectedValue  any    `json:"rejected_value"`
 	AcceptedValues []any  `json:"accepted_values"`
-	PropertyName   string `json:"property_name,omitempty"`
+	PropertyName   string `json:"property_name"`
 }
 
 // toPlanValidationDTO converts the internal composed result to

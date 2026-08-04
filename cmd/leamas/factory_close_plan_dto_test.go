@@ -159,7 +159,9 @@ func TestDTO_DiagnosticKeys(t *testing.T) {
 		"code":            false,
 		"keyword":         false,
 		"message":         false,
+		"rejected_value":  false,
 		"accepted_values": false,
+		"property_name":   false,
 	}
 	for k := range raw.DecodeErrors[0] {
 		if _, ok := wantKeys[k]; ok {
