@@ -23,10 +23,11 @@ func clonePlanValidationError(diagnostic PlanValidationError) PlanValidationErro
 
 // clonePlanValidationErrors returns a deep copy of the diagnostics slice.
 // Each diagnostic is cloned so mutations to individual diagnostics do not
-// affect the original slice.
+// affect the original slice. Returns a non-nil empty slice when input
+// is nil or empty.
 func clonePlanValidationErrors(diagnostics []PlanValidationError) []PlanValidationError {
-	if diagnostics == nil {
-		return nil
+	if len(diagnostics) == 0 {
+		return []PlanValidationError{}
 	}
 	out := make([]PlanValidationError, len(diagnostics))
 	for i := range diagnostics {

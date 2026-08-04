@@ -17,27 +17,38 @@ func jsonPointer(segments ...string) string {
 }
 
 // jsonPointerIndex builds /<segment>/<index> style paths for array elements.
-// Negative indices are rejected (fail closed).
+// Negative indices and empty segment names are rejected (fail closed).
 func jsonPointerIndex(segment string, index int) string {
-	if index < 0 {
-		return "" // Fail closed for negative indices
+	if index < 0 || segment == "" {
+		return "" // Fail closed for negative indices or empty segment
 	}
 	return "/" + jsonPointerToken(segment) + "/" + itoa(index)
 }
 
 // jsonPointerCheckID constructs /checks/<index>/<field>.
+// Fails closed for negative index or empty field.
 func jsonPointerCheckID(index int, field string) string {
+	if index < 0 || field == "" {
+		return "" // Fail closed
+	}
 	return jsonPointerIndex("checks", index) + "/" + jsonPointerToken(field)
 }
 
 // jsonPointerArtifactID constructs /artifacts/<index>/<field>.
+// Fails closed for negative index or empty field.
 func jsonPointerArtifactID(index int, field string) string {
+	if index < 0 || field == "" {
+		return "" // Fail closed
+	}
 	return jsonPointerIndex("artifacts", index) + "/" + jsonPointerToken(field)
 }
 
 // jsonPointerArgvElement constructs /checks/<checkIndex>/argv/<argIndex>.
-// This is used for argv element validation errors.
+// Fails closed for negative indices.
 func jsonPointerArgvElement(checkIndex, argIndex int) string {
+	if checkIndex < 0 || argIndex < 0 {
+		return "" // Fail closed for negative indices
+	}
 	return jsonPointerIndex("checks", checkIndex) + "/argv/" + itoa(argIndex)
 }
 

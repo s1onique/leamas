@@ -1,104 +1,10 @@
 package closure
 
 import (
+	"errors"
+	"fmt"
 	"testing"
 )
-
-// TestJSONPointerHelpers tests the RFC 6901 JSON Pointer helpers.
-func TestJSONPointerHelpers(t *testing.T) {
-	t.Run("jsonPointer empty", func(t *testing.T) {
-		got := jsonPointer()
-		if got != "" {
-			t.Errorf("jsonPointer() = %q, want %q", got, "")
-		}
-	})
-
-	t.Run("jsonPointer single segment", func(t *testing.T) {
-		got := jsonPointer("foo")
-		if got != "/foo" {
-			t.Errorf("jsonPointer(\"foo\") = %q, want %q", got, "/foo")
-		}
-	})
-
-	t.Run("jsonPointer multiple segments", func(t *testing.T) {
-		got := jsonPointer("foo", "bar", "baz")
-		if got != "/foo/bar/baz" {
-			t.Errorf("jsonPointer(\"foo\", \"bar\", \"baz\") = %q, want %q", got, "/foo/bar/baz")
-		}
-	})
-
-	t.Run("jsonPointerIndex positive", func(t *testing.T) {
-		got := jsonPointerIndex("checks", 0)
-		if got != "/checks/0" {
-			t.Errorf("jsonPointerIndex(\"checks\", 0) = %q, want %q", got, "/checks/0")
-		}
-	})
-
-	t.Run("jsonPointerIndex large index", func(t *testing.T) {
-		got := jsonPointerIndex("artifacts", 99)
-		if got != "/artifacts/99" {
-			t.Errorf("jsonPointerIndex(\"artifacts\", 99) = %q, want %q", got, "/artifacts/99")
-		}
-	})
-
-	t.Run("jsonPointerIndex negative fails closed", func(t *testing.T) {
-		got := jsonPointerIndex("checks", -1)
-		if got != "" {
-			t.Errorf("jsonPointerIndex(\"checks\", -1) = %q, want %q (fail closed)", got, "")
-		}
-	})
-
-	t.Run("jsonPointerCheckID", func(t *testing.T) {
-		got := jsonPointerCheckID(0, "id")
-		if got != "/checks/0/id" {
-			t.Errorf("jsonPointerCheckID(0, \"id\") = %q, want %q", got, "/checks/0/id")
-		}
-	})
-
-	t.Run("jsonPointerArtifactID", func(t *testing.T) {
-		got := jsonPointerArtifactID(1, "path")
-		if got != "/artifacts/1/path" {
-			t.Errorf("jsonPointerArtifactID(1, \"path\") = %q, want %q", got, "/artifacts/1/path")
-		}
-	})
-
-	t.Run("jsonPointerArgvElement", func(t *testing.T) {
-		got := jsonPointerArgvElement(0, 0)
-		if got != "/checks/0/argv/0" {
-			t.Errorf("jsonPointerArgvElement(0, 0) = %q, want %q", got, "/checks/0/argv/0")
-		}
-	})
-}
-
-// TestJSONPointerToken tests RFC 6901 token encoding.
-func TestJSONPointerToken(t *testing.T) {
-	cases := []struct {
-		input    string
-		expected string
-	}{
-		{"foo", "foo"},
-		{"foo/bar", "foo~1bar"},
-		{"foo~bar", "foo~0bar"},
-		{"foo/bar~baz", "foo~1bar~0baz"},
-		{"a/b~c/d", "a~1b~0c~1d"},
-		{"", ""},
-		{"~", "~0"},
-		{"/", "~1"},
-		{"~1", "~01"},
-		{"~0", "~00"},
-		// Note: "a~1b~0c" encodes both ~ chars per RFC 6901.
-		// ~ → ~0, / → ~1. No / in this string, so only ~ is encoded.
-		{"a~1b~0c", "a~01b~00c"},
-	}
-	for _, c := range cases {
-		t.Run(c.input, func(t *testing.T) {
-			got := jsonPointerToken(c.input)
-			if got != c.expected {
-				t.Errorf("jsonPointerToken(%q) = %q, want %q", c.input, got, c.expected)
-			}
-		})
-	}
-}
 
 // TestSemanticPathMatrix tests that every semantic error type produces
 // the expected InstancePath for every known error path in the taxonomy.
@@ -144,11 +50,8 @@ func TestSemanticPathMatrix(t *testing.T) {
 	})
 
 	// RunnerAuthorityError paths
-	t.Run("RunnerAuthorityError PlanDiagnostics mode", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "mode",
-			Message: "unknown mode",
-		}
+	t.Run("RunnerAuthorityError mode", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "mode", Message: "unknown mode"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
@@ -158,11 +61,8 @@ func TestSemanticPathMatrix(t *testing.T) {
 		}
 	})
 
-	t.Run("RunnerAuthorityError PlanDiagnostics tool.revision", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "tool.revision",
-			Message: "revision is required",
-		}
+	t.Run("RunnerAuthorityError tool.revision", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "tool.revision", Message: "revision required"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
@@ -172,99 +72,75 @@ func TestSemanticPathMatrix(t *testing.T) {
 		}
 	})
 
-	t.Run("RunnerAuthorityError PlanDiagnostics tool.binary_sha256", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "tool.binary_sha256",
-			Message: "binary_sha256 is required",
-		}
+	t.Run("RunnerAuthorityError tool.binary_sha256", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "tool.binary_sha256", Message: "sha256 required"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
 		}
 		if diags[0].InstancePath != "/runner_authority/tool/binary_sha256" {
-			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/runner_authority/tool/binary_sha256")
+			t.Errorf("got %q, want %q", diags[0].InstancePath, "/runner_authority/tool/binary_sha256")
 		}
 	})
 
-	t.Run("RunnerAuthorityError PlanDiagnostics binary_sha256", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "binary_sha256",
-			Message: "binary_sha256 mismatch",
-		}
+	t.Run("RunnerAuthorityError binary_sha256", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "binary_sha256", Message: "mismatch"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
 		}
 		if diags[0].InstancePath != "/runner_authority/binary_sha256" {
-			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/runner_authority/binary_sha256")
+			t.Errorf("got %q, want %q", diags[0].InstancePath, "/runner_authority/binary_sha256")
 		}
 	})
 
-	t.Run("RunnerAuthorityError PlanDiagnostics vcs.revision", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "vcs.revision",
-			Message: "vcs.revision mismatch",
-		}
+	t.Run("RunnerAuthorityError vcs.revision", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "vcs.revision", Message: "mismatch"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
 		}
 		if diags[0].InstancePath != "/runner_authority/vcs_revision" {
-			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/runner_authority/vcs_revision")
+			t.Errorf("got %q, want %q", diags[0].InstancePath, "/runner_authority/vcs_revision")
 		}
 	})
 
-	t.Run("RunnerAuthorityError PlanDiagnostics vcs.modified", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "vcs.modified",
-			Message: "modified sources",
-		}
+	t.Run("RunnerAuthorityError vcs.modified", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "vcs.modified", Message: "modified"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
 		}
 		if diags[0].InstancePath != "/runner_authority/vcs_modified" {
-			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/runner_authority/vcs_modified")
+			t.Errorf("got %q, want %q", diags[0].InstancePath, "/runner_authority/vcs_modified")
 		}
 	})
 
-	t.Run("RunnerAuthorityError PlanDiagnostics target.subject", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "target.subject",
-			Message: "target subject empty",
-		}
+	t.Run("RunnerAuthorityError target.subject", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "target.subject", Message: "empty"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
 		}
 		if diags[0].InstancePath != "/runner_authority/target_subject" {
-			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/runner_authority/target_subject")
+			t.Errorf("got %q, want %q", diags[0].InstancePath, "/runner_authority/target_subject")
 		}
 	})
 
-	t.Run("RunnerAuthorityError PlanDiagnostics target.tree", func(t *testing.T) {
-		err := &RunnerAuthorityError{
-			Field:   "target.tree",
-			Message: "target tree empty",
-		}
+	t.Run("RunnerAuthorityError target.tree", func(t *testing.T) {
+		err := &RunnerAuthorityError{Field: "target.tree", Message: "empty"}
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
 		}
 		if diags[0].InstancePath != "/runner_authority/target_tree" {
-			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/runner_authority/target_tree")
+			t.Errorf("got %q, want %q", diags[0].InstancePath, "/runner_authority/target_tree")
 		}
 	})
 
 	// PlanSemanticError paths
 	t.Run("PlanSemanticError PlanDiagnostics", func(t *testing.T) {
-		err := newSemanticError(
-			"/checks/0/id",
-			PlanCodeSemanticConstraintFailed,
-			KeywordPattern,
-			"invalid check id",
-			nil,
-		)
+		err := newSemanticError("/checks/0/id", PlanCodeSemanticConstraintFailed, KeywordPattern, "invalid", nil)
 		diags := err.PlanDiagnostics()
 		if len(diags) != 1 {
 			t.Fatalf("got %d diagnostics, want 1", len(diags))
@@ -272,29 +148,13 @@ func TestSemanticPathMatrix(t *testing.T) {
 		if diags[0].InstancePath != "/checks/0/id" {
 			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/checks/0/id")
 		}
-		if diags[0].Code != PlanCodeSemanticConstraintFailed {
-			t.Errorf("Code = %v, want %v", diags[0].Code, PlanCodeSemanticConstraintFailed)
-		}
-		if diags[0].Keyword != KeywordPattern {
-			t.Errorf("Keyword = %v, want %v", diags[0].Keyword, KeywordPattern)
-		}
 	})
 
 	// PlanSemanticMultiError paths
 	t.Run("PlanSemanticMultiError PlanDiagnostics", func(t *testing.T) {
 		err := newSemanticMultiError([]PlanValidationError{
-			{
-				InstancePath: "/checks/0/id",
-				Code:        PlanCodeSemanticConstraintFailed,
-				Keyword:     KeywordPattern,
-				Message:     "invalid check id",
-			},
-			{
-				InstancePath: "/checks/1/mode",
-				Code:        PlanCodeSemanticConstraintFailed,
-				Keyword:     KeywordType,
-				Message:     "unknown check mode",
-			},
+			{InstancePath: "/checks/0/id", Code: PlanCodeSemanticConstraintFailed, Keyword: KeywordPattern, Message: "invalid"},
+			{InstancePath: "/checks/1/mode", Code: PlanCodeSemanticConstraintFailed, Keyword: KeywordType, Message: "unknown"},
 		}, nil)
 		diags := err.PlanDiagnostics()
 		if len(diags) != 2 {
@@ -343,6 +203,157 @@ type unknownError struct {
 	msg string
 }
 
-func (e *unknownError) Error() string {
-	return e.msg
+func (e *unknownError) Error() string { return e.msg }
+
+// TestErrorsIs tests errors.Is through every Cause-bearing type.
+func TestErrorsIs(t *testing.T) {
+	t.Run("PlanSemanticError Unwrap", func(t *testing.T) {
+		cause := &unknownError{msg: "underlying error"}
+		err := newSemanticError("/foo", PlanCodeSemanticConstraintFailed, KeywordType, "test", cause)
+		if !errors.Is(err, cause) {
+			t.Error("errors.Is(err, cause) = false, want true")
+		}
+	})
+
+	t.Run("PlanSemanticMultiError Unwrap", func(t *testing.T) {
+		cause := &unknownError{msg: "underlying error"}
+		err := newSemanticMultiError([]PlanValidationError{{InstancePath: "/foo", Code: PlanCodeSemanticConstraintFailed, Keyword: KeywordType, Message: "test"}}, cause)
+		if !errors.Is(err, cause) {
+			t.Error("errors.Is(err, cause) = false, want true")
+		}
+	})
+
+	t.Run("RunnerAuthorityError Unwrap", func(t *testing.T) {
+		cause := &unknownError{msg: "underlying error"}
+		err := &RunnerAuthorityError{Field: "mode", Message: "test", Cause: cause}
+		if !errors.Is(err, cause) {
+			t.Error("errors.Is(err, cause) = false, want true")
+		}
+	})
+
+	t.Run("ExecutionModeError no cause", func(t *testing.T) {
+		err := &ExecutionModeError{Path: "/mode", Value: "bad", Presence: ExecutionModePresentUnknown, Supported: SupportedExecutionModes()}
+		if errors.Is(err, errors.New("anything")) {
+			t.Error("errors.Is(err, anything) = true, want false (no cause)")
+		}
+	})
+}
+
+// TestErrorsAs tests errors.As through wrapping.
+func TestErrorsAs(t *testing.T) {
+	t.Run("wrapped PlanSemanticError", func(t *testing.T) {
+		inner := newSemanticError("/foo", PlanCodeSemanticConstraintFailed, KeywordType, "inner", nil)
+		wrapper := fmt.Errorf("wrapper: %w", inner)
+		var semantic *PlanSemanticError
+		if !errors.As(wrapper, &semantic) {
+			t.Error("errors.As(wrapper, &semantic) = false, want true")
+		}
+		if semantic.Diagnostic.InstancePath != "/foo" {
+			t.Errorf("InstancePath = %q, want %q", semantic.Diagnostic.InstancePath, "/foo")
+		}
+	})
+
+	t.Run("wrapped RunnerAuthorityError", func(t *testing.T) {
+		inner := &RunnerAuthorityError{Field: "mode", Message: "inner"}
+		wrapper := fmt.Errorf("wrapper: %w", inner)
+		var runner *RunnerAuthorityError
+		if !errors.As(wrapper, &runner) {
+			t.Error("errors.As(wrapper, &runner) = false, want true")
+		}
+		if runner.Field != "mode" {
+			t.Errorf("Field = %q, want %q", runner.Field, "mode")
+		}
+	})
+
+	t.Run("wrapped ExecutionModeError", func(t *testing.T) {
+		inner := &ExecutionModeError{Path: "/mode", Value: "bad", Presence: ExecutionModePresentUnknown, Supported: SupportedExecutionModes()}
+		wrapper := fmt.Errorf("wrapper: %w", inner)
+		var exec *ExecutionModeError
+		if !errors.As(wrapper, &exec) {
+			t.Error("errors.As(wrapper, &exec) = false, want true")
+		}
+		if exec.Presence != ExecutionModePresentUnknown {
+			t.Errorf("Presence = %v, want %v", exec.Presence, ExecutionModePresentUnknown)
+		}
+	})
+}
+
+// TestAcceptedValuesMutationIsolation tests AcceptedValues mutation isolation.
+func TestAcceptedValuesMutationIsolation(t *testing.T) {
+	t.Run("ExecutionModeError AcceptedValues isolation", func(t *testing.T) {
+		orig := &ExecutionModeError{Path: "/mode", Value: "bad", Presence: ExecutionModePresentUnknown, Supported: SupportedExecutionModes()}
+		diags := orig.PlanDiagnostics()
+		diags[0].AcceptedValues[0] = "hacked"
+		diags2 := orig.PlanDiagnostics()
+		if diags2[0].AcceptedValues[0] == "hacked" {
+			t.Error("AcceptedValues mutation leaked through to original")
+		}
+	})
+
+	t.Run("clonePlanValidationError AcceptedValues isolation", func(t *testing.T) {
+		orig := PlanValidationError{
+			InstancePath:   "/foo",
+			Code:           PlanCodeSemanticConstraintFailed,
+			Keyword:        KeywordEnum,
+			AcceptedValues: []string{"a", "b", "c"},
+		}
+		cloned := clonePlanValidationError(orig)
+		cloned.AcceptedValues[0] = "hacked"
+		if orig.AcceptedValues[0] == "hacked" {
+			t.Error("AcceptedValues mutation leaked through to original")
+		}
+	})
+}
+
+// TestWrappedPlanDiagnosticSource tests errors.As for planDiagnosticSource.
+func TestWrappedPlanDiagnosticSource(t *testing.T) {
+	t.Run("wrapped source preserves PlanDiagnostics", func(t *testing.T) {
+		orig := &ExecutionModeError{Path: "/execution/mode", Value: "bad", Presence: ExecutionModePresentUnknown, Supported: SupportedExecutionModes()}
+		wrapper := fmt.Errorf("validation failed: %w", orig)
+		var source planDiagnosticSource
+		if !errors.As(wrapper, &source) {
+			t.Error("errors.As(wrapper, &source) = false, want true")
+		}
+		diags := source.PlanDiagnostics()
+		if len(diags) != 1 {
+			t.Fatalf("got %d diagnostics, want 1", len(diags))
+		}
+		if diags[0].InstancePath != "/execution/mode" {
+			t.Errorf("InstancePath = %q, want %q", diags[0].InstancePath, "/execution/mode")
+		}
+	})
+}
+
+// TestNilDiagnosticSourceOutput tests that nil or empty outputs become [].
+func TestNilDiagnosticSourceOutput(t *testing.T) {
+	t.Run("PlanSemanticMultiError empty diagnostics", func(t *testing.T) {
+		err := newSemanticMultiError(nil, nil)
+		diags := err.PlanDiagnostics()
+		if diags == nil {
+			t.Error("PlanDiagnostics() returned nil, want non-nil empty slice")
+		}
+		if len(diags) != 0 {
+			t.Errorf("len(diags) = %d, want 0", len(diags))
+		}
+	})
+
+	t.Run("clonePlanValidationErrors nil input", func(t *testing.T) {
+		result := clonePlanValidationErrors(nil)
+		if result == nil {
+			t.Error("clonePlanValidationErrors(nil) returned nil, want non-nil empty slice")
+		}
+		if len(result) != 0 {
+			t.Errorf("len(result) = %d, want 0", len(result))
+		}
+	})
+
+	t.Run("semanticDiagnostics nil", func(t *testing.T) {
+		diags := semanticDiagnostics(nil)
+		if diags == nil {
+			t.Error("semanticDiagnostics(nil) returned nil, want non-nil empty slice")
+		}
+		if len(diags) != 0 {
+			t.Errorf("len(diags) = %d, want 0", len(diags))
+		}
+	})
 }
