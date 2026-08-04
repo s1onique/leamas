@@ -7,9 +7,8 @@ import (
 )
 
 // TestComposedRunnerAuthorityStructuralRejection verifies that runner_authority
-// mode errors are caught at the structural level (enum validation).
-// Note: tool_release_exact mode is VALID in the implementation - the semantic
-// rule requiring a tool block is not enforced in the composed pipeline.
+// mode errors are caught at the structural level (enum validation) and
+// semantic errors (missing tool block) are caught by ValidateRunnerAuthority.
 func TestComposedRunnerAuthorityStructuralRejection(t *testing.T) {
 	// runner_authority.mode unknown is rejected structurally as invalid_enum
 	// tool_release_exact is valid without a tool block (no semantic enforcement)
@@ -43,9 +42,9 @@ func TestComposedRunnerAuthorityStructuralRejection(t *testing.T) {
 			wantValid: false,
 		},
 		{
-			name: "tool_release_exact without tool block is valid",
-			// The composed pipeline does not enforce tool_release_exact requiring a tool block.
-			// That semantic rule would need to be added to ValidatePlan to be enforced.
+			name: "tool_release_exact without tool block is rejected semantically",
+			// The composed pipeline now enforces tool_release_exact requiring a tool block
+			// via ValidateRunnerAuthority wired into ValidatePlan.
 			json: `{
   "contract_version": 1,
   "act_id": "ACT-RUNNER-AUTH",
@@ -66,7 +65,7 @@ func TestComposedRunnerAuthorityStructuralRejection(t *testing.T) {
   },
   "runner_authority": {"mode": "tool_release_exact"}
 }`,
-			wantValid: true,
+			wantValid: false,
 		},
 		{
 			name: "tool_release_exact with tool block is valid",

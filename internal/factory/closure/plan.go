@@ -148,6 +148,9 @@ func ValidatePlan(plan Plan) error {
 	if err := validatePlanAuthority(plan); err != nil {
 		return err
 	}
+	if err := ValidateRunnerAuthority(plan.RunnerAuthority); err != nil {
+		return err
+	}
 	return nil
 }
 

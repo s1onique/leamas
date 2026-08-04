@@ -36,7 +36,7 @@ func (e *PolicyProfileError) Error() string {
 	case PolicyProfileErrorMissingCheck:
 		return fmt.Sprintf("plan does not satisfy policy profile %q: missing or non-matching check %q", e.ProfileName, e.CheckID)
 	default:
-		return "unknown policy profile error"
+		return fmt.Sprintf("unknown policy profile error (kind=%d)", e.Kind)
 	}
 }
 
@@ -70,6 +70,17 @@ func (e *PolicyProfileError) PlanDiagnostics() []PlanValidationError {
 			Keyword:      KeywordMinItems,
 			Message:      e.Error(),
 			PropertyName: e.CheckID,
+		}
+	default:
+		// Invalid/unknown PolicyProfileErrorKind - return invariant diagnostic
+		// with empty InstancePath and PropertyName identifying the numeric kind
+		diag = PlanValidationError{
+			InstancePath: "",
+			SchemaPath:   "",
+			Code:         PlanCodeSemanticConstraintFailed,
+			Keyword:      KeywordType,
+			Message:      e.Error(),
+			PropertyName: fmt.Sprintf("PolicyProfileErrorKind=%d", e.Kind),
 		}
 	}
 
