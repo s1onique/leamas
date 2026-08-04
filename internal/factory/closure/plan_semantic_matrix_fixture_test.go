@@ -51,8 +51,8 @@ func validSemanticPlanFixture(t *testing.T) Plan {
 			ForbidTrackedFullDigests: &falseVal,
 			RequireDiffCheck:         &trueVal,
 		},
-		PolicyProfile: "factory",
-		RunnerBinding: "leamas",
+		PolicyProfile: "", // Empty is valid - no policy profile required
+		RunnerBinding: "", // Empty is valid - no runner binding required
 		RunnerAuthority: &RunnerAuthority{
 			Mode: RunnerAuthoritySubjectExact,
 			Tool: nil, // Not required for subject_exact

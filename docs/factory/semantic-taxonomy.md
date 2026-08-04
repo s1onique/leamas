@@ -152,9 +152,16 @@ func semanticDiagnostics(err error) []PlanValidationError {
 
 ## Test Reconciliation
 
-The semantic taxonomy document is reconciled with Go constants in `plan_semantic_matrix_test.go`:
+The semantic taxonomy document is reconciled with Go constants via mechanical tests:
 
-```go
-// TestSemanticPathMatrix verifies every error type's InstancePath and Code
-// against the documented taxonomy.
-```
+- `plan_semantic_matrix_runner_test.go` - RunnerAuthorityError field mapping
+- `plan_semantic_matrix_policy_test.go` - PolicyFieldOrder verification
+- `plan_semantic_matrix_root_test.go` - Root property errors
+- `plan_semantic_matrix_checks_test.go` - Check validation paths
+- `plan_semantic_matrix_artifacts_test.go` - Artifact validation paths
+- `plan_semantic_composed_json_test.go` - Composed JSON validation
+- `plan_semantic_policy_order_test.go` - Policy ordering determinism
+- `plan_semantic_environment_test.go` - Environment path determinism
+- `plan_semantic_taxonomy_parity_test.go` - Taxonomy parity proof
+
+Every new semantic error path must be added to the taxonomy document AND covered by a test.
