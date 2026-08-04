@@ -213,6 +213,16 @@ func assertClosureSubprocess(t *testing.T, binary, directory, expected string, e
 	if expectSuccess && err != nil {
 		t.Fatalf("%v: %v stderr=%q", args, err, stderr)
 	}
+	// Handle JSON output from plan validate
+	if strings.HasPrefix(strings.TrimSpace(stdout), "{") {
+		// JSON output - check for valid: true if expected is "VALID"
+		if expected == "VALID" {
+			if !strings.Contains(stdout, `"valid": true`) {
+				t.Fatalf("%v stdout=%q, want JSON with valid=true; stderr=%q", args, stdout, stderr)
+			}
+			return
+		}
+	}
 	if strings.TrimSpace(stdout) != expected {
 		t.Fatalf("%v stdout=%q, want %q; stderr=%q", args, stdout, expected, stderr)
 	}

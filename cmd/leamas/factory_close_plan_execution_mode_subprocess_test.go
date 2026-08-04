@@ -31,38 +31,38 @@ func TestClosurePlanValidateExecutionModeSubprocess(t *testing.T) {
 		name        string
 		body        map[string]any
 		wantExit    int
-		wantStdout  string
+		wantValid   bool
 		wantDiagHas string
 	}{
 		{
-			name:       "canonical",
-			body:       closureExecModeCanonical(t),
-			wantExit:   0,
-			wantStdout: "VALID\n",
+			name:      "canonical",
+			body:      closureExecModeCanonical(t),
+			wantExit:  0,
+			wantValid: true,
 		},
 		{
 			name:        "execution-omitted",
 			body:        closureExecModeOmittedExecution(t),
 			wantExit:    1,
-			wantDiagHas: "is required",
+			wantDiagHas: "required",
 		},
 		{
 			name:        "mode-omitted",
 			body:        closureExecModeModeOmitted(t),
 			wantExit:    1,
-			wantDiagHas: "is required",
+			wantDiagHas: "required",
 		},
 		{
 			name:        "mode-empty-string",
 			body:        closureExecModeModeEmpty(t),
 			wantExit:    1,
-			wantDiagHas: "is empty",
+			wantDiagHas: "serial_fail_fast",
 		},
 		{
 			name:        "mode-whitespace",
 			body:        closureExecModeModeWhitespace(t),
 			wantExit:    1,
-			wantDiagHas: "whitespace",
+			wantDiagHas: "serial_fail_fast",
 		},
 		{
 			name:        "mode-unknown",
@@ -74,19 +74,19 @@ func TestClosurePlanValidateExecutionModeSubprocess(t *testing.T) {
 			name:        "unknown-sibling",
 			body:        closureExecModeUnknownSibling(t),
 			wantExit:    1,
-			wantDiagHas: "unknown field",
+			wantDiagHas: "unknown property",
 		},
 		{
 			name:        "top-level-mode-alias",
 			body:        closureExecModeTopLevelAlias(t),
 			wantExit:    1,
-			wantDiagHas: "unknown field",
+			wantDiagHas: "unknown property",
 		},
 		{
 			name:        "policy-mode-alias",
 			body:        closureExecModePolicyModeAlias(t),
 			wantExit:    1,
-			wantDiagHas: "unknown field",
+			wantDiagHas: "unknown property",
 		},
 	}
 
@@ -99,12 +99,37 @@ func TestClosurePlanValidateExecutionModeSubprocess(t *testing.T) {
 			if exit != tc.wantExit {
 				t.Fatalf("exit=%d want=%d stdout=%q stderr=%q", exit, tc.wantExit, stdout, stderr)
 			}
-			if tc.wantStdout != "" && stdout != tc.wantStdout {
-				t.Fatalf("stdout=%q want=%q stderr=%q", stdout, tc.wantStdout, stderr)
+			// Parse JSON result
+			var result map[string]any
+			if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+				t.Fatalf("failed to parse JSON output: %v, stdout=%q", err, stdout)
+			}
+			if tc.wantValid {
+				// For valid plans, check result.valid == true
+				valid, ok := result["valid"].(bool)
+				if !ok || !valid {
+					t.Fatalf("expected valid=true in JSON result, got stdout=%q", stdout)
+				}
 			}
 			if tc.wantDiagHas != "" {
-				if !strings.Contains(strings.ToLower(stderr), strings.ToLower(tc.wantDiagHas)) {
-					t.Fatalf("stderr %q missing substring %q", stderr, tc.wantDiagHas)
+				// Check for diagnostic in structural errors or semantic errors
+				hasDiag := false
+				if structural, ok := result["structural"].(map[string]any); ok {
+					if errors, ok := structural["errors"].([]any); ok {
+						for _, e := range errors {
+							if errStr, ok := e.(map[string]any); ok {
+								if msg, ok := errStr["message"].(string); ok {
+									if strings.Contains(strings.ToLower(msg), strings.ToLower(tc.wantDiagHas)) {
+										hasDiag = true
+										break
+									}
+								}
+							}
+						}
+					}
+				}
+				if !hasDiag {
+					t.Fatalf("expected diagnostic containing %q in JSON result, got stdout=%q stderr=%q", tc.wantDiagHas, stdout, stderr)
 				}
 			}
 		})
@@ -124,8 +149,16 @@ func TestClosurePlanValidateCLIExitCodesAreDistinct(t *testing.T) {
 
 	validOut, _, validExit := runLeamasExpect(t, binary,
 		"factory", "close", "plan", "validate", "--file", validPath)
-	if validExit != 0 || validOut != "VALID\n" {
-		t.Fatalf("canonical fixture did not return VALID: exit=%d stdout=%q", validExit, validOut)
+	if validExit != 0 {
+		t.Fatalf("canonical fixture did not return exit 0: exit=%d stdout=%q", validExit, validOut)
+	}
+	// Check result contains valid: true
+	var validResult map[string]any
+	if err := json.Unmarshal([]byte(validOut), &validResult); err != nil {
+		t.Fatalf("failed to parse valid output as JSON: %v", err)
+	}
+	if valid, ok := validResult["valid"].(bool); !ok || !valid {
+		t.Fatalf("canonical fixture result valid=false: stdout=%q", validOut)
 	}
 
 	if _, _, badExit := runLeamasExpect(t, binary,

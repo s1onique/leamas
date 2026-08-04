@@ -48,24 +48,6 @@ func runFactoryClose(args []string, stdout, stderr io.Writer) int {
 	}
 }
 
-func runFactoryClosePlan(args []string, stdout, stderr io.Writer) int {
-	if len(args) == 0 || args[0] != "validate" {
-		fmt.Fprintln(stderr, "factory close plan: expected validate")
-		return closeFailureCode("usage", "expected validate")
-	}
-	fs := newCloseFlagSet("factory close plan validate", stderr)
-	var file string
-	fs.StringVar(&file, "file", "", "closure plan JSON file")
-	if err := parseCloseFlags(fs, args[1:]); err != nil || file == "" {
-		return reportCloseFlagError(stderr, "factory close plan validate", err, "--file is required")
-	}
-	if _, _, err := closure.LoadPlan(file); err != nil {
-		return reportCloseError(stderr, "factory close plan validate", err)
-	}
-	fmt.Fprintln(stdout, "VALID")
-	return closeSuccessCode()
-}
-
 func runFactoryCloseRun(args []string, stdout, stderr io.Writer) int {
 	// Parse --protocol first to determine which dispatcher to use
 	protocol, protoArgs, err := parseProtocolFlag(args)
@@ -172,10 +154,17 @@ func closeSuccessCode() int {
 	return result.ExitCode()
 }
 
+// closeFailureCode returns exit 1 for validation failures (invalid plans).
 func closeFailureCode(code, message string) int {
 	result := factoryoutput.NewResult("factory-close")
 	result.AddFailure(code, message)
 	return result.ExitCode()
+}
+
+// closeUsageError returns exit 2 for usage and internal errors per ACT requirements.
+func closeUsageError(stderr io.Writer, command, message string) int {
+	fmt.Fprintf(stderr, "%s: %s\n", command, message)
+	return 2
 }
 
 func runFactoryCloseChain(args []string, stdout, stderr io.Writer) int {
