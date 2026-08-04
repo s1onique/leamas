@@ -27,10 +27,10 @@ func JSONSchema() (map[string]any, error) {
 	root := contract.Root
 
 	schema := map[string]any{
-		"$schema":  "https://json-schema.org/draft/2020-12/schema",
-		"$id":      "https://leamas.io/closure-plan/v1/schema.json",
-		"title":    "Closure Protocol v1 Plan",
-		"type":     "object",
+		"$schema":                       "https://json-schema.org/draft/2020-12/schema",
+		"$id":                           "https://leamas.io/closure-plan/v1/schema.json",
+		"title":                         "Closure Protocol v1 Plan",
+		"type":                          "object",
 		"x-leamas-validation-authority": "leamas factory close plan validate",
 	}
 
