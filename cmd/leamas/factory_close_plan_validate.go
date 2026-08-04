@@ -11,12 +11,12 @@ import (
 
 // planValidateDeps encapsulates dependencies for testing.
 type planValidateDeps struct {
-	readFile func(path string) ([]byte, error)
-	readAll  func(r io.Reader) ([]byte, error)
+	openFile    func(path string) (io.ReadCloser, error)
+	readBounded func(r io.Reader, max int64) ([]byte, error)
 }
 
 // runFactoryClosePlanValidateWith validates a plan using the provided readers.
-// Production binds os.Stdin and real file opening at the outer adapter.
+// Production binds os.Open and bounded read at the outer adapter.
 func runFactoryClosePlanValidateWith(
 	args []string,
 	stdin io.Reader,
@@ -24,7 +24,12 @@ func runFactoryClosePlanValidateWith(
 	stderr io.Writer,
 	deps planValidateDeps,
 ) int {
-	if hasHelpFlag(args) {
+	if len(args) == 1 && isHelpFlag(args[0]) && len(args) == 1 {
+		fmt.Fprintln(stderr, "Usage: leamas factory close plan validate [--file <path>] [--stdin]")
+		fmt.Fprintln(stderr, "Validate a Closure Protocol v1 plan JSON file.")
+		return 0
+	}
+	if len(args) > 0 && isHelpFlag(args[0]) && len(args) == 1 {
 		fmt.Fprintln(stderr, "Usage: leamas factory close plan validate [--file <path>] [--stdin]")
 		fmt.Fprintln(stderr, "Validate a Closure Protocol v1 plan JSON file.")
 		return 0
@@ -47,7 +52,7 @@ func runFactoryClosePlanValidateWith(
 			if i+1 >= len(args) {
 				return closeUsageError(stderr, "factory close plan validate", "--file requires a value")
 			}
-			if args[i+1] == "--file" || args[i+1] == "--stdin" {
+			if args[i+1] == "--file" || args[i+1] == "--stdin" || isHelpFlag(args[i+1]) {
 				return closeUsageError(stderr, "factory close plan validate", "--file requires a value")
 			}
 			filePath = args[i+1]
@@ -75,17 +80,29 @@ func runFactoryClosePlanValidateWith(
 		return closeUsageError(stderr, "factory close plan validate", "one of --file or --stdin is required")
 	}
 
-	// Read input with bounded read
+	// Read input with bounded read through authority
 	var data []byte
 	var err error
+	const maxBytes = closure.MaxPlanBytes + 1
 
 	if filePath != "" {
-		data, err = deps.readFile(filePath)
+		f, err := deps.openFile(filePath)
 		if err != nil {
 			return closeUsageError(stderr, "factory close plan validate", "file read failed: "+err.Error())
 		}
+		data, err = deps.readBounded(f, maxBytes)
+		closeErr := f.Close()
+		if err != nil {
+			if closeErr != nil {
+				return closeUsageError(stderr, "factory close plan validate", "file read failed: "+err.Error()+"; close failed: "+closeErr.Error())
+			}
+			return closeUsageError(stderr, "factory close plan validate", "file read failed: "+err.Error())
+		}
+		if closeErr != nil {
+			return closeUsageError(stderr, "factory close plan validate", "file close failed: "+closeErr.Error())
+		}
 	} else {
-		data, err = deps.readAll(stdin)
+		data, err = deps.readBounded(stdin, maxBytes)
 		if err != nil {
 			return closeUsageError(stderr, "factory close plan validate", "stdin read failed: "+err.Error())
 		}
@@ -106,12 +123,8 @@ func runFactoryClosePlanValidateWith(
 	}
 
 	// Atomic write: encode to buffer first, then single write
-	buf := make([]byte, 0, len(resultData)+1)
-	buf = append(buf, resultData...)
-	buf = append(buf, '\n')
-
-	if _, err := stdout.Write(buf); err != nil {
-		return 2
+	if err := atomicWrite(stdout, resultData); err != nil {
+		return closeUsageError(stderr, "factory close plan validate", "output failed")
 	}
 
 	if result.Valid {
@@ -120,23 +133,33 @@ func runFactoryClosePlanValidateWith(
 	return 1 // Invalid plan
 }
 
-// runFactoryClosePlanValidate is the production adapter using os.Stdin and os.ReadFile.
+// atomicWrite performs exactly one write and checks the result.
+// On failure, exit is 2 with stderr containing a bounded diagnostic.
+func atomicWrite(w io.Writer, payload []byte) error {
+	n, err := w.Write(payload)
+	if err != nil {
+		return fmt.Errorf("write error: %w", err)
+	}
+	if n != len(payload) {
+		return fmt.Errorf("partial write: wrote %d of %d bytes", n, len(payload))
+	}
+	return nil
+}
+
+// runFactoryClosePlanValidate is the production adapter using os.Open and bounded read.
 func runFactoryClosePlanValidate(args []string, stdout, stderr io.Writer) int {
 	deps := planValidateDeps{
-		readFile: os.ReadFile,
-		readAll: func(r io.Reader) ([]byte, error) {
-			return io.ReadAll(io.LimitReader(r, closure.MaxPlanBytes+1))
+		openFile: func(path string) (io.ReadCloser, error) {
+			return os.Open(path)
+		},
+		readBounded: func(r io.Reader, max int64) ([]byte, error) {
+			return io.ReadAll(io.LimitReader(r, max))
 		},
 	}
 	return runFactoryClosePlanValidateWith(args, os.Stdin, stdout, stderr, deps)
 }
 
-// hasHelpFlag checks if args contain a help flag.
-func hasHelpFlag(args []string) bool {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			return true
-		}
-	}
-	return false
+// isHelpFlag returns true if arg is a help flag.
+func isHelpFlag(arg string) bool {
+	return arg == "-h" || arg == "--help"
 }

@@ -8,43 +8,28 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure"
 )
 
-// runFactoryClosePlanExample outputs the canonical Closure Protocol v1 plan example.
+// runFactoryClosePlanExample outputs a valid example plan.
 func runFactoryClosePlanExample(args []string, stdout, stderr io.Writer) int {
-	if hasHelpFlag(args) {
+	// Help must be the sole argument
+	if len(args) == 1 && isHelpFlag(args[0]) {
 		fmt.Fprintln(stderr, "Usage: leamas factory close plan example")
-		fmt.Fprintln(stderr, "Output the canonical Closure Protocol v1 plan example as JSON.")
+		fmt.Fprintln(stderr, "Output a valid Closure Protocol v1 plan example as JSON.")
 		return 0
 	}
 	if len(args) > 0 {
 		return closeUsageError(stderr, "factory close plan example", "accepts no arguments")
 	}
 
-	example := closure.DescriptorExample()
-	// Validate the example passes all stages
-	raw, err := json.Marshal(example)
-	if err != nil {
-		return closeUsageError(stderr, "factory close plan example", "marshal failed: "+err.Error())
-	}
-	result := closure.ValidatePlanComposed(raw)
-	if !result.Valid {
-		return closeUsageError(stderr, "factory close plan example", "composed validation failed")
-	}
-	if !result.SemanticValid {
-		return closeUsageError(stderr, "factory close plan example", "semantic validation failed")
-	}
-
-	data, err := json.MarshalIndent(example, "", "  ")
+	// Generate example plan
+	plan := closure.DescriptorExample()
+	data, err := json.MarshalIndent(plan, "", "  ")
 	if err != nil {
 		return closeUsageError(stderr, "factory close plan example", "marshal failed: "+err.Error())
 	}
 
 	// Atomic write: encode to buffer first, then single write
-	buf := make([]byte, 0, len(data)+1)
-	buf = append(buf, data...)
-	buf = append(buf, '\n')
-
-	if _, err := stdout.Write(buf); err != nil {
-		return 2
+	if err := atomicWrite(stdout, data); err != nil {
+		return closeUsageError(stderr, "factory close plan example", "output failed")
 	}
 	return 0
 }

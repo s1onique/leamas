@@ -10,7 +10,8 @@ import (
 
 // runFactoryClosePlanSchema outputs the Closure Protocol v1 JSON Schema.
 func runFactoryClosePlanSchema(args []string, stdout, stderr io.Writer) int {
-	if hasHelpFlag(args) {
+	// Help must be the sole argument
+	if len(args) == 1 && isHelpFlag(args[0]) {
 		fmt.Fprintln(stderr, "Usage: leamas factory close plan schema")
 		fmt.Fprintln(stderr, "Output the Closure Protocol v1 JSON Schema as JSON.")
 		return 0
@@ -19,19 +20,19 @@ func runFactoryClosePlanSchema(args []string, stdout, stderr io.Writer) int {
 		return closeUsageError(stderr, "factory close plan schema", "accepts no arguments")
 	}
 
-	schema := closure.JSONSchema()
+	schema, err := closure.JSONSchema()
+	if err != nil {
+		return closeUsageError(stderr, "factory close plan schema", "schema generation failed")
+	}
+
 	data, err := json.MarshalIndent(schema, "", "  ")
 	if err != nil {
 		return closeUsageError(stderr, "factory close plan schema", "marshal failed: "+err.Error())
 	}
 
 	// Atomic write: encode to buffer first, then single write
-	buf := make([]byte, 0, len(data)+1)
-	buf = append(buf, data...)
-	buf = append(buf, '\n')
-
-	if _, err := stdout.Write(buf); err != nil {
-		return 2
+	if err := atomicWrite(stdout, data); err != nil {
+		return closeUsageError(stderr, "factory close plan schema", "output failed")
 	}
 	return 0
 }

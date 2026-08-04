@@ -1,8 +1,12 @@
 package closure
 
 import (
+	"errors"
 	"slices"
 )
+
+// ErrSchemaGeneration indicates a field with an unknown or malformed descriptor.
+var ErrSchemaGeneration = errors.New("schema generation failed")
 
 // JSONSchema generates a real JSON Schema document from the closure plan
 // descriptor authority. This is the stable schema command output.
@@ -16,7 +20,8 @@ import (
 //   - x-applicability extensions for conditional fields
 //
 // Internal implementation fields (go_name) are not exposed.
-func JSONSchema() map[string]any {
+// Migration aliases are NOT included in the public schema.
+func JSONSchema() (map[string]any, error) {
 	contract := planContractV1()
 	root := contract.Root
 
@@ -27,34 +32,28 @@ func JSONSchema() map[string]any {
 		"type":    "object",
 	}
 
-	props, required := buildObjectProperties(root)
+	props, required, err := buildObjectProperties(root, "")
+	if err != nil {
+		return nil, err
+	}
 	schema["properties"] = props
 	if len(required) > 0 {
 		schema["required"] = required
 	}
 	schema["additionalProperties"] = false
 
-	// Add alias documentation
-	if len(contract.TopLevelAliases) > 0 || len(contract.AliasSubpaths) > 0 {
-		schema["$defs"] = map[string]any{
-			"aliases": map[string]any{
-				"description": "Migration aliases accepted during deserialization",
-				"type":        "object",
-				"examples":    contract.TopLevelAliases,
-				"subpaths":    contract.AliasSubpaths,
-			},
-		}
-	}
-
-	return schema
+	return schema, nil
 }
 
-func buildObjectProperties(obj planObjectDescriptor) (map[string]any, []string) {
+func buildObjectProperties(obj planObjectDescriptor, path string) (map[string]any, []string, error) {
 	props := make(map[string]any)
 	var required []string
 
 	for name, field := range obj.Fields {
-		fieldSchema := buildFieldSchema(field)
+		fieldSchema, err := buildFieldSchema(field, path+"/"+name)
+		if err != nil {
+			return nil, nil, err
+		}
 		if fieldSchema != nil {
 			props[name] = fieldSchema
 			if field.Required {
@@ -66,10 +65,10 @@ func buildObjectProperties(obj planObjectDescriptor) (map[string]any, []string) 
 	// Sort required for determinism
 	slices.Sort(required)
 
-	return props, required
+	return props, required, nil
 }
 
-func buildFieldSchema(field planFieldDescriptor) map[string]any {
+func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, error) {
 	// Determine JSON type from Go kind
 	var jsonType string
 	switch field.Kind {
@@ -83,9 +82,10 @@ func buildFieldSchema(field planFieldDescriptor) map[string]any {
 		jsonType = "object"
 	case kindArray:
 		jsonType = "array"
+	case kindEnum:
+		jsonType = "string"
 	default:
-		// Skip unknown kinds
-		return nil
+		return nil, errors.New("unknown kind at " + path)
 	}
 
 	schema := map[string]any{
@@ -95,7 +95,7 @@ func buildFieldSchema(field planFieldDescriptor) map[string]any {
 	// Handle constant values
 	if field.ConstantValue != nil {
 		schema["const"] = field.ConstantValue
-		return schema
+		return schema, nil
 	}
 
 	// Set type
@@ -109,8 +109,14 @@ func buildFieldSchema(field planFieldDescriptor) map[string]any {
 	}
 
 	// Handle array items
-	if field.Kind == kindArray && field.ItemDescriptor != nil {
-		itemSchema := buildFieldSchema(*field.ItemDescriptor)
+	if field.Kind == kindArray {
+		if field.ItemDescriptor == nil {
+			return nil, errors.New("array without item descriptor at " + path)
+		}
+		itemSchema, err := buildFieldSchema(*field.ItemDescriptor, path+"_items")
+		if err != nil {
+			return nil, err
+		}
 		if itemSchema != nil {
 			schema["items"] = itemSchema
 		}
@@ -122,8 +128,14 @@ func buildFieldSchema(field planFieldDescriptor) map[string]any {
 	}
 
 	// Handle object children
-	if field.Kind == kindObject && field.Children != nil {
-		childProps, childRequired := buildObjectProperties(*field.Children)
+	if field.Kind == kindObject {
+		if field.Children == nil {
+			return nil, errors.New("object missing required child/value schema at " + path)
+		}
+		childProps, childRequired, err := buildObjectProperties(*field.Children, path)
+		if err != nil {
+			return nil, err
+		}
 		schema["type"] = "object"
 		schema["properties"] = childProps
 		schema["additionalProperties"] = false
@@ -142,5 +154,5 @@ func buildFieldSchema(field planFieldDescriptor) map[string]any {
 		schema["x-applicability"] = field.ApplicabilityRules
 	}
 
-	return schema
+	return schema, nil
 }
