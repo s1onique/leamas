@@ -10,48 +10,6 @@ import (
 	"testing"
 )
 
-// ----------------------------------------------------------------------------
-// Local Alias Taint Tracking
-//
-// This section implements function-local taint tracking for error message
-// sources. Within each function body, we track identifiers that have been
-// directly assigned from err.Error() as "tainted". Tainted identifiers remain
-// tainted until they are reassigned from a non-tainted expression.
-//
-// This is NOT whole-program taint analysis. It is bounded to:
-//   - Direct assignments within the same function scope
-//   - Simple identifier-to-identifier reassignments
-//   - Does not track data flow across function boundaries
-//   - Does not handle aliasing through map/chan/slice operations
-//   - Does not propagate through type conversions like []byte(msg)
-//
-// The purpose is to catch common patterns like:
-//   msg := err.Error()
-//   if strings.Contains(msg, "...") { ... }
-// ----------------------------------------------------------------------------
-
-// newTaintTracker creates a fresh taint tracker for a function body.
-func newTaintTracker() *taintTracker {
-	return &taintTracker{
-		tainted: make(map[string]bool),
-	}
-}
-
-// isTainted reports whether ident is currently marked as tainted.
-func (tt *taintTracker) isTainted(ident string) bool {
-	return tt.tainted[ident]
-}
-
-// markTainted marks ident as tainted (derived from err.Error()).
-func (tt *taintTracker) markTainted(ident string) {
-	tt.tainted[ident] = true
-}
-
-// unmarkTainted removes ident from the tainted set.
-func (tt *taintTracker) unmarkTainted(ident string) {
-	delete(tt.tainted, ident)
-}
-
 // auditFileForLocalTaintParsing audits a single file for tainted identifier
 // usage within function scopes. It tracks local assignments from err.Error()
 // and rejects forbidden operations on tainted identifiers.
@@ -228,7 +186,7 @@ import "strings"
 import "errors"
 func check(err error) bool {
 	return strings.Contains(err.Error(), "path:")
-}`,
+ }`,
 			wantErr: true,
 		},
 		{
@@ -239,7 +197,7 @@ import "errors"
 func check(err error) bool {
 	msg := err.Error()
 	return strings.Contains(msg, "path:")
-}`,
+ }`,
 			wantErr: true,
 		},
 		{
@@ -250,7 +208,7 @@ import "errors"
 func split(err error) []string {
 	msg := err.Error()
 	return strings.SplitN(msg, ":", 2)
-}`,
+ }`,
 			wantErr: true,
 		},
 		{
@@ -262,7 +220,7 @@ func split(err error) []string {
 	msg := "initial"
 	msg = err.Error()
 	return strings.SplitN(msg, ":", 2)
-}`,
+ }`,
 			wantErr: true,
 		},
 	}
@@ -305,7 +263,7 @@ func check(err error) bool {
 	msg := err.Error()
 	msg = "safe"
 	return strings.Contains(msg, "path:")
-}`,
+ }`,
 			wantErr: false,
 		},
 		{
@@ -315,7 +273,7 @@ import "strings"
 func check(data string) bool {
 	msg := data
 	return strings.Contains(msg, "path:")
-}`,
+ }`,
 			wantErr: false,
 		},
 		{
@@ -326,7 +284,7 @@ import "errors"
 func check(err error) int {
 	msg := err.Error()
 	return len(msg)
-}`,
+ }`,
 			wantErr: false,
 		},
 		{
@@ -338,7 +296,7 @@ func check(err error) bool {
 	safe := "constant"
 	msg := safe
 	return strings.Contains(msg, "path:")
-}`,
+ }`,
 			wantErr: false,
 		},
 		{
@@ -347,7 +305,7 @@ func check(err error) bool {
 import "strings"
 func split(data string) []string {
 	return strings.SplitN(data, ":", 2)
-}`,
+ }`,
 			wantErr: false,
 		},
 	}

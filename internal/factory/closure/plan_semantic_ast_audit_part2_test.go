@@ -292,3 +292,23 @@ type taintTracker struct {
 }
 
 // newTaintTracker creates a fresh taint tracker for a function body.
+func newTaintTracker() *taintTracker {
+	return &taintTracker{
+		tainted: make(map[string]bool),
+	}
+}
+
+// isTainted reports whether ident is currently marked as tainted.
+func (tt *taintTracker) isTainted(ident string) bool {
+	return tt.tainted[ident]
+}
+
+// markTainted marks ident as tainted (derived from err.Error()).
+func (tt *taintTracker) markTainted(ident string) {
+	tt.tainted[ident] = true
+}
+
+// unmarkTainted removes ident from the tainted set.
+func (tt *taintTracker) unmarkTainted(ident string) {
+	delete(tt.tainted, ident)
+}
