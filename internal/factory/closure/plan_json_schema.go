@@ -160,6 +160,15 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 
 	// Handle applicability rules as extension
 	if len(field.ApplicabilityRules) > 0 {
+		// Validate applicability identity: each (sibling, value) pair must be unique
+		seen := make(map[string]bool)
+		for _, rule := range field.ApplicabilityRules {
+			key := rule.Sibling + "=" + rule.Value
+			if seen[key] {
+				return nil, fmt.Errorf("%w: duplicate applicability identity at %s: %s=%s", ErrSchemaGeneration, path, rule.Sibling, rule.Value)
+			}
+			seen[key] = true
+		}
 		schema["x-applicability"] = field.ApplicabilityRules
 	}
 

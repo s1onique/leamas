@@ -242,15 +242,18 @@ func TestExampleOutputIsValidPlan(t *testing.T) {
 	}
 }
 
-// TestExampleMarshalFailure proves marshal failure exits 2.
+// TestExampleMarshalFailure proves marshal failure exits 2 with zero validator calls.
 func TestExampleMarshalFailure(t *testing.T) {
-	// Use a type that cannot be marshaled to JSON
-	type unmarshalable struct{}
+	// Use a channel value which json.Marshal cannot encode
+	var validateCalls int
 	deps := planExampleDeps{
 		Example: func() map[string]any {
-			return map[string]any{"bad": unmarshalable{}}
+			return map[string]any{"bad": make(chan struct{})}
 		},
-		Validate: closure.ValidatePlanComposed,
+		Validate: func(data []byte) closure.ComposedPlanValidationResult {
+			validateCalls++
+			return closure.ValidatePlanComposed(data)
+		},
 	}
 	var stdout, stderr bytes.Buffer
 	exit := runFactoryClosePlanExampleWith(nil, &stdout, &stderr, deps)
@@ -259,6 +262,9 @@ func TestExampleMarshalFailure(t *testing.T) {
 	}
 	if stdout.Len() != 0 {
 		t.Fatalf("marshal failure wrote to stdout")
+	}
+	if validateCalls != 0 {
+		t.Errorf("marshal failure must not call validator: validateCalls = %d, want 0", validateCalls)
 	}
 }
 
