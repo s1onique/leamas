@@ -137,7 +137,7 @@ func validatePlanComposedWithObserverAndDeps(data []byte, observer compositionOb
 	observer.SemanticValidated()
 	if semErr != nil {
 		result.SemanticValid = false
-		result.SemanticErrors = []PlanValidationError{semanticDiagnostic(semErr)}
+		result.SemanticErrors = semanticDiagnostics(semErr)
 		result.Valid = false
 		return result
 	}

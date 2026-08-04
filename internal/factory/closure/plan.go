@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -115,10 +116,10 @@ func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
 
 func ValidatePlan(plan Plan) error {
 	if plan.ContractVersion != ContractVersionV1 {
-		return fmt.Errorf("unsupported closure plan contract_version %d", plan.ContractVersion)
+		return errUnsupportedContractVersion(plan.ContractVersion)
 	}
 	if !actIDPattern.MatchString(plan.ActID) || containsClosurePlaceholder(plan.ActID) {
-		return fmt.Errorf("invalid act_id %q", plan.ActID)
+		return errInvalidActID(plan.ActID)
 	}
 	if err := validateOID("baseline.commit_oid", plan.Baseline.CommitOID); err != nil {
 		return err
@@ -130,10 +131,10 @@ func ValidatePlan(plan Plan) error {
 		return err
 	}
 	if len(plan.Checks) == 0 || len(plan.Checks) > MaxChecks {
-		return fmt.Errorf("checks count must be between 1 and %d", MaxChecks)
+		return errInvalidChecksCount(len(plan.Checks))
 	}
 	if len(plan.Artifacts) > MaxArtifacts {
-		return fmt.Errorf("artifacts count exceeds %d", MaxArtifacts)
+		return errInvalidArtifactsCount(len(plan.Artifacts))
 	}
 	if err := validatePlanChecks(plan.Checks); err != nil {
 		return err
@@ -148,82 +149,6 @@ func ValidatePlan(plan Plan) error {
 		return err
 	}
 	return nil
-}
-
-// validatePlanPolicy replaces the previous "all policy fields are
-// required" generic message with exact per-sibling diagnostics. The
-// validator reports each missing sibling under its /policy/<name>
-// JSON pointer so callers can fix every gap in a single edit. The
-// validator also keeps the historical "closure v1 requires clean
-// worktree before and after" diagnostic, which is a semantic
-// constraint rather than a missing-property diagnostic.
-func validatePlanPolicy(policy PlanPolicy) error {
-	missing := missingPlanPolicyFields(policy)
-	if len(missing) > 0 {
-		return &PlanPolicyRequiredError{Missing: missing}
-	}
-	if !*policy.RequireCleanBefore || !*policy.RequireCleanAfter {
-		return fmt.Errorf("closure v1 requires clean worktree before and after")
-	}
-	return nil
-}
-
-// missingPlanPolicyFields returns the ordered list of /policy
-// sibling names whose value is missing. The order is read from
-// the descriptor's /policy.Required set (via PolicyFieldOrder)
-// so the descriptor remains the single authority; the typed
-// PlanPolicy struct's pointer fields are the value source.
-func missingPlanPolicyFields(policy PlanPolicy) []string {
-	values := map[string]*bool{
-		"require_clean_before":        policy.RequireCleanBefore,
-		"require_clean_after":         policy.RequireCleanAfter,
-		"forbid_tracked_full_digests": policy.ForbidTrackedFullDigests,
-		"require_diff_check":          policy.RequireDiffCheck,
-	}
-	order := PolicyFieldOrder()
-	missing := make([]string, 0, len(order))
-	for _, name := range order {
-		if values[name] == nil {
-			missing = append(missing, name)
-		}
-	}
-	return missing
-}
-
-// PlanPolicyRequiredError is the typed diagnostic the policy
-// validator emits when one or more policy siblings are absent. The
-// error is JSON-marshallable so future CLI flags can render it
-// directly. The Missing slice is the ordered list of sibling names
-// that were absent.
-type PlanPolicyRequiredError struct {
-	Missing []string
-}
-
-// Error implements the error interface. The message format lists
-// every missing sibling, separated by ", ", so consumers that print
-// the error see all gaps at once.
-func (e *PlanPolicyRequiredError) Error() string {
-	if len(e.Missing) == 0 {
-		return "policy fields missing"
-	}
-	return fmt.Sprintf("missing required policy field(s): %s", strings.Join(e.Missing, ", "))
-}
-
-// IsPlanPolicyRequiredError reports whether err (or any wrapped
-// error) is a *PlanPolicyRequiredError. The helper lets callers
-// route the diagnostic through a dedicated path without exposing
-// the concrete error type.
-func IsPlanPolicyRequiredError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if _, ok := err.(*PlanPolicyRequiredError); ok {
-		return true
-	}
-	if unwrap, ok := err.(interface{ Unwrap() error }); ok {
-		return IsPlanPolicyRequiredError(unwrap.Unwrap())
-	}
-	return false
 }
 
 // validatePlanExecutionMode is the single, authoritative entry point
@@ -252,15 +177,15 @@ func validatePlanExecutionMode(execution PlanExecution) error {
 }
 
 func validatePlanChecks(checks []PlanCheck) error {
-	seen := make(map[string]struct{}, len(checks))
+	seen := make(map[string]int, len(checks))
 	for i, check := range checks {
 		if !itemIDPattern.MatchString(check.ID) || containsClosurePlaceholder(check.ID) {
-			return fmt.Errorf("checks[%d].id is invalid", i)
+			return errInvalidCheckID(i, check.ID)
 		}
 		if _, exists := seen[check.ID]; exists {
-			return fmt.Errorf("duplicate check id %q", check.ID)
+			return errDuplicateCheckID(i, check.ID)
 		}
-		seen[check.ID] = struct{}{}
+		seen[check.ID] = i
 		switch check.Mode {
 		case CheckModeRun:
 			if err := validateRunnableCheck(i, check); err != nil {
@@ -268,14 +193,14 @@ func validatePlanChecks(checks []PlanCheck) error {
 			}
 		case CheckModeExclude:
 			if strings.TrimSpace(check.Reason) == "" || strings.ContainsAny(check.Reason, "\r\n") || len(check.Reason) > 240 || containsClosurePlaceholder(check.Reason) {
-				return fmt.Errorf("checks[%d].reason is required and must be compact final prose", i)
+				return errInvalidCheckReason(i)
 			}
 			if len(check.Argv) != 0 || check.WorkingDirectory != "" ||
 				check.TimeoutSeconds != 0 || check.Environment != nil {
-				return fmt.Errorf("checks[%d] exclusion contains execution fields", i)
+				return errExclusionWithExecutionFields(i)
 			}
 		default:
-			return fmt.Errorf("checks[%d] has unknown mode %q", i, check.Mode)
+			return errUnknownCheckMode(i, string(check.Mode))
 		}
 	}
 	return nil
@@ -283,58 +208,65 @@ func validatePlanChecks(checks []PlanCheck) error {
 
 func validateRunnableCheck(index int, check PlanCheck) error {
 	if len(check.Argv) == 0 || len(check.Argv) > MaxArgvElements {
-		return fmt.Errorf("checks[%d].argv count must be between 1 and %d", index, MaxArgvElements)
+		return errInvalidCheckArgvCount(index)
 	}
 	for argIndex, arg := range check.Argv {
 		if arg == "" || strings.ContainsRune(arg, 0) || containsClosurePlaceholder(arg) {
-			return fmt.Errorf("checks[%d].argv[%d] is invalid or contains a placeholder", index, argIndex)
+			return errInvalidCheckArgvElement(index, argIndex)
 		}
 	}
 	if err := validateRepositoryRelativePath(check.WorkingDirectory, true); err != nil {
-		return fmt.Errorf("checks[%d].working_directory: %w", index, err)
+		return errInvalidCheckWorkingDirectory(index)
 	}
 	if check.TimeoutSeconds <= 0 || check.TimeoutSeconds > MaxCheckTimeoutSeconds {
-		return fmt.Errorf("checks[%d].timeout_seconds must be between 1 and %d", index, MaxCheckTimeoutSeconds)
+		return errInvalidCheckTimeout(index)
 	}
 	if check.Environment == nil || len(check.Environment) > MaxEnvironmentEntries {
-		return fmt.Errorf("checks[%d].environment must be an object with at most %d entries", index, MaxEnvironmentEntries)
+		return errInvalidCheckEnvironment(index)
 	}
-	for name, value := range check.Environment {
+	// Sort environment keys for deterministic validation.
+	keys := make([]string, 0, len(check.Environment))
+	for k := range check.Environment {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		value := check.Environment[name]
 		if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) {
-			return fmt.Errorf("checks[%d].environment contains invalid entry %q", index, name)
+			return errInvalidCheckEnvironmentKey(index, name)
 		}
 	}
 	if check.Reason != "" {
-		return fmt.Errorf("checks[%d] runnable check contains exclusion reason", index)
+		return errRunnableCheckWithReason(index)
 	}
 	return nil
 }
 
 func validatePlanArtifacts(artifacts []PlanArtifact) error {
-	seen := make(map[string]struct{}, len(artifacts))
+	seen := make(map[string]int, len(artifacts))
 	for i, artifact := range artifacts {
 		if !itemIDPattern.MatchString(artifact.ID) || containsClosurePlaceholder(artifact.ID) {
-			return fmt.Errorf("artifacts[%d].id is invalid", i)
+			return errInvalidArtifactID(i, artifact.ID)
 		}
 		if _, exists := seen[artifact.ID]; exists {
-			return fmt.Errorf("duplicate artifact id %q", artifact.ID)
+			return errDuplicateArtifactID(i, artifact.ID)
 		}
-		seen[artifact.ID] = struct{}{}
+		seen[artifact.ID] = i
 		if err := validateRepositoryRelativePath(artifact.Path, false); err != nil {
-			return fmt.Errorf("artifacts[%d].path: %w", i, err)
+			return errInvalidArtifactPath(i)
 		}
 		if artifact.Required == nil {
-			return fmt.Errorf("artifacts[%d].required is missing", i)
+			return errMissingArtifactRequired(i)
 		}
 		if artifact.MaxBytes <= 0 {
-			return fmt.Errorf("artifacts[%d].max_bytes must be positive", i)
+			return errInvalidArtifactMaxBytes(i)
 		}
 		if strings.TrimSpace(artifact.MediaType) == "" || containsClosurePlaceholder(artifact.MediaType) {
-			return fmt.Errorf("artifacts[%d].media_type is invalid", i)
+			return errInvalidArtifactMediaType(i)
 		}
 		role := ArtifactRoleFor(artifact)
 		if !validArtifactRole(role) {
-			return fmt.Errorf("artifacts[%d].role %q is invalid", i, role)
+			return errInvalidArtifactRole(i, string(role))
 		}
 	}
 	return nil
@@ -342,10 +274,16 @@ func validatePlanArtifacts(artifacts []PlanArtifact) error {
 
 func validateOID(field, value string) error {
 	if containsClosurePlaceholder(value) {
-		return fmt.Errorf("%s contains a closure placeholder", field)
+		if field == "baseline.commit_oid" {
+			return errBaselineCommitOIDPlaceholder()
+		}
+		return errBaselineTreeOIDPlaceholder()
 	}
 	if !oidPattern.MatchString(value) {
-		return fmt.Errorf("%s must be a full lowercase Git OID", field)
+		if field == "baseline.commit_oid" {
+			return errInvalidBaselineCommitOID(value)
+		}
+		return errInvalidBaselineTreeOID(value)
 	}
 	return nil
 }
