@@ -2,7 +2,7 @@ package closure
 
 // PlanSchema returns the Closure Protocol v1 plan contract descriptor
 // as a JSON-serializable map. This is the single authority for the
-// schema command - do not hand-maintain a second schema inventory.
+// descriptor command - do not hand-maintain a second schema inventory.
 func PlanSchema() map[string]interface{} {
 	contract := planContractV1()
 	return descriptorToMap(contract)

@@ -9,76 +9,134 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure"
 )
 
-const maxPlanBytes = 1024 * 1024 // 1MB max
+// planValidateDeps encapsulates dependencies for testing.
+type planValidateDeps struct {
+	readFile func(path string) ([]byte, error)
+	readAll  func(r io.Reader) ([]byte, error)
+}
 
-func runFactoryClosePlanValidate(args []string, stdout, stderr io.Writer) int {
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+// runFactoryClosePlanValidateWith validates a plan using the provided readers.
+// Production binds os.Stdin and real file opening at the outer adapter.
+func runFactoryClosePlanValidateWith(
+	args []string,
+	stdin io.Reader,
+	stdout io.Writer,
+	stderr io.Writer,
+	deps planValidateDeps,
+) int {
+	if hasHelpFlag(args) {
 		fmt.Fprintln(stderr, "Usage: leamas factory close plan validate [--file <path>] [--stdin]")
 		fmt.Fprintln(stderr, "Validate a Closure Protocol v1 plan JSON file.")
-		return closeSuccessCode()
+		return 0
 	}
 
-	var file string
+	// Parse flags with consistent argument parser
+	var filePath string
 	var useStdin bool
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
+	seenFile := false
+	seenStdin := false
+
+	i := 0
+	for i < len(args) {
+		arg := args[i]
+		switch arg {
 		case "--file":
+			if seenFile {
+				return closeUsageError(stderr, "factory close plan validate", "repeated --file")
+			}
 			if i+1 >= len(args) {
 				return closeUsageError(stderr, "factory close plan validate", "--file requires a value")
 			}
-			file = args[i+1]
-			i++
+			if args[i+1] == "--file" || args[i+1] == "--stdin" {
+				return closeUsageError(stderr, "factory close plan validate", "--file requires a value")
+			}
+			filePath = args[i+1]
+			seenFile = true
+			i += 2
 		case "--stdin":
+			if seenStdin {
+				return closeUsageError(stderr, "factory close plan validate", "repeated --stdin")
+			}
 			useStdin = true
+			seenStdin = true
+			i++
 		default:
-			return closeUsageError(stderr, "factory close plan validate", "unknown flag: "+args[i])
+			return closeUsageError(stderr, "factory close plan validate", "unknown flag: "+arg)
 		}
 	}
 
-	// Check input selection
-	if file == "" && !useStdin {
-		return closeUsageError(stderr, "factory close plan validate", "one of --file or --stdin is required")
-	}
-	if file != "" && useStdin {
+	// Check mutual exclusivity
+	if filePath != "" && useStdin {
 		return closeUsageError(stderr, "factory close plan validate", "--file and --stdin are mutually exclusive")
 	}
 
-	// Read input
+	// Require input selection
+	if filePath == "" && !useStdin {
+		return closeUsageError(stderr, "factory close plan validate", "one of --file or --stdin is required")
+	}
+
+	// Read input with bounded read
 	var data []byte
 	var err error
-	if file != "" {
-		data, err = os.ReadFile(file)
+
+	if filePath != "" {
+		data, err = deps.readFile(filePath)
 		if err != nil {
 			return closeUsageError(stderr, "factory close plan validate", "file read failed: "+err.Error())
 		}
 	} else {
-		data, err = io.ReadAll(os.Stdin)
+		data, err = deps.readAll(stdin)
 		if err != nil {
 			return closeUsageError(stderr, "factory close plan validate", "stdin read failed: "+err.Error())
 		}
 	}
 
-	// Check size
-	if len(data) > maxPlanBytes {
+	// Check size: MaxPlanBytes + 1 = rejection before validation
+	if len(data) > closure.MaxPlanBytes {
 		return closeUsageError(stderr, "factory close plan validate", "plan exceeds max size")
 	}
 
 	// Validate using composed pipeline
 	result := closure.ValidatePlanComposed(data)
 
-	// Marshal result to JSON
+	// Marshal result to JSON with nil arrays serialized as []
 	resultData, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return closeUsageError(stderr, "factory close plan validate", "result marshal failed")
 	}
 
-	if _, err := stdout.Write(resultData); err != nil {
-		return closeUsageError(stderr, "factory close plan validate", "write failed")
+	// Atomic write: encode to buffer first, then single write
+	buf := make([]byte, 0, len(resultData)+1)
+	buf = append(buf, resultData...)
+	buf = append(buf, '\n')
+
+	if _, err := stdout.Write(buf); err != nil {
+		return 2
 	}
-	fmt.Fprintln(stdout)
 
 	if result.Valid {
-		return closeSuccessCode()
+		return 0
 	}
-	return 1 // Invalid plan, exit 1
+	return 1 // Invalid plan
+}
+
+// runFactoryClosePlanValidate is the production adapter using os.Stdin and os.ReadFile.
+func runFactoryClosePlanValidate(args []string, stdout, stderr io.Writer) int {
+	deps := planValidateDeps{
+		readFile: os.ReadFile,
+		readAll: func(r io.Reader) ([]byte, error) {
+			return io.ReadAll(io.LimitReader(r, closure.MaxPlanBytes+1))
+		},
+	}
+	return runFactoryClosePlanValidateWith(args, os.Stdin, stdout, stderr, deps)
+}
+
+// hasHelpFlag checks if args contain a help flag.
+func hasHelpFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
+	return false
 }
