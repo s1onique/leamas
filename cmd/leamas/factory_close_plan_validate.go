@@ -112,8 +112,14 @@ func runFactoryClosePlanValidateWith(
 	// Validate using composed pipeline
 	result := closure.ValidatePlanComposed(data)
 
-	// Marshal result to JSON with nil arrays serialized as []
-	resultData, err := json.MarshalIndent(result, "", "  ")
+	// Convert through frozen public CLI DTO before serialisation.
+	// The DTO is the authoritative public wire boundary; adding
+	// a JSON-tagged field to the internal type does not change
+	// the CLI protocol.
+	dto := toPlanValidationDTO(result)
+
+	// Marshal DTO to JSON with nil arrays serialized as []
+	resultData, err := json.MarshalIndent(dto, "", "  ")
 	if err != nil {
 		return closeUsageError(stderr, "factory close plan validate", "result marshal failed")
 	}
@@ -148,9 +154,7 @@ func runFactoryClosePlanValidate(args []string, stdout, stderr io.Writer) int {
 		openFile: func(path string) (io.ReadCloser, error) {
 			return os.Open(path)
 		},
-		readBounded: func(r io.Reader, max int64) ([]byte, error) {
-			return io.ReadAll(io.LimitReader(r, max))
-		},
+		readBounded: productionBoundedRead,
 	}
 	return runFactoryClosePlanValidateWith(args, os.Stdin, stdout, stderr, deps)
 }
@@ -158,4 +162,82 @@ func runFactoryClosePlanValidate(args []string, stdout, stderr io.Writer) int {
 // isHelpFlag returns true if arg is a help flag.
 func isHelpFlag(arg string) bool {
 	return arg == "-h" || arg == "--help"
+}
+
+// planValidationDTO is the frozen public CLI wire format for
+// validation results. The set of fields and JSON keys is fixed
+// so that adding an internal JSON-tagged field cannot silently
+// change the CLI protocol.
+//
+// Diagnostic arrays are always non-nil (rendered as []) so that
+// callers can rely on JSON-array, never JSON-null semantics.
+type planValidationDTO struct {
+	Structural     planStructuralDTO   `json:"structural"`
+	Decoded        bool                `json:"decoded"`
+	DecodeErrors   []planDiagnosticDTO `json:"decode_errors"`
+	SemanticValid  bool                `json:"semantic_valid"`
+	SemanticErrors []planDiagnosticDTO `json:"semantic_errors"`
+	Valid          bool                `json:"valid"`
+}
+
+// planStructuralDTO is the structural-stage subset of the public
+// validation wire.
+type planStructuralDTO struct {
+	Valid           bool                `json:"valid"`
+	ContractVersion int                 `json:"contract_version"`
+	Errors          []planDiagnosticDTO `json:"errors"`
+}
+
+// planDiagnosticDTO is a single frozen diagnostic line. It exposes
+// no internal cause, observer, or implementation fields.
+type planDiagnosticDTO struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
+}
+
+// toPlanValidationDTO converts the internal composed result to
+// the frozen public CLI DTO. nil diagnostic arrays become empty
+// slices so JSON serialisation always yields [].
+func toPlanValidationDTO(r closure.ComposedPlanValidationResult) planValidationDTO {
+	decodeErrors := r.DecodeErrors
+	if decodeErrors == nil {
+		decodeErrors = []closure.PlanValidationError{}
+	}
+	semanticErrors := r.SemanticErrors
+	if semanticErrors == nil {
+		semanticErrors = []closure.PlanValidationError{}
+	}
+	structErrors := r.Structural.Errors
+	if structErrors == nil {
+		structErrors = []closure.PlanValidationError{}
+	}
+	return planValidationDTO{
+		Structural: planStructuralDTO{
+			Valid:           r.Structural.Valid,
+			ContractVersion: r.Structural.ContractVersion,
+			Errors:          toPlanDiagnosticDTOs(structErrors),
+		},
+		Decoded:        r.Decoded,
+		DecodeErrors:   toPlanDiagnosticDTOs(decodeErrors),
+		SemanticValid:  r.SemanticValid,
+		SemanticErrors: toPlanDiagnosticDTOs(semanticErrors),
+		Valid:          r.Valid,
+	}
+}
+
+func toPlanDiagnosticDTOs(src []closure.PlanValidationError) []planDiagnosticDTO {
+	out := make([]planDiagnosticDTO, len(src))
+	for i, e := range src {
+		out[i] = planDiagnosticDTO{Path: e.InstancePath, Message: e.Message}
+	}
+	return out
+}
+
+// productionBoundedRead reads up to max bytes from r using a
+// bounded LimitReader. It is the production implementation of the
+// bounded-read capability and is exported as a named function so
+// tests can prove the real bound is honoured with counting or
+// infinite readers.
+func productionBoundedRead(r io.Reader, max int64) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(r, max))
 }

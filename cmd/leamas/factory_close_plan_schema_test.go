@@ -50,22 +50,47 @@ func TestSchemaRejectsArguments(t *testing.T) {
 	}
 }
 
+// schemaInvocationResult captures the full output of one schema
+// handler invocation for non-vacuous determinism checks.
+type schemaInvocationResult struct {
+	Exit   int
+	Stdout []byte
+	Stderr []byte
+}
+
 func TestSchemaDeterminism20Sequential(t *testing.T) {
-	results := make([]string, 20)
+	results := make([]schemaInvocationResult, 20)
 	for i := 0; i < 20; i++ {
 		var stdout, stderr bytes.Buffer
-		runFactoryClosePlanSchema(nil, &stdout, &stderr)
-		results[i] = stdout.String()
+		exit := runFactoryClosePlanSchema(nil, &stdout, &stderr)
+		results[i] = schemaInvocationResult{
+			Exit:   exit,
+			Stdout: bytes.Clone(stdout.Bytes()),
+			Stderr: bytes.Clone(stderr.Bytes()),
+		}
 	}
+	// Every invocation must succeed before comparing
+	for i, r := range results {
+		if r.Exit != 0 {
+			t.Fatalf("run %d exit = %d, want 0", i, r.Exit)
+		}
+		if len(r.Stderr) != 0 {
+			t.Fatalf("run %d stderr not empty: %q", i, r.Stderr)
+		}
+		if len(r.Stdout) == 0 {
+			t.Fatalf("run %d wrote nothing to stdout", i)
+		}
+	}
+	// All invocations must be byte-identical
 	for i := 1; i < 20; i++ {
-		if results[i] != results[0] {
-			t.Fatalf("run %d differs from run 0", i)
+		if !bytes.Equal(results[i].Stdout, results[0].Stdout) {
+			t.Fatalf("run %d stdout differs from run 0", i)
 		}
 	}
 }
 
 func TestSchemaDeterminism8Concurrent(t *testing.T) {
-	results := make([]string, 8)
+	results := make([]schemaInvocationResult, 8)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	start := make(chan struct{})
@@ -75,17 +100,34 @@ func TestSchemaDeterminism8Concurrent(t *testing.T) {
 			defer wg.Done()
 			<-start
 			var stdout, stderr bytes.Buffer
-			runFactoryClosePlanSchema(nil, &stdout, &stderr)
+			exit := runFactoryClosePlanSchema(nil, &stdout, &stderr)
 			mu.Lock()
-			results[idx] = stdout.String()
+			results[idx] = schemaInvocationResult{
+				Exit:   exit,
+				Stdout: bytes.Clone(stdout.Bytes()),
+				Stderr: bytes.Clone(stderr.Bytes()),
+			}
 			mu.Unlock()
 		}(i)
 	}
 	close(start)
 	wg.Wait()
+	// Every invocation must succeed before comparing
+	for i, r := range results {
+		if r.Exit != 0 {
+			t.Fatalf("concurrent run %d exit = %d, want 0", i, r.Exit)
+		}
+		if len(r.Stderr) != 0 {
+			t.Fatalf("concurrent run %d stderr not empty: %q", i, r.Stderr)
+		}
+		if len(r.Stdout) == 0 {
+			t.Fatalf("concurrent run %d wrote nothing to stdout", i)
+		}
+	}
+	// All invocations must be byte-identical
 	for i := 1; i < 8; i++ {
-		if results[i] != results[0] {
-			t.Fatalf("concurrent run %d differs from run 0", i)
+		if !bytes.Equal(results[i].Stdout, results[0].Stdout) {
+			t.Fatalf("concurrent run %d stdout differs from run 0", i)
 		}
 	}
 }
