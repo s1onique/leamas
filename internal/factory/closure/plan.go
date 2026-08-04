@@ -121,10 +121,10 @@ func ValidatePlan(plan Plan) error {
 	if !actIDPattern.MatchString(plan.ActID) || containsClosurePlaceholder(plan.ActID) {
 		return errInvalidActID(plan.ActID)
 	}
-	if err := validateOID("baseline.commit_oid", plan.Baseline.CommitOID); err != nil {
+	if err := validateBaselineCommitOID(plan.Baseline.CommitOID); err != nil {
 		return err
 	}
-	if err := validateOID("baseline.tree_oid", plan.Baseline.TreeOID); err != nil {
+	if err := validateBaselineTreeOID(plan.Baseline.TreeOID); err != nil {
 		return err
 	}
 	if err := validatePlanExecutionMode(plan.Execution); err != nil {
@@ -197,7 +197,7 @@ func validatePlanChecks(checks []PlanCheck) error {
 			}
 			if len(check.Argv) != 0 || check.WorkingDirectory != "" ||
 				check.TimeoutSeconds != 0 || check.Environment != nil {
-				return errExclusionWithExecutionFields(i)
+				return errExclusionWithExecutionFields(i, check)
 			}
 		default:
 			return errUnknownCheckMode(i, string(check.Mode))
@@ -272,22 +272,6 @@ func validatePlanArtifacts(artifacts []PlanArtifact) error {
 	return nil
 }
 
-func validateOID(field, value string) error {
-	if containsClosurePlaceholder(value) {
-		if field == "baseline.commit_oid" {
-			return errBaselineCommitOIDPlaceholder()
-		}
-		return errBaselineTreeOIDPlaceholder()
-	}
-	if !oidPattern.MatchString(value) {
-		if field == "baseline.commit_oid" {
-			return errInvalidBaselineCommitOID(value)
-		}
-		return errInvalidBaselineTreeOID(value)
-	}
-	return nil
-}
-
 func validateRepositoryRelativePath(path string, allowDot bool) error {
 	if path == "" || filepath.IsAbs(path) || strings.ContainsRune(path, 0) || containsClosurePlaceholder(path) {
 		return fmt.Errorf("must be a non-empty repository-relative path")
@@ -329,4 +313,24 @@ func readBoundedFile(path string, limit int) ([]byte, error) {
 		return nil, fmt.Errorf("file exceeds %d-byte limit", limit)
 	}
 	return data, nil
+}
+
+// validateOID validates any OID field using the generic string-based dispatch.
+// This is used by manifest and runner identity validation where field identity
+// is implicit from context. For plan baseline validation, use validateBaselineCommitOID
+// and validateBaselineTreeOID directly for explicit field paths.
+func validateOID(field, value string) error {
+	if containsClosurePlaceholder(value) {
+		if field == "baseline.commit_oid" {
+			return errBaselineCommitOIDPlaceholder()
+		}
+		return errBaselineTreeOIDPlaceholder()
+	}
+	if !oidPattern.MatchString(value) {
+		if field == "baseline.commit_oid" {
+			return errInvalidBaselineCommitOID(value)
+		}
+		return errInvalidBaselineTreeOID(value)
+	}
+	return nil
 }

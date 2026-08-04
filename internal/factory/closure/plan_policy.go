@@ -77,3 +77,21 @@ func IsPlanPolicyRequiredError(err error) bool {
 	}
 	return false
 }
+
+// PlanDiagnostics implements planDiagnosticSource. It returns one
+// diagnostic for each missing policy field, each with the exact
+// path /policy/<field_name>. The diagnostics are deep-copied.
+func (e *PlanPolicyRequiredError) PlanDiagnostics() []PlanValidationError {
+	diags := make([]PlanValidationError, len(e.Missing))
+	for i, name := range e.Missing {
+		diags[i] = clonePlanValidationError(PlanValidationError{
+			InstancePath: "/policy/" + name,
+			SchemaPath:   "/policy/" + name,
+			Code:         PlanCodeRequiredPropertyMissing,
+			Keyword:      KeywordRequired,
+			Message:      e.Error(),
+			PropertyName: name,
+		})
+	}
+	return diags
+}

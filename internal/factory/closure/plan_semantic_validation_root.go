@@ -94,3 +94,27 @@ func errInvalidArtifactsCount(count int) *PlanSemanticError {
 		fmt.Errorf("artifacts count exceeds %d", MaxArtifacts),
 	)
 }
+
+// validateBaselineCommitOID validates the baseline commit OID using exact field identity.
+// No unknown field can fall through to a root fallback.
+func validateBaselineCommitOID(commitOID string) error {
+	if containsClosurePlaceholder(commitOID) {
+		return errBaselineCommitOIDPlaceholder()
+	}
+	if !oidPattern.MatchString(commitOID) {
+		return errInvalidBaselineCommitOID(commitOID)
+	}
+	return nil
+}
+
+// validateBaselineTreeOID validates the baseline tree OID using exact field identity.
+// No unknown field can fall through to a root fallback.
+func validateBaselineTreeOID(treeOID string) error {
+	if containsClosurePlaceholder(treeOID) {
+		return errBaselineTreeOIDPlaceholder()
+	}
+	if !oidPattern.MatchString(treeOID) {
+		return errInvalidBaselineTreeOID(treeOID)
+	}
+	return nil
+}

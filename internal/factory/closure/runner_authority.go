@@ -11,10 +11,58 @@ import (
 type RunnerAuthorityError struct {
 	Field   string
 	Message string
+	Cause   error
+}
+
+// PlanDiagnostics implements planDiagnosticSource. It returns a single
+// diagnostic with the exact JSON Pointer path derived from the Field
+// name. The path is prefixed with "/runner_authority/".
+func (e *RunnerAuthorityError) PlanDiagnostics() []PlanValidationError {
+	path := "/runner_authority"
+	switch e.Field {
+	case "mode":
+		path = "/runner_authority/mode"
+	case "tool":
+		path = "/runner_authority/tool"
+	case "tool.revision":
+		path = "/runner_authority/tool/revision"
+	case "tool.tree_oid":
+		path = "/runner_authority/tool/tree_oid"
+	case "tool.binary_sha256":
+		path = "/runner_authority/tool/binary_sha256"
+	case "tool.version":
+		path = "/runner_authority/tool/version"
+	case "tool.tag_name":
+		path = "/runner_authority/tool/tag_name"
+	case "tool.tag_object_oid":
+		path = "/runner_authority/tool/tag_object_oid"
+	case "vcs.revision":
+		path = "/runner_authority/vcs_revision"
+	case "vcs.modified":
+		path = "/runner_authority/vcs_modified"
+	case "binary_sha256":
+		path = "/runner_authority/binary_sha256"
+	case "target.subject":
+		path = "/runner_authority/target_subject"
+	case "target.tree":
+		path = "/runner_authority/target_tree"
+	}
+	return []PlanValidationError{clonePlanValidationError(PlanValidationError{
+		InstancePath: path,
+		SchemaPath:   path,
+		Code:         PlanCodeSemanticConstraintFailed,
+		Keyword:      KeywordType,
+		Message:      e.Error(),
+	})}
 }
 
 func (e *RunnerAuthorityError) Error() string {
 	return fmt.Sprintf("runner_authority.%s: %s", e.Field, e.Message)
+}
+
+// Unwrap returns the underlying cause for errors.Is/errors.As.
+func (e *RunnerAuthorityError) Unwrap() error {
+	return e.Cause
 }
 
 // ResolvedRunnerAuthority contains the fully resolved runner authority state.

@@ -40,6 +40,7 @@ const (
 	KeywordEnum           PlanValidationKeyword = "enum"
 	KeywordRequired       PlanValidationKeyword = "required"
 	KeywordConst          PlanValidationKeyword = "const"
+	KeywordPattern        PlanValidationKeyword = "pattern"
 	KeywordAdditionalProp PlanValidationKeyword = "additionalProperties"
 	KeywordMinItems       PlanValidationKeyword = "minItems"
 	KeywordIfThenElse     PlanValidationKeyword = "if"

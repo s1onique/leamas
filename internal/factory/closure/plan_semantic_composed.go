@@ -24,10 +24,7 @@ func semanticDiagnostics(err error) []PlanValidationError {
 	// Check for planDiagnosticSource (typed semantic error).
 	var source planDiagnosticSource
 	if errors.As(err, &source) {
-		diags := source.PlanDiagnostics()
-		out := make([]PlanValidationError, len(diags))
-		copy(out, diags)
-		return out
+		return clonePlanValidationErrors(source.PlanDiagnostics())
 	}
 
 	// Unknown untyped error → deterministic root fallback.

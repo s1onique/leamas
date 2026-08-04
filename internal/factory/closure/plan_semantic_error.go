@@ -18,9 +18,11 @@ type PlanSemanticError struct {
 	Cause      error
 }
 
-// PlanDiagnostics implements planDiagnosticSource.
+// PlanDiagnostics implements planDiagnosticSource. The diagnostic is
+// deep-copied so callers can mutate the returned AcceptedValues
+// without affecting the error's internal state.
 func (e *PlanSemanticError) PlanDiagnostics() []PlanValidationError {
-	return []PlanValidationError{e.Diagnostic}
+	return []PlanValidationError{clonePlanValidationError(e.Diagnostic)}
 }
 
 // Error implements the error interface.
@@ -40,11 +42,11 @@ type PlanSemanticMultiError struct {
 	Cause       error
 }
 
-// PlanDiagnostics implements planDiagnosticSource.
+// PlanDiagnostics implements planDiagnosticSource. The diagnostics are
+// deep-copied so callers can mutate the returned AcceptedValues
+// without affecting the error's internal state.
 func (e *PlanSemanticMultiError) PlanDiagnostics() []PlanValidationError {
-	out := make([]PlanValidationError, len(e.Diagnostics))
-	copy(out, e.Diagnostics)
-	return out
+	return clonePlanValidationErrors(e.Diagnostics)
 }
 
 // Error implements the error interface.

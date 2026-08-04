@@ -126,15 +126,37 @@ func errInvalidCheckReason(index int) *PlanSemanticError {
 	)
 }
 
-// errExclusionWithExecutionFields returns a typed error for exclusion with execution fields.
-func errExclusionWithExecutionFields(index int) *PlanSemanticError {
-	path := jsonPointerCheckID(index, "argv")
+// exclusionFirstOffendingField returns the first offending field name
+// in order: argv, working_directory, timeout_seconds, environment.
+// Returns "" if no offending field is found.
+func exclusionFirstOffendingField(check PlanCheck) string {
+	if len(check.Argv) != 0 {
+		return "argv"
+	}
+	if check.WorkingDirectory != "" {
+		return "working_directory"
+	}
+	if check.TimeoutSeconds != 0 {
+		return "timeout_seconds"
+	}
+	if check.Environment != nil {
+		return "environment"
+	}
+	return ""
+}
+
+// errExclusionWithExecutionFields returns a typed error pointing to the
+// first offending execution field in order: argv, working_directory,
+// timeout_seconds, environment.
+func errExclusionWithExecutionFields(index int, check PlanCheck) *PlanSemanticError {
+	field := exclusionFirstOffendingField(check)
+	path := jsonPointerCheckID(index, field)
 	return newSemanticError(
 		path,
 		PlanCodeSemanticConstraintFailed,
 		KeywordType,
-		fmt.Sprintf("checks[%d] exclusion contains execution fields", index),
-		fmt.Errorf("checks[%d] exclusion contains execution fields", index),
+		fmt.Sprintf("checks[%d] exclusion contains forbidden field %q", index, field),
+		fmt.Errorf("checks[%d] exclusion contains forbidden field %q", index, field),
 	)
 }
 
