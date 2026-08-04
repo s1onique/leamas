@@ -41,18 +41,22 @@ func auditFileForLocalTaintParsing(file *ast.File, path string) error {
 
 // auditFunctionBody analyzes a function body for tainted identifier usage.
 // Returns a list of diagnostic messages for any violations found.
+//
+// This implements ordered statement analysis:
+//  1. For each statement in lexical order:
+//     a. Check forbidden operations against current taint state
+//     b. Apply assignment effects to taint state
+//  2. Do not check a statement using assignments that occur later
 func auditFunctionBody(body *ast.BlockStmt, tracker *taintTracker) []string {
 	var diagnostics []string
 
-	// First pass: update taint state based on assignments
 	for _, stmt := range body.List {
-		processAssignment(stmt, tracker)
-	}
-
-	// Second pass: check for forbidden operations
-	for _, stmt := range body.List {
+		// Step 1: Check for forbidden uses BEFORE applying this statement's effects
 		diags := checkForbiddenOperations(stmt, tracker)
 		diagnostics = append(diagnostics, diags...)
+
+		// Step 2: Apply assignment effects for subsequent statements
+		processAssignment(stmt, tracker)
 	}
 
 	return diagnostics
@@ -223,6 +227,20 @@ func split(err error) []string {
  }`,
 			wantErr: true,
 		},
+		// Order-sensitive: tainted BEFORE safe assignment should reject use
+		{
+			name: "order-taint-before-safe-rejected",
+			src: `package fixture
+import "strings"
+import "errors"
+func check(err error) bool {
+	msg := err.Error()
+	strings.Contains(msg, "x")
+	msg = "safe"
+	return false
+ }`,
+			wantErr: true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -254,6 +272,33 @@ func TestLocalAliasTaintTrackingNegativeFixtures(t *testing.T) {
 		src     string
 		wantErr bool
 	}{
+		// Order-sensitive: taint cleared by safe assignment
+		{
+			name: "order-taint-then-safe-accepted",
+			src: `package fixture
+import "strings"
+import "errors"
+func check(err error) bool {
+	msg := err.Error()
+	msg = "safe"
+	return strings.Contains(msg, "path:")
+ }`,
+			wantErr: false,
+		},
+		// Order-sensitive: safe before first use, then tainted (no later use)
+		{
+			name: "order-safe-before-use-then-taint-accepted",
+			src: `package fixture
+import "strings"
+import "errors"
+func check(err error) bool {
+	msg := "safe"
+	strings.Contains(msg, "path:")
+	msg = err.Error()
+	return false
+ }`,
+			wantErr: false,
+		},
 		{
 			name: "msg-sanitized-strings.Contains-accepted",
 			src: `package fixture
