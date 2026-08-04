@@ -199,10 +199,9 @@ func TestSchemaParityXApplicabilityOnConditionalFields(t *testing.T) {
 	checkItems := checks["items"].(map[string]any)
 	checkProps := checkItems["properties"].(map[string]any)
 
-	// argv, reason, working_directory, timeout_seconds all carry
-	// x-applicability rules in the real descriptor.
-	// (environment uses free-form string map and returns early.)
-	for _, field := range []string{"argv", "reason", "working_directory", "timeout_seconds"} {
+	// argv, reason, working_directory, timeout_seconds, environment
+	// all carry x-applicability rules in the real descriptor.
+	for _, field := range []string{"argv", "reason", "working_directory", "timeout_seconds", "environment"} {
 		f, ok := checkProps[field].(map[string]any)
 		if !ok {
 			t.Errorf("conditional field %s missing from checks", field)

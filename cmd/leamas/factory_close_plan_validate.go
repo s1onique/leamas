@@ -188,11 +188,39 @@ type planStructuralDTO struct {
 	Errors          []planDiagnosticDTO `json:"errors"`
 }
 
-// planDiagnosticDTO is a single frozen diagnostic line. It exposes
-// no internal cause, observer, or implementation fields.
+// planDiagnosticDTO is the frozen public diagnostic wire.
+// Every field name is part of the CLI contract; renaming or
+// removing any field is a breaking change. The diagnostic
+// preserves the typed taxonomy established by Closure Protocol
+// v1 so callers can identify the failing rule without parsing
+// prose:
+//
+//   - InstancePath is the JSON pointer to the failing value
+//     (empty for runtime-only diagnostics).
+//   - SchemaPath is the JSON pointer to the failing schema
+//     location.
+//   - Code is the stable diagnostic code (e.g. "required",
+//     "enum_mismatch", "value_too_large").
+//   - Keyword is the JSON Schema keyword that failed
+//     (e.g. "required", "enum", "maxLength").
+//   - Message is the human-readable explanation.
+//   - RejectedValue is the value that failed, deep-copied.
+//   - AcceptedValues is the closed set of accepted values, [] not null.
+//   - PropertyName is the runtime-only field name (e.g.
+//     "vcs.revision", "binary_sha256") for runner-authority
+//     diagnostics that have no InstancePath.
+//
+// Cause, observer, and implementation-only fields are
+// intentionally absent.
 type planDiagnosticDTO struct {
-	Path    string `json:"path"`
-	Message string `json:"message"`
+	InstancePath   string `json:"instance_path"`
+	SchemaPath     string `json:"schema_path"`
+	Code           string `json:"code"`
+	Keyword        string `json:"keyword"`
+	Message        string `json:"message"`
+	RejectedValue  any    `json:"rejected_value,omitempty"`
+	AcceptedValues []any  `json:"accepted_values"`
+	PropertyName   string `json:"property_name,omitempty"`
 }
 
 // toPlanValidationDTO converts the internal composed result to
@@ -228,9 +256,62 @@ func toPlanValidationDTO(r closure.ComposedPlanValidationResult) planValidationD
 func toPlanDiagnosticDTOs(src []closure.PlanValidationError) []planDiagnosticDTO {
 	out := make([]planDiagnosticDTO, len(src))
 	for i, e := range src {
-		out[i] = planDiagnosticDTO{Path: e.InstancePath, Message: e.Message}
+		out[i] = planDiagnosticDTO{
+			InstancePath:   e.InstancePath,
+			SchemaPath:     e.SchemaPath,
+			Code:           string(e.Code),
+			Keyword:        string(e.Keyword),
+			Message:        e.Message,
+			RejectedValue:  deepCopyAny(e.RejectedValue),
+			AcceptedValues: toAnySlice(e.AcceptedValues),
+			PropertyName:   e.PropertyName,
+		}
 	}
 	return out
+}
+
+// toAnySlice converts a []string to []any without nil entries.
+// nil becomes []any{} so JSON serialisation is [] not null.
+func toAnySlice(src []string) []any {
+	if src == nil {
+		return []any{}
+	}
+	out := make([]any, len(src))
+	for i, s := range src {
+		out[i] = s
+	}
+	return out
+}
+
+// deepCopyAny returns a deep copy of simple JSON values so
+// callers cannot mutate the source through the DTO. Maps and
+// slices are recursively copied; primitives are returned as-is;
+// nil stays nil.
+func deepCopyAny(v any) any {
+	switch x := v.(type) {
+	case nil:
+		return nil
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, vv := range x {
+			out[k] = deepCopyAny(vv)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, vv := range x {
+			out[i] = deepCopyAny(vv)
+		}
+		return out
+	case []string:
+		out := make([]any, len(x))
+		for i, vv := range x {
+			out[i] = vv
+		}
+		return out
+	default:
+		return x
+	}
 }
 
 // productionBoundedRead reads up to max bytes from r using a

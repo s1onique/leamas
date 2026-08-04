@@ -138,18 +138,20 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 		if field.Children.Kind == objectStringMap {
 			schema["type"] = "object"
 			schema["additionalProperties"] = map[string]any{"type": "string"}
-			return schema, nil
-		}
-		// Handle strict closed objects
-		childProps, childRequired, err := buildObjectProperties(*field.Children, path)
-		if err != nil {
-			return nil, err
-		}
-		schema["type"] = "object"
-		schema["properties"] = childProps
-		schema["additionalProperties"] = false
-		if len(childRequired) > 0 {
-			schema["required"] = childRequired
+			// Continue to common metadata (examples, x-applicability)
+			// instead of returning early.
+		} else {
+			// Handle strict closed objects
+			childProps, childRequired, err := buildObjectProperties(*field.Children, path)
+			if err != nil {
+				return nil, err
+			}
+			schema["type"] = "object"
+			schema["properties"] = childProps
+			schema["additionalProperties"] = false
+			if len(childRequired) > 0 {
+				schema["required"] = childRequired
+			}
 		}
 	}
 

@@ -126,11 +126,18 @@ func TestDTO_NestedStructuralKeys(t *testing.T) {
 	}
 }
 
-// TestDTO_DiagnosticKeys pins nested diagnostic keys.
+// TestDTO_DiagnosticKeys pins nested diagnostic keys to the
+// canonical typed taxonomy.
 func TestDTO_DiagnosticKeys(t *testing.T) {
 	result := closure.ComposedPlanValidationResult{
 		DecodeErrors: []closure.PlanValidationError{
-			{InstancePath: "/x", Message: "err"},
+			{
+				InstancePath: "/x",
+				SchemaPath:   "#/properties/x",
+				Code:         closure.PlanValidationCode("required"),
+				Keyword:      closure.PlanValidationKeyword("required"),
+				Message:      "missing field",
+			},
 		},
 		Valid: false,
 	}
@@ -146,7 +153,14 @@ func TestDTO_DiagnosticKeys(t *testing.T) {
 	if len(raw.DecodeErrors) != 1 {
 		t.Fatalf("expected 1 error, got %d", len(raw.DecodeErrors))
 	}
-	wantKeys := map[string]bool{"path": false, "message": false}
+	wantKeys := map[string]bool{
+		"instance_path":   false,
+		"schema_path":     false,
+		"code":            false,
+		"keyword":         false,
+		"message":         false,
+		"accepted_values": false,
+	}
 	for k := range raw.DecodeErrors[0] {
 		if _, ok := wantKeys[k]; ok {
 			wantKeys[k] = true
@@ -158,6 +172,90 @@ func TestDTO_DiagnosticKeys(t *testing.T) {
 		if !present {
 			t.Errorf("missing diagnostic key: %q", k)
 		}
+	}
+}
+
+// TestDTO_DiagnosticRuntimeProperty proves runner-authority
+// diagnostics with empty InstancePath and nonempty PropertyName
+// preserve PropertyName in the public wire.
+func TestDTO_DiagnosticRuntimeProperty(t *testing.T) {
+	result := closure.ComposedPlanValidationResult{
+		SemanticErrors: []closure.PlanValidationError{
+			{
+				InstancePath: "",
+				PropertyName: "vcs.revision",
+				Code:         closure.PlanValidationCode("semantic"),
+				Keyword:      closure.PlanValidationKeyword("required"),
+				Message:      "missing field",
+			},
+		},
+		Valid: false,
+	}
+	dto := toPlanValidationDTO(result)
+	data, _ := json.Marshal(dto)
+
+	var raw struct {
+		SemanticErrors []map[string]any `json:"semantic_errors"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(raw.SemanticErrors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(raw.SemanticErrors))
+	}
+	if raw.SemanticErrors[0]["instance_path"] != "" {
+		t.Errorf("instance_path = %v, want empty", raw.SemanticErrors[0]["instance_path"])
+	}
+	if raw.SemanticErrors[0]["property_name"] != "vcs.revision" {
+		t.Errorf("property_name = %v, want vcs.revision", raw.SemanticErrors[0]["property_name"])
+	}
+}
+
+// TestDTO_DiagnosticAcceptedValuesNotNull proves AcceptedValues
+// is [] not null when source is nil.
+func TestDTO_DiagnosticAcceptedValuesNotNull(t *testing.T) {
+	result := closure.ComposedPlanValidationResult{
+		DecodeErrors: []closure.PlanValidationError{
+			{
+				InstancePath: "/x",
+				Code:         closure.PlanValidationCode("required"),
+			},
+		},
+		Valid: false,
+	}
+	dto := toPlanValidationDTO(result)
+	data, _ := json.Marshal(dto)
+	s := string(data)
+	if strings.Contains(s, `"accepted_values":null`) {
+		t.Errorf("accepted_values must not be null: %s", s)
+	}
+}
+
+// TestDTO_DiagnosticDeepCopy proves deep-copy conversion does not
+// share underlying memory.
+func TestDTO_DiagnosticDeepCopy(t *testing.T) {
+	src := closure.PlanValidationError{
+		InstancePath: "/x",
+		RejectedValue: map[string]any{
+			"key": "value",
+		},
+		AcceptedValues: []string{"a", "b"},
+	}
+	dto := toPlanValidationDTO(closure.ComposedPlanValidationResult{
+		DecodeErrors: []closure.PlanValidationError{src},
+	})
+	if len(dto.DecodeErrors) != 1 {
+		t.Fatal("expected 1 error")
+	}
+	if dto.DecodeErrors[0].RejectedValue == nil {
+		t.Fatal("rejected_value not preserved")
+	}
+	// Deep copy: mutating source must not affect DTO
+	srcMap := src.RejectedValue.(map[string]any)
+	srcMap["key"] = "mutated"
+	dtoMap := dto.DecodeErrors[0].RejectedValue.(map[string]any)
+	if dtoMap["key"] != "value" {
+		t.Errorf("DTO shares underlying memory with source: %v", dtoMap)
 	}
 }
 
