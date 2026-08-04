@@ -212,7 +212,7 @@ func Clean() {}
 	for _, f := range findings {
 		if f.Severity == checks.SeverityError {
 			foundErrors = true
-			break
+			t.Logf("Found error: Path=%s Kind=%s Message=%s Severity=%s", f.Path, f.Kind, f.Message, f.Severity)
 		}
 	}
 	if foundErrors {

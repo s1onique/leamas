@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 // NewMetricsCollectionV3 creates a new metrics collection from environment variables.
@@ -123,7 +124,7 @@ func (mc *MetricsCollectionV3) SetSubjectIdentity(headOID, treeOID, worktreeStat
 
 // AddCheckWithResources records metrics when resources are provided directly.
 func (mc *MetricsCollectionV3) AddCheckWithResources(
-	verifier Verifier,
+	verifier registry.Verifier,
 	ordinal int,
 	findings []checks.Finding,
 	duration time.Duration,
@@ -301,7 +302,7 @@ func (e *FingerprintError) Error() string {
 }
 
 // executionFingerprintV3 computes a digest of a verifier's execution definition.
-func executionFingerprintV3(name string, exec ExecutionDefinition, env []string) (string, error) {
+func executionFingerprintV3(name string, exec registry.ExecutionDefinition, env []string) (string, error) {
 	if name == "" {
 		return "", &FingerprintError{Reason: "verifier name is required"}
 	}

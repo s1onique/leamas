@@ -1,11 +1,14 @@
 package closure
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -22,15 +25,66 @@ var (
 // aligned.
 const planExecutionModePath = "/execution/mode"
 
+// DecodePlan is the legacy public entry point. It preserves the
+// documented contract: parse, decode, and ValidatePlan in
+// sequence. The internal composed pipeline routes the bytes
+// through parseBoundedClosurePlanDocument (the single bounded
+// syntactic authority) and the typed-decoder through
+// decodeTypedPlan; composition observability is invocation-local
+// via the compositionObserver interface in
+// plan_contract_validation.go.
 func DecodePlan(data []byte) (Plan, error) {
-	var plan Plan
-	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
+	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
+	if len(parseDiagnostics) > 0 {
+		return Plan{}, errorFromDiagnostics(parseDiagnostics)
+	}
+	plan, err := decodeTypedPlan(root)
+	if err != nil {
 		return Plan{}, err
 	}
 	if err := ValidatePlan(plan); err != nil {
 		return Plan{}, err
 	}
 	return plan, nil
+}
+
+// decodeTypedPlan turns the already-parsed document root into a
+// typed Plan. It uses the same canonical JSON encoder/decoder pair
+// as the parser so no second syntactic parse occurs. The typed
+// decoder uses DisallowUnknownFields so unknown JSON keys still
+// surface as a typed decode error even when the structural
+// validator has accepted the document.
+func decodeTypedPlan(root any) (Plan, error) {
+	return decodeTypedPlanWithObserver(root, noopCompositionObserver{})
+}
+
+// decodeTypedPlanWithObserver is the internal entry point the
+// composed pipeline uses. The observer is invocation-local; tests
+// pass a per-assertion counting observer and production passes the
+// noop observer.
+func decodeTypedPlanWithObserver(root any, observer compositionObserver) (Plan, error) {
+	observer.TypedDecoded()
+	buf, err := json.Marshal(root)
+	if err != nil {
+		return Plan{}, fmt.Errorf("marshal parsed plan: %w", err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(buf))
+	dec.DisallowUnknownFields()
+	var plan Plan
+	if err := dec.Decode(&plan); err != nil {
+		return Plan{}, fmt.Errorf("typed decode: %w", err)
+	}
+	return plan, nil
+}
+
+// errorFromDiagnostics turns a list of structural diagnostics into
+// a Go error so the legacy DecodePlan preserves its (Plan{}, error)
+// return contract.
+func errorFromDiagnostics(diags []PlanValidationError) error {
+	if len(diags) == 0 {
+		return nil
+	}
+	return fmt.Errorf("plan rejected by structural validation: %s", diags[0].Message)
 }
 
 func LoadPlan(path string) (Plan, []byte, error) {
@@ -49,11 +103,12 @@ func LoadPlan(path string) (Plan, []byte, error) {
 // It enforces the size bound and strict JSON syntax only; callers that need
 // an executable plan must subsequently invoke ValidatePlan explicitly.
 func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
-	if len(data) > MaxPlanBytes {
-		return Plan{}, nil, fmt.Errorf("plan exceeds maximum size: %d > %d", len(data), MaxPlanBytes)
+	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
+	if len(parseDiagnostics) > 0 {
+		return Plan{}, nil, errorFromDiagnostics(parseDiagnostics)
 	}
-	var plan Plan
-	if err := decodeStrictBounded(data, MaxPlanBytes, &plan); err != nil {
+	plan, err := decodeTypedPlan(root)
+	if err != nil {
 		return Plan{}, nil, fmt.Errorf("decode closure plan: %w", err)
 	}
 	return plan, data, nil
@@ -61,25 +116,25 @@ func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
 
 func ValidatePlan(plan Plan) error {
 	if plan.ContractVersion != ContractVersionV1 {
-		return fmt.Errorf("unsupported closure plan contract_version %d", plan.ContractVersion)
+		return errUnsupportedContractVersion(plan.ContractVersion)
 	}
 	if !actIDPattern.MatchString(plan.ActID) || containsClosurePlaceholder(plan.ActID) {
-		return fmt.Errorf("invalid act_id %q", plan.ActID)
+		return errInvalidActID(plan.ActID)
 	}
-	if err := validateOID("baseline.commit_oid", plan.Baseline.CommitOID); err != nil {
+	if err := validateBaselineCommitOID(plan.Baseline.CommitOID); err != nil {
 		return err
 	}
-	if err := validateOID("baseline.tree_oid", plan.Baseline.TreeOID); err != nil {
+	if err := validateBaselineTreeOID(plan.Baseline.TreeOID); err != nil {
 		return err
 	}
 	if err := validatePlanExecutionMode(plan.Execution); err != nil {
 		return err
 	}
 	if len(plan.Checks) == 0 || len(plan.Checks) > MaxChecks {
-		return fmt.Errorf("checks count must be between 1 and %d", MaxChecks)
+		return errInvalidChecksCount(len(plan.Checks))
 	}
 	if len(plan.Artifacts) > MaxArtifacts {
-		return fmt.Errorf("artifacts count exceeds %d", MaxArtifacts)
+		return errInvalidArtifactsCount(len(plan.Artifacts))
 	}
 	if err := validatePlanChecks(plan.Checks); err != nil {
 		return err
@@ -87,14 +142,13 @@ func ValidatePlan(plan Plan) error {
 	if err := validatePlanArtifacts(plan.Artifacts); err != nil {
 		return err
 	}
-	if plan.Policy.RequireCleanBefore == nil || plan.Policy.RequireCleanAfter == nil ||
-		plan.Policy.ForbidTrackedFullDigests == nil || plan.Policy.RequireDiffCheck == nil {
-		return fmt.Errorf("all policy fields are required")
-	}
-	if !*plan.Policy.RequireCleanBefore || !*plan.Policy.RequireCleanAfter {
-		return fmt.Errorf("closure v1 requires clean worktree before and after")
+	if err := validatePlanPolicy(plan.Policy); err != nil {
+		return err
 	}
 	if err := validatePlanAuthority(plan); err != nil {
+		return err
+	}
+	if err := ValidateRunnerAuthority(plan.RunnerAuthority); err != nil {
 		return err
 	}
 	return nil
@@ -126,15 +180,15 @@ func validatePlanExecutionMode(execution PlanExecution) error {
 }
 
 func validatePlanChecks(checks []PlanCheck) error {
-	seen := make(map[string]struct{}, len(checks))
+	seen := make(map[string]int, len(checks))
 	for i, check := range checks {
 		if !itemIDPattern.MatchString(check.ID) || containsClosurePlaceholder(check.ID) {
-			return fmt.Errorf("checks[%d].id is invalid", i)
+			return errInvalidCheckID(i, check.ID)
 		}
 		if _, exists := seen[check.ID]; exists {
-			return fmt.Errorf("duplicate check id %q", check.ID)
+			return errDuplicateCheckID(i, check.ID)
 		}
-		seen[check.ID] = struct{}{}
+		seen[check.ID] = i
 		switch check.Mode {
 		case CheckModeRun:
 			if err := validateRunnableCheck(i, check); err != nil {
@@ -142,14 +196,14 @@ func validatePlanChecks(checks []PlanCheck) error {
 			}
 		case CheckModeExclude:
 			if strings.TrimSpace(check.Reason) == "" || strings.ContainsAny(check.Reason, "\r\n") || len(check.Reason) > 240 || containsClosurePlaceholder(check.Reason) {
-				return fmt.Errorf("checks[%d].reason is required and must be compact final prose", i)
+				return errInvalidCheckReason(i)
 			}
 			if len(check.Argv) != 0 || check.WorkingDirectory != "" ||
 				check.TimeoutSeconds != 0 || check.Environment != nil {
-				return fmt.Errorf("checks[%d] exclusion contains execution fields", i)
+				return errExclusionWithExecutionFields(i, check)
 			}
 		default:
-			return fmt.Errorf("checks[%d] has unknown mode %q", i, check.Mode)
+			return errUnknownCheckMode(i, string(check.Mode))
 		}
 	}
 	return nil
@@ -157,69 +211,66 @@ func validatePlanChecks(checks []PlanCheck) error {
 
 func validateRunnableCheck(index int, check PlanCheck) error {
 	if len(check.Argv) == 0 || len(check.Argv) > MaxArgvElements {
-		return fmt.Errorf("checks[%d].argv count must be between 1 and %d", index, MaxArgvElements)
+		return errInvalidCheckArgvCount(index)
 	}
 	for argIndex, arg := range check.Argv {
 		if arg == "" || strings.ContainsRune(arg, 0) || containsClosurePlaceholder(arg) {
-			return fmt.Errorf("checks[%d].argv[%d] is invalid or contains a placeholder", index, argIndex)
+			return errInvalidCheckArgvElement(index, argIndex)
 		}
 	}
 	if err := validateRepositoryRelativePath(check.WorkingDirectory, true); err != nil {
-		return fmt.Errorf("checks[%d].working_directory: %w", index, err)
+		return errInvalidCheckWorkingDirectory(index)
 	}
 	if check.TimeoutSeconds <= 0 || check.TimeoutSeconds > MaxCheckTimeoutSeconds {
-		return fmt.Errorf("checks[%d].timeout_seconds must be between 1 and %d", index, MaxCheckTimeoutSeconds)
+		return errInvalidCheckTimeout(index)
 	}
 	if check.Environment == nil || len(check.Environment) > MaxEnvironmentEntries {
-		return fmt.Errorf("checks[%d].environment must be an object with at most %d entries", index, MaxEnvironmentEntries)
+		return errInvalidCheckEnvironment(index)
 	}
-	for name, value := range check.Environment {
+	// Sort environment keys for deterministic validation.
+	keys := make([]string, 0, len(check.Environment))
+	for k := range check.Environment {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		value := check.Environment[name]
 		if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) {
-			return fmt.Errorf("checks[%d].environment contains invalid entry %q", index, name)
+			return errInvalidCheckEnvironmentKey(index, name)
 		}
 	}
 	if check.Reason != "" {
-		return fmt.Errorf("checks[%d] runnable check contains exclusion reason", index)
+		return errRunnableCheckWithReason(index)
 	}
 	return nil
 }
 
 func validatePlanArtifacts(artifacts []PlanArtifact) error {
-	seen := make(map[string]struct{}, len(artifacts))
+	seen := make(map[string]int, len(artifacts))
 	for i, artifact := range artifacts {
 		if !itemIDPattern.MatchString(artifact.ID) || containsClosurePlaceholder(artifact.ID) {
-			return fmt.Errorf("artifacts[%d].id is invalid", i)
+			return errInvalidArtifactID(i, artifact.ID)
 		}
 		if _, exists := seen[artifact.ID]; exists {
-			return fmt.Errorf("duplicate artifact id %q", artifact.ID)
+			return errDuplicateArtifactID(i, artifact.ID)
 		}
-		seen[artifact.ID] = struct{}{}
+		seen[artifact.ID] = i
 		if err := validateRepositoryRelativePath(artifact.Path, false); err != nil {
-			return fmt.Errorf("artifacts[%d].path: %w", i, err)
+			return errInvalidArtifactPath(i)
 		}
 		if artifact.Required == nil {
-			return fmt.Errorf("artifacts[%d].required is missing", i)
+			return errMissingArtifactRequired(i)
 		}
 		if artifact.MaxBytes <= 0 {
-			return fmt.Errorf("artifacts[%d].max_bytes must be positive", i)
+			return errInvalidArtifactMaxBytes(i)
 		}
 		if strings.TrimSpace(artifact.MediaType) == "" || containsClosurePlaceholder(artifact.MediaType) {
-			return fmt.Errorf("artifacts[%d].media_type is invalid", i)
+			return errInvalidArtifactMediaType(i)
 		}
 		role := ArtifactRoleFor(artifact)
 		if !validArtifactRole(role) {
-			return fmt.Errorf("artifacts[%d].role %q is invalid", i, role)
+			return errInvalidArtifactRole(i, string(role))
 		}
-	}
-	return nil
-}
-
-func validateOID(field, value string) error {
-	if containsClosurePlaceholder(value) {
-		return fmt.Errorf("%s contains a closure placeholder", field)
-	}
-	if !oidPattern.MatchString(value) {
-		return fmt.Errorf("%s must be a full lowercase Git OID", field)
 	}
 	return nil
 }
@@ -265,4 +316,24 @@ func readBoundedFile(path string, limit int) ([]byte, error) {
 		return nil, fmt.Errorf("file exceeds %d-byte limit", limit)
 	}
 	return data, nil
+}
+
+// validateOID validates any OID field using the generic string-based dispatch.
+// This is used by manifest and runner identity validation where field identity
+// is implicit from context. For plan baseline validation, use validateBaselineCommitOID
+// and validateBaselineTreeOID directly for explicit field paths.
+func validateOID(field, value string) error {
+	if containsClosurePlaceholder(value) {
+		if field == "baseline.commit_oid" {
+			return errBaselineCommitOIDPlaceholder()
+		}
+		return errBaselineTreeOIDPlaceholder()
+	}
+	if !oidPattern.MatchString(value) {
+		if field == "baseline.commit_oid" {
+			return errInvalidBaselineCommitOID(value)
+		}
+		return errInvalidBaselineTreeOID(value)
+	}
+	return nil
 }

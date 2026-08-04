@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/registry"
 )
 
 // fakeClock returns successive timestamps from a fixed slice.
@@ -76,19 +77,19 @@ func (f *fakeSampler) Sample() (ResourceSnapshot, error) {
 	return r.snapshot, r.err
 }
 
-// testVerifier creates a Verifier for testing.
-func testVerifier(name string, run func(string) []checks.Finding) Verifier {
-	return Verifier{
+// testVerifier creates a registry.Verifier for testing.
+func testVerifier(name string, run func(string) []checks.Finding) registry.Verifier {
+	return registry.Verifier{
 		Name: name,
 		Run:  run,
-		Execution: ExecutionDefinition{
-			Kind:             ExecutionInProcess,
+		Execution: registry.ExecutionDefinition{
+			Kind:             registry.ExecutionInProcess,
 			ImplementationID: "internal/factory/gate.testVerifier",
 			EnvVars:          []string{"GOFLAGS"},
 		},
-		Cache: CacheSemantics{
-			GoBuildCache:      CacheNotApplicable,
-			GoTestResultCache: CacheModeNA,
+		Cache: registry.CacheSemantics{
+			GoBuildCache:      registry.CacheNotApplicable,
+			GoTestResultCache: registry.CacheModeNA,
 		},
 	}
 }
@@ -223,7 +224,7 @@ func TestRunFactorize_PrintsTotalOnSuccess(t *testing.T) {
 		0, 100*time.Millisecond, 0, 50*time.Millisecond, 0)
 
 	var out bytes.Buffer
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		testVerifier("beta", func(string) []checks.Finding { return nil }),
 		testVerifier("alpha", func(string) []checks.Finding { return nil }),
 	}
@@ -248,7 +249,7 @@ func TestRunFactorize_PrintsFailureAndTotalOnError(t *testing.T) {
 	clk := newFakeClock(t, start, 0, 100*time.Millisecond, 0, 100*time.Millisecond, 0)
 
 	var out bytes.Buffer
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		testVerifier("alpha", func(string) []checks.Finding { return nil }),
 		testVerifier("beta", func(string) []checks.Finding {
 			return []checks.Finding{{Path: "p", Kind: "k", Message: "m"}}
@@ -275,7 +276,7 @@ func TestRunFactorize_PrintsFailureAndTotalOnError(t *testing.T) {
 func TestRunFactorize_PreservesExitCodeOnFailure(t *testing.T) {
 	start := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 	clk := newFakeClock(t, start, 0, 0, 0, 0, 0)
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		testVerifier("alpha", func(string) []checks.Finding {
 			return []checks.Finding{{Path: "p", Kind: "k", Message: "m"}}
 		}),
@@ -294,7 +295,7 @@ func TestRunFactorize_PreservesExitCodeOnFailure(t *testing.T) {
 func TestRunFactorize_SortsByName(t *testing.T) {
 	start := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
 	clk := newFakeClock(t, start, 0, 0, 0, 0, 0, 0, 0, 0)
-	verifiers := []Verifier{
+	verifiers := []registry.Verifier{
 		testVerifier("mu", func(string) []checks.Finding { return nil }),
 		testVerifier("alpha", func(string) []checks.Finding { return nil }),
 		testVerifier("zeta", func(string) []checks.Finding { return nil }),

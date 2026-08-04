@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "act": "ACT-LEAMAS-FACTORY-VERIFIER-EXECUTION-AUTHORITY01-CORRECTION02G",
+  "implementation_commit": "a6e1eb62202dc04b3db5c6c76fc75cd5c5771ee5",
+  "implementation_tree": "913b6c6546d2cb6fb9e9a28ec2e20adb25efd3ff",
+  "implementation_parent": "a6798c970e357721526c16bda41fbd31b801aee8",
+  "closure_commit": "b03a3cb2d335e512da5bcb7f7b68b5d60bcfce1b",
+  "closure_parent": "a6e1eb62202dc04b3db5c6c76fc75cd5c5771ee5",
+  "status": "REOPENED",
+  "reopen_reason": "patch_hygiene_violations;_package_wide_same_package_authorization_skip;_factorize_raw_operation_exceptions;_direct_call_subtree_classification_incomplete;_no_op_structural_tests;_cli_output_contract_changes",
+  "superseded_by": "ACT-LEAMAS-FACTORY-VERIFIER-EXECUTION-AUTHORITY01-CORRECTION02G-AUTHORITY-CLI-AND-CLOSURE-TRUTH"
+}

@@ -95,6 +95,26 @@ type ExecutionModeError struct {
 	Supported []ExecutionMode
 }
 
+// PlanDiagnostics implements planDiagnosticSource. It returns a single
+// diagnostic with exact InstancePath, Code, Keyword, and deep-copied
+// AcceptedValues.
+func (e *ExecutionModeError) PlanDiagnostics() []PlanValidationError {
+	// Deep-copy AcceptedValues so callers can mutate the returned
+	// slice without affecting the error's internal state.
+	accepted := make([]string, len(e.Supported))
+	for i, m := range e.Supported {
+		accepted[i] = string(m)
+	}
+	return []PlanValidationError{clonePlanValidationError(PlanValidationError{
+		InstancePath:   "/execution/mode",
+		SchemaPath:     "/execution/mode",
+		Code:           PlanCodeSemanticConstraintFailed,
+		Keyword:        KeywordEnum,
+		Message:        e.Error(),
+		AcceptedValues: accepted,
+	})}
+}
+
 // Error implements the error interface.
 func (e *ExecutionModeError) Error() string {
 	switch e.Presence {

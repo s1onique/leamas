@@ -22,8 +22,14 @@ func TestFactoryClosePlanValidate(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	exitCode := runFactoryClose([]string{"plan", "validate", "--file", path}, &stdout, &stderr)
-	if exitCode != 0 || stdout.String() != "VALID\n" || stderr.Len() != 0 {
+	if exitCode != 0 {
 		t.Fatalf("exit=%d stdout=%q stderr=%q", exitCode, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), `"valid": true`) {
+		t.Fatalf("expected valid JSON result, got stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("expected no stderr, got %q", stderr.String())
 	}
 }
 

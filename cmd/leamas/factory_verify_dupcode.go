@@ -2,165 +2,218 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 
-	"github.com/s1onique/leamas/internal/factory/dupcode"
+	"github.com/s1onique/leamas/internal/factory/gate"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
+	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
 
-// Default thresholds for the quality gate
+const (
+	ExitSuccess          = 0
+	ExitAuthorityFailure = 1
+	ExitParseFailure     = 2
+)
+
 const (
 	DefaultMinLines  = 40
 	DefaultMinTokens = 400
 )
 
-// BaselineDefaultPath is the default path for the baseline file.
 const BaselineDefaultPath = ".factory/dupcode-baseline.json"
 
+var osExit = os.Exit
+
+func dupcodeCommandArgs(argv []string) ([]string, bool) {
+	if len(argv) < 4 {
+		return nil, false
+	}
+	return argv[4:], true
+}
+
+func printDupcodeUsage(fs *flag.FlagSet, output io.Writer) {
+	fmt.Fprintln(output, "Usage: leamas factory verify dupcode [options]")
+	previous := fs.Output()
+	fs.SetOutput(output)
+	fs.PrintDefaults()
+	fs.SetOutput(previous)
+}
+
 func handleFactoryVerifyDupcode() {
-	// Reset flag state for this subcommand
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	flag.CommandLine.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "Usage: leamas factory verify dupcode [options]\n")
-		flag.CommandLine.PrintDefaults()
-	}
-
-	// Parse flags for dupcode subcommand
-	baselinePath := flag.String("baseline", BaselineDefaultPath, "Path to baseline file")
-	updateBaseline := flag.Bool("update-baseline", false, "Update baseline file with current findings")
-	minLines := flag.Int("min-lines", DefaultMinLines, "Minimum lines for duplicate block")
-	minTokens := flag.Int("min-tokens", DefaultMinTokens, "Minimum tokens for duplicate block")
-	jsonOutput := flag.Bool("json", false, "Output results as JSON")
-
-	// Parse only the arguments after "dupcode"
-	// os.Args = ["leamas", "factory", "verify", "dupcode", "--update-baseline", ...]
-	// We want to parse ["dupcode", "--update-baseline", ...]
-	args := os.Args[4:] // Skip "leamas factory verify"
-	if err := flag.CommandLine.Parse(args); err != nil {
-		if err == flag.ErrHelp {
-			os.Exit(0)
-		}
-		// Flag parse error - report and exit
-		if *jsonOutput {
-			fmt.Printf(`{"error": "flag parse error: %v"}`, err)
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		}
-		os.Exit(2)
-	}
-
-	// Build config
-	cfg := dupcode.DefaultConfig()
-	cfg.MinLines = *minLines
-	cfg.MinTokens = *minTokens
-
-	if *updateBaseline {
-		handleUpdateBaseline(*baselinePath, cfg, *jsonOutput)
+	args, ok := dupcodeCommandArgs(os.Args)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "Error: insufficient arguments for dupcode command")
+		osExit(ExitParseFailure)
 		return
 	}
-
-	handleVerifyBaseline(*baselinePath, cfg, *jsonOutput)
+	osExit(handleDupcode(args, os.Stdout, os.Stderr))
 }
 
-func handleUpdateBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bool) {
-	// Scan repo
-	report, err := dupcode.CheckReport(".", cfg)
-	if err != nil {
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("scan failed: %v", err)})
-		} else {
-			fmt.Fprintf(os.Stderr, "Error scanning repository: %v\n", err)
+func handleDupcode(args []string, stdout, stderr io.Writer) int {
+	return handleDupcodeWith(args, stdout, stderr, dupcodeTypedDispatchers{
+		verify:         gate.DispatchDupcodeVerifyTyped,
+		updateBaseline: gate.DispatchDupcodeUpdateBaselineTyped,
+	})
+}
+
+type dupcodeTypedDispatchers struct {
+	verify         func(context.Context, string, gate.DupcodeVerifySpec) gate.DupcodeVerifyOutcome
+	updateBaseline func(context.Context, string, gate.DupcodeUpdateBaselineSpec) gate.DupcodeUpdateBaselineOutcome
+}
+
+func handleDupcodeWith(args []string, stdout, stderr io.Writer, dispatchers dupcodeTypedDispatchers) int {
+	fs := flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.Usage = func() {}
+
+	baselinePath := fs.String("baseline", BaselineDefaultPath, "Path to baseline file")
+	updateBaseline := fs.Bool("update-baseline", false, "Update baseline file with current findings")
+	minLines := fs.Int("min-lines", DefaultMinLines, "Minimum lines for duplicate block")
+	minTokens := fs.Int("min-tokens", DefaultMinTokens, "Minimum tokens for duplicate block")
+	jsonOutput := fs.Bool("json", false, "Output results as JSON")
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			printDupcodeUsage(fs, stderr)
+			return ExitSuccess
 		}
-		os.Exit(2)
+		if *jsonOutput {
+			enc := json.NewEncoder(stdout)
+			_ = enc.Encode(map[string]interface{}{"error": fmt.Sprintf("flag parse error: %v", err)})
+		} else {
+			fmt.Fprintf(stderr, "Error: %v\n", err)
+		}
+		return ExitParseFailure
 	}
 
-	// Write baseline
-	if err := dupcode.WriteBaseline(baselinePath, report); err != nil {
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("failed to write baseline: %v", err)})
+	if fs.NArg() > 0 {
+		if *jsonOutput {
+			enc := json.NewEncoder(stdout)
+			_ = enc.Encode(map[string]interface{}{"error": fmt.Sprintf("unexpected positional argument: %s", fs.Arg(0))})
 		} else {
-			fmt.Fprintf(os.Stderr, "Error writing baseline: %v\n", err)
+			fmt.Fprintf(stderr, "Error: unexpected positional argument: %s\n", fs.Arg(0))
 		}
-		os.Exit(2)
+		return ExitParseFailure
 	}
 
+	ctx := context.Background()
+
+	if *updateBaseline {
+		spec := gate.DupcodeUpdateBaselineSpec{
+			BaselinePath: *baselinePath,
+			MinLines:     *minLines,
+			MinTokens:    *minTokens,
+		}
+		return renderUpdateBaselineResult(ctx, spec, *jsonOutput, stdout, stderr, dispatchers)
+	}
+
+	spec := gate.DupcodeVerifySpec{
+		BaselinePath: *baselinePath,
+		MinLines:     *minLines,
+		MinTokens:    *minTokens,
+	}
+	return renderVerifyBaselineResult(ctx, spec, *jsonOutput, stdout, stderr, dispatchers)
+}
+
+// renderDupcodeDispatchFailure evaluates dispatcher failure channels in the
+// canonical order: Dispatch.Error, then Dispatch.Findings. The first channel
+// that carries an observable signal wins; the typed payload is only rendered
+// when both channels are empty.
+//
+// Returns exitCode and failed=true when a failure channel was rendered.
+// failed=false means the caller may proceed to render the typed payload.
+func renderDupcodeDispatchFailure(
+	result verifierdispatch.Result,
+	jsonOutput bool,
+	stdout io.Writer,
+	stderr io.Writer,
+) (exitCode int, failed bool) {
+	if result.Error != nil {
+		if jsonOutput {
+			enc := json.NewEncoder(stdout)
+			_ = enc.Encode(map[string]interface{}{"error": fmt.Sprintf("runner error: %v", result.Error)})
+		} else {
+			fmt.Fprintf(stderr, "dupcode: %v\n", result.Error)
+		}
+		return ExitAuthorityFailure, true
+	}
+	if len(result.Findings) > 0 {
+		f := result.Findings[0]
+		if jsonOutput {
+			enc := json.NewEncoder(stdout)
+			_ = enc.Encode(map[string]interface{}{
+				"error": f.Message,
+				"kind":  f.Kind,
+			})
+		} else {
+			fmt.Fprintf(stderr, "dupcode: %s\n", f.Message)
+		}
+		return ExitAuthorityFailure, true
+	}
+	return 0, false
+}
+
+func renderUpdateBaselineResult(ctx context.Context, spec gate.DupcodeUpdateBaselineSpec, jsonOutput bool, stdout, stderr io.Writer, dispatchers dupcodeTypedDispatchers) int {
+	result := dispatchers.updateBaseline(ctx, ".", spec)
+	if exitCode, failed := renderDupcodeDispatchFailure(result.Dispatch, jsonOutput, stdout, stderr); failed {
+		return exitCode
+	}
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		enc.Encode(map[string]interface{}{
-			"baseline":   baselinePath,
-			"findings":   len(report.Findings),
-			"thresholds": map[string]int{"min_lines": cfg.MinLines, "min_tokens": cfg.MinTokens},
+		enc := json.NewEncoder(stdout)
+		_ = enc.Encode(map[string]interface{}{
+			"baseline":   spec.BaselinePath,
+			"thresholds": map[string]int{"min_lines": spec.MinLines, "min_tokens": spec.MinTokens},
+			"findings":   result.Report.Findings,
+			"scan_report": map[string]interface{}{
+				"min_lines": result.Report.MinLines, "min_tokens": result.Report.MinTokens,
+				"finding_count": result.Report.FindingCount,
+			},
 		})
 	} else {
-		fmt.Printf("Baseline written to: %s\n", baselinePath)
-		fmt.Printf("Findings: %d\n", len(report.Findings))
-		fmt.Printf("Thresholds: min_lines=%d, min_tokens=%d\n", cfg.MinLines, cfg.MinTokens)
+		fmt.Fprintf(stdout, "Baseline written to: %s\n", spec.BaselinePath)
+		fmt.Fprintf(stdout, "Thresholds: min_lines=%d, min_tokens=%d\n", spec.MinLines, spec.MinTokens)
+		fmt.Fprintf(stdout, "Scan found %d duplicate blocks\n", result.Report.FindingCount)
 	}
-
-	os.Exit(0)
+	return ExitSuccess
 }
 
-func handleVerifyBaseline(baselinePath string, cfg dupcode.Config, jsonOutput bool) {
-	// Check if baseline exists
-	if _, err := os.Stat(baselinePath); os.IsNotExist(err) {
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{
-				"error": "baseline not found",
-				"hint":  "run with --update-baseline to create baseline",
-			})
-		} else {
-			fmt.Fprintf(os.Stderr, "Baseline file not found: %s\n", baselinePath)
-			fmt.Fprintf(os.Stderr, "Run 'leamas factory verify dupcode --update-baseline' to create a baseline.\n")
-		}
-		os.Exit(2)
+func renderVerifyBaselineResult(ctx context.Context, spec gate.DupcodeVerifySpec, jsonOutput bool, stdout, stderr io.Writer, dispatchers dupcodeTypedDispatchers) int {
+	result := dispatchers.verify(ctx, ".", spec)
+	if exitCode, failed := renderDupcodeDispatchFailure(result.Dispatch, jsonOutput, stdout, stderr); failed {
+		return exitCode
 	}
-
-	// Load baseline
-	baseline, err := dupcode.LoadBaseline(baselinePath)
-	if err != nil {
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("failed to load baseline: %v", err)})
-		} else {
-			fmt.Fprintf(os.Stderr, "Error loading baseline: %v\n", err)
-		}
-		os.Exit(2)
-	}
-
-	// Scan repo
-	report, err := dupcode.CheckReport(".", cfg)
-	if err != nil {
-		if jsonOutput {
-			enc := json.NewEncoder(os.Stdout)
-			enc.Encode(map[string]interface{}{"error": fmt.Sprintf("scan failed: %v", err)})
-		} else {
-			fmt.Fprintf(os.Stderr, "Error scanning repository: %v\n", err)
-		}
-		os.Exit(2)
-	}
-
-	// Compare with baseline
-	result := dupcode.CompareToBaseline(report, baseline)
-
 	if jsonOutput {
-		enc := json.NewEncoder(os.Stdout)
-		if result.HasChanges {
-			enc.Encode(map[string]interface{}{
-				"new_findings":      len(result.NewFindings),
-				"worsened_findings": len(result.WorsenedFindings),
-				"has_changes":       true,
-			})
-		} else {
-			enc.Encode(map[string]interface{}{"has_changes": false})
-		}
+		enc := json.NewEncoder(stdout)
+		_ = enc.Encode(map[string]interface{}{
+			"has_changes":       result.Comparison.HasChanges,
+			"new_count":         result.Comparison.NewCount,
+			"worsened_count":    result.Comparison.WorsenedCount,
+			"new_findings":      result.Comparison.NewFindings,
+			"worsened_findings": result.Comparison.WorsenedFindings,
+			"current_report":    result.Report,
+		})
 	} else {
-		dupcode.PrintCompareResult(result)
+		if result.Comparison.HasChanges {
+			fmt.Fprintf(stdout, "Duplicate code violations found:\n")
+			fmt.Fprintf(stdout, "  New: %d\n", result.Comparison.NewCount)
+			fmt.Fprintf(stdout, "  Worsened: %d\n", result.Comparison.WorsenedCount)
+		} else {
+			fmt.Fprintf(stdout, "No duplicate code violations found.\n")
+		}
 	}
+	return ExitSuccess
+}
 
-	os.Exit(dupcode.ExitCodeFromCompareResult(result))
+func ValidateDupcodeAuthorityWithOperation(operation verifierauthority.VerifierOperation) error {
+	ctx := context.Background()
+	ec, err := gate.DetectDupcodeExecutionContext(ctx, ".")
+	if err != nil {
+		return err
+	}
+	return gate.ValidateDupcodeExecutionAuthority(ec, operation)
 }

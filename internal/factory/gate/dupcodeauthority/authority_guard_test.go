@@ -4,6 +4,7 @@ package dupcodeauthority
 
 import (
 	"fmt"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
@@ -34,7 +35,7 @@ func TestDupcodeAuthorityLocalDeniedBeforeVerifier(t *testing.T) {
 	}
 
 	// Wrap the fake verifier with the guard - this is the production pattern
-	guardedVerifier := Guard(ctx, fakeVerifier)
+	guardedVerifier := Guard(ctx, verifierauthority.OperationVerify, fakeVerifier)
 
 	// Execute the guarded verifier
 	findings := guardedVerifier(".")
@@ -81,7 +82,7 @@ func TestDupcodeAuthorityGuardDeniesWithCanonicalError(t *testing.T) {
 		WorktreeClean:   true,
 	}
 
-	guardedVerifier := Guard(ctx, fakeVerifier)
+	guardedVerifier := Guard(ctx, verifierauthority.OperationVerify, fakeVerifier)
 	findings := guardedVerifier(".")
 
 	if len(findings) != 1 {
@@ -118,9 +119,10 @@ func TestDupcodeAuthorityGuardAllowsInValidContext(t *testing.T) {
 		RepositoryRoot:  "/workspace",
 		HeadCommit:      "a71c0340dd08a821e66832488a83e665ba09f02c",
 		WorktreeClean:   true,
+		WorkspaceRoot:   "/workspace",
 	}
 
-	guardedVerifier := Guard(ctx, fakeVerifier)
+	guardedVerifier := Guard(ctx, verifierauthority.OperationVerify, fakeVerifier)
 	findings := guardedVerifier(".")
 
 	if len(findings) != 0 {

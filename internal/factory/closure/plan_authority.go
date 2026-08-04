@@ -57,14 +57,24 @@ func validatePlanAuthority(plan Plan) error {
 	}
 	profile, ok := policyProfiles[plan.PolicyProfile]
 	if !ok {
-		return fmt.Errorf("policy_profile %q is unknown", plan.PolicyProfile)
+		return &PolicyProfileError{
+			ProfileName: plan.PolicyProfile,
+			Kind:        PolicyProfileErrorUnknown,
+		}
 	}
 	if !profile.Enabled {
-		return fmt.Errorf("policy_profile %q is not yet implemented for this repository", plan.PolicyProfile)
+		return &PolicyProfileError{
+			ProfileName: plan.PolicyProfile,
+			Kind:        PolicyProfileErrorUnimplemented,
+		}
 	}
 	for _, required := range profile.RequiredChecks {
 		if !planHasCheck(plan, required) {
-			return fmt.Errorf("plan does not satisfy policy profile %q: missing or non-matching check %q", profile.Name, required.ID)
+			return &PolicyProfileError{
+				ProfileName: plan.PolicyProfile,
+				CheckID:     required.ID,
+				Kind:        PolicyProfileErrorMissingCheck,
+			}
 		}
 	}
 	return nil

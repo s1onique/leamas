@@ -2,107 +2,134 @@
 package gate
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
-	"github.com/s1onique/leamas/internal/factory/gate/dupcodeauthority"
+	"github.com/s1onique/leamas/internal/factory/registry"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
+	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
 
-// ExecutionKind classifies how a verifier executes.
-type ExecutionKind string
+// noopSampler is a sampler that always succeeds with zero values.
+type noopSampler struct{}
 
-const (
-	ExecutionInProcess ExecutionKind = "in-process"
-	ExecutionChild     ExecutionKind = "child-process"
-)
-
-// CacheRelevance classifies whether Go build cache affects the verifier.
-type CacheRelevance string
-
-const (
-	CacheRelevant      CacheRelevance = "relevant"
-	CacheNotRelevant   CacheRelevance = "not-relevant"
-	CacheNotApplicable CacheRelevance = "not-applicable"
-)
-
-// TestResultCacheMode classifies whether test result cache applies.
-type TestResultCacheMode string
-
-const (
-	CacheModeEnabled  TestResultCacheMode = "enabled"
-	CacheModeDisabled TestResultCacheMode = "disabled"
-	CacheModeNA       TestResultCacheMode = "not-applicable"
-)
-
-// VerifierLane classifies a verifier into a specific execution lane.
-type VerifierLane string
-
-const (
-	VerifierLaneFast    VerifierLane = "fast"
-	VerifierLaneDupcode VerifierLane = "dupcode"
-)
-
-// ExecutionDefinition captures the authoritative execution metadata for a verifier.
-type ExecutionDefinition struct {
-	Kind             ExecutionKind
-	ImplementationID string
-	EnvVars          []string
+func (n *noopSampler) Sample() (verifierdispatch.ResourceSnapshot, error) {
+	return verifierdispatch.ResourceSnapshot{}, nil
 }
 
-// CacheSemantics captures the authoritative cache behavior for a verifier.
-type CacheSemantics struct {
-	GoBuildCache      CacheRelevance      `json:"go_build_cache"`
-	GoTestResultCache TestResultCacheMode `json:"go_test_result_cache"`
+// platformSamplerAdapter wraps gate's PlatformSampler to implement verifierdispatch.ResourceSampler.
+type platformSamplerAdapter struct {
+	inner ResourceSampler
 }
 
-// Verifier represents a Factory verifier with its authoritative metadata.
-type Verifier struct {
-	Name      string
-	Run       func(root string) []checks.Finding
-	Lane      VerifierLane
-	Execution ExecutionDefinition
-	Cache     CacheSemantics
+func (a *platformSamplerAdapter) Sample() (verifierdispatch.ResourceSnapshot, error) {
+	snap, err := a.inner.Sample()
+	if err != nil {
+		return verifierdispatch.ResourceSnapshot{}, err
+	}
+	return verifierdispatch.ResourceSnapshot{
+		UserCPU:   snap.UserCPU,
+		SystemCPU: snap.SystemCPU,
+		MaxRSSKB:  snap.ProcessMaxRSSKB,
+	}, nil
+}
+
+// FastVerifiers returns verifiers that run in the fast lane.
+func FastVerifiers() []registry.Verifier {
+	var result []registry.Verifier
+	for _, v := range AllVerifiers() {
+		if v.Lane == registry.VerifierLaneFast && v.Scope == registry.InvocationGate {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// DupcodeVerifiers returns verifiers that run in the dupcode lane.
+// Command-only definitions are excluded so they cannot leak into gate /
+// factorize selection.
+func DupcodeVerifiers() []registry.Verifier {
+	var result []registry.Verifier
+	for _, v := range AllVerifiers() {
+		if v.Lane == registry.VerifierLaneDupcode && v.Scope == registry.InvocationGate {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+func metricsFilePath() string {
+	return os.Getenv("LEAMAS_FACTORIZE_METRICS_FILE")
+}
+
+func metricsScenario() string {
+	return os.Getenv("LEAMAS_FACTORIZE_SCENARIO")
+}
+
+func metricsSequence() string {
+	return os.Getenv("LEAMAS_FACTORIZE_SEQUENCE")
+}
+
+func shouldCollectMetrics() bool {
+	return metricsFilePath() != ""
 }
 
 // RunGate runs all verifiers and Go toolchain checks.
-// Dupcode lane verifiers are checked against the central authority first.
+// All verifier execution is routed through the central dispatcher which performs
+// authority validation before invoking the verifier.
+//
+// Command-only definitions (e.g. dupcode-update-baseline) are excluded from
+// RunGate discovery; they are reachable only via typed command dispatch.
 func RunGate(root string) int {
-	verifiers := AllVerifiers()
+	verifiers := GateVerifiers()
 
-	// Fail closed if registry has invalid metadata
 	if err := ValidateVerifiers(verifiers); err != nil {
 		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
 		return 1
+	}
+
+	for _, v := range verifiers {
+		if err := v.Validate(); err != nil {
+			fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
+			return 1
+		}
 	}
 
 	sort.Slice(verifiers, func(i, j int) bool {
 		return verifiers[i].Name < verifiers[j].Name
 	})
 
+	dispatcher, err := verifierdispatch.NewDispatcher(verifiers)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
+		return 1
+	}
+
+	ctx := context.Background()
+	observer := &verifierdispatch.DefaultContextObserver{}
 	failed := false
 
 	for _, v := range verifiers {
 		var findings []checks.Finding
 
-		// Dupcode lane verifiers require central authority check
-		if v.Lane == VerifierLaneDupcode {
-			if err := ValidateDupcodeAuthorityForCLI(root); err != nil {
-				findings = []checks.Finding{
-					{
-						Path:     v.Name,
-						Kind:     "dupcode_ci_only_authority_denied",
-						Message:  err.Error(),
-						Severity: checks.SeverityError,
-					},
-				}
-			}
+		request := verifierdispatch.Request{
+			VerifierID: v.Name,
+			Operation:  verifierauthority.OperationVerify,
+			Root:       root,
 		}
 
-		// Run verifier only if not denied by authority
-		if len(findings) == 0 {
-			findings = v.Run(root)
+		runnerFactory := func() func(root string) []checks.Finding {
+			return v.Run
+		}
+
+		result := dispatcher.Dispatch(ctx, request, observer, runnerFactory)
+
+		if len(result.Findings) > 0 {
+			findings = result.Findings
 		}
 
 		if len(findings) > 0 {
@@ -127,22 +154,6 @@ func RunGate(root string) int {
 	return 0
 }
 
-func metricsFilePath() string {
-	return os.Getenv("LEAMAS_FACTORIZE_METRICS_FILE")
-}
-
-func metricsScenario() string {
-	return os.Getenv("LEAMAS_FACTORIZE_SCENARIO")
-}
-
-func metricsSequence() string {
-	return os.Getenv("LEAMAS_FACTORIZE_SEQUENCE")
-}
-
-func shouldCollectMetrics() bool {
-	return metricsFilePath() != ""
-}
-
 // RunFactorize runs all Factory policy verifiers without toolchain checks.
 // When LEAMAS_FACTORIZE_METRICS_FILE is set, metrics are collected and published.
 // Metrics collection failures cause factorize to exit non-zero (fail-closed).
@@ -151,20 +162,19 @@ func shouldCollectMetrics() bool {
 // "dupcode" and "dupcode-baseline" verifiers perform only one scan of the
 // repository during a single factorize invocation.
 //
-// Dupcode lane verifiers require central authority check.
+// Authorization and execution are bound: the factory creates a data-only lazy
+// lifecycle only after authorization passes. Protected dupcode setup starts only
+// when an admitted bound dupcode-family runner executes.
 func RunFactorize(root string) int {
-	// Central authority check: deny locally before any verifier initialization
-	if err := ValidateDupcodeAuthorityForCLI(root); err != nil {
-		fmt.Fprintf(os.Stderr, "dupcode: %v\n", err)
-		return 1
-	}
+	// Phase 1: Build the base verifier registry for authorization.
+	// Command-only definitions are excluded from factorize selection; they
+	// are reachable only via typed command dispatch.
+	verifiers := GateVerifiers()
 
-	// Build verifiers with shared dupcode context
-	verifiers, err := FactorizeVerifiersWithDupcodeContext(root)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
-		return 1
-	}
+	// Sort by name for alphabetical order (preserving established factorize contract)
+	sort.Slice(verifiers, func(i, j int) bool {
+		return verifiers[i].Name < verifiers[j].Name
+	})
 
 	// Fail closed if registry has invalid metadata
 	if err := ValidateVerifiers(verifiers); err != nil {
@@ -172,13 +182,81 @@ func RunFactorize(root string) int {
 		return 1
 	}
 
+	// Create dispatcher
+	dispatcher, err := verifierdispatch.NewDispatcher(verifiers)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
+		return 1
+	}
+
+	ctx := context.Background()
+	observer := &verifierdispatch.DefaultContextObserver{}
+
+	// Build ProfileRequests for exactly the authorized verifiers (alphabetical order)
+	requests := make([]verifierdispatch.ProfileRequest, 0, len(verifiers))
+	for _, v := range verifiers {
+		requests = append(requests, verifierdispatch.ProfileRequest{
+			VerifierID: v.Name,
+			Operation:  verifierauthority.OperationVerify,
+		})
+	}
+
+	// Phase 2: Authorize AND bind. The factory constructs only a lazy,
+	// data-only lifecycle and is invoked only after authorization succeeds.
+	binding, err := dispatcher.AuthorizeAndBindProfile(ctx, root, requests, observer,
+		func(authorized []verifierdispatch.VerifierMetadata) ([]verifierdispatch.FactoryRunner, error) {
+			// Construct the lazy shared lifecycle after authorization. Threshold
+			// reads, analyzer/provider setup, and scanning remain deferred until
+			// one of the bound dupcode-family Run functions executes.
+			factorizeVerifiers, err := FactorizeVerifiersWithDupcodeContext(root)
+			if err != nil {
+				return nil, err
+			}
+
+			// Build a map of Run functions from the factorize verifiers
+			runMap := make(map[string]func(string) []checks.Finding)
+			for _, v := range factorizeVerifiers {
+				runMap[v.Name] = v.Run
+			}
+
+			// Build factory runners: ID + Run only (metadata comes from dispatcher)
+			factoryRunners := make([]verifierdispatch.FactoryRunner, 0, len(authorized))
+			for _, v := range authorized {
+				run, ok := runMap[v.Name]
+				if !ok {
+					return nil, fmt.Errorf("factory: no run function for authorized verifier %s", v.Name)
+				}
+				factoryRunners = append(factoryRunners, verifierdispatch.FactoryRunner{
+					VerifierID: v.Name,
+					Run:        run,
+				})
+			}
+			return factoryRunners, nil
+		})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "factory authorization: %v\n", err)
+		return 1
+	}
+
+	// Print denials if any
+	profile := binding.Profile()
+	if len(profile.Denials()) > 0 {
+		printAuthorizationDenials(profile.Denials())
+		return 1
+	}
+
+	// Factory contract violation - no runners bound
+	if len(binding.Runners()) == 0 {
+		fmt.Fprintf(os.Stderr, "factory: no runners bound for authorized inventory\n")
+		return 1
+	}
+
 	var mc *MetricsCollectionV3
-	var sampler ResourceSampler
+	var sampler verifierdispatch.ResourceSampler
 
 	// Metrics collection is enabled when the destination path is set
 	if shouldCollectMetrics() {
-		var err error
-
 		// Validate scenario is provided
 		scenario := metricsScenario()
 		if scenario == "" {
@@ -219,157 +297,39 @@ func RunFactorize(root string) int {
 		)
 
 		// Bind expected verifier inventory for reconciliation
-		for _, v := range verifiers {
-			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, v.Name)
+		for _, meta := range binding.Runners() {
+			mc.ExpectedVerifierIDs = append(mc.ExpectedVerifierIDs, meta.Name)
 		}
 
-		sampler = NewPlatformSampler()
+		sampler = &platformSamplerAdapter{inner: NewPlatformSampler()}
 	} else {
 		// Use a no-op sampler when metrics are disabled
 		sampler = &noopSampler{}
 	}
 
-	result := runFactorize(os.Stdout, systemClock{}, root, verifiers, mc, sampler)
+	// Track total factorize duration including verifier execution
+	totalStart := time.Now()
+
+	// Phase 3: Execute bound runners exactly once with real timing and resource sampling
+	records, err := binding.Execute(sampler)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "factory execution: %v\n", err)
+		return 1
+	}
+
+	totalElapsed := time.Since(totalStart)
+
+	// Process execution records and print results with real timing
+	profile = binding.Profile()
+	exitCode := processExecutionRecords(os.Stdout, profile, records, mc, totalElapsed)
 
 	// Fail-closed: metrics finalization errors cause factorize to fail
 	if mc != nil {
-		if err := mc.Finalize(result != 0); err != nil {
+		if err := mc.Finalize(exitCode != 0); err != nil {
 			fmt.Fprintf(os.Stderr, "factory metrics finalization: %v\n", err)
 			return 1
 		}
 	}
 
-	return result
-}
-
-// noopSampler is a sampler that always succeeds with zero values.
-type noopSampler struct{}
-
-func (n *noopSampler) Sample() (ResourceSnapshot, error) {
-	return ResourceSnapshot{}, nil
-}
-
-// RunGateFast runs the gate in fast mode. It executes only fast-lane verifiers
-// and explicitly skips dupcode-lane verifiers with honest SKIP messages.
-func RunGateFast(root string) int {
-	allVerifiers := AllVerifiers()
-	fastVerifiers, dupcodeVerifiers, err := PartitionVerifiers(allVerifiers)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
-		return 1
-	}
-
-	sort.Slice(fastVerifiers, func(i, j int) bool {
-		return fastVerifiers[i].Name < fastVerifiers[j].Name
-	})
-
-	// Report skipped verifiers
-	for _, v := range dupcodeVerifiers {
-		fmt.Printf("  %s: SKIP: expensive verifier lane; run make gate-dupcode\n", v.Name)
-	}
-
-	failed := false
-
-	for _, v := range fastVerifiers {
-		findings := v.Run(root)
-		if len(findings) > 0 {
-			failed = true
-			fmt.Printf("\n--- %s FAILED ---\n", v.Name)
-			for _, f := range findings {
-				fmt.Printf("  %s: %s: %s\n", f.Path, f.Kind, f.Message)
-			}
-		} else {
-			fmt.Printf("  %s: OK\n", v.Name)
-		}
-	}
-
-	// Run toolchain checks in fast mode (excludes dupcode package tests)
-	runToolchainChecksFast(root, &failed)
-
-	if failed {
-		fmt.Printf("\n*** GATE FAILED ***\n")
-		return 1
-	}
-
-	fmt.Printf("\n*** GATE PASSED ***\n")
-	return 0
-}
-
-// RunGateDupcode runs the dupcode lane with exactly the duplicate-code verifiers.
-// Dupcode is a CI-only verifier lane. This function checks the central authority
-// before executing any dupcode verifier or scanning any source code.
-func RunGateDupcode(root string) int {
-	// Central authority check: deny locally before any verifier initialization
-	if err := ValidateDupcodeAuthorityForCLI(root); err != nil {
-		fmt.Fprintf(os.Stderr, "dupcode: %v\n", err)
-		fmt.Printf("\n*** GATE FAILED ***\n")
-		return 1
-	}
-
-	allVerifiers := AllVerifiers()
-	_, dupcodeVerifiers, err := PartitionVerifiers(allVerifiers)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "factory verifier registry: %v\n", err)
-		return 1
-	}
-
-	sort.Slice(dupcodeVerifiers, func(i, j int) bool {
-		return dupcodeVerifiers[i].Name < dupcodeVerifiers[j].Name
-	})
-
-	failed := false
-
-	for _, v := range dupcodeVerifiers {
-		findings := v.Run(root)
-		if len(findings) > 0 {
-			failed = true
-			fmt.Printf("\n--- %s FAILED ---\n", v.Name)
-			for _, f := range findings {
-				fmt.Printf("  %s: %s: %s\n", f.Path, f.Kind, f.Message)
-			}
-		} else {
-			fmt.Printf("  %s: OK\n", v.Name)
-		}
-	}
-
-	// Run dupcode package tests
-	RunDupcodeToolchain(root, &failed)
-
-	if failed {
-		fmt.Printf("\n*** GATE FAILED ***\n")
-		return 1
-	}
-
-	fmt.Printf("\n*** GATE PASSED ***\n")
-	return 0
-}
-
-// ValidateDupcodeAuthorityForCLI is the central authority check for CLI invocations.
-// It returns nil only when all required GitHub Actions markers are present and valid.
-// This is the single point of authority enforcement for all direct CLI dupcode access.
-func ValidateDupcodeAuthorityForCLI(root string) error {
-	ctx := dupcodeauthority.DetectDupcodeExecutionContext(root)
-	return dupcodeauthority.ValidateDupcodeExecutionAuthority(ctx)
-}
-
-// FastVerifiers returns verifiers that run in the fast lane.
-func FastVerifiers() []Verifier {
-	var result []Verifier
-	for _, v := range AllVerifiers() {
-		if v.Lane == VerifierLaneFast {
-			result = append(result, v)
-		}
-	}
-	return result
-}
-
-// DupcodeVerifiers returns verifiers that run in the dupcode lane.
-func DupcodeVerifiers() []Verifier {
-	var result []Verifier
-	for _, v := range AllVerifiers() {
-		if v.Lane == VerifierLaneDupcode {
-			result = append(result, v)
-		}
-	}
-	return result
+	return exitCode
 }

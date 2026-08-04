@@ -3,13 +3,14 @@ package gate
 
 import (
 	"encoding/hex"
+	"github.com/s1onique/leamas/internal/factory/registry"
 	"testing"
 )
 
 // TestExecutionFingerprintV3_ReturnsErrorForEmptyName verifies fail-closed.
 func TestExecutionFingerprintV3_ReturnsErrorForEmptyName(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{"GOFLAGS"},
 	}
@@ -21,8 +22,8 @@ func TestExecutionFingerprintV3_ReturnsErrorForEmptyName(t *testing.T) {
 
 // TestExecutionFingerprintV3_ReturnsErrorForEmptyImplID verifies fail-closed.
 func TestExecutionFingerprintV3_ReturnsErrorForEmptyImplID(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "",
 		EnvVars:          []string{"GOFLAGS"},
 	}
@@ -34,8 +35,8 @@ func TestExecutionFingerprintV3_ReturnsErrorForEmptyImplID(t *testing.T) {
 
 // TestExecutionFingerprintV3_IdenticalExecProduceIdenticalFingerprints verifies.
 func TestExecutionFingerprintV3_IdenticalExecProduceIdenticalFingerprints(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{"GOFLAGS"},
 	}
@@ -52,8 +53,8 @@ func TestExecutionFingerprintV3_IdenticalExecProduceIdenticalFingerprints(t *tes
 
 // TestExecutionFingerprintV3_DifferentVerifierNamesAlterFingerprint verifies.
 func TestExecutionFingerprintV3_DifferentVerifierNamesAlterFingerprint(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{"GOFLAGS"},
 	}
@@ -70,13 +71,13 @@ func TestExecutionFingerprintV3_DifferentVerifierNamesAlterFingerprint(t *testin
 
 // TestExecutionFingerprintV3_ImplIDChangesAlterFingerprint verifies.
 func TestExecutionFingerprintV3_ImplIDChangesAlterFingerprint(t *testing.T) {
-	exec1 := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec1 := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{"GOFLAGS"},
 	}
-	exec2 := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec2 := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckAlt",
 		EnvVars:          []string{"GOFLAGS"},
 	}
@@ -93,8 +94,8 @@ func TestExecutionFingerprintV3_ImplIDChangesAlterFingerprint(t *testing.T) {
 
 // TestExecutionFingerprintV3_GoEnvChangesAlterFingerprint verifies.
 func TestExecutionFingerprintV3_GoEnvChangesAlterFingerprint(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{"GOFLAGS"},
 	}
@@ -114,8 +115,8 @@ func TestExecutionFingerprintV3_GoEnvChangesAlterFingerprint(t *testing.T) {
 
 // TestExecutionFingerprintV3_EnvOrderingDoesNotMatter verifies.
 func TestExecutionFingerprintV3_EnvOrderingDoesNotMatter(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{"GOFLAGS", "GOCACHE"},
 	}
@@ -135,8 +136,8 @@ func TestExecutionFingerprintV3_EnvOrderingDoesNotMatter(t *testing.T) {
 
 // TestExecutionFingerprintV3_FullDigestLength verifies SHA-256.
 func TestExecutionFingerprintV3_FullDigestLength(t *testing.T) {
-	exec := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	exec := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{"GOFLAGS"},
 	}
@@ -158,13 +159,13 @@ func TestExecutionFingerprintV3_FullDigestLength(t *testing.T) {
 
 // TestExecutionFingerprintV3_KindIncluded verifies execution kind is in hash.
 func TestExecutionFingerprintV3_KindIncluded(t *testing.T) {
-	execInProcess := ExecutionDefinition{
-		Kind:             ExecutionInProcess,
+	execInProcess := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionInProcess,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{},
 	}
-	execChild := ExecutionDefinition{
-		Kind:             ExecutionChild,
+	execChild := registry.ExecutionDefinition{
+		Kind:             registry.ExecutionChild,
 		ImplementationID: "internal/factory/test.CheckRepo",
 		EnvVars:          []string{},
 	}

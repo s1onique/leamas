@@ -3,7 +3,10 @@
 package dupcodeauthority
 
 import (
+	"context"
+
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/verifierauthority"
 )
 
 // GuardedVerifier is the canonical contract every dupcode verifier
@@ -18,9 +21,9 @@ type GuardedVerifier func(root string) []checks.Finding
 // single canonical CI-only-denial finding without invoking the real
 // verifier, recording the denial kind, severity, and message so other
 // tools can grep the gate output.
-func Guard(ctx DupcodeExecutionContext, real GuardedVerifier) GuardedVerifier {
+func Guard(ctx DupcodeExecutionContext, operation verifierauthority.VerifierOperation, real GuardedVerifier) GuardedVerifier {
 	return func(root string) []checks.Finding {
-		if err := ValidateDupcodeExecutionAuthority(ctx); err != nil {
+		if err := ValidateDupcodeExecutionAuthority(ctx, operation); err != nil {
 			return []checks.Finding{
 				{
 					Path:     "dupcode",
@@ -39,12 +42,13 @@ func Guard(ctx DupcodeExecutionContext, real GuardedVerifier) GuardedVerifier {
 // is the preferred entry point for callers that cannot supply a
 // pre-built context (e.g., the CLI handler that handles
 // `leamas factory gate --lane=dupcode`).
-func GuardedRun(root string, real GuardedVerifier) []checks.Finding {
-	return Guard(DetectContext(root), real)(root)
+func GuardedRun(ctx DupcodeExecutionContext, operation verifierauthority.VerifierOperation, real GuardedVerifier, root string) []checks.Finding {
+	return Guard(ctx, operation, real)(root)
 }
 
-// DetectDupcodeExecutionContext is an exported alias for DetectContext
-// so the gate package can call it without importing internal functions.
-func DetectDupcodeExecutionContext(root string) DupcodeExecutionContext {
-	return DetectContext(root)
+// DetectDupcodeExecutionContextFromRoot reads the production environment
+// and repository root to assemble a DupcodeExecutionContext.
+func DetectDupcodeExecutionContextFromRoot(ctx context.Context, root string) DupcodeExecutionContext {
+	ec := verifierauthority.DetectExecutionContext(ctx, root)
+	return DetectContext(ec)
 }

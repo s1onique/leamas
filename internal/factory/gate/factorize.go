@@ -1,4 +1,5 @@
-// Package gate provides the factorize runner with wall-clock timings.
+// SPDX-License-Identifier: Apache-2.0
+
 package gate
 
 import (
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/s1onique/leamas/internal/factory/checks"
+	"github.com/s1onique/leamas/internal/factory/registry"
+	"github.com/s1onique/leamas/internal/factory/verifierdispatch"
 )
 
 // clock abstracts the time source used to measure check and total
@@ -24,26 +27,27 @@ type systemClock struct{}
 func (systemClock) Now() time.Time { return time.Now() }
 
 // runCheck executes a single verifier check, measures its wall-clock
-// duration, and writes one status line to out:
+// duration, and writes one status line to out.
 //
-//	"name: OK: 0.14s"
-//	"name: FAILED: 0.91s"
-//
-// Resource usage is sampled before and after the verifier to cover
-// execution. Both samples must succeed or the check fails.
+// Resource usage is sampled before and after the verifier when a sampler is provided.
+// Both samples must succeed or the check fails.
 func runCheck(
 	out io.Writer,
 	clk clock,
-	verifier Verifier,
+	verifier registry.Verifier,
 	metrics *MetricsCollectionV3,
 	ordinal int,
 	root string,
 	sampler ResourceSampler,
 ) ([]checks.Finding, error) {
-	// Sample before verifier execution
-	before, err := sampler.Sample()
-	if err != nil {
-		return nil, fmt.Errorf("resource sample before %s: %w", verifier.Name, err)
+	// Sample before verifier execution if sampler provided
+	var before ResourceSnapshot
+	if sampler != nil {
+		var err error
+		before, err = sampler.Sample()
+		if err != nil {
+			return nil, fmt.Errorf("resource sample before %s: %w", verifier.Name, err)
+		}
 	}
 
 	started := clk.Now()
@@ -57,27 +61,28 @@ func runCheck(
 
 	fmt.Fprintf(out, "  %s: %s: %.2fs\n", verifier.Name, status, elapsed.Seconds())
 
-	// Sample after verifier execution
-	after, err := sampler.Sample()
-	if err != nil {
-		return findings, fmt.Errorf("resource sample after %s: %w", verifier.Name, err)
-	}
+	// Sample after verifier execution if sampler provided
+	if sampler != nil {
+		after, err := sampler.Sample()
+		if err != nil {
+			return findings, fmt.Errorf("resource sample after %s: %w", verifier.Name, err)
+		}
 
-	if metrics != nil {
-		env := os.Environ()
-
-		if err := metrics.AddCheckWithResources(
-			verifier,
-			ordinal,
-			findings,
-			elapsed,
-			after.UserCPU-before.UserCPU,
-			after.SystemCPU-before.SystemCPU,
-			after.ProcessMaxRSSKB,
-			root,
-			env,
-		); err != nil {
-			return findings, fmt.Errorf("metrics collection for %s: %w", verifier.Name, err)
+		if metrics != nil {
+			env := os.Environ()
+			if err := metrics.AddCheckWithResources(
+				verifier,
+				ordinal,
+				findings,
+				elapsed,
+				after.UserCPU-before.UserCPU,
+				after.SystemCPU-before.SystemCPU,
+				after.ProcessMaxRSSKB,
+				root,
+				env,
+			); err != nil {
+				return findings, fmt.Errorf("metrics collection for %s: %w", verifier.Name, err)
+			}
 		}
 	}
 
@@ -97,11 +102,11 @@ func runFactorize(
 	out io.Writer,
 	clk clock,
 	root string,
-	verifiers []Verifier,
+	verifiers []registry.Verifier,
 	metrics *MetricsCollectionV3,
 	sampler ResourceSampler,
 ) int {
-	sorted := make([]Verifier, len(verifiers))
+	sorted := make([]registry.Verifier, len(verifiers))
 	copy(sorted, verifiers)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Name < sorted[j].Name
@@ -142,5 +147,76 @@ func exitCode(failed bool) int {
 	if failed {
 		return 1
 	}
+	return 0
+}
+
+// processExecutionRecords processes pre-computed execution records and prints results.
+// This is called after binding.Execute() has already run all verifiers with truthful timing.
+func processExecutionRecords(
+	out io.Writer,
+	profile *verifierdispatch.AuthorizedProfile,
+	records []verifierdispatch.ExecutionRecord,
+	metrics *MetricsCollectionV3,
+	totalElapsed time.Duration,
+) int {
+	failed := false
+
+	ordinal := 1
+	for _, record := range records {
+		status := "OK"
+		if len(record.Findings) > 0 {
+			status = "FAILED"
+		}
+		fmt.Fprintf(out, "  %s: %s: %.2fs\n", record.Metadata.Name, status, record.Duration.Seconds())
+
+		if len(record.Findings) > 0 {
+			failed = true
+			printFailureFindings(out, record.Metadata.Name, record.Findings)
+		}
+
+		// Metrics collection using real timing and resource samples from Execute()
+		if metrics != nil {
+			env := os.Environ()
+			// Build a registry.Verifier from metadata for metrics compatibility
+			verifier := registry.Verifier{
+				Name:      record.Metadata.Name,
+				Lane:      record.Metadata.Lane,
+				Authority: record.Metadata.Authority,
+				Cache:     record.Metadata.Cache,
+				Execution: registry.ExecutionDefinition{
+					Kind:             record.Metadata.Kind,
+					ImplementationID: record.Metadata.ImplID,
+					EnvVars:          record.Metadata.EnvVars,
+				},
+			}
+			// Calculate resource deltas from pre/post samples
+			// Zero values indicate sampling was not performed (sampler was nil)
+			userCPUDelta := record.After.UserCPU - record.Before.UserCPU
+			systemCPUDelta := record.After.SystemCPU - record.Before.SystemCPU
+			rss := record.After.MaxRSSKB
+			if err := metrics.AddCheckWithResources(
+				verifier,
+				ordinal,
+				record.Findings,
+				record.Duration,
+				userCPUDelta,
+				systemCPUDelta,
+				rss,
+				profile.RepositoryRoot(),
+				env,
+			); err != nil {
+				fmt.Fprintf(os.Stderr, "error: metrics collection for %s: %v\n", record.Metadata.Name, err)
+				failed = true
+			}
+		}
+		ordinal++
+	}
+
+	if failed {
+		fmt.Fprintf(out, "\n*** FACTORIZE FAILED: %.2fs ***\n", totalElapsed.Seconds())
+		return 1
+	}
+
+	fmt.Fprintf(out, "\n*** FACTORIZE PASSED: %.2fs ***\n", totalElapsed.Seconds())
 	return 0
 }
