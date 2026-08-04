@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"sync"
 	"testing"
+
+	"github.com/s1onique/leamas/internal/factory/closure"
 )
 
 func TestExampleHelpSolo(t *testing.T) {
@@ -106,6 +109,18 @@ func TestExampleOutputIsValidJSON(t *testing.T) {
 func TestExampleOutputIsValidPlan(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	runFactoryClosePlanExample(nil, &stdout, &stderr)
-	// Example should pass validation
-	// (Full validation tested in integration)
+	if stdout.Len() == 0 {
+		t.Fatal("no output written")
+	}
+	// Parse output and validate through composed pipeline
+	var plan map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &plan); err != nil {
+		t.Fatalf("output is not valid JSON: %v", err)
+	}
+	// Re-validate through composed pipeline
+	result := closure.ValidatePlanComposed(stdout.Bytes())
+	if !result.Valid {
+		t.Errorf("example validation failed: structural=%v decoded=%v semantic=%v",
+			result.Structural.Valid, result.Decoded, result.SemanticValid)
+	}
 }

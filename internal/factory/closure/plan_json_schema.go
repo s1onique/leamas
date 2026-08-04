@@ -2,6 +2,7 @@ package closure
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 )
 
@@ -26,10 +27,11 @@ func JSONSchema() (map[string]any, error) {
 	root := contract.Root
 
 	schema := map[string]any{
-		"$schema": "https://json-schema.org/draft/2020-12/schema",
-		"$id":     "https://leamas.io/closure-plan/v1/schema.json",
-		"title":   "Closure Protocol v1 Plan",
-		"type":    "object",
+		"$schema":  "https://json-schema.org/draft/2020-12/schema",
+		"$id":      "https://leamas.io/closure-plan/v1/schema.json",
+		"title":    "Closure Protocol v1 Plan",
+		"type":     "object",
+		"x-leamas-validation-authority": "leamas factory close plan validate",
 	}
 
 	props, required, err := buildObjectProperties(root, "")
@@ -85,7 +87,7 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 	case kindEnum:
 		jsonType = "string"
 	default:
-		return nil, errors.New("unknown kind at " + path)
+		return nil, fmt.Errorf("%w: unknown kind at %s", ErrSchemaGeneration, path)
 	}
 
 	schema := map[string]any{
@@ -111,7 +113,7 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 	// Handle array items
 	if field.Kind == kindArray {
 		if field.ItemDescriptor == nil {
-			return nil, errors.New("array without item descriptor at " + path)
+			return nil, fmt.Errorf("%w: array without item descriptor at %s", ErrSchemaGeneration, path)
 		}
 		itemSchema, err := buildFieldSchema(*field.ItemDescriptor, path+"_items")
 		if err != nil {
@@ -130,8 +132,15 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 	// Handle object children
 	if field.Kind == kindObject {
 		if field.Children == nil {
-			return nil, errors.New("object missing required child/value schema at " + path)
+			return nil, fmt.Errorf("%w: object missing children at %s", ErrSchemaGeneration, path)
 		}
+		// Handle free-form string maps specially
+		if field.Children.Kind == objectStringMap {
+			schema["type"] = "object"
+			schema["additionalProperties"] = map[string]any{"type": "string"}
+			return schema, nil
+		}
+		// Handle strict closed objects
 		childProps, childRequired, err := buildObjectProperties(*field.Children, path)
 		if err != nil {
 			return nil, err

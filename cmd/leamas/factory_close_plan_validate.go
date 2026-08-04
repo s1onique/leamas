@@ -24,12 +24,8 @@ func runFactoryClosePlanValidateWith(
 	stderr io.Writer,
 	deps planValidateDeps,
 ) int {
-	if len(args) == 1 && isHelpFlag(args[0]) && len(args) == 1 {
-		fmt.Fprintln(stderr, "Usage: leamas factory close plan validate [--file <path>] [--stdin]")
-		fmt.Fprintln(stderr, "Validate a Closure Protocol v1 plan JSON file.")
-		return 0
-	}
-	if len(args) > 0 && isHelpFlag(args[0]) && len(args) == 1 {
+	// Help flag check
+	if len(args) == 1 && isHelpFlag(args[0]) {
 		fmt.Fprintln(stderr, "Usage: leamas factory close plan validate [--file <path>] [--stdin]")
 		fmt.Fprintln(stderr, "Validate a Closure Protocol v1 plan JSON file.")
 		return 0

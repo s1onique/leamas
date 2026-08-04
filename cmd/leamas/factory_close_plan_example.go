@@ -9,6 +9,8 @@ import (
 )
 
 // runFactoryClosePlanExample outputs a valid example plan.
+// Before emitting, it validates the example through the composed pipeline
+// to guarantee it passes all structural, decode, and semantic checks.
 func runFactoryClosePlanExample(args []string, stdout, stderr io.Writer) int {
 	// Help must be the sole argument
 	if len(args) == 1 && isHelpFlag(args[0]) {
@@ -25,6 +27,12 @@ func runFactoryClosePlanExample(args []string, stdout, stderr io.Writer) int {
 	data, err := json.MarshalIndent(plan, "", "  ")
 	if err != nil {
 		return closeUsageError(stderr, "factory close plan example", "marshal failed: "+err.Error())
+	}
+
+	// Fail-closed validation: verify example passes composed validation
+	result := closure.ValidatePlanComposed(data)
+	if !result.Valid {
+		return closeUsageError(stderr, "factory close plan example", "example validation failed: example is not a valid plan")
 	}
 
 	// Atomic write: encode to buffer first, then single write
