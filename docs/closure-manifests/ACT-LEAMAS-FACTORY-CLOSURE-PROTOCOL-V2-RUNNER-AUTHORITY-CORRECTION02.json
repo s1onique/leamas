@@ -1,0 +1,27 @@
+{
+  "closure_protocol_version": "2",
+  "plan_contract_version": 1,
+  "subject_commit": "f2b7584752a24956378e9bef3bac7daf251413ef",
+  "subject_tree": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "freeze_commit": "046d73b0e5e2f15d6f941bfb21d558ae43b49c2f",
+  "freeze_tree": "419c51e506db3921ce6e5afca6feea165a74064d",
+  "plan_path": "docs/closure-plans/DOGFOOD.json",
+  "plan_blob": "c9d8ebe9012bfafee9096da28e2662dd4829464e",
+  "plan_sha256": "e5b06d228bc122d665ebbbd580294432b1633d382399f83dfdc87941ccbb2615",
+  "execution_tree": "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+  "check_results": [
+    {
+      "id": "noop",
+      "mode": "run",
+      "outcome": "pass"
+    }
+  ],
+  "leamas_binary_identity": {
+    "path": "/home/chistyakov/Projects/leamas/bin/leamas",
+    "sha256": "a130faf7ba5edd4cbf96bc6273b1bb7656e939c538ced2a09ba229db1405283c",
+    "vcs_revision": "b9ad0954846af21032050ce6d30688319a50c3e3",
+    "vcs_modified": false,
+    "leamas_version": "0.1.0"
+  },
+  "caller_head": "046d73b0e5e2f15d6f941bfb21d558ae43b49c2f"
+}
