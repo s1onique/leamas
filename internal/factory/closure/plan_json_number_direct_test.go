@@ -26,8 +26,10 @@ func TestJsonNumberToIntegerDirect(t *testing.T) {
 		{"1.5", "1.5", false, 0},
 		{"1e-1", "1e-1", false, 0},
 		{"600.000000000000000000001", "600.000000000000000000001", false, 0},
-		// 1e1000 is non-integral so rejected here. Bound
-		// rejection is the structural-stage's job.
+		// 1e1000 is a mathematical integer but exceeds the
+		// helper's int64 representable range. The helper
+		// rejects it; the bound stage will surface the
+		// above-maximum classification.
 		{"1e1000", "1e1000", false, 0},
 	}
 	for _, c := range cases {
