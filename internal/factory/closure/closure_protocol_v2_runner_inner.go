@@ -13,6 +13,11 @@ package closure
 // threshold while preserving the single closure over the
 // descriptor that
 // ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01 requires.
+//
+// R2A (MAC-CANARY-READINESS01-R2A): the inner runner returns
+// an unpublished v2RunCandidate rather than writing the
+// manifest. Publication is the outer runner's responsibility
+// and only happens after the after-state authority passes.
 
 import (
 	"context"
@@ -25,38 +30,44 @@ import (
 // the drift check can run on every return path without
 // duplicating the inner logic.
 //
+// The inner authority may load and validate the frozen plan,
+// execute the subject checks, and construct the manifest
+// candidate. It MUST NOT write req.ManifestOutput; the outer
+// runner's publication barrier is the only path that may
+// publish the candidate bytes.
+//
 // LIFECYCLE-INVARIANTS01 wires this function as a pure
 // helper; callers should continue to use
 // RunClosureProtocolV2WithDeps.
-func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2RunnerDeps, callerBefore v2CallerState) (V2Manifest, error) {
+func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2RunnerDeps, callerBefore v2CallerState) (v2RunCandidate, error) {
 	_ = callerBefore
 	// Phase 3 (CORRECTION01): detached output locations.
 	if err := EnforceDetachedV2Outputs(req); err != nil {
-		return V2Manifest{}, err
+		return v2RunCandidate{}, err
 	}
 	clean, cleanErr := workingTreeClean(ctx, deps.Git, req.RepositoryRoot)
 	if cleanErr != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("inspect caller worktree: %s", cleanErr.Error()),
 			"caller_worktree", cleanErr.Error())
 	}
 	if !clean {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeCallerWorktreeDirty,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeCallerWorktreeDirty,
 			"caller worktree must be clean before v2 run",
 			"caller_worktree", "")
 	}
 	callerHead, err := runGitValue(ctx, deps.Git, req.RepositoryRoot, "rev-parse", "HEAD^{commit}")
 	if err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("read caller HEAD: %s", err.Error()),
 			"caller_head", err.Error())
 	}
 	facts, err := deps.Topology.ResolveTopology(ctx, req.RepositoryRoot, req.SubjectCommit, req.FreezeCommit)
 	if err != nil {
-		return V2Manifest{}, err
+		return v2RunCandidate{}, err
 	}
 	if !facts.SubjectResolved || !facts.FreezeResolved {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("topology resolution incomplete: subject=%v freeze=%v relation=%s",
 				facts.SubjectResolved, facts.FreezeResolved, string(facts.Classify())),
 			"topology", string(facts.Classify()))
@@ -65,19 +76,19 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 	freezeCommit := facts.FreezeCommitValue()
 	subjectTree, err := runGitValue(ctx, deps.Git, req.RepositoryRoot, "rev-parse", "--verify", "--end-of-options", subjectCommit+"^{tree}")
 	if err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("resolve subject tree: %s", err.Error()),
 			"subject_tree", err.Error())
 	}
 	freezeTree, err := runGitValue(ctx, deps.Git, req.RepositoryRoot, "rev-parse", "--verify", "--end-of-options", freezeCommit+"^{tree}")
 	if err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("resolve freeze tree: %s", err.Error()),
 			"freeze_tree", err.Error())
 	}
 	outcome := DispatchClosureTopology(req.ClosureProtocolVersion, facts)
 	if !outcome.Accepted {
-		return V2Manifest{}, &V2Error{Diags: V2Diagnostics{{
+		return v2RunCandidate{}, &V2Error{Diags: V2Diagnostics{{
 			Code:         outcome.Code,
 			Message:      outcome.Message,
 			PropertyName: "topology",
@@ -86,7 +97,7 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 	}
 	frozen, err := deps.Loader.LoadFrozenPlan(ctx, req.RepositoryRoot, freezeCommit, req.PlanPath)
 	if err != nil {
-		return V2Manifest{}, err
+		return v2RunCandidate{}, err
 	}
 	// Phase 3 (PATH-AUTHORITY01): working-plan assertion. The
 	// runner compares the working-tree bytes at
@@ -97,7 +108,7 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 	// forbidden root.
 	if req.OptionalWorkingPlanAssertion != "" {
 		if err := enforceWorkingPlanAssertion(req.OptionalWorkingPlanAssertion, frozen); err != nil {
-			return V2Manifest{}, err
+			return v2RunCandidate{}, err
 		}
 	}
 	// Phase 2 (CORRECTION01): authoritative frozen-plan
@@ -107,20 +118,20 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 	// plan that fails either stage.
 	plan, _, err := parsePlanBytes(frozen.Bytes)
 	if err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeFrozenPlanNotBlob,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeFrozenPlanNotBlob,
 			fmt.Sprintf("parse frozen plan: %s", err.Error()),
 			"plan_bytes", err.Error())
 	}
 	if !PlanContractVersion(plan.ContractVersion).IsSupported() {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeUnsupportedPlanContractVersion,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeUnsupportedPlanContractVersion,
 			fmt.Sprintf("frozen plan contract version %d is not supported", plan.ContractVersion),
 			"plan_contract_version", "")
 	}
 	if err := ValidateV2VersionCombination(PlanContractVersion(plan.ContractVersion), req.ClosureProtocolVersion); err != nil {
-		return V2Manifest{}, err
+		return v2RunCandidate{}, err
 	}
 	if PlanContractVersion(plan.ContractVersion) != PlanContractVersion(req.PlanContractVersion) {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeUnsupportedPlanProtocolComb,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeUnsupportedPlanProtocolComb,
 			fmt.Sprintf("request plan contract version %d does not match frozen plan version %d",
 				req.PlanContractVersion, plan.ContractVersion),
 			"plan_contract_version", fmt.Sprintf("request=%d frozen=%d", req.PlanContractVersion, plan.ContractVersion))
@@ -133,10 +144,10 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 	// bytes loaded from F:P and retains every nested plan
 	// diagnostic in the typed V2Error.
 	if _, err := ValidateFrozenPlanV2(frozen.Bytes); err != nil {
-		return V2Manifest{}, err
+		return v2RunCandidate{}, err
 	}
 	if err := os.MkdirAll(req.EvidenceDirectory, 0o700); err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("mkdir evidence dir: %s", err.Error()),
 			"evidence_directory", err.Error())
 	}
@@ -150,10 +161,10 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 		Now:             deps.Now,
 	})
 	if err != nil {
-		return V2Manifest{}, err
+		return v2RunCandidate{}, err
 	}
 	if execResult.ObservedTree != subjectTree {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
 			fmt.Sprintf("executor observed tree %s does not match subject tree %s",
 				execResult.ObservedTree, subjectTree),
 			"execution_tree", execResult.ObservedTree)
@@ -177,16 +188,25 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 		Evidence:               execResult.Evidence,
 	})
 	if err != nil {
-		return V2Manifest{}, err
+		return v2RunCandidate{}, err
 	}
 	data, err := V2ManifestRender(manifest)
 	if err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeManifestWriteFailed,
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeManifestWriteFailed,
 			fmt.Sprintf("render manifest: %s", err.Error()),
 			"manifest_output", err.Error())
 	}
-	if err := AtomicWriteV2Manifest(req.ManifestOutput, data); err != nil {
-		return V2Manifest{}, err
+	candidate := v2RunCandidate{Manifest: manifest, ManifestBytes: data}
+	// R2A candidate observer: invoked once, after the
+	// candidate is constructed and rendered. The observer is
+	// invocation-local; tests use a counting observer to
+	// assert the candidate was constructed exactly once.
+	if deps.CandidateObserver != nil {
+		deps.CandidateObserver.CandidateConstructed(manifest, data)
 	}
-	return manifest, nil
+	// The inner runner MUST NOT publish the manifest. The
+	// outer runner is the only path that may call
+	// AtomicWriteV2Manifest, and only after the after-state
+	// authority passes.
+	return candidate, nil
 }

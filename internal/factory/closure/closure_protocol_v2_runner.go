@@ -16,9 +16,10 @@ package closure
 //  9. execute checks against S^{tree} via detached worktree
 //  10. verify observed execution tree
 //  11. assemble manifest via NewV2Manifest (with binary identity)
-//  12. atomically write the manifest
-//  13. deregister and remove the temporary worktree (Phase 5)
-//  14. caller-state drift check (LIFECYCLE-INVARIANTS01)
+//  12. capture caller-after state (publication barrier gate)
+//  13. verify no caller drift or worktree registration leak
+//  14. atomically write the manifest (publication barrier exit)
+//  15. caller-state drift check (LIFECYCLE-INVARIANTS01)
 //
 // The runner MUST emit no success manifest on failure. All
 // failures surface as typed V2Error values with a non-empty
@@ -28,6 +29,13 @@ package closure
 // under the LLM-friendly 400-line threshold while preserving
 // the single closure over the descriptor that
 // ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01 requires.
+//
+// R2A (MAC-CANARY-READINESS01-R2A): the runner now enforces a
+// publication barrier between manifest construction (inner)
+// and manifest publication (outer). No on-disk manifest bytes
+// become visible until the after-state authority proves the
+// caller state was observed successfully and is unchanged
+// from the before-state snapshot.
 
 import (
 	"context"
@@ -46,6 +54,19 @@ type V2RunnerDeps struct {
 	Commands       commandExecutor
 	Now            func() time.Time
 	BinaryIdentity V2BinaryIdentity
+	// SnapshotFn captures the caller-state observation for
+	// the given snapshot phase. Production wiring uses
+	// defaultV2RunnerSnapshotFunc; tests inject a fake that
+	// returns a non-Available v2CallerStateSnapshot at the
+	// V2SnapshotPhaseAfter boundary to prove the outer runner
+	// refuses to publish the manifest.
+	SnapshotFn V2RunnerSnapshotFunc
+	// CandidateObserver, when non-nil, is invoked by the
+	// inner runner immediately after the manifest candidate
+	// is constructed and rendered. Tests inject a counting
+	// observer to prove the candidate was constructed exactly
+	// once. The runner skips the observer call when nil.
+	CandidateObserver V2CandidateObserver
 }
 
 // DefaultV2RunnerDeps returns the production dependency
@@ -53,12 +74,14 @@ type V2RunnerDeps struct {
 // override any field before invoking RunClosureProtocolV2WithDeps.
 func DefaultV2RunnerDeps() V2RunnerDeps {
 	return V2RunnerDeps{
-		Git:      RealGit{},
-		Topology: NewGitV2TopologyResolver(RealGit{}),
-		Loader:   NewGitV2FrozenPlanLoader(RealGit{}),
-		Executor: NewGitV2SubjectExecutor(RealGit{}),
-		Commands: boundedCommandExecutor{},
-		Now:      time.Now,
+		Git:               RealGit{},
+		Topology:          NewGitV2TopologyResolver(RealGit{}),
+		Loader:            NewGitV2FrozenPlanLoader(RealGit{}),
+		Executor:          NewGitV2SubjectExecutor(RealGit{}),
+		Commands:          boundedCommandExecutor{},
+		Now:               time.Now,
+		SnapshotFn:        defaultV2RunnerSnapshotFunc,
+		CandidateObserver: noopCandidateObserver{},
 	}
 }
 
@@ -84,14 +107,21 @@ func RunClosureProtocolV2WithBinary(ctx context.Context, req V2Request, identity
 // supplied dependency wiring. Tests inject fakes; production
 // callers use RunClosureProtocolV2WithBinary.
 //
-// Phase 4 (LIFECYCLE-INVARIANTS01): the runner captures the
-// caller state BEFORE any side-effecting step and re-snapshots
-// it on every return path. If the after snapshot disagrees with
-// the before snapshot (HEAD changed, HEAD tree changed,
-// `git status --porcelain=v2 --untracked-files=all` produced
-// different output, or a new linked-worktree registration
-// leaked), the runner emits typed diagnostics and refuses to
-// claim success.
+// R2A (MAC-CANARY-READINESS01-R2A): the outer runner sequence
+// is now:
+//
+//	capture before snapshot
+//	run inner authority → unpublished candidate
+//	capture after snapshot
+//	require after Available=true
+//	require no caller drift
+//	require no worktree registration drift
+//	atomically publish candidate bytes to ManifestOutput
+//	return (manifest, nil)
+//
+// No manifest bytes reach the on-disk path before the
+// after-state authority passes. Any failure leaves the
+// manifest path absent.
 func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2RunnerDeps) (V2Manifest, error) {
 	if err := ValidateV2Request(req); err != nil {
 		return V2Manifest{}, err
@@ -122,55 +152,87 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 	if deps.Git == nil {
 		deps.Git = RealGit{}
 	}
+	if deps.SnapshotFn == nil {
+		deps.SnapshotFn = defaultV2RunnerSnapshotFunc
+	}
+	if deps.CandidateObserver == nil {
+		// Production may leave the observer nil; the inner
+		// runner skips the observer call when nil so the
+		// barrier remains correct.
+	}
 	// Phase 4 (LIFECYCLE-INVARIANTS01): capture the caller
 	// state BEFORE any side-effecting step. The post-run
-	// snapshot is captured just before the function returns
-	// (success or failure) so the runner can refuse to claim
-	// success when HEAD, HEAD tree, status, or
-	// linked-worktree registrations drifted.
+	// snapshot is captured just before publication (success
+	// path) or before the function returns (failure path) so
+	// the runner can refuse to claim success when HEAD, HEAD
+	// tree, status, or linked-worktree registrations drifted.
 	//
 	// R1 (MAC-CANARY-READINESS01-R1): the before snapshot
 	// must be fail-closed. Any observation failure (HEAD
 	// lookup, status, worktree inventory) produces typed
 	// V2Diagnostics and the runner refuses to execute.
-	callerBefore := snapshotCallerState(ctx, deps.Git, req.RepositoryRoot)
+	//
+	// R2A (MAC-CANARY-READINESS01-R2A): the snapshot
+	// observation now flows through deps.SnapshotFn with an
+	// explicit phase identifier so tests can target the
+	// after boundary without command-count approximations.
+	callerBefore := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseBefore)
 	if !callerBefore.Available {
 		return V2Manifest{}, &V2Error{Diags: callerBefore.Diagnostics}
 	}
-	manifest, err := runClosureProtocolV2Inner(ctx, req, deps, callerBefore.State)
-	callerAfter := snapshotCallerState(ctx, deps.Git, req.RepositoryRoot)
+	candidate, err := runClosureProtocolV2Inner(ctx, req, deps, callerBefore.State)
+	if err != nil {
+		// Even on inner failure the runner still captures an
+		// after-state observation so it can surface drift
+		// diagnostics. No manifest bytes have been written;
+		// the candidate is unpublished.
+		callerAfter := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
+		if post := mergeAfterDiagnostics(callerAfter); len(post) > 0 {
+			if v2err, ok := err.(*V2Error); ok {
+				v2err.Diags = append(v2err.Diags, post...)
+				return V2Manifest{}, v2err
+			}
+			return V2Manifest{}, &V2Error{Diags: post}
+		}
+		return V2Manifest{}, err
+	}
+	// Publication barrier: capture the after-state snapshot
+	// BEFORE writing the candidate bytes to disk. Any failure
+	// here aborts publication.
+	callerAfter := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
 	if !callerAfter.Available {
 		// The after snapshot must be fail-closed: if we
 		// cannot confirm the caller state after the run,
 		// we MUST NOT claim clean success. The diagnostics
-		// are merged with any prior error so the CLI can
-		// render the exact cause.
-		post := callerAfter.Diagnostics
-		if err == nil {
-			return V2Manifest{}, &V2Error{Diags: post}
-		}
-		if v2err, ok := err.(*V2Error); ok {
-			v2err.Diags = append(v2err.Diags, post...)
-			return V2Manifest{}, v2err
-		}
-		return V2Manifest{}, &V2Error{Diags: post}
+		// are merged into a typed V2Error so the CLI can
+		// render the exact cause. The candidate manifest
+		// is intentionally not written.
+		return V2Manifest{}, &V2Error{Diags: callerAfter.Diagnostics}
 	}
 	if post := callerBefore.State.Diff(callerAfter.State); len(post) > 0 {
-		// Drift detected. If the inner call succeeded we
-		// MUST refuse to publish the manifest and surface
-		// every diagnostic; if the inner call already
-		// failed we still surface the drift so the CLI
-		// can render the exact cause.
-		if err == nil {
-			return V2Manifest{}, &V2Error{Diags: post}
-		}
-		if v2err, ok := err.(*V2Error); ok {
-			v2err.Diags = append(v2err.Diags, post...)
-			return V2Manifest{}, v2err
-		}
+		// Drift detected between before and after. The
+		// candidate manifest is intentionally not written.
 		return V2Manifest{}, &V2Error{Diags: post}
 	}
-	return manifest, err
+	// Publication barrier exit: atomic write happens ONLY
+	// after the after-state authority passes. This is the
+	// final success-side mutation.
+	if err := AtomicWriteV2Manifest(req.ManifestOutput, candidate.ManifestBytes); err != nil {
+		return V2Manifest{}, err
+	}
+	return candidate.Manifest, nil
+}
+
+// mergeAfterDiagnostics returns the diagnostics from an
+// after-state snapshot when the snapshot was unavailable. When
+// the snapshot is available the function returns nil so the
+// caller does not synthesise diagnostics for a healthy after
+// observation.
+func mergeAfterDiagnostics(after v2CallerStateSnapshot) V2Diagnostics {
+	if after.Available {
+		return nil
+	}
+	return after.Diagnostics
 }
 
 // runClosureProtocolV2Inner is implemented in closure_protocol_v2_runner_inner.go.
