@@ -17,6 +17,7 @@ var ErrSchemaGeneration = errors.New("schema generation failed")
 //   - properties, required arrays
 //   - const and enum constraints
 //   - minItems for arrays
+//   - minLength/pattern/minimum/maximum value-level constraints
 //   - additionalProperties: false for strict objects
 //   - x-applicability extensions for conditional fields
 //
@@ -153,6 +154,23 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 				schema["required"] = childRequired
 			}
 		}
+	}
+
+	// Emit value-level constraints. The JSON Schema standard covers
+	// every constraint the v1 descriptor declares (minLength,
+	// pattern, minimum, maximum) so consumers can rely on standard
+	// tooling instead of Leamas-specific extensions.
+	if field.MinLength > 0 {
+		schema["minLength"] = field.MinLength
+	}
+	if field.Pattern != "" {
+		schema["pattern"] = field.Pattern
+	}
+	if field.Minimum != 0 {
+		schema["minimum"] = field.Minimum
+	}
+	if field.Maximum != 0 {
+		schema["maximum"] = field.Maximum
 	}
 
 	// Add example value if present

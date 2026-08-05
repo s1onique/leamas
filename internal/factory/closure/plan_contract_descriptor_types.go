@@ -158,6 +158,30 @@ type planFieldDescriptor struct {
 	// RejectedAliases are JSON names that LOOK like this field but
 	// MUST be rejected.
 	RejectedAliases []string
+
+	// MinLength is the JSON Schema minLength constraint for
+	// string-typed fields. Zero means "no constraint". The
+	// structural validator emits a KeywordMinLength diagnostic
+	// when the supplied string is shorter than MinLength.
+	MinLength int
+
+	// Pattern is the JSON Schema pattern constraint for
+	// string-typed fields. Empty means "no constraint". The
+	// structural validator uses Go's regexp/syntax package to
+	// match the value; an unparsable pattern is a descriptor
+	// defect and the field is rejected at parse time.
+	Pattern string
+
+	// Minimum is the JSON Schema minimum constraint for
+	// integer-typed fields. Zero means "no constraint" so 0 is
+	// always a valid minimum when the field is otherwise
+	// permitted to hold zero. Use a non-zero sentinel value
+	// (or set Maximum explicitly) to make 0 rejectable.
+	Minimum int64
+
+	// Maximum is the JSON Schema maximum constraint for
+	// integer-typed fields. Zero means "no constraint".
+	Maximum int64
 }
 
 // planFieldKind enumerates the JSON type categories.

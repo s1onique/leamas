@@ -1,6 +1,9 @@
 package closure
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 // plan_contract_validation_fields.go centralises the per-field and
 // per-array walkers (validatePlanField, validatePlanArray,
@@ -11,6 +14,11 @@ import "strings"
 // ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01 requires.
 
 // validatePlanField walks a single field against its descriptor.
+// In addition to the JSON type/const/enum checks, it enforces the
+// descriptor's value-level constraints (MinLength, Pattern,
+// Minimum, Maximum) when those constraints are declared. The
+// diagnostics use stable JSON Schema keywords so consumers can
+// classify failures without parsing the message.
 func validatePlanField(field planFieldDescriptor, path string, value any, parent planObjectDescriptor, _ map[string]any, contract planContractV1Descriptor) []PlanValidationError {
 	var diagnostics []PlanValidationError
 	if value == nil {
@@ -45,7 +53,8 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 	case kindArray:
 		diagnostics = append(diagnostics, validatePlanArray(field, path, value, contract)...)
 	case kindString:
-		if _, ok := value.(string); !ok {
+		strVal, ok := value.(string)
+		if !ok {
 			diagnostics = append(diagnostics, PlanValidationError{
 				InstancePath:  path,
 				SchemaPath:    path,
@@ -54,6 +63,8 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 				Message:       "property \"" + field.JSONName + "\" must be a string, got " + typeNameOf(value),
 				RejectedValue: value,
 			})
+		} else {
+			diagnostics = append(diagnostics, validateStringConstraints(field, path, strVal)...)
 		}
 	case kindInteger:
 		intVal, ok := jsonNumberToInteger(value)
@@ -65,24 +76,28 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 				Keyword:       KeywordType,
 				Message:       "property \"" + field.JSONName + "\" must be an integer, got " + typeNameOf(value),
 				RejectedValue: value,
+				PropertyName:  field.JSONName,
 			})
-		} else if field.ConstantValue != nil {
-			if cv, ok := field.ConstantValue.(int); ok && intVal != cv {
-				code := PlanCodeInvalidEnum
-				// Use the documented "unsupported_contract_version"
-				// code when the field is /contract_version.
-				if field.JSONName == "contract_version" {
-					code = PlanCodeUnsupportedContractVersion
+		} else {
+			diagnostics = append(diagnostics, validateIntegerConstraints(field, path, intVal)...)
+			if field.ConstantValue != nil {
+				if cv, ok := field.ConstantValue.(int); ok && intVal != cv {
+					code := PlanCodeInvalidEnum
+					// Use the documented "unsupported_contract_version"
+					// code when the field is /contract_version.
+					if field.JSONName == "contract_version" {
+						code = PlanCodeUnsupportedContractVersion
+					}
+					diagnostics = append(diagnostics, PlanValidationError{
+						InstancePath:   path,
+						SchemaPath:     path,
+						Code:           code,
+						Keyword:        KeywordConst,
+						Message:        "property \"" + field.JSONName + "\" must equal " + itoa(cv) + ", got " + itoa(intVal),
+						RejectedValue:  intVal,
+						AcceptedValues: []string{itoa(cv)},
+					})
 				}
-				diagnostics = append(diagnostics, PlanValidationError{
-					InstancePath:   path,
-					SchemaPath:     path,
-					Code:           code,
-					Keyword:        KeywordConst,
-					Message:        "property \"" + field.JSONName + "\" must equal " + itoa(cv) + ", got " + itoa(intVal),
-					RejectedValue:  intVal,
-					AcceptedValues: []string{itoa(cv)},
-				})
 			}
 		}
 	case kindBoolean:
@@ -134,6 +149,115 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 		}
 	}
 	return diagnostics
+}
+
+// validateStringConstraints enforces the descriptor's string
+// value-level constraints (MinLength, Pattern). The function returns
+// no diagnostics when the descriptor declares no constraints; a
+// broken Pattern is treated as a descriptor defect and emits a
+// single `invalid_type` diagnostic with KeywordPattern so consumers
+// can still classify the failure structurally.
+func validateStringConstraints(field planFieldDescriptor, path, value string) []PlanValidationError {
+	var diagnostics []PlanValidationError
+	if field.MinLength > 0 && len(value) < field.MinLength {
+		diagnostics = append(diagnostics, PlanValidationError{
+			InstancePath:  path,
+			SchemaPath:    path,
+			Code:          PlanCodeInvalidType,
+			Keyword:       KeywordMinLength,
+			Message:       "property \"" + field.JSONName + "\" length " + itoa(len(value)) + " is below minLength " + itoa(field.MinLength),
+			RejectedValue: value,
+			PropertyName:  field.JSONName,
+		})
+	}
+	if field.Pattern != "" {
+		re, err := regexp.Compile(field.Pattern)
+		if err != nil {
+			diagnostics = append(diagnostics, PlanValidationError{
+				InstancePath:  path,
+				SchemaPath:    path,
+				Code:          PlanCodeInvalidType,
+				Keyword:       KeywordPattern,
+				Message:       "property \"" + field.JSONName + "\" descriptor pattern is unparsable",
+				RejectedValue: value,
+				PropertyName:  field.JSONName,
+			})
+		} else if !re.MatchString(value) {
+			diagnostics = append(diagnostics, PlanValidationError{
+				InstancePath:  path,
+				SchemaPath:    path,
+				Code:          PlanCodeInvalidType,
+				Keyword:       KeywordPattern,
+				Message:       "property \"" + field.JSONName + "\" value does not match pattern",
+				RejectedValue: value,
+				PropertyName:  field.JSONName,
+			})
+		}
+	}
+	return diagnostics
+}
+
+// validateIntegerConstraints enforces the descriptor's integer
+// value-level constraints (Minimum, Maximum). A diagnostic is
+// emitted whenever the supplied value falls outside the inclusive
+// declared range; the rejected_value carries the exact integer
+// the producer supplied so consumers can correct it.
+func validateIntegerConstraints(field planFieldDescriptor, path string, value int) []PlanValidationError {
+	var diagnostics []PlanValidationError
+	if field.Minimum != 0 && int64(value) < field.Minimum {
+		diagnostics = append(diagnostics, PlanValidationError{
+			InstancePath:  path,
+			SchemaPath:    path,
+			Code:          PlanCodeInvalidType,
+			Keyword:       KeywordMinimum,
+			Message:       "property \"" + field.JSONName + "\" value " + itoa(value) + " is below minimum " + itoa64(field.Minimum),
+			RejectedValue: value,
+			PropertyName:  field.JSONName,
+			AcceptedValues: []string{
+				"[" + itoa64(field.Minimum) + ", " + itoa64(field.Maximum) + "]",
+			},
+		})
+		return diagnostics
+	}
+	if field.Maximum != 0 && int64(value) > field.Maximum {
+		diagnostics = append(diagnostics, PlanValidationError{
+			InstancePath:  path,
+			SchemaPath:    path,
+			Code:          PlanCodeInvalidType,
+			Keyword:       KeywordMaximum,
+			Message:       "property \"" + field.JSONName + "\" value " + itoa(value) + " exceeds maximum " + itoa64(field.Maximum),
+			RejectedValue: value,
+			PropertyName:  field.JSONName,
+			AcceptedValues: []string{
+				"[" + itoa64(field.Minimum) + ", " + itoa64(field.Maximum) + "]",
+			},
+		})
+	}
+	return diagnostics
+}
+
+// itoa64 renders an int64 as a base-10 string. The helper keeps
+// the integer-bound diagnostic messages free of strconv imports.
+func itoa64(v int64) string {
+	if v == 0 {
+		return "0"
+	}
+	negative := v < 0
+	if negative {
+		v = -v
+	}
+	var buf [20]byte
+	pos := len(buf)
+	for v > 0 {
+		pos--
+		buf[pos] = byte('0' + v%10)
+		v /= 10
+	}
+	if negative {
+		pos--
+		buf[pos] = '-'
+	}
+	return string(buf[pos:])
 }
 
 // validatePlanArray walks an array against its descriptor.

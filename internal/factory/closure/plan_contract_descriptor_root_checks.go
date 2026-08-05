@@ -11,10 +11,19 @@ package closure
 // validateRunnableCheck) are encoded exhaustively via
 // ApplicabilityRules so both branches are documented:
 //
-//   - mode=run: argv and environment required; working_directory/
-//     timeout_seconds optional; reason forbidden.
+//   - mode=run: argv, working_directory, timeout_seconds, and
+//     environment required; reason forbidden.
 //   - mode=exclude: reason required; argv/working_directory/
 //     timeout_seconds/environment forbidden.
+//
+// Working-directory and timeout_seconds presence rules align
+// the descriptor with the runtime validation that has always
+// required them for run-mode checks. The structural applicability
+// walker reports `required_property_missing` with the exact
+// property_name when the field is absent; the structural value
+// constraints (minLength/pattern/minimum/maximum) reject empty,
+// invalid, or out-of-range values with `invalid_type` plus a
+// stable keyword.
 func planContractV1ChecksField() planFieldDescriptor {
 	return planFieldDescriptor{
 		JSONName:     "checks",
@@ -92,10 +101,12 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindString,
 						Required:     false,
 						SemanticRule: "validateRepositoryRelativePath",
-						Description:  "Repository-relative working directory. Optional when mode='run'; forbidden when mode='exclude'.",
+						Description:  "Repository-relative working directory. Required when mode='run'; forbidden when mode='exclude'. Must be non-empty, must not be an absolute path, must not start with '..', and must be lexically clean.",
 						ExampleValue: ".",
+						MinLength:    1,
+						Pattern:      `^[^/]+(/[^/]+)*$`,
 						ApplicabilityRules: []fieldApplicabilityRule{
-							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
 						},
 						RejectedAliases: []string{
@@ -109,10 +120,12 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindInteger,
 						Required:     false,
 						SemanticRule: "validateRunnableCheck(TimeoutSeconds)",
-						Description:  "Per-check timeout in seconds. Optional when mode='run'; forbidden when mode='exclude'.",
+						Description:  "Per-check timeout in seconds, inclusive bounds [1, 600]. Required when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: 60,
+						Minimum:      1,
+						Maximum:      600,
 						ApplicabilityRules: []fieldApplicabilityRule{
-							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
 						},
 					},

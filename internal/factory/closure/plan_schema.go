@@ -63,6 +63,18 @@ func fieldDescriptorToMap(f planFieldDescriptor) map[string]interface{} {
 	if f.MinItems > 0 {
 		m["min_items"] = f.MinItems
 	}
+	if f.MinLength > 0 {
+		m["min_length"] = f.MinLength
+	}
+	if f.Pattern != "" {
+		m["pattern"] = f.Pattern
+	}
+	if f.Minimum != 0 {
+		m["minimum"] = f.Minimum
+	}
+	if f.Maximum != 0 {
+		m["maximum"] = f.Maximum
+	}
 	return m
 }
 

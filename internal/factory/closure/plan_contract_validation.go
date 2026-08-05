@@ -32,19 +32,9 @@ const (
 	PlanCodeDuplicateApplicabilityRule PlanValidationCode = "duplicate_applicability_rule"
 )
 
-// PlanValidationKeyword mirrors the JSON Schema keyword taxonomy.
-type PlanValidationKeyword string
-
-const (
-	KeywordType           PlanValidationKeyword = "type"
-	KeywordEnum           PlanValidationKeyword = "enum"
-	KeywordRequired       PlanValidationKeyword = "required"
-	KeywordConst          PlanValidationKeyword = "const"
-	KeywordPattern        PlanValidationKeyword = "pattern"
-	KeywordAdditionalProp PlanValidationKeyword = "additionalProperties"
-	KeywordMinItems       PlanValidationKeyword = "minItems"
-	KeywordIfThenElse     PlanValidationKeyword = "if"
-)
+// PlanValidationKeyword and its closed constant set live in
+// plan_contract_validation_keywords.go so this file stays under the
+// LLM-friendly 400-line threshold.
 
 // PlanValidationError is a single structured diagnostic. The struct
 // is JSON-marshallable so future CLI flags can render it verbatim.
