@@ -218,7 +218,7 @@ func validateRunnableCheck(index int, check PlanCheck) error {
 			return errInvalidCheckArgvElement(index, argIndex)
 		}
 	}
-	if err := validateRepositoryRelativePath(check.WorkingDirectory, true); err != nil {
+	if err := portablePathValidate(check.WorkingDirectory, true, false); err != nil {
 		return errInvalidCheckWorkingDirectory(index, err)
 	}
 	if check.TimeoutSeconds <= 0 || check.TimeoutSeconds > MaxCheckTimeoutSeconds {
