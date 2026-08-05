@@ -94,26 +94,25 @@ func makeCommit(t *testing.T, dir, message string, files map[string]string) stri
 func TestV2HermeticTopologyEndToEnd(t *testing.T) {
 	dir := initRepo(t)
 	subject := makeCommit(t, dir, "subject implementation", map[string]string{
-		"src/lib.go": "package lib\n",
+		"src/lib.go":       "package lib\n",
+		"subject-only.txt": "subject implementation file\n",
 	})
+	subjectTree := mustRunGit(t, dir, "rev-parse", subject+"^{tree}")
+	planBytes, err := BuildV2ValidPlanFixtureWithCheck("ACT-HERMETIC-V2-01",
+		subject, subjectTree, v2FixtureCheck{
+			ID:               "subject_only_present",
+			Mode:             "run",
+			Argv:             []string{"test", "-f", "subject-only.txt"},
+			WorkingDirectory: ".",
+			TimeoutSeconds:   60,
+			Environment:      map[string]string{},
+		})
+	if err != nil {
+		t.Fatalf("BuildV2ValidPlanFixtureWithCheck: %v", err)
+	}
 	freeze := makeCommit(t, dir, "freeze: add closure plan", map[string]string{
-		"docs/closure-plans/HERMETIC-PLAN.json": `{
-  "contract_version": 1,
-  "act_id": "ACT-HERMETIC-V2-01",
-  "baseline": {"commit_oid": "` + subject + `", "tree_oid": "` + subject + `"},
-  "execution": {"mode": "serial_fail_fast"},
-  "checks": [],
-  "artifacts": [],
-  "policy": {
-    "require_clean_before": true,
-    "require_clean_after": true,
-    "forbid_tracked_full_digests": true,
-    "require_diff_check": false
-  }
-}
-`,
+		"docs/closure-plans/HERMETIC-PLAN.json": string(planBytes),
 	})
-	_ = subject
 	evidenceDir := t.TempDir()
 	manifestPath := filepath.Join(t.TempDir(), "manifest.json")
 	req := V2Request{
@@ -263,12 +262,21 @@ func TestV2RunnerRejectsDirtyCaller(t *testing.T) {
 func TestV2FrozenBytesAdversarial(t *testing.T) {
 	dir := initRepo(t)
 	subject := makeCommit(t, dir, "subject", map[string]string{"a.txt": "a"})
+	subjectTree := mustRunGit(t, dir, "rev-parse", subject+"^{tree}")
+	frozenBytes, err := BuildV2ValidPlanFixture("ACT-HERMETIC-FROZEN-01", subject, subjectTree)
+	if err != nil {
+		t.Fatalf("BuildV2ValidPlanFixture: %v", err)
+	}
 	freeze := makeCommit(t, dir, "freeze", map[string]string{
-		"docs/closure-plans/HERMETIC.json": `{"contract_version": 1, "act_id": "ACT-HERMETIC-FROZEN-01"}`,
+		"docs/closure-plans/HERMETIC.json": string(frozenBytes),
 	})
-	// Modify the disk plan to a different act_id AFTER F.
+	// Modify the disk plan to a different valid plan AFTER F.
+	diskBytes, err := BuildV2ValidPlanFixture("DISK_ACT", subject, subjectTree)
+	if err != nil {
+		t.Fatalf("BuildV2ValidPlanFixture(disk): %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(dir, "docs/closure-plans/HERMETIC.json"),
-		[]byte(`{"contract_version": 1, "act_id": "DISK_ACT"}`), 0o644); err != nil {
+		diskBytes, 0o644); err != nil {
 		t.Fatalf("overwrite plan: %v", err)
 	}
 	// Reset working tree so the dirty test above doesn't
