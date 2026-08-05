@@ -1,0 +1,190 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01",
+  "subject": {
+    "commit_oid": "20a5c6387655b7bff0236ea2becfed595c949ee0",
+    "tree_oid": "1ebf1e660019749b2a0a8177eba9b358d1d9237a"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev",
+    "binary_sha256": "59838de51b3725b4e326ed660aceaf20e6decc2bf286462f1ef10f40a9468e06",
+    "vcs_revision": "20a5c6387655b7bff0236ea2becfed595c949ee0",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "20a5c6387655b7bff0236ea2becfed595c949ee0",
+    "head_tree_oid": "1ebf1e660019749b2a0a8177eba9b358d1d9237a",
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "files_changed": [
+    {
+      "path": "docs/acts/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01.md",
+      "sha256": "8b8a70e1b00cb650e3388d20dc545bdbfb4e5c5f9aca265a8fdc92ac421cc696"
+    },
+    {
+      "path": "internal/factory/closure/v2_mac_canary_test.go",
+      "sha256": "483e50ed2639df7611d7b58b5a9f9e45505a4ee29fccaaad4c53e7f8b9632140"
+    },
+    {
+      "path": "cmd/leamas/factory_close_v2_mac_canary_test.go",
+      "sha256": "5a3fa802320cc09a67585cc47cf04f6df1d98fbd4098e6c14d5164362131ed6b"
+    },
+    {
+      "path": "docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01.md",
+      "sha256": "c87748573ee9ac8935ae5e1fa3c4d80503ce194c9ff1a9d9620b5f20e069a9ad"
+    }
+  ],
+  "checks": [
+    {
+      "check_id": "v2-mac-canary-full-runner-descendant-proof",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2MacCanaryFullRunnerDescendantProof",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-mac-canary-working-assertion-rejects-descendant-plan",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2MacCanaryWorkingAssertionRejectsDescendantPlan",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-mac-canary-no-caller-state-drift",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2MacCanaryNoCallerStateDrift",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-mac-canary-no-worktree-leak",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2MacCanaryNoWorktreeLeak",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "cli-v2-mac-canary-dogfood",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureCLIV2MacCanaryDogfood",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    }
+  ],
+  "dogfood": {
+    "command": "cd /tmp/leamas-mac-canary-dogfood/cwd && /home/chistyakov/Projects/leamas/bin/leamas factory close run-v2-authority --protocol-version 2 --plan-contract-version 1 --repository /tmp/leamas-mac-canary-dogfood/repo --subject 6037a3b9c1b162a1323981f3303e24a54941b03e --freeze e2b5a0e42a289d05a6e10168c6256a371f67d425 --plan-path docs/closure-plans/MAC-CANARY-DOGFOOD.json --evidence-directory /tmp/leamas-mac-canary-dogfood/evidence --manifest-output /tmp/leamas-mac-canary-dogfood/manifest.json",
+    "exit": 0,
+    "stdout_sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87",
+    "stderr_sha256": "59639d002d532247796ad28dc3cfcae6f099e45503e6bbda45ca91fd251504c7",
+    "manifest_sha256": "883a66b05bbef539a62fca91cf83da917415d9beab4b833ab409e86b80968916",
+    "binary_commit": "20a5c6387655b7bff0236ea2becfed595c949ee0",
+    "binary_sha256": "59838de51b3725b4e326ed660aceaf20e6decc2bf286462f1ef10f40a9468e06",
+    "binary_modified": false,
+    "subject_commit": "6037a3b9c1b162a1323981f3303e24a54941b03e",
+    "subject_tree": "299576640e00495c1f4c04aa44366bae62876de8",
+    "freeze_commit": "e2b5a0e42a289d05a6e10168c6256a371f67d425",
+    "freeze_tree": "d5071cb742fb4aac3885d54c2a44d8b617c90793",
+    "caller_head": "f6a28493779a23c0378e92d71bdd94efeafac389",
+    "execution_tree": "299576640e00495c1f4c04aa44366bae62876de8",
+    "plan_blob": "111a356b88f5669011640c1c42cfb53e7bae053d",
+    "plan_sha256": "cf3e6835982b80206eb577df5fa27d322abbb90b1161bc211e9430e13a0c8e82",
+    "caller_status_before": "",
+    "caller_status_after": "",
+    "worktree_registrations_before": 1,
+    "worktree_registrations_after": 1
+  },
+  "mac_handoff": {
+    "inspection_commands": [
+      "git -C <clinemm> cat-file -e 56fd526e1923f2546fa0aeb53a0dc6e7501e5061^{commit}",
+      "git -C <clinemm> cat-file -e 01822bf5c8b99e5a4b89a6761a713ec3603754b0^{commit}",
+      "git -C <clinemm> merge-base --is-ancestor 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 01822bf5c8b99e5a4b89a6761a713ec3603754b0",
+      "git -C <clinemm> ls-tree -r --name-only 01822bf5c8b99e5a4b89a6761a713ec3603754b0",
+      "git -C <clinemm> show 01822bf5c8b99e5a4b89a6761a713ec3603754b0:\"$P\""
+    ],
+    "run_command": "/home/chistyakov/Projects/leamas/bin/leamas factory close run-v2-authority --protocol-version 2 --plan-contract-version 1 --repository <clinemm> --subject 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 --freeze 01822bf5c8b99e5a4b89a6761a713ec3603754b0 --plan-path <P> --evidence-directory <outside-clinemm-evidence> --manifest-output <outside-clinemm-manifest.json>",
+    "binary_commit": "20a5c6387655b7bff0236ea2becfed595c949ee0",
+    "binary_sha256": "59838de51b3725b4e326ed660aceaf20e6decc2bf286462f1ef10f40a9468e06",
+    "handoff_note": "All inspection commands are non-mutating. The frozen plan path P is recovered from the ls-tree listing, never guessed. Evidence and manifest paths MUST live outside <clinemm>."
+  },
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "v2-mac-canary-tests.go-test",
+      "media_type": "text/plain; charset=utf-8",
+      "availability": "discarded",
+      "note": "Test stdout/stderr discarded; runner refuses to commit evidence to the source repository per ACT 5 closure protocol."
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [],
+  "unresolved_blockers": [
+    "v2 closure-commit verifier"
+  ],
+  "verdict": "pass"
+}
