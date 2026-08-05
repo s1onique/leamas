@@ -40,13 +40,13 @@ func TestThreeLayerTimeoutParity(t *testing.T) {
 		{"null", "null", true, false, false, false},
 		{"0", "0", true, false, false, false},
 		{"1", "1", true, true, true, true},
-		{"1.0", "1.0", true, true, true, false}, // runtime cannot parse 1.0
-		{"1.0", "1.0", true, true, true, false}, // runtime cannot parse 1.0
+		{"1.0", "1.0", true, true, true, false}, // structural stage rejects 1.0
+		{"1.0", "1.0", true, true, true, false}, // structural stage rejects 1.0
 		{"1.5", "1.5", true, false, false, false},
 		{"599", "599", true, true, true, true},
 		{"600", "600", true, true, true, true},
-		{"600.0", "600.0", true, true, true, false}, // runtime cannot parse 600.0
-		{"6e2", "6e2", true, true, true, false}, // runtime cannot parse 6e2
+		{"600.0", "600.0", true, true, true, false}, // structural stage rejects 600.0
+		{"6e2", "6e2", true, true, true, false}, // structural stage rejects 6e2
 		{"601", "601", true, false, false, false},
 		{"1e1000", "1e1000", true, false, false, false},
 		{"quoted", "\"60\"", true, false, false, false},
