@@ -56,6 +56,9 @@ internal/factory/closure/closure_protocol_v2_topology_test.go — classification
 internal/factory/closure/closure_protocol_v2_hermetic_test.go — full hermetic ClineMM-topology regression tests
 cmd/leamas/factory_close_v2_runner.go                          — new CLI: factory close run-v2-authority
 cmd/leamas/factory_close.go                                    — wires run-v2-authority subcommand
+docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.json
+docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.json
+docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.md
 ```
 
 ## What is closed
@@ -143,9 +146,17 @@ STATUS=PARTIAL
 
 INITIAL_HEAD=953bbea6f045ff300eea0a773b9e4da086fe71a6
 INITIAL_TREE=0dd3c7bd22cbffc6e3f04bf1722e4f5491baca3a
-FINAL_HEAD=<set by closure>
-FINAL_TREE=<set by closure>
+FINAL_HEAD=0181f2db42e1fe98641c03aaf9c3ccafb4a22006
+FINAL_TREE=d148d00d84a704e2a8b5926f8451897c03c78c0a
 WORKTREE_STATUS=clean
+SUBJECT_COMMIT=0e8444fd355ca383cc3e8c9b27c1f803799170f0
+SUBJECT_TREE=7ca0ba0b6e9300b1d1ef752fa38e684ef37badef
+FREEZE_COMMIT=594bdd229ab426ab39975cc0fcb864d60f6605c9
+CLOSURE_TAG=act/leamas-factory-closure-protocol-v2-runner-authority01
+MANIFEST_PATH=docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.json
+CLOSE_REPORT_PATH=docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.md
+PLAN_PATH=docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.json
+PLAN_SHA256=5cafede36842f12357032c99de9637338e71f0ae9cad75dd958bcae8747be65a
 
 V1_EXECUTION_TREE_AUTHORITY=F^{tree} (Closure Protocol v1 unchanged)
 V1_PLAN_BYTE_AUTHORITY=F:PATH (Closure Protocol v1 unchanged)
@@ -199,11 +210,27 @@ LOCAL_GATES=gofmt OK, go vet OK, go test ./internal/factory/closure/ OK, static 
 PRE_EXISTING_GATE_FINDINGS=forbidden-patterns pre-existing platform-specific build_ignored files; unrelated to this ACT
 
 BUILT_BINARY=bin/leamas
-BUILT_BINARY_SHA256=<recorded at close>
-BUILT_VERSION=<recorded at close>
-BUILT_VCS_REVISION=<set by closure>
+BUILT_BINARY_SHA256=dbe95943ef982fde068fdc7820b2786f2f2926763acbe4a5506ad6edbd8fe96a
+BUILT_VERSION=0.1.0+dev.0181f2db42e1.20260805T133754Z
+BUILT_VCS_REVISION=0181f2db42e1fe98641c03aaf9c3ccafb4a22006
 BUILT_VCS_MODIFIED=false
 
 UNRESOLVED_BLOCKERS=v2 closure-commit verifier (Phase 15); real ClineMM repository inspection (Phase 13); external dogfood (Phase 14)
 MAC_HANDOFF=this ACT is the runner needed to retry the ClineMM transaction from a Mac; the binary at bin/leamas (after this commit) can be installed and invoked via `leamas factory close run-v2-authority ...`
 ```
+
+## Closure
+
+The closure was executed through `leamas factory close run` followed by `verify` and `tag create`:
+
+```text
+Verdict=PASS
+Plan SHA-256=5cafede36842f12357032c99de9637338e71f0ae9cad75dd958bcae8747be65a
+Plan Blob OID=resolved from F:PLAN_PATH
+Subject Commit=0e8444fd355ca383cc3e8c9b27c1f803799170f0
+Subject Tree=7ca0ba0b6e9300b1d1ef752fa38e684ef37badef
+Freeze Commit=594bdd229ab426ab39975cc0fcb864d60f6605c9
+Closure Tag=act/leamas-factory-closure-protocol-v2-runner-authority01
+```
+
+PARTIAL status is preserved because the ClineMM real-repository inspection and the installed-style dogfood remain to be exercised from a Mac with the ClineMM checkout available.
