@@ -1,0 +1,142 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01",
+  "plan": {
+    "sha256": "5cafede36842f12357032c99de9637338e71f0ae9cad75dd958bcae8747be65a",
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "594bdd229ab426ab39975cc0fcb864d60f6605c9",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY01.json",
+    "plan_blob_oid": "5c6c68b7f0e7c7d65bea9d675d8f1b34d1c4ec39",
+    "plan_sha256": "5cafede36842f12357032c99de9637338e71f0ae9cad75dd958bcae8747be65a",
+    "subject_commit": "0e8444fd355ca383cc3e8c9b27c1f803799170f0"
+  },
+  "subject": {
+    "commit_oid": "0e8444fd355ca383cc3e8c9b27c1f803799170f0",
+    "tree_oid": "7ca0ba0b6e9300b1d1ef752fa38e684ef37badef"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev.1e95d5c520a7.20260805T133404Z",
+    "binary_sha256": "db3cde4d83a4dab57cb96a49934a53533d7b829218a7ec081631131edbdc2ec5",
+    "vcs_revision": "1e95d5c520a791b8d266bcfdc6b93bc75884bac0",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "tmp-v2-close",
+    "head_commit_oid": "0e8444fd355ca383cc3e8c9b27c1f803799170f0",
+    "head_tree_oid": "7ca0ba0b6e9300b1d1ef752fa38e684ef37badef",
+    "origin_main_commit_oid": "72397ce380693cc407ca8a4678a77f3607566dea",
+    "ahead_by": 5,
+    "behind_by": 0,
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "checks": [
+    {
+      "check_id": "v2-focused-tests",
+      "subject_tree_oid": "7ca0ba0b6e9300b1d1ef752fa38e684ef37badef",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-05T13:37:32.470017124Z",
+      "finished_at_utc": "2026-08-05T13:37:34.006113257Z",
+      "duration_ms": 1536,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "02be082cd3ec37ace0920096a159dd3b85628b0aedbc6bbb1986325bfc7bda0d",
+      "stdout_byte_count": 235,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 235,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-vet",
+      "subject_tree_oid": "7ca0ba0b6e9300b1d1ef752fa38e684ef37badef",
+      "argv": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-05T13:37:34.00900988Z",
+      "finished_at_utc": "2026-08-05T13:37:35.292827873Z",
+      "duration_ms": 1283,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    }
+  ],
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "v2-focused-tests.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "02be082cd3ec37ace0920096a159dd3b85628b0aedbc6bbb1986325bfc7bda0d",
+      "byte_count": 235,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-focused-tests.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-vet.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-vet.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "runner.diagnostics",
+      "media_type": "application/json",
+      "sha256": "b92a1c8072ed9569674075115a87755c9c6f56d2fd1b817383bc0ed2d7adf082",
+      "byte_count": 162,
+      "availability": "detached"
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [],
+  "verdict": "pass"
+}
