@@ -19,12 +19,15 @@ package closure
 // Working-directory and timeout_seconds presence rules align
 // the descriptor with the runtime validation that has always
 // required them for run-mode checks. The structural applicability
-// walker reports `required_property_missing` with the exact
-// property_name when the field is absent; the structural value
+// walker reports `forbidden_presence` with the exact property
+// name when a forbidden field is present; the structural value
 // constraints (minLength/pattern/minimum/maximum) reject empty,
-// invalid, or out-of-range values with `invalid_type` plus a
-// stable keyword.
+// invalid, or out-of-range values with stable, constraint-specific
+// codes that do not masquerade as invalid_type.
 func planContractV1ChecksField() planFieldDescriptor {
+	workingDirectoryMinLength := 1
+	timeoutMinimum := int64(1)
+	timeoutMaximum := int64(600)
 	return planFieldDescriptor{
 		JSONName:     "checks",
 		GoName:       "Checks",
@@ -101,10 +104,18 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindString,
 						Required:     false,
 						SemanticRule: "validateRepositoryRelativePath",
-						Description:  "Repository-relative working directory. Required when mode='run'; forbidden when mode='exclude'. Must be non-empty, must not be an absolute path, must not start with '..', and must be lexically clean.",
+						Description:  "Repository-relative working directory. Required when mode='run'; forbidden when mode='exclude'. Must be non-empty, not absolute, lexically clean.",
 						ExampleValue: ".",
-						MinLength:    1,
-						Pattern:      `^[^/]+(/[^/]+)*$`,
+						MinLength:    &workingDirectoryMinLength,
+						// Pattern is intentionally restricted to a
+						// portable subset that catches the most
+						// common violations (leading slash, empty
+						// segments, trailing slash). The remaining
+						// rules (parent traversal, lexical
+						// cleanliness, null bytes) are surfaced
+						// through the x-leamas-repository-relative-
+						// path extension and the semantic validator.
+						Pattern: `^[^/]+(/[^/]+)*$`,
 						ApplicabilityRules: []fieldApplicabilityRule{
 							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
@@ -112,6 +123,12 @@ func planContractV1ChecksField() planFieldDescriptor {
 						RejectedAliases: []string{
 							"cwd",
 							"dir",
+						},
+						PathPolicy: &planPathPolicy{
+							AllowDot:              true,
+							AllowParentSegments:   false,
+							RequireLexicallyClean: true,
+							Separator:             "/",
 						},
 					},
 					"timeout_seconds": {
@@ -122,8 +139,8 @@ func planContractV1ChecksField() planFieldDescriptor {
 						SemanticRule: "validateRunnableCheck(TimeoutSeconds)",
 						Description:  "Per-check timeout in seconds, inclusive bounds [1, 600]. Required when mode='run'; forbidden when mode='exclude'.",
 						ExampleValue: 60,
-						Minimum:      1,
-						Maximum:      600,
+						Minimum:      &timeoutMinimum,
+						Maximum:      &timeoutMaximum,
 						ApplicabilityRules: []fieldApplicabilityRule{
 							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},

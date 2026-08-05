@@ -17,8 +17,11 @@ import (
 // In addition to the JSON type/const/enum checks, it enforces the
 // descriptor's value-level constraints (MinLength, Pattern,
 // Minimum, Maximum) when those constraints are declared. The
-// diagnostics use stable JSON Schema keywords so consumers can
-// classify failures without parsing the message.
+// diagnostics use stable, constraint-specific codes
+// (value_below_min_length, pattern_mismatch, numeric_below_minimum,
+// numeric_above_maximum) so consumers can classify failures
+// without parsing the message or using the generic invalid_type
+// bucket.
 func validatePlanField(field planFieldDescriptor, path string, value any, parent planObjectDescriptor, _ map[string]any, contract planContractV1Descriptor) []PlanValidationError {
 	var diagnostics []PlanValidationError
 	if value == nil {
@@ -32,6 +35,7 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 			Keyword:       KeywordType,
 			Message:       "property \"" + field.JSONName + "\" must not be null",
 			RejectedValue: nil,
+			PropertyName:  field.JSONName,
 		})
 		return diagnostics
 	}
@@ -62,6 +66,7 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 				Keyword:       KeywordType,
 				Message:       "property \"" + field.JSONName + "\" must be a string, got " + typeNameOf(value),
 				RejectedValue: value,
+				PropertyName:  field.JSONName,
 			})
 		} else {
 			diagnostics = append(diagnostics, validateStringConstraints(field, path, strVal)...)
@@ -83,8 +88,6 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 			if field.ConstantValue != nil {
 				if cv, ok := field.ConstantValue.(int); ok && intVal != cv {
 					code := PlanCodeInvalidEnum
-					// Use the documented "unsupported_contract_version"
-					// code when the field is /contract_version.
 					if field.JSONName == "contract_version" {
 						code = PlanCodeUnsupportedContractVersion
 					}
@@ -109,6 +112,7 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 				Keyword:       KeywordType,
 				Message:       "property \"" + field.JSONName + "\" must be a boolean, got " + typeNameOf(value),
 				RejectedValue: value,
+				PropertyName:  field.JSONName,
 			})
 		} else if field.ConstantValue != nil {
 			if want, ok := field.ConstantValue.(bool); ok && value.(bool) != want {
@@ -133,6 +137,7 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 				Keyword:       KeywordType,
 				Message:       "property \"" + field.JSONName + "\" must be a string, got " + typeNameOf(value),
 				RejectedValue: value,
+				PropertyName:  field.JSONName,
 			})
 		} else if !stringInSlice(field.EnumAuthority, str) {
 			acceptedCopy := append([]string(nil), field.EnumAuthority...)
@@ -152,31 +157,35 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 }
 
 // validateStringConstraints enforces the descriptor's string
-// value-level constraints (MinLength, Pattern). The function returns
-// no diagnostics when the descriptor declares no constraints; a
-// broken Pattern is treated as a descriptor defect and emits a
-// single `invalid_type` diagnostic with KeywordPattern so consumers
-// can still classify the failure structurally.
+// value-level constraints (MinLength, Pattern). Diagnostics use the
+// constraint-specific codes value_below_min_length and
+// pattern_mismatch so a source-free consumer can distinguish
+// length from pattern failures without parsing the message.
 func validateStringConstraints(field planFieldDescriptor, path, value string) []PlanValidationError {
 	var diagnostics []PlanValidationError
-	if field.MinLength > 0 && len(value) < field.MinLength {
+	if field.MinLength != nil && len(value) < *field.MinLength {
 		diagnostics = append(diagnostics, PlanValidationError{
 			InstancePath:  path,
 			SchemaPath:    path,
-			Code:          PlanCodeInvalidType,
+			Code:          PlanCodeValueBelowMinLength,
 			Keyword:       KeywordMinLength,
-			Message:       "property \"" + field.JSONName + "\" length " + itoa(len(value)) + " is below minLength " + itoa(field.MinLength),
+			Message:       "property \"" + field.JSONName + "\" length " + itoa(len(value)) + " is below minLength " + itoa(*field.MinLength),
 			RejectedValue: value,
 			PropertyName:  field.JSONName,
+			AcceptedValues: []string{
+				"length >= " + itoa(*field.MinLength),
+			},
 		})
-	}
-	if field.Pattern != "" {
+		// Pattern is only checked when the length precondition
+		// already passes; otherwise a value that fails both checks
+		// produces two stacked diagnostics for the same field.
+	} else if field.Pattern != "" {
 		re, err := regexp.Compile(field.Pattern)
 		if err != nil {
 			diagnostics = append(diagnostics, PlanValidationError{
 				InstancePath:  path,
 				SchemaPath:    path,
-				Code:          PlanCodeInvalidType,
+				Code:          PlanCodeValuePatternMismatch,
 				Keyword:       KeywordPattern,
 				Message:       "property \"" + field.JSONName + "\" descriptor pattern is unparsable",
 				RejectedValue: value,
@@ -186,7 +195,7 @@ func validateStringConstraints(field planFieldDescriptor, path, value string) []
 			diagnostics = append(diagnostics, PlanValidationError{
 				InstancePath:  path,
 				SchemaPath:    path,
-				Code:          PlanCodeInvalidType,
+				Code:          PlanCodeValuePatternMismatch,
 				Keyword:       KeywordPattern,
 				Message:       "property \"" + field.JSONName + "\" value does not match pattern",
 				RejectedValue: value,
@@ -198,46 +207,60 @@ func validateStringConstraints(field planFieldDescriptor, path, value string) []
 }
 
 // validateIntegerConstraints enforces the descriptor's integer
-// value-level constraints (Minimum, Maximum). A diagnostic is
-// emitted whenever the supplied value falls outside the inclusive
-// declared range; the rejected_value carries the exact integer
-// the producer supplied so consumers can correct it.
+// value-level constraints (Minimum, Maximum). Diagnostics use the
+// constraint-specific codes numeric_below_minimum and
+// numeric_above_maximum so a correctly typed integer that falls
+// outside the inclusive bounds is not misclassified as
+// invalid_type. The exact supplied integer is preserved in
+// rejected_value; the inclusive bounds are exposed via
+// accepted_values in the canonical "[min, max]" form so a
+// source-free consumer can correct the input.
 func validateIntegerConstraints(field planFieldDescriptor, path string, value int) []PlanValidationError {
 	var diagnostics []PlanValidationError
-	if field.Minimum != 0 && int64(value) < field.Minimum {
+	if field.Minimum != nil && int64(value) < *field.Minimum {
 		diagnostics = append(diagnostics, PlanValidationError{
-			InstancePath:  path,
-			SchemaPath:    path,
-			Code:          PlanCodeInvalidType,
-			Keyword:       KeywordMinimum,
-			Message:       "property \"" + field.JSONName + "\" value " + itoa(value) + " is below minimum " + itoa64(field.Minimum),
-			RejectedValue: value,
-			PropertyName:  field.JSONName,
-			AcceptedValues: []string{
-				"[" + itoa64(field.Minimum) + ", " + itoa64(field.Maximum) + "]",
-			},
+			InstancePath:   path,
+			SchemaPath:     path,
+			Code:           PlanCodeNumericBelowMinimum,
+			Keyword:        KeywordMinimum,
+			Message:        "property \"" + field.JSONName + "\" value " + itoa(value) + " is below minimum " + itoa64(*field.Minimum),
+			RejectedValue:  value,
+			PropertyName:   field.JSONName,
+			AcceptedValues: integerBoundRange(field),
 		})
 		return diagnostics
 	}
-	if field.Maximum != 0 && int64(value) > field.Maximum {
+	if field.Maximum != nil && int64(value) > *field.Maximum {
 		diagnostics = append(diagnostics, PlanValidationError{
-			InstancePath:  path,
-			SchemaPath:    path,
-			Code:          PlanCodeInvalidType,
-			Keyword:       KeywordMaximum,
-			Message:       "property \"" + field.JSONName + "\" value " + itoa(value) + " exceeds maximum " + itoa64(field.Maximum),
-			RejectedValue: value,
-			PropertyName:  field.JSONName,
-			AcceptedValues: []string{
-				"[" + itoa64(field.Minimum) + ", " + itoa64(field.Maximum) + "]",
-			},
+			InstancePath:   path,
+			SchemaPath:     path,
+			Code:           PlanCodeNumericAboveMaximum,
+			Keyword:        KeywordMaximum,
+			Message:        "property \"" + field.JSONName + "\" value " + itoa(value) + " exceeds maximum " + itoa64(*field.Maximum),
+			RejectedValue:  value,
+			PropertyName:   field.JSONName,
+			AcceptedValues: integerBoundRange(field),
 		})
 	}
 	return diagnostics
 }
 
-// itoa64 renders an int64 as a base-10 string. The helper keeps
-// the integer-bound diagnostic messages free of strconv imports.
+// integerBoundRange renders the inclusive [min, max] bound range
+// for integer diagnostics. Missing bounds render as "*" so the
+// canonical encoding is unambiguous on both sides.
+func integerBoundRange(field planFieldDescriptor) []string {
+	minStr := "*"
+	if field.Minimum != nil {
+		minStr = itoa64(*field.Minimum)
+	}
+	maxStr := "*"
+	if field.Maximum != nil {
+		maxStr = itoa64(*field.Maximum)
+	}
+	return []string{"[" + minStr + ", " + maxStr + "]"}
+}
+
+// itoa64 renders an int64 as a base-10 string.
 func itoa64(v int64) string {
 	if v == 0 {
 		return "0"

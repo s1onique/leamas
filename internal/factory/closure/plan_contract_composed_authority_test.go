@@ -189,12 +189,12 @@ func TestApplicabilityRunReasonForbidden(t *testing.T) {
 	}
 	found := false
 	for _, e := range result.Errors {
-		if e.Code == PlanCodeSemanticConstraintFailed && e.InstancePath == "/checks/0/reason" {
+		if e.Code == PlanCodeForbiddenPresence && e.InstancePath == "/checks/0/reason" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("expected semantic_constraint_failed at /checks/0/reason; got %v", result.Errors)
+		t.Fatalf("expected forbidden_presence at /checks/0/reason; got %v", result.Errors)
 	}
 }
 
@@ -221,12 +221,12 @@ func TestApplicabilityExcludeRunFieldsForbidden(t *testing.T) {
 	}
 	found := false
 	for _, e := range result.Errors {
-		if e.Code == PlanCodeSemanticConstraintFailed && e.InstancePath == "/checks/0/argv" {
+		if e.Code == PlanCodeForbiddenPresence && e.InstancePath == "/checks/0/argv" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("expected semantic_constraint_failed at /checks/0/argv; got %v", result.Errors)
+		t.Fatalf("expected forbidden_presence at /checks/0/argv; got %v", result.Errors)
 	}
 }
 
@@ -257,12 +257,12 @@ func TestApplicabilityExcludeEmptyStringForbidden(t *testing.T) {
 				// structural validator's minItems check on argv fires
 				// before the applicability walker, so we accept either
 				// invalid_type (minItems) or semantic_constraint_failed.
-				if e.Code == PlanCodeSemanticConstraintFailed || e.Code == PlanCodeInvalidType {
+				if e.Code == PlanCodeForbiddenPresence || e.Code == PlanCodeSemanticConstraintFailed || e.Code == PlanCodeInvalidType {
 					found = true
 				}
 			}
 			if !found {
-				t.Fatalf("expected semantic_constraint_failed or invalid_type diagnostic; got %v", result.Errors)
+				t.Fatalf("expected forbidden_presence, semantic_constraint_failed, or invalid_type diagnostic; got %v", result.Errors)
 			}
 		})
 	}

@@ -6,35 +6,9 @@ import (
 	"strings"
 )
 
-// PlanValidationCode is the stable, machine-readable diagnostic code
-// emitted by the structural validator. The closed set is documented
-// in ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01 and
-// ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01-CORRECTION01-
-// STRUCTURAL-PARITY-CLOSURE01.
-type PlanValidationCode string
-
-const (
-	PlanCodeInvalidJSON                PlanValidationCode = "invalid_json"
-	PlanCodeUnsupportedContractVersion PlanValidationCode = "unsupported_contract_version"
-	PlanCodeRequiredPropertyMissing    PlanValidationCode = "required_property_missing"
-	PlanCodeInvalidType                PlanValidationCode = "invalid_type"
-	PlanCodeInvalidEnum                PlanValidationCode = "invalid_enum"
-	PlanCodeUnknownProperty            PlanValidationCode = "unknown_property"
-	PlanCodeDuplicateProperty          PlanValidationCode = "duplicate_property"
-	PlanCodeSemanticConstraintFailed   PlanValidationCode = "semantic_constraint_failed"
-	// PlanCodeDuplicateApplicabilityRule is the stable code
-	// raised when a descriptor field carries two or more
-	// ApplicabilityRule entries that share (Sibling, Value).
-	// Two rules for the same condition are ambiguous: a
-	// descriptor inventory must declare at most one rule per
-	// (Sibling, Value) pair so the walker and the example
-	// generator agree on the contract.
-	PlanCodeDuplicateApplicabilityRule PlanValidationCode = "duplicate_applicability_rule"
-)
-
-// PlanValidationKeyword and its closed constant set live in
-// plan_contract_validation_keywords.go so this file stays under the
-// LLM-friendly 400-line threshold.
+// PlanValidationCode and PlanValidationKeyword live in
+// plan_contract_validation_keywords.go so this file stays under
+// the LLM-friendly 400-line threshold.
 
 // PlanValidationError is a single structured diagnostic. The struct
 // is JSON-marshallable so future CLI flags can render it verbatim.
@@ -44,9 +18,9 @@ type PlanValidationError struct {
 	Code           PlanValidationCode    `json:"code"`
 	Keyword        PlanValidationKeyword `json:"keyword"`
 	Message        string                `json:"message"`
-	RejectedValue  any                   `json:"rejected_value,omitempty"`
-	AcceptedValues []string              `json:"accepted_values,omitempty"`
-	PropertyName   string                `json:"property_name,omitempty"`
+	RejectedValue  any                   `json:"rejected_value"`
+	AcceptedValues []string              `json:"accepted_values"`
+	PropertyName   string                `json:"property_name"`
 }
 
 // PlanValidationResult is the structured outcome of a single
@@ -112,9 +86,16 @@ func validatePlanStructuralFromRootWithObserver(root any, observer compositionOb
 	contract := planContractV1()
 	diagnostics := validatePlanObject(contract.Root, root, contract, "")
 	result.ContractVersion = recoverContractVersion(root)
-	if len(diagnostics) == 0 {
-		diagnostics = append(diagnostics, ValidateModeDependentApplicability(root, contract)...)
-	}
+	// Always run the applicability walker so the
+	// required_property_missing and forbidden_presence
+	// diagnostics fire independently of structural failures.
+	// Post-process the structural stream so a forbidden field is
+	// always reported with the deterministic forbidden_presence
+	// classification, regardless of whether the supplied value
+	// also independently violates a value constraint.
+	applicability := ValidateModeDependentApplicability(root, contract)
+	diagnostics = filterStructuralByApplicability(diagnostics, applicability)
+	diagnostics = append(diagnostics, applicability...)
 	if len(diagnostics) > 0 {
 		sortDiagnostics(diagnostics)
 		result.Errors = diagnostics

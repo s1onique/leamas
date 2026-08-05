@@ -123,8 +123,8 @@ func TestApplicabilityAuthorityForbiddenRuleUnderMatchingMode(t *testing.T) {
 		},
 	}
 	diags := ValidateModeDependentApplicability(root, contract)
-	if !hasDiagnosticAt(diags, "/checks/0/argv", PlanCodeSemanticConstraintFailed) {
-		t.Fatalf("expected semantic_constraint_failed at /checks/0/argv; got %v", diags)
+	if !hasDiagnosticAt(diags, "/checks/0/argv", PlanCodeForbiddenPresence) {
+		t.Fatalf("expected forbidden_presence or semantic_constraint_failed at /checks/0/argv; got %v", diags)
 	}
 }
 
@@ -174,8 +174,8 @@ func TestApplicabilityAuthorityMultipleModeRules(t *testing.T) {
 		},
 	}
 	excludeDiags := ValidateModeDependentApplicability(excludeRoot, contract)
-	if !hasDiagnosticAt(excludeDiags, "/checks/0/argv", PlanCodeSemanticConstraintFailed) {
-		t.Fatalf("mode=exclude, argv present must emit semantic_constraint_failed; got %v", excludeDiags)
+	if !hasDiagnosticAt(excludeDiags, "/checks/0/argv", PlanCodeForbiddenPresence) {
+		t.Fatalf("mode=exclude, argv present must emit forbidden_presence; got %v", excludeDiags)
 	}
 }
 
@@ -277,8 +277,8 @@ func TestApplicabilityRuleIdentityDistinctRulesAccepted(t *testing.T) {
 		},
 	}
 	excludeDiags := ValidateModeDependentApplicability(excludeRoot, contract)
-	if !hasDiagnosticAt(excludeDiags, "/checks/0/argv", PlanCodeSemanticConstraintFailed) {
-		t.Fatalf("mode=exclude, argv present must emit semantic_constraint_failed; got %v", excludeDiags)
+	if !hasDiagnosticAt(excludeDiags, "/checks/0/argv", PlanCodeForbiddenPresence) {
+		t.Fatalf("mode=exclude, argv present must emit forbidden_presence; got %v", excludeDiags)
 	}
 }
 

@@ -307,8 +307,8 @@ func buildSourceMatrixCasesPart2() []testCase {
 			wantDiags: []wantDiag{
 				{
 					InstancePath:  "/checks/0/working_directory",
-					Code:          PlanCodeSemanticConstraintFailed,
-					Keyword:       KeywordType,
+					Code:          PlanCodePathPolicyViolation,
+					Keyword:       KeywordPathPolicy,
 					MessageSubstr: "must be a non-empty repository-relative path",
 				},
 			},
@@ -320,8 +320,8 @@ func buildSourceMatrixCasesPart2() []testCase {
 			wantDiags: []wantDiag{
 				{
 					InstancePath:  "/checks/0/working_directory",
-					Code:          PlanCodeSemanticConstraintFailed,
-					Keyword:       KeywordType,
+					Code:          PlanCodePathPolicyViolation,
+					Keyword:       KeywordPathPolicy,
 					MessageSubstr: "must be a non-empty repository-relative path",
 				},
 			},
@@ -333,9 +333,9 @@ func buildSourceMatrixCasesPart2() []testCase {
 			wantDiags: []wantDiag{
 				{
 					InstancePath:  "/checks/0/working_directory",
-					Code:          PlanCodeSemanticConstraintFailed,
-					Keyword:       KeywordType,
-					MessageSubstr: "must be a non-empty repository-relative path",
+					Code:          PlanCodePathPolicyViolation,
+					Keyword:       KeywordPathPolicy,
+					MessageSubstr: "must not escape the repository",
 				},
 			},
 		},
@@ -346,8 +346,8 @@ func buildSourceMatrixCasesPart2() []testCase {
 			wantDiags: []wantDiag{
 				{
 					InstancePath:  "/checks/0/working_directory",
-					Code:          PlanCodeSemanticConstraintFailed,
-					Keyword:       KeywordType,
+					Code:          PlanCodePathPolicyViolation,
+					Keyword:       KeywordPathPolicy,
 					MessageSubstr: "must be a non-empty repository-relative path",
 				},
 			},

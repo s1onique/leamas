@@ -160,10 +160,11 @@ type planFieldDescriptor struct {
 	RejectedAliases []string
 
 	// MinLength is the JSON Schema minLength constraint for
-	// string-typed fields. Zero means "no constraint". The
-	// structural validator emits a KeywordMinLength diagnostic
-	// when the supplied string is shorter than MinLength.
-	MinLength int
+	// string-typed fields. Nil means "no constraint". The
+	// structural validator emits a value_below_min_length
+	// diagnostic with KeywordMinLength when the supplied string
+	// is shorter than *MinLength.
+	MinLength *int
 
 	// Pattern is the JSON Schema pattern constraint for
 	// string-typed fields. Empty means "no constraint". The
@@ -173,15 +174,43 @@ type planFieldDescriptor struct {
 	Pattern string
 
 	// Minimum is the JSON Schema minimum constraint for
-	// integer-typed fields. Zero means "no constraint" so 0 is
-	// always a valid minimum when the field is otherwise
-	// permitted to hold zero. Use a non-zero sentinel value
-	// (or set Maximum explicitly) to make 0 rejectable.
-	Minimum int64
+	// integer-typed fields. Nil means "no constraint". The
+	// descriptor uses an explicit pointer so a legitimate bound
+	// of zero (Minimum=0) is representable; a zero value with
+	// the nil pointer is treated as absent.
+	Minimum *int64
 
 	// Maximum is the JSON Schema maximum constraint for
-	// integer-typed fields. Zero means "no constraint".
-	Maximum int64
+	// integer-typed fields. Nil means "no constraint".
+	Maximum *int64
+
+	// PathPolicy declares the repository-relative path rules the
+	// runtime enforces for string-typed fields. A non-nil value
+	// makes the rules machine-discoverable through a Leamas
+	// extension; the JSON Schema also emits the path-policy
+	// extension alongside the standard minLength/pattern.
+	PathPolicy *planPathPolicy
+}
+
+// planPathPolicy declares the repository-relative path policy a
+// descriptor field carries. The rules live in the Leamas extension
+// namespace so a source-free consumer can detect every canonical
+// rule without parsing prose. The same struct drives both the
+// generated x-leamas-repository-relative-path JSON Schema extension
+// and the runtime semantic path validator.
+type planPathPolicy struct {
+	// AllowDot, when true, accepts the literal "." path.
+	AllowDot bool
+	// AllowParentSegments, when true, accepts parent-traversal
+	// segments like ".." or "../foo".
+	AllowParentSegments bool
+	// RequireLexicallyClean, when true, requires the supplied
+	// path to equal filepath.Clean(path).
+	RequireLexicallyClean bool
+	// Separator is the path separator the policy assumes. The
+	// Leamas convention is "/" (forward slash) on every
+	// supported platform.
+	Separator string
 }
 
 // planFieldKind enumerates the JSON type categories.

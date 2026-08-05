@@ -65,16 +65,22 @@ func errInvalidCheckArgvElement(checkIndex, argIndex int) *PlanSemanticError {
 	)
 }
 
-// errInvalidCheckWorkingDirectory returns a typed error for invalid working directory.
-func errInvalidCheckWorkingDirectory(index int) *PlanSemanticError {
+// errInvalidCheckWorkingDirectory returns a typed error for a
+// working-directory value that fails the runtime path-policy
+// (parent traversal, lexical cleanliness, etc.). The diagnostic
+// uses the stable path_policy_violation code and the
+// x-leamas-path-policy keyword so a source-free consumer can
+// distinguish a runtime path-policy failure from a generic
+// semantic_constraint_failed.
+func errInvalidCheckWorkingDirectory(index int, cause error) *PlanSemanticError {
 	path := jsonPointerCheckID(index, "working_directory")
-	cause := fmt.Errorf("checks[%d].working_directory: must be a non-empty repository-relative path", index)
+	msg := fmt.Sprintf("checks[%d].working_directory: %s", index, cause.Error())
 	return newSemanticError(
 		path,
-		PlanCodeSemanticConstraintFailed,
-		KeywordType,
-		fmt.Sprintf("checks[%d].working_directory: must be a non-empty repository-relative path", index),
-		cause,
+		PlanCodePathPolicyViolation,
+		KeywordPathPolicy,
+		msg,
+		fmt.Errorf("checks[%d].working_directory: %w", index, cause),
 	)
 }
 

@@ -9,11 +9,7 @@ package closure
 // ACT-LEAMAS-FACTORY-CLOSE-PLAN-CONTRACT-AUTHORITY01 requires.
 
 // ComposedPlanValidationResult is the JSON-ready structured stage
-// model the future CLI consumes. The result has four explicit
-// stages (structural / decode / semantic / verdict) with json
-// tags. Each diagnostic array is initialised non-nil so success
-// JSON serialises as [] not null. The legacy exported `Semantic
-// error` field is gone.
+// model the future CLI consumes.
 type ComposedPlanValidationResult struct {
 	Structural     PlanValidationResult  `json:"structural"`
 	Decoded        bool                  `json:"decoded"`
@@ -23,39 +19,16 @@ type ComposedPlanValidationResult struct {
 	Valid          bool                  `json:"valid"`
 }
 
-// composedValidationDeps is the invocation-local dependency bundle
-// the composed pipeline routes through. Production binds
-// DecodeTyped to decodeTypedPlanWithObserver; tests inject a
-// sentinel decoder to exercise typed-stage failure paths. The
-// struct is intentionally narrow: only the typed decode step is
-// parameterised because the structural parse and semantic
-// validation paths are not separable without changing their
-// contract.
-//
-// A nil DecodeTyped is treated as a closed-path invariant:
-// the pipeline emits a single deterministic decode-stage
-// diagnostic and never falls back to the production decoder.
-// The fail-closed contract means a malformed dependency bundle
-// cannot silently substitute the real typed decoder.
 type composedValidationDeps struct {
 	DecodeTyped func(root any, observer compositionObserver) (Plan, error)
 }
 
-// defaultComposedValidationDeps returns the production binding
-// for composedValidationDeps. The single binding is a package-
-// local constant function; there is no mutable global state.
 func defaultComposedValidationDeps() composedValidationDeps {
 	return composedValidationDeps{
 		DecodeTyped: decodeTypedPlanWithObserver,
 	}
 }
 
-// typedDecodeMissingDependencyError is the deterministic sentinel
-// raised when a caller passes a composedValidationDeps bundle
-// without a DecodeTyped binding. Production always supplies the
-// canonical binding via defaultComposedValidationDeps; the error
-// is the only path through which a missing-binding diagnostic is
-// emitted.
 type typedDecodeMissingDependencyError struct{}
 
 func (typedDecodeMissingDependencyError) Error() string {
@@ -64,37 +37,10 @@ func (typedDecodeMissingDependencyError) Error() string {
 
 var errTypedDecodeMissingDependency typedDecodeMissingDependencyError
 
-// validatePlanComposedWithObserver is the production entry point
-// that owns the composed pipeline using the default dependency
-// bundle:
-//
-//  1. Bounded single parse via parseBoundedClosurePlanDocument
-//     (one syntactic authority; MaxPlanBytes cap; trailing
-//     rejection; duplicate-key rejection).
-//  2. Structural + applicability validation via
-//     validatePlanStructuralFromRootWithObserver.
-//  3. Typed decode via the supplied deps.DecodeTyped binding.
-//  4. Semantic validation via ValidatePlan (called at most once).
-//
-// The observer is invocation-local: production passes
-// noopCompositionObserver{}; tests pass a per-assertion counting
-// observer. There is no package-global mutable counter.
 func validatePlanComposedWithObserver(data []byte, observer compositionObserver) ComposedPlanValidationResult {
 	return validatePlanComposedWithObserverAndDeps(data, observer, defaultComposedValidationDeps())
 }
 
-// validatePlanComposedWithObserverAndDeps is the dep-injection
-// entry point tests use to drive the typed decode stage with a
-// sentinel decoder. Production callers go through
-// validatePlanComposedWithObserver (which uses the default deps).
-// The dependency bundle is invocation-local; no package-global
-// mutable state is shared between calls.
-//
-// A nil deps.DecodeTyped closes the typed-decode path
-// deterministically: the pipeline emits a single decode-stage
-// diagnostic whose message is the closed-path invariant and
-// short-circuits before semantic validation. The pipeline
-// never falls back to the production decoder.
 func validatePlanComposedWithObserverAndDeps(data []byte, observer compositionObserver, deps composedValidationDeps) ComposedPlanValidationResult {
 	result := ComposedPlanValidationResult{
 		Structural:     PlanValidationResult{Errors: []PlanValidationError{}},
@@ -146,21 +92,10 @@ func validatePlanComposedWithObserverAndDeps(data []byte, observer compositionOb
 	return result
 }
 
-// ValidatePlanComposed is the public single internal entry point
-// the future CLI invokes. It uses the noop observer so production
-// has no mutable composition state.
 func ValidatePlanComposed(data []byte) ComposedPlanValidationResult {
 	return validatePlanComposedWithObserver(data, noopCompositionObserver{})
 }
 
-// validatePlanStructuralAndSemanticWith is the dep-aware
-// convenience wrapper that runs the composed pipeline and
-// surfaces the diagnostic of the actual failing stage. Stage
-// precedence: structural -> typed -> semantic. It never returns
-// the generic "semantic validation failed" for a structural or
-// typed-decode failure. Production
-// ValidatePlanStructuralAndSemantic delegates to this function
-// using defaultComposedValidationDeps.
 func validatePlanStructuralAndSemanticWith(data []byte, observer compositionObserver, deps composedValidationDeps) (PlanValidationResult, error) {
 	result := validatePlanComposedWithObserverAndDeps(data, observer, deps)
 	if !result.Structural.Valid {
@@ -175,71 +110,37 @@ func validatePlanStructuralAndSemanticWith(data []byte, observer compositionObse
 	return result.Structural, nil
 }
 
-// ValidatePlanStructuralAndSemantic is a convenience wrapper
-// that runs the composed pipeline and surfaces the diagnostic of
-// the actual failing stage. Stage precedence: structural -> typed
-// -> semantic. It never returns the generic "semantic validation
-// failed" for a structural or typed-decode failure.
 func ValidatePlanStructuralAndSemantic(data []byte) (PlanValidationResult, error) {
 	return validatePlanStructuralAndSemanticWith(data, noopCompositionObserver{}, defaultComposedValidationDeps())
 }
 
-// ValidateModeDependentApplicability walks every check item
-// and consults the descriptor's ApplicabilityRules for each
-// field. The walker iterates the DESCRIPTOR's fields (not only the
-// JSON members present in the document) so it can detect both
+// ValidateModeDependentApplicability walks every check item and
+// consults the descriptor's ApplicabilityRules for each field. The
+// walker iterates the DESCRIPTOR's fields (not only the JSON
+// members present in the document) so it can detect both
 // missing-required and present-forbidden conditions
 // deterministically.
 //
-// The walker first runs the descriptor-level applicability rule
-// identity validator so a field that carries two ApplicabilityRule
-// entries sharing (Sibling, Value) cannot silently produce
-// ambiguous diagnostics. The validator emits one duplicate
-// diagnostic per offending rule and the walker then skips that
-// field's per-check processing entirely; the field is treated as
-// a closed-path until the descriptor is repaired.
+// Diagnostic taxonomy:
 //
-// Presence semantics are key-existence only. A forbidden field
-// is rejected whenever the JSON key is present at all (the value
-// may be empty, null, an empty string, or a zero-length
-// collection).
-//
-// Diagnostics:
-//
-//	duplicate applicability rule (descriptor level):
-//	  duplicate_applicability_rule at the field path
-//
-//	missing required under sibling:
+//	required under sibling:
 //	  required_property_missing at the exact instance path
+//	forbidden under sibling:
+//	  forbidden_presence at the exact instance path
 //
-//	present forbidden under sibling:
-//	  semantic_constraint_failed at the exact instance path
-//
-// The walker runs as part of ValidatePlanStructural AFTER ordinary
-// structural shape validation succeeds (so a malformed check array
-// never triggers applicability noise).
+// The walker emits forbidden_presence regardless of the supplied
+// value so a forbidden field is reported consistently. The
+// structural pipeline (validatePlanStructuralFromRootWithObserver)
+// post-processes the diagnostic stream to drop any structural
+// value-constraint diagnostics for forbidden fields; the
+// applicability classification always wins for forbidden fields.
 func ValidateModeDependentApplicability(root any, contract planContractV1Descriptor) []PlanValidationError {
 	return validateModeDependentApplicabilityWithObserver(root, contract, noopDescriptorValidationObserver{})
 }
 
-// validateModeDependentApplicabilityWithObserver is the
-// invocation-local entry point that owns the descriptor
-// applicability validator and the per-check walker. The
-// observer receives the validator's diagnostic stream so a
-// counting observer can prove the validator runs exactly once
-// per applicability invocation. The walker skips per-check
-// processing for any field whose descriptor path is in
-// duplicatePaths so the duplicate_applicability_rule diagnostic
-// is the only signal the field emits.
 func validateModeDependentApplicabilityWithObserver(root any, contract planContractV1Descriptor, observer descriptorValidationObserver) []PlanValidationError {
 	identityDiagnostics := validateDescriptorApplicabilityIdentity(contract)
-	// Derive suppression BEFORE invoking the observer so the
-	// observer cannot change which fields the walker processes.
 	duplicatePaths := duplicateApplicabilityFieldPaths(identityDiagnostics)
-	// Pass a defensive copy of the diagnostics stream to the
-	// observer. The observer receives an immutable snapshot so
-	// it cannot mutate the canonical diagnostics the walker is
-	// about to surface to its caller.
 	snapshot := make([]PlanValidationError, len(identityDiagnostics))
 	copy(snapshot, identityDiagnostics)
 	observer.DescriptorIdentityValidated(snapshot)
@@ -272,12 +173,6 @@ func validateModeDependentApplicabilityWithObserver(root any, contract planContr
 		}
 		for fieldName, childField := range checksField.ItemDescriptor.Children.Fields {
 			fieldPath := "/checks/" + itoa(index) + "/" + fieldName
-			// The duplicate diagnostic's InstancePath is the
-			// descriptor field path (/checks/<fieldName>);
-			// the walker's runtime field path includes the
-			// per-item index. Suppress when the descriptor
-			// field path is in the duplicate set so the two
-			// keys stay aligned.
 			descriptorFieldPath := "/checks/" + fieldName
 			if _, suppressed := duplicatePaths[descriptorFieldPath]; suppressed {
 				continue
@@ -311,7 +206,7 @@ func validateModeDependentApplicabilityWithObserver(root any, contract planContr
 						diagnostics = append(diagnostics, PlanValidationError{
 							InstancePath:  fieldPath,
 							SchemaPath:    fieldPath,
-							Code:          PlanCodeSemanticConstraintFailed,
+							Code:          PlanCodeForbiddenPresence,
 							Keyword:       KeywordIfThenElse,
 							Message:       "property \"" + fieldName + "\" is forbidden when mode=\"" + modeStr + "\"",
 							PropertyName:  fieldName,
@@ -326,17 +221,11 @@ func validateModeDependentApplicabilityWithObserver(root any, contract planContr
 }
 
 // applicabilityRulesFor returns the descriptor's authoritative
-// rule list for a field. The ApplicabilityRules slice is the sole
-// authority.
+// rule list for a field.
 func applicabilityRulesFor(field planFieldDescriptor) []fieldApplicabilityRule {
 	return field.ApplicabilityRules
 }
 
-// applicabilityPresenceForMode resolves the presence rule for a
-// given field under a specific mode value. The canonical example
-// generator uses this helper to decide whether to emit a field in
-// the run-mode fixture. The default is PresenceOptional so
-// the helper is total.
 func applicabilityPresenceForMode(field planFieldDescriptor, mode string) PresenceRule {
 	for _, rule := range field.ApplicabilityRules {
 		if rule.Sibling == "mode" && rule.Value == mode {
@@ -344,4 +233,39 @@ func applicabilityPresenceForMode(field planFieldDescriptor, mode string) Presen
 		}
 	}
 	return PresenceOptional
+}
+
+// filterStructuralByApplicability drops structural diagnostics for
+// any (instance_path, property_name) pair that the applicability
+// walker classified as forbidden_presence. The applicability
+// classification wins so a forbidden field reports the same
+// deterministic category regardless of the supplied value.
+//
+// The function is total: when the applicability stream is empty or
+// carries no forbidden_presence codes, the structural stream is
+// returned unchanged.
+func filterStructuralByApplicability(structural []PlanValidationError, applicability []PlanValidationError) []PlanValidationError {
+	if len(applicability) == 0 || len(structural) == 0 {
+		return structural
+	}
+	forbidden := make(map[string]struct{}, len(applicability))
+	for _, d := range applicability {
+		if d.Code != PlanCodeForbiddenPresence {
+			continue
+		}
+		key := d.InstancePath + "\x00" + d.PropertyName
+		forbidden[key] = struct{}{}
+	}
+	if len(forbidden) == 0 {
+		return structural
+	}
+	out := make([]PlanValidationError, 0, len(structural))
+	for _, d := range structural {
+		key := d.InstancePath + "\x00" + d.PropertyName
+		if _, drop := forbidden[key]; drop {
+			continue
+		}
+		out = append(out, d)
+	}
+	return out
 }
