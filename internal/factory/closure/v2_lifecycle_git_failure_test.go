@@ -174,16 +174,26 @@ func TestV2Lifecycle_ClassifyGitOutputOverflow(t *testing.T) {
 	}
 }
 
-// TestV2Lifecycle_SnapshotCallerStateSafeWithNilGit asserts the
-// snapshot function is total when no git client is supplied
-// (the runner calls it before any git dependency is set).
-func TestV2Lifecycle_SnapshotCallerStateSafeWithNilGit(t *testing.T) {
-	state := snapshotCallerState(context.Background(), nil, "")
-	if state.HEADCommit != "" || state.HEADTree != "" {
-		t.Fatalf("expected empty state for nil git, got %+v", state)
+// TestV2Lifecycle_SnapshotCallerStateFailClosedOnNilGit asserts
+// the snapshot function is fail-closed when no git client is
+// supplied: the snapshot must NOT be marked Available and must
+// carry the typed caller_state_unavailable diagnostic.
+func TestV2Lifecycle_SnapshotCallerStateFailClosedOnNilGit(t *testing.T) {
+	snap := snapshotCallerState(context.Background(), nil, "")
+	if snap.Available {
+		t.Fatalf("snapshot must not be Available when git client is nil")
 	}
-	if len(state.WorktreeRegistrations) != 0 {
-		t.Fatalf("expected zero registrations for nil git, got %d", len(state.WorktreeRegistrations))
+	if len(snap.Diagnostics) == 0 {
+		t.Fatalf("snapshot must carry diagnostics when git client is nil")
+	}
+	if !snap.Diagnostics.HasCode(V2CodeCallerStateUnavailable) {
+		t.Fatalf("expected caller_state_unavailable, got %v", snap.Diagnostics.Codes())
+	}
+	if snap.State.HEADCommit != "" || snap.State.HEADTree != "" {
+		t.Fatalf("expected empty state for nil git, got %+v", snap.State)
+	}
+	if len(snap.State.WorktreeRegistrations) != 0 {
+		t.Fatalf("expected zero registrations for nil git, got %d", len(snap.State.WorktreeRegistrations))
 	}
 }
 
@@ -309,13 +319,16 @@ func TestV2Lifecycle_CleanupTimeoutBoundsDefault(t *testing.T) {
 func TestV2Lifecycle_SnapshotCallerStateIsDeterministic(t *testing.T) {
 	dir := initRepo(t)
 	mustRunGit(t, dir, "commit", "--allow-empty", "-m", "init")
-	a := snapshotCallerState(context.Background(), nil, dir)
-	b := snapshotCallerState(context.Background(), nil, dir)
-	if a.HEADCommit != b.HEADCommit {
-		t.Fatalf("HEAD drift between snapshots: %s vs %s", a.HEADCommit, b.HEADCommit)
+	a := snapshotCallerState(context.Background(), RealGit{}, dir)
+	b := snapshotCallerState(context.Background(), RealGit{}, dir)
+	if !a.Available || !b.Available {
+		t.Fatalf("snapshots must be Available, diags a=%v b=%v", a.Diagnostics.Codes(), b.Diagnostics.Codes())
 	}
-	if a.HEADTree != b.HEADTree {
-		t.Fatalf("HEAD tree drift between snapshots: %s vs %s", a.HEADTree, b.HEADTree)
+	if a.State.HEADCommit != b.State.HEADCommit {
+		t.Fatalf("HEAD drift between snapshots: %s vs %s", a.State.HEADCommit, b.State.HEADCommit)
+	}
+	if a.State.HEADTree != b.State.HEADTree {
+		t.Fatalf("HEAD tree drift between snapshots: %s vs %s", a.State.HEADTree, b.State.HEADTree)
 	}
 }
 

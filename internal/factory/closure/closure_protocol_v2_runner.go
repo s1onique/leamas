@@ -128,9 +128,34 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 	// (success or failure) so the runner can refuse to claim
 	// success when HEAD, HEAD tree, status, or
 	// linked-worktree registrations drifted.
+	//
+	// R1 (MAC-CANARY-READINESS01-R1): the before snapshot
+	// must be fail-closed. Any observation failure (HEAD
+	// lookup, status, worktree inventory) produces typed
+	// V2Diagnostics and the runner refuses to execute.
 	callerBefore := snapshotCallerState(ctx, deps.Git, req.RepositoryRoot)
-	manifest, err := runClosureProtocolV2Inner(ctx, req, deps, callerBefore)
-	if post := callerBefore.Diff(snapshotCallerState(ctx, deps.Git, req.RepositoryRoot)); len(post) > 0 {
+	if !callerBefore.Available {
+		return V2Manifest{}, &V2Error{Diags: callerBefore.Diagnostics}
+	}
+	manifest, err := runClosureProtocolV2Inner(ctx, req, deps, callerBefore.State)
+	callerAfter := snapshotCallerState(ctx, deps.Git, req.RepositoryRoot)
+	if !callerAfter.Available {
+		// The after snapshot must be fail-closed: if we
+		// cannot confirm the caller state after the run,
+		// we MUST NOT claim clean success. The diagnostics
+		// are merged with any prior error so the CLI can
+		// render the exact cause.
+		post := callerAfter.Diagnostics
+		if err == nil {
+			return V2Manifest{}, &V2Error{Diags: post}
+		}
+		if v2err, ok := err.(*V2Error); ok {
+			v2err.Diags = append(v2err.Diags, post...)
+			return V2Manifest{}, v2err
+		}
+		return V2Manifest{}, &V2Error{Diags: post}
+	}
+	if post := callerBefore.State.Diff(callerAfter.State); len(post) > 0 {
 		// Drift detected. If the inner call succeeded we
 		// MUST refuse to publish the manifest and surface
 		// every diagnostic; if the inner call already

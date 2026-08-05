@@ -91,6 +91,7 @@ var AllowedFiles = map[string]bool{
 	"cmd/leamas/factory_close_plan_execution_mode_subprocess_test.go":  true,
 	"cmd/leamas/factory_close_plan_schema_example_determinism_test.go": true,
 	"cmd/leamas/factory_close_v2_authority_cli_test.go":                true,
+	"cmd/leamas/bounded_subprocess_v2_test.go":                         true,
 }
 
 // AllowedImports are packages that may only be imported by test files.

@@ -67,6 +67,13 @@ const (
 	V2CodeGitNotRepository     V2DiagnosticCode = "git_not_repository"
 	V2CodeGitPermissionDenied  V2DiagnosticCode = "git_permission_denied"
 	V2CodeGitMalformedRevision V2DiagnosticCode = "git_malformed_revision"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1
+	// adds fail-closed snapshot codes. Each code is emitted
+	// when the corresponding Git observation cannot be
+	// obtained; the runner refuses to claim success and
+	// reports the exact field that failed.
+	V2CodeCallerStateUnavailable       V2DiagnosticCode = "caller_state_unavailable"
+	V2CodeWorktreeInventoryUnavailable V2DiagnosticCode = "worktree_inventory_unavailable"
 )
 
 // V2Diagnostic is the structured diagnostic record emitted by

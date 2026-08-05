@@ -51,9 +51,13 @@ func TestV2Lifecycle_CallerStateUnchangedOnSuccess(t *testing.T) {
 	freeze := makeCommit(t, dir, "freeze", map[string]string{
 		"docs/closure-plans/LIFECYCLE.json": string(frozenBytes),
 	})
-	before := snapshotCallerState(context.Background(), nil, dir)
-	if len(before.WorktreeRegistrations) != 0 {
-		t.Fatalf("baseline must have zero registrations, got %d", len(before.WorktreeRegistrations))
+	before := snapshotCallerState(context.Background(), RealGit{}, dir)
+	if !before.Available {
+		t.Fatalf("before snapshot must be Available, diags=%v", before.Diagnostics.Codes())
+	}
+	beforeCount := len(before.State.WorktreeRegistrations)
+	if beforeCount < 1 {
+		t.Fatalf("baseline must have at least the main worktree registration, got %d", beforeCount)
 	}
 	manifest, err := runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
@@ -71,8 +75,11 @@ func TestV2Lifecycle_CallerStateUnchangedOnSuccess(t *testing.T) {
 	if manifest.SubjectCommit != subject {
 		t.Fatalf("subject mismatch: got=%s want=%s", manifest.SubjectCommit, subject)
 	}
-	after := snapshotCallerState(context.Background(), nil, dir)
-	if diff := before.Diff(after); len(diff) > 0 {
+	after := snapshotCallerState(context.Background(), RealGit{}, dir)
+	if !after.Available {
+		t.Fatalf("after snapshot must be Available, diags=%v", after.Diagnostics.Codes())
+	}
+	if diff := before.State.Diff(after.State); len(diff) > 0 {
 		t.Fatalf("caller state drift: %v", diff)
 	}
 }
@@ -103,7 +110,10 @@ func TestV2Lifecycle_WorktreeRegistrationNoLeak(t *testing.T) {
 	freeze := makeCommit(t, dir, "freeze", map[string]string{
 		"docs/closure-plans/LEAK.json": string(frozenBytes),
 	})
-	before := snapshotWorktreeRegistrations(context.Background(), nil, dir)
+	before := snapshotWorktreeRegistrations(context.Background(), RealGit{}, dir)
+	if !before.Available {
+		t.Fatalf("before snapshot must be Available, diags=%v", before.Diagnostics.Codes())
+	}
 	_, err = runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
 		PlanContractVersion:    1,
@@ -117,8 +127,11 @@ func TestV2Lifecycle_WorktreeRegistrationNoLeak(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunClosureProtocolV2: %v", err)
 	}
-	after := snapshotWorktreeRegistrations(context.Background(), nil, dir)
-	if diff := before.Diff(after); len(diff) > 0 {
+	after := snapshotWorktreeRegistrations(context.Background(), RealGit{}, dir)
+	if !after.Available {
+		t.Fatalf("after snapshot must be Available, diags=%v", after.Diagnostics.Codes())
+	}
+	if diff := before.Registrations.Diff(after.Registrations); len(diff) > 0 {
 		t.Fatalf("worktree registration leaked: %v", diff)
 	}
 }
@@ -221,7 +234,10 @@ func TestV2Lifecycle_CleanupSurvivesCancellation(t *testing.T) {
 	freeze := makeCommit(t, dir, "freeze", map[string]string{
 		"docs/closure-plans/CANCEL.json": string(frozenBytes),
 	})
-	before := snapshotWorktreeRegistrations(context.Background(), nil, dir)
+	before := snapshotWorktreeRegistrations(context.Background(), RealGit{}, dir)
+	if !before.Available {
+		t.Fatalf("before snapshot must be Available, diags=%v", before.Diagnostics.Codes())
+	}
 	_, err = runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
 		PlanContractVersion:    1,
@@ -235,8 +251,11 @@ func TestV2Lifecycle_CleanupSurvivesCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RunClosureProtocolV2: %v", err)
 	}
-	after := snapshotWorktreeRegistrations(context.Background(), nil, dir)
-	if diff := before.Diff(after); len(diff) > 0 {
+	after := snapshotWorktreeRegistrations(context.Background(), RealGit{}, dir)
+	if !after.Available {
+		t.Fatalf("after snapshot must be Available, diags=%v", after.Diagnostics.Codes())
+	}
+	if diff := before.Registrations.Diff(after.Registrations); len(diff) > 0 {
 		t.Fatalf("worktree registration leaked after cancellation: %v", diff)
 	}
 }

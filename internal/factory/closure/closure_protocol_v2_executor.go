@@ -159,13 +159,21 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 	// worktree registrations BEFORE we add ours so the
 	// lifecycle cleanup report can detect any leaked
 	// registration after worktree remove + prune + os.RemoveAll.
-	beforeReg := snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
+	//
+	// R1 (MAC-CANARY-READINESS01-R1): the snapshot is
+	// fail-closed; an observation failure before the run
+	// produces a typed V2CodeWorktreeInventoryUnavailable
+	// diagnostic and the executor refuses to proceed.
+	beforeRegSnap := snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
+	if !beforeRegSnap.Available {
+		return V2ExecuteResult{}, &V2Error{Diags: beforeRegSnap.Diagnostics}
+	}
 	// Cleanup runs in-scope so the result captures its
 	// outcome. The previous deferred-local-variable pattern
 	// leaked the report; this model folds the report into the
 	// final return BEFORE propagating.
 	cleanup := func() v2LifecycleCleanupReport {
-		report := v2LifecycleCleanupReport{Before: beforeReg}
+		report := v2LifecycleCleanupReport{Before: beforeRegSnap.Registrations}
 		rmResult := cleanupGit("worktree", "remove", "--force", worktreePath)
 		if rmResult.Err != nil || rmResult.ExitCode != 0 {
 			report.Stages.WorktreeRemoveError = fmt.Errorf("git worktree remove --force %s: %s",
@@ -179,7 +187,18 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		if err := os.RemoveAll(worktreePath); err != nil {
 			report.Stages.FilesystemRemoveError = err
 		}
-		report.After = snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
+		afterRegSnap := snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
+		if afterRegSnap.Available {
+			report.After = afterRegSnap.Registrations
+		} else {
+			// The after snapshot is fail-closed: a missing
+			// inventory after cleanup is recorded as a
+			// stage error so the lifecycle report can
+			// surface it via HasError().
+			report.Stages.WorktreeRemoveError = fmt.Errorf(
+				"worktree inventory observation failed after cleanup: %s",
+				diagMessage(afterRegSnap.Diagnostics))
+		}
 		return report
 	}
 

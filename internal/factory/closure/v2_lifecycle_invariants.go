@@ -4,16 +4,21 @@ package closure
 
 // v2_lifecycle_invariants.go implements the production-enforced
 // lifecycle invariants required by
-// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-LIFECYCLE-INVARIANTS01.
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-LIFECYCLE-INVARIANTS01
+// and the fail-closed observation correction from
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1.
 //
 // The file owns the four production authorities that make the
 // v2 runner a safe witness even when the caller misbehaves:
 //
 //  1. caller-state authority — captures HEAD, HEAD tree,
 //     `git status --porcelain=v2 --untracked-files=all`, and
-//     linked-worktree registrations BEFORE and AFTER the run,
-//     and reports any difference as a typed V2Diagnostic so
-//     the runner can refuse to claim success.
+//     linked-worktree registrations BEFORE and AFTER the run
+//     in fail-closed result-bearing snapshots. Any observation
+//     failure is captured as a typed V2Diagnostic and the
+//     runner refuses to claim success. Drift between the two
+//     snapshots produces typed V2Diagnostics so the runner
+//     cannot claim success when it mutated the caller.
 //  2. worktree-registration authority — captures
 //     `git worktree list --porcelain` and proves no registration
 //     leaks after success, failure, cancellation, or timeout.
@@ -90,20 +95,56 @@ func (s v2WorktreeRegistrationSet) Diff(after v2WorktreeRegistrationSet) v2Workt
 	return diff
 }
 
+// v2WorktreeRegistrationSnapshot is the fail-closed result of
+// `git worktree list --porcelain`. The runner must refuse to
+// claim success unless Available is true. Diagnostics carries
+// every typed observation failure so the CLI can render the
+// exact cause.
+type v2WorktreeRegistrationSnapshot struct {
+	Registrations v2WorktreeRegistrationSet
+	Diagnostics   V2Diagnostics
+	Available     bool
+}
+
 // snapshotWorktreeRegistrations runs
 // `git worktree list --porcelain` and parses the registered
-// worktree paths. The function returns an empty set when the
-// git command fails (a brand-new repository still returns an
-// empty set with exit code 0; the empty-set result is
-// indistinguishable from a failure, which the runner treats as
-// a missing-inventory event rather than a leak).
-func snapshotWorktreeRegistrations(ctx context.Context, git gitClient, repoRoot string) v2WorktreeRegistrationSet {
+// worktree paths. The snapshot is fail-closed: any observation
+// failure is captured as a typed V2Diagnostic and
+// Available=false. The runner must reject when
+// Available=false.
+func snapshotWorktreeRegistrations(ctx context.Context, git gitClient, repoRoot string) v2WorktreeRegistrationSnapshot {
 	if git == nil || repoRoot == "" {
-		return v2WorktreeRegistrationSet{}
+		return v2WorktreeRegistrationSnapshot{
+			Registrations: v2WorktreeRegistrationSet{},
+			Diagnostics: V2Diagnostics{{
+				Code:         V2CodeWorktreeInventoryUnavailable,
+				Message:      "worktree inventory observation failed: no Git client supplied",
+				PropertyName: "worktree_inventory",
+			}},
+		}
 	}
 	result := git.Run(ctx, repoRoot, "worktree", "list", "--porcelain")
 	if result.Err != nil || result.ExitCode != 0 {
-		return v2WorktreeRegistrationSet{}
+		// Always surface the worktree inventory failure as the
+		// typed V2CodeWorktreeInventoryUnavailable so the runner
+		// and tests can distinguish it from generic Git
+		// operational failures. The original error message is
+		// retained via gitFailureDiagnostic for diagnostics.
+		inner := gitFailureDiagnostic("worktree_inventory",
+			[]string{"worktree", "list", "--porcelain"}, result)
+		innerMsg := "worktree inventory observation failed"
+		if inner != nil {
+			innerMsg = fmt.Sprintf("worktree inventory observation failed: %s", inner.Error())
+		}
+		return v2WorktreeRegistrationSnapshot{
+			Registrations: v2WorktreeRegistrationSet{},
+			Diagnostics: V2Diagnostics{{
+				Code:         V2CodeWorktreeInventoryUnavailable,
+				Message:      innerMsg,
+				PropertyName: "worktree_inventory",
+				Detail:       strings.TrimSpace(string(result.Stderr)),
+			}},
+		}
 	}
 	var (
 		out  v2WorktreeRegistrationSet
@@ -130,7 +171,10 @@ func snapshotWorktreeRegistrations(ctx context.Context, git gitClient, repoRoot 
 		}
 	}
 	flush()
-	return out
+	return v2WorktreeRegistrationSnapshot{
+		Registrations: out,
+		Available:     true,
+	}
 }
 
 // v2CallerState is the immutable snapshot of the caller
@@ -145,32 +189,88 @@ type v2CallerState struct {
 	WorktreeRegistrations v2WorktreeRegistrationSet
 }
 
+// v2CallerStateSnapshot is the fail-closed result of capturing
+// the four caller-state observations. The runner must refuse to
+// claim success unless Available is true; the runner must also
+// reject the BEFORE snapshot if Diagnostics is non-empty.
+type v2CallerStateSnapshot struct {
+	State       v2CallerState
+	Diagnostics V2Diagnostics
+	Available   bool
+}
+
 // snapshotCallerState captures HEAD, HEAD^{tree}, status, and
-// linked-worktree registrations in a single immutable
+// linked-worktree registrations in a single fail-closed
 // snapshot. The status uses `--porcelain=v2 --untracked-files=all`
 // so ignored files do not contaminate the dirtiness signal.
-func snapshotCallerState(ctx context.Context, git gitClient, repoRoot string) v2CallerState {
-	state := v2CallerState{WorktreeRegistrations: v2WorktreeRegistrationSet{}}
+// Any observation failure is captured as a typed V2Diagnostic;
+// the runner MUST reject if Diagnostics is non-empty.
+func snapshotCallerState(ctx context.Context, git gitClient, repoRoot string) v2CallerStateSnapshot {
+	snap := v2CallerStateSnapshot{
+		State: v2CallerState{WorktreeRegistrations: v2WorktreeRegistrationSet{}},
+	}
 	if git == nil || repoRoot == "" {
-		return state
+		snap.Diagnostics = V2Diagnostics{{
+			Code:         V2CodeCallerStateUnavailable,
+			Message:      "caller state observation failed: no Git client supplied",
+			PropertyName: "caller_state",
+		}}
+		return snap
 	}
-	if head, err := runGitValue(ctx, git, repoRoot, "rev-parse", "HEAD^{commit}"); err == nil {
-		state.HEADCommit = head
+	if head, err := runGitValue(ctx, git, repoRoot, "rev-parse", "HEAD^{commit}"); err != nil {
+		snap.Diagnostics = append(snap.Diagnostics, V2Diagnostic{
+			Code:         V2CodeCallerStateUnavailable,
+			Message:      fmt.Sprintf("caller state observation failed: HEAD lookup: %s", err.Error()),
+			PropertyName: "caller_head",
+		})
+	} else {
+		snap.State.HEADCommit = head
 	}
-	if tree, err := runGitValue(ctx, git, repoRoot, "rev-parse", "HEAD^{tree}"); err == nil {
-		state.HEADTree = tree
+	if tree, err := runGitValue(ctx, git, repoRoot, "rev-parse", "HEAD^{tree}"); err != nil {
+		snap.Diagnostics = append(snap.Diagnostics, V2Diagnostic{
+			Code:         V2CodeCallerStateUnavailable,
+			Message:      fmt.Sprintf("caller state observation failed: HEAD^{tree} lookup: %s", err.Error()),
+			PropertyName: "caller_tree",
+		})
+	} else {
+		snap.State.HEADTree = tree
 	}
-	if status, err := runGitValue(ctx, git, repoRoot, "status", "--porcelain=v2", "--untracked-files=all"); err == nil {
-		state.StatusPorcelain = status
+	if status, err := runGitValue(ctx, git, repoRoot, "status", "--porcelain=v2", "--untracked-files=all"); err != nil {
+		snap.Diagnostics = append(snap.Diagnostics, V2Diagnostic{
+			Code:         V2CodeCallerStateUnavailable,
+			Message:      fmt.Sprintf("caller state observation failed: status: %s", err.Error()),
+			PropertyName: "caller_status",
+		})
+	} else {
+		snap.State.StatusPorcelain = status
 	}
-	state.WorktreeRegistrations = snapshotWorktreeRegistrations(ctx, git, repoRoot)
-	return state
+	regSnap := snapshotWorktreeRegistrations(ctx, git, repoRoot)
+	if regSnap.Available {
+		snap.State.WorktreeRegistrations = regSnap.Registrations
+	} else {
+		snap.Diagnostics = append(snap.Diagnostics, regSnap.Diagnostics...)
+		// The caller state authority is unavailable when the
+		// worktree inventory cannot be observed. Mark the
+		// caller-state snapshot as failed so the runner refuses
+		// to claim success, while keeping the typed
+		// worktree-inventory code for diagnostic detail.
+		snap.Diagnostics = append(snap.Diagnostics, V2Diagnostic{
+			Code:         V2CodeCallerStateUnavailable,
+			Message:      "caller state observation failed: worktree inventory unavailable",
+			PropertyName: "caller_state",
+		})
+	}
+	snap.Available = len(snap.Diagnostics) == 0
+	return snap
 }
 
 // Diff compares two v2CallerState values and returns every
 // typed diagnostic required to report any drift. The function
 // is total: an empty slice means the caller state was
-// unchanged.
+// unchanged. The Diff is intentionally still based on the raw
+// v2CallerState struct so the existing worktree-invariants
+// tests can construct synthetic before/after pairs without
+// needing a full snapshot.
 func (s v2CallerState) Diff(after v2CallerState) V2Diagnostics {
 	var out V2Diagnostics
 	if s.HEADCommit != "" && after.HEADCommit != "" && s.HEADCommit != after.HEADCommit {
@@ -291,9 +391,6 @@ func gitFailureDiagnostic(property string, args []string, result gitCommandResul
 	if err == nil {
 		return nil
 	}
-	if code == V2CodeGitOperationFailed {
-		return NewV2ErrorWith(code, err.Error(), property, strings.TrimSpace(string(result.Stderr)))
-	}
 	return NewV2ErrorWith(code, err.Error(), property, strings.TrimSpace(string(result.Stderr)))
 }
 
@@ -339,6 +436,16 @@ func (r v2LifecycleCleanupReport) Summary() string {
 		return ""
 	}
 	return strings.Join(parts, "; ")
+}
+
+// diagMessage extracts a single human-readable message from a
+// non-empty diagnostics slice. It returns "" when the slice is
+// empty so callers can fall back to a generic error string.
+func diagMessage(d V2Diagnostics) string {
+	if len(d) == 0 {
+		return ""
+	}
+	return d[0].Message
 }
 
 // _ ensures the default cleanup timeout is referenced; tests
