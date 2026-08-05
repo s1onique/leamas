@@ -1,6 +1,13 @@
 // Package closure implements Closure Protocol v1.
 package closure
 
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"math/big"
+)
+
 const (
 	ContractVersionV1           = 1
 	CheckModeRun                = "run"
@@ -133,6 +140,55 @@ type PlanCheck struct {
 	TimeoutSeconds   int               `json:"timeout_seconds,omitempty"`
 	Environment      map[string]string `json:"environment"`
 	Reason           string            `json:"reason,omitempty"`
+}
+
+// UnmarshalJSON decodes a PlanCheck from the public wire shape.
+//
+// CORRECTION08: the runtime timeout decoder now accepts the
+// same mathematical integer language declared by the emitted
+// JSON Schema. timeout_seconds may be supplied as 1, 1.0, 1e0,
+// 600, 600.0, 6e2, or any other mathematically integral JSON
+// number inside the inclusive [1, 600] range. Non-integral
+// numbers, numbers outside the range, and non-numbers are
+// rejected with a typed error.
+//
+// The decoder uses json.Decoder.UseNumber so the literal
+// decimal text of every number is preserved through to the
+// exact rational stage. It then converts to int only after
+// proving mathematical integer classification and
+// in-range membership.
+func (c *PlanCheck) UnmarshalJSON(data []byte) error {
+	type alias PlanCheck
+	var raw struct {
+		alias
+		TimeoutSecondsRaw json.Number `json:"timeout_seconds,omitempty"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	dec.UseNumber()
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	c2 := PlanCheck(raw.alias)
+	c2.TimeoutSeconds = 0
+	if raw.TimeoutSecondsRaw != "" {
+		rat, ok := parseExactNumber(string(raw.TimeoutSecondsRaw))
+		if !ok {
+			return &json.SyntaxError{
+				Offset: int64(len(data)),
+			}
+		}
+		if !rat.IsInt() {
+			return fmt.Errorf("timeout_seconds is not an integer: %s", raw.TimeoutSecondsRaw)
+		}
+		if rat.Cmp(big.NewRat(1, 1)) < 0 || rat.Cmp(big.NewRat(600, 1)) > 0 {
+			return fmt.Errorf("timeout_seconds out of range [1,600]: %s", raw.TimeoutSecondsRaw)
+		}
+		num, _ := new(big.Int).SetString(rat.Num().String(), 10)
+		c2.TimeoutSeconds = int(num.Int64())
+	}
+	*c = c2
+	return nil
 }
 
 type PlanArtifact struct {
