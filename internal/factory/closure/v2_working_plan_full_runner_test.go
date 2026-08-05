@@ -70,7 +70,7 @@ func TestV2WorkingPlan_FullRunnerMismatch(t *testing.T) {
 		ManifestOutput:               filepath.Join(t.TempDir(), "manifest.json"),
 		OptionalWorkingPlanAssertion: working,
 	}
-	_, err = RunClosureProtocolV2(context.Background(), req)
+	_, err = runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("working plan mismatch must reject (HEAD=%s, D=descendant of F)", d)
 	}
@@ -132,7 +132,7 @@ func TestV2WorkingPlan_FullRunnerMatch(t *testing.T) {
 		ManifestOutput:               filepath.Join(t.TempDir(), "manifest.json"),
 		OptionalWorkingPlanAssertion: working,
 	}
-	manifest, err := RunClosureProtocolV2(context.Background(), req)
+	manifest, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err != nil {
 		t.Fatalf("matching working plan must pass: %v", err)
 	}

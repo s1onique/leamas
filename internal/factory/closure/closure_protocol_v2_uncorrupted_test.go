@@ -60,7 +60,7 @@ func TestV2GenuineUnrelatedTopology(t *testing.T) {
 		EvidenceDirectory:      evidenceDir,
 		ManifestOutput:         manifestPath,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("expected rejection for genuinely unrelated commits")
 	}
@@ -151,7 +151,7 @@ func TestV2RunnerRejectsProtocolVersion1(t *testing.T) {
 		EvidenceDirectory:      t.TempDir(),
 		ManifestOutput:         filepath.Join(t.TempDir(), "manifest.json"),
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("expected rejection for protocol 1")
 	}

@@ -55,7 +55,7 @@ func TestV2Lifecycle_CallerStateUnchangedOnSuccess(t *testing.T) {
 	if len(before.WorktreeRegistrations) != 0 {
 		t.Fatalf("baseline must have zero registrations, got %d", len(before.WorktreeRegistrations))
 	}
-	manifest, err := RunClosureProtocolV2(context.Background(), V2Request{
+	manifest, err := runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
 		PlanContractVersion:    1,
 		RepositoryRoot:         dir,
@@ -104,7 +104,7 @@ func TestV2Lifecycle_WorktreeRegistrationNoLeak(t *testing.T) {
 		"docs/closure-plans/LEAK.json": string(frozenBytes),
 	})
 	before := snapshotWorktreeRegistrations(context.Background(), nil, dir)
-	_, err = RunClosureProtocolV2(context.Background(), V2Request{
+	_, err = runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
 		PlanContractVersion:    1,
 		RepositoryRoot:         dir,
@@ -222,7 +222,7 @@ func TestV2Lifecycle_CleanupSurvivesCancellation(t *testing.T) {
 		"docs/closure-plans/CANCEL.json": string(frozenBytes),
 	})
 	before := snapshotWorktreeRegistrations(context.Background(), nil, dir)
-	_, err = RunClosureProtocolV2(context.Background(), V2Request{
+	_, err = runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
 		PlanContractVersion:    1,
 		RepositoryRoot:         dir,

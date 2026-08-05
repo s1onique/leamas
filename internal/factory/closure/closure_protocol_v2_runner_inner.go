@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 )
 
 // runClosureProtocolV2Inner is the orchestration body of the
@@ -159,40 +158,6 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 				execResult.ObservedTree, subjectTree),
 			"execution_tree", execResult.ObservedTree)
 	}
-	// Map mode from the original plan.Checks so mode is
-	// preserved verbatim from the contract rather than
-	// derived from the post-execution status.
-	modeFor := func(id string) string {
-		for _, pc := range plan.Checks {
-			if pc.ID == id {
-				return pc.Mode
-			}
-		}
-		return ""
-	}
-	checks := make([]V2CheckResult, 0, len(execResult.CheckResults))
-	for _, c := range execResult.CheckResults {
-		checks = append(checks, V2CheckResult{
-			ID:      c.CheckID,
-			Mode:    modeFor(c.CheckID),
-			Outcome: string(c.Status),
-			Detail:  strings.TrimSpace(c.ExecutionErrorCode),
-		})
-	}
-	binary := deps.BinaryIdentity
-	if binary.Path == "" || binary.SHA256 == "" {
-		// Phase 6 (CORRECTION01) advertises a strict binary
-		// identity check. We tolerate the unset case so
-		// the existing in-process test suite continues to
-		// pass; the production CLI path always populates
-		// the identity via captureRunningBinaryIdentity.
-		binary = V2BinaryIdentity{
-			Path:          "leamas",
-			SHA256:        "",
-			VCSRevision:   "",
-			LeamasVersion: "",
-		}
-	}
 	manifest, err := NewV2Manifest(V2ManifestBuild{
 		ClosureProtocolVersion: req.ClosureProtocolVersion,
 		PlanContractVersion:    PlanContractVersion(plan.ContractVersion),
@@ -206,8 +171,10 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 		PlanBytes:              frozen.Bytes,
 		ExecutionTree:          subjectTree,
 		CallerHead:             callerHead,
-		BinaryIdentity:         binary,
-		CheckResults:           checks,
+		BinaryIdentity:         deps.BinaryIdentity,
+		PlanChecks:             plan.Checks,
+		ExecutionResults:       execResult.CheckResults,
+		Evidence:               execResult.Evidence,
 	})
 	if err != nil {
 		return V2Manifest{}, err

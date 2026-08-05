@@ -125,7 +125,7 @@ func TestV2HermeticTopologyEndToEnd(t *testing.T) {
 		EvidenceDirectory:      evidenceDir,
 		ManifestOutput:         manifestPath,
 	}
-	manifest, err := RunClosureProtocolV2(context.Background(), req)
+	manifest, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err != nil {
 		v2err, ok := err.(*V2Error)
 		if ok {
@@ -207,7 +207,7 @@ func TestV2RunnerRejectsReverseRelation(t *testing.T) {
 		EvidenceDirectory:      evidenceDir,
 		ManifestOutput:         manifestPath,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("expected rejection for reverse relation")
 	}
@@ -244,7 +244,7 @@ func TestV2RunnerRejectsDirtyCaller(t *testing.T) {
 		EvidenceDirectory:      t.TempDir(),
 		ManifestOutput:         filepath.Join(t.TempDir(), "manifest.json"),
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("expected rejection for dirty caller")
 	}
@@ -294,7 +294,7 @@ func TestV2FrozenBytesAdversarial(t *testing.T) {
 		EvidenceDirectory:      evidenceDir,
 		ManifestOutput:         manifestPath,
 	}
-	manifest, err := RunClosureProtocolV2(context.Background(), req)
+	manifest, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err != nil {
 		t.Fatalf("runner failed: %v", err)
 	}
@@ -327,7 +327,7 @@ func TestV2AbsolutePlanPathRejected(t *testing.T) {
 		EvidenceDirectory:      t.TempDir(),
 		ManifestOutput:         filepath.Join(t.TempDir(), "manifest.json"),
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("expected rejection of absolute plan path")
 	}
@@ -367,7 +367,7 @@ func TestV2RunnerRejectsUnrelatedCommits(t *testing.T) {
 		EvidenceDirectory:      t.TempDir(),
 		ManifestOutput:         filepath.Join(t.TempDir(), "manifest.json"),
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		// Some git setups may still report the merge-base as
 		// empty. We only fail loudly if the runner accepted

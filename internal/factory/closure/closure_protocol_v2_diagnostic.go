@@ -44,6 +44,9 @@ const (
 	V2CodeCleanupFailed                     V2DiagnosticCode = "cleanup_failed"
 	V2CodeManifestWriteFailed               V2DiagnosticCode = "manifest_write_failed"
 	V2CodeRequestIncomplete                 V2DiagnosticCode = "request_incomplete"
+	V2CodeBinaryIdentityInvalid             V2DiagnosticCode = "binary_identity_invalid"
+	V2CodeManifestIdentityInvalid           V2DiagnosticCode = "manifest_identity_invalid"
+	V2CodeCheckResultMappingInvalid         V2DiagnosticCode = "check_result_mapping_invalid"
 	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-LIFECYCLE-INVARIANTS01
 	// adds caller-state authority codes. Each code reports a
 	// specific invariant violation discovered after the

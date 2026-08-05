@@ -85,7 +85,7 @@ func TestV2PathMatrix_AbsoluteDetachedAccepted(t *testing.T) {
 		ManifestOutput:               manifest,
 		OptionalWorkingPlanAssertion: working,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err != nil {
 		t.Fatalf("absolute detached path must pass: %v", err)
 	}
@@ -112,7 +112,7 @@ func TestV2PathMatrix_InsideRepoRejected(t *testing.T) {
 		EvidenceDirectory:      evidence,
 		ManifestOutput:         manifest,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("inside-repo path must reject")
 	}
@@ -137,7 +137,7 @@ func TestV2PathMatrix_RelativeRepoRootRejected(t *testing.T) {
 		EvidenceDirectory:      t.TempDir(),
 		ManifestOutput:         filepath.Join(t.TempDir(), "manifest.json"),
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("relative repository_root must reject")
 	}
@@ -178,7 +178,7 @@ func TestV2PathMatrix_NonexistentLeafSymlinkIntoRepoRejected(t *testing.T) {
 		EvidenceDirectory:      evidence,
 		ManifestOutput:         manifest,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("evidence under symlink-into-repo must reject")
 	}
@@ -217,7 +217,7 @@ func TestV2PathMatrix_BenignSymlinkOutsideRepoAccepted(t *testing.T) {
 		ManifestOutput:               manifest,
 		OptionalWorkingPlanAssertion: working,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err != nil {
 		t.Fatalf("benign symlink outside repo must pass: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestV2PathMatrix_WorkingPlanMatchingFP(t *testing.T) {
 		ManifestOutput:               filepath.Join(t.TempDir(), "manifest.json"),
 		OptionalWorkingPlanAssertion: working,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err != nil {
 		t.Fatalf("matching working plan must pass: %v", err)
 	}
@@ -264,7 +264,7 @@ func TestV2PathMatrix_WorkingPlanDifferingFromFP(t *testing.T) {
 		ManifestOutput:               filepath.Join(t.TempDir(), "manifest.json"),
 		OptionalWorkingPlanAssertion: working,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("differing working plan must reject")
 	}
@@ -299,7 +299,7 @@ func TestV2PathMatrix_WorkingPlanInsideRepoRejected(t *testing.T) {
 		ManifestOutput:               filepath.Join(t.TempDir(), "manifest.json"),
 		OptionalWorkingPlanAssertion: working,
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("working plan inside repo must reject")
 	}
@@ -325,7 +325,7 @@ func TestV2PathMatrix_ManifestInsideRepoRejected(t *testing.T) {
 		EvidenceDirectory:      t.TempDir(),
 		ManifestOutput:         filepath.Join(dir, "manifest.json"),
 	}
-	_, err := RunClosureProtocolV2(context.Background(), req)
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), req)
 	if err == nil {
 		t.Fatalf("manifest inside repo must reject")
 	}
@@ -341,7 +341,7 @@ func TestV2PathMatrix_NULByteRejected(t *testing.T) {
 	dir, subject, subjectTree, _ := newRepoForPath(t)
 	_, _, freeze := buildValidPlanAndCommit(t, dir, subject, subjectTree)
 	evidence := t.TempDir() + "\x00bad"
-	_, err := RunClosureProtocolV2(context.Background(), V2Request{
+	_, err := runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
 		PlanContractVersion:    1,
 		RepositoryRoot:         dir,

@@ -38,7 +38,13 @@ type V2ManifestBuild struct {
 	ExecutionTree          string
 	CallerHead             string
 	BinaryIdentity         V2BinaryIdentity
-	CheckResults           []V2CheckResult
+	PlanChecks             []PlanCheck
+	ExecutionResults       []CheckResult
+	Evidence               []EvidenceRecord
+	// CheckResults is retained only for source compatibility with
+	// older callers; strict construction requires PlanChecks and
+	// derives results from the execution authority stream.
+	CheckResults []V2CheckResult
 }
 
 // NewV2Manifest validates the supplied build inputs and
@@ -51,36 +57,25 @@ type V2ManifestBuild struct {
 // On failure a typed V2Error is returned. On success the
 // returned V2Manifest is ready for deterministic rendering.
 func NewV2Manifest(b V2ManifestBuild) (V2Manifest, error) {
-	if !b.ClosureProtocolVersion.IsSupported() {
+	if b.ClosureProtocolVersion != ClosureProtocolV2 {
 		return V2Manifest{}, NewV2ErrorWith(V2CodeUnsupportedClosureProtocolVersion,
-			fmt.Sprintf("closure protocol version %q is not supported", string(b.ClosureProtocolVersion)),
+			fmt.Sprintf("v2 manifest requires closure protocol version 2, got %q", string(b.ClosureProtocolVersion)),
 			"closure_protocol_version", "")
 	}
-	if !b.PlanContractVersion.IsSupported() {
+	if b.PlanContractVersion != PlanContractV1 {
 		return V2Manifest{}, NewV2ErrorWith(V2CodeUnsupportedPlanContractVersion,
 			fmt.Sprintf("plan contract version %d is not supported", int(b.PlanContractVersion)),
 			"plan_contract_version", "")
 	}
-	if b.SubjectCommit == "" || b.SubjectTree == "" {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"subject commit and tree are required", "subject", "")
+	if err := validateV2ManifestObjectIdentities(b); err != nil {
+		return V2Manifest{}, err
 	}
-	if b.FreezeCommit == "" || b.FreezeTree == "" {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"freeze commit and tree are required", "freeze", "")
+	if err := validateLoaderInputs("manifest-authority", b.FreezeCommit, b.PlanPath); err != nil {
+		return V2Manifest{}, invalidV2ManifestIdentity("plan_path", err.Error())
 	}
-	if b.PlanPath == "" || b.PlanBlob == "" || b.PlanSHA256 == "" {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"plan path, blob, and SHA-256 are required", "plan", "")
-	}
-	if b.ExecutionTree == "" {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
-			"execution tree is required", "execution_tree", "")
-	}
-	if b.ExecutionTree != b.SubjectTree {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
-			fmt.Sprintf("execution_tree %s must equal subject_tree %s", b.ExecutionTree, b.SubjectTree),
-			"execution_tree", b.ExecutionTree)
+	if !sha256Pattern.MatchString(b.PlanSHA256) {
+		return V2Manifest{}, invalidV2ManifestIdentity("plan_sha256",
+			"plan SHA-256 must be 64 lowercase hexadecimal characters")
 	}
 	if len(b.PlanBytes) == 0 {
 		return V2Manifest{}, NewV2ErrorWith(V2CodeRequestIncomplete,
@@ -94,11 +89,18 @@ func NewV2Manifest(b V2ManifestBuild) (V2Manifest, error) {
 				actualSHA, b.PlanSHA256),
 			"plan_sha256", actualSHA)
 	}
-	if b.CallerHead == "" {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"caller_head is required", "caller_head", "")
+	if err := ValidateV2BinaryIdentity(b.BinaryIdentity); err != nil {
+		return V2Manifest{}, err
 	}
-	checks := append([]V2CheckResult(nil), b.CheckResults...)
+	if len(b.PlanChecks) == 0 {
+		return V2Manifest{}, invalidV2CheckMapping("checks", "manifest construction requires the authoritative plan checks")
+	}
+	checks, err := buildV2ManifestCheckResults(
+		b.SubjectTree, b.PlanChecks, b.ExecutionResults, b.Evidence,
+	)
+	if err != nil {
+		return V2Manifest{}, err
+	}
 	return V2Manifest{
 		ClosureProtocolVersion: b.ClosureProtocolVersion,
 		PlanContractVersion:    int(b.PlanContractVersion),

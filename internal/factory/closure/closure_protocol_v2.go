@@ -188,13 +188,30 @@ type V2Manifest struct {
 }
 
 // V2CheckResult is the per-check result bound into the v2
-// manifest. The schema mirrors the v1 check_results field so
-// downstream tooling can share a single parser.
+// manifest. Results are emitted in frozen-plan order, and the
+// fields retain the execution authority needed to distinguish a
+// completed run from an exclusion or a skipped check.
 type V2CheckResult struct {
-	ID      string `json:"id"`
-	Mode    string `json:"mode"`
-	Outcome string `json:"outcome"`
-	Detail  string `json:"detail,omitempty"`
+	ID                      string                `json:"id"`
+	Mode                    string                `json:"mode"`
+	Outcome                 string                `json:"outcome"`
+	ExitCode                *int                  `json:"exit_code,omitempty"`
+	DurationMS              int64                 `json:"duration_ms"`
+	ExecutionClassification string                `json:"execution_classification"`
+	CleanupStatus           string                `json:"cleanup_status"`
+	Evidence                []V2EvidenceReference `json:"evidence,omitempty"`
+	Detail                  string                `json:"detail,omitempty"`
+}
+
+// V2EvidenceReference binds a manifest result to one detached
+// stdout/stderr record without copying the record payload into the
+// core manifest.
+type V2EvidenceReference struct {
+	LogicalName  string `json:"logical_name"`
+	MediaType    string `json:"media_type"`
+	SHA256       string `json:"sha256"`
+	ByteCount    int64  `json:"byte_count"`
+	Availability string `json:"availability"`
 }
 
 // V2BinaryIdentity records the Leamas binary that produced

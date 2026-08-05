@@ -273,7 +273,7 @@ func TestV2Lifecycle_DetachedAfterDiffHonoursCallerState(t *testing.T) {
 	// common case. We assert the diff helper is no-op so the
 	// production wiring is exercised. Drift detection is
 	// covered by the unit tests above.
-	manifest, err := RunClosureProtocolV2(context.Background(), V2Request{
+	manifest, err := runClosureProtocolV2ForTest(t, context.Background(), V2Request{
 		ClosureProtocolVersion: ClosureProtocolV2,
 		PlanContractVersion:    1,
 		RepositoryRoot:         dir,
