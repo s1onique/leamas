@@ -9,11 +9,24 @@ import (
 // ErrSchemaGeneration indicates a field with an unknown or malformed descriptor.
 var ErrSchemaGeneration = errors.New("schema generation failed")
 
+// Leamas Closure Protocol v1 dialect and vocabulary URIs.
+//
+// CORRECTION04: the emitted schema now selects a stable Leamas
+// dialect URI so a generic JSON Schema consumer can detect the
+// Leamas extensions (x-applicability, x-leamas-repository-relative-path)
+// without parsing prose or hardcoding field names. The dialect
+// itself remains a Draft 2020-12 schema; the URI is the stable
+// contract identifier.
+const (
+	leamasClosurePlanV1DialectURI = "https://leamas.io/closure-plan/v1/schema.json"
+	leamasVocabularyURI           = "https://leamas.io/closure-plan/v1/vocab"
+)
+
 // JSONSchema generates a real JSON Schema document from the closure plan
 // descriptor authority. This is the stable schema command output.
 //
 // The generated schema includes:
-//   - $schema and $id declarations
+//   - $schema and $id declarations selecting the Leamas Closure Plan v1 dialect
 //   - properties, required arrays
 //   - const and enum constraints
 //   - minItems for arrays
@@ -30,10 +43,12 @@ func JSONSchema() (map[string]any, error) {
 	root := contract.Root
 
 	schema := map[string]any{
-		"$schema":                       "https://json-schema.org/draft/2020-12/schema",
-		"$id":                           "https://leamas.io/closure-plan/v1/schema.json",
+		"$schema":                       leamasClosurePlanV1DialectURI,
+		"$id":                           leamasClosurePlanV1DialectURI,
 		"title":                         "Closure Protocol v1 Plan",
 		"type":                          "object",
+		"x-leamas-dialect":              "leamas-closure-plan-v1",
+		"x-leamas-vocabulary":           leamasVocabularyURI,
 		"x-leamas-validation-authority": "leamas factory close plan validate",
 	}
 
@@ -175,20 +190,15 @@ func buildFieldSchema(field planFieldDescriptor, path string) (map[string]any, e
 			}
 			seen[key] = true
 		}
-		schema["x-applicability"] = toApplicabilityDTOs(field.ApplicabilityRules)
+		// CORRECTION04: emit rules as []map[string]any so the
+		// generic schema evaluator (which inspects []any) sees
+		// the same wire shape that the public CLI serialises.
+		// Returning a typed struct slice would hide the rules
+		// from generic JSON Schema consumers.
+		schema["x-applicability"] = toApplicabilityMaps(field.ApplicabilityRules)
 	}
 
 	return schema, nil
-}
-
-// pathPolicyDTO is retained for documentation purposes; the
-// schema generator emits pathPolicyToMap directly so consumers
-// always see the canonical snake_case public keys.
-type pathPolicyDTO struct {
-	AllowDot              bool   `json:"allow_dot"`
-	AllowParentSegments   bool   `json:"allow_parent_segments"`
-	RequireLexicallyClean bool   `json:"require_lexically_clean"`
-	Separator             string `json:"separator"`
 }
 
 // pathPolicyToMap renders a planPathPolicy as a map[string]any
@@ -203,23 +213,16 @@ func pathPolicyToMap(p *planPathPolicy) map[string]any {
 	}
 }
 
-// applicabilityDTO is the frozen public wire shape for the
-// x-applicability extension.
-type applicabilityDTO struct {
-	Sibling  string `json:"sibling"`
-	Value    string `json:"value"`
-	Presence string `json:"presence"`
-}
-
-// toApplicabilityDTOs converts internal applicability rules to
-// the public DTO.
-func toApplicabilityDTOs(rules []fieldApplicabilityRule) []applicabilityDTO {
-	out := make([]applicabilityDTO, len(rules))
+// toApplicabilityMaps converts internal applicability rules to
+// the public wire shape []map[string]any. The shape mirrors the
+// public JSON Schema declaration: { sibling, value, presence }.
+func toApplicabilityMaps(rules []fieldApplicabilityRule) []map[string]any {
+	out := make([]map[string]any, len(rules))
 	for i, rule := range rules {
-		out[i] = applicabilityDTO{
-			Sibling:  rule.Sibling,
-			Value:    rule.Value,
-			Presence: rule.Presence.String(),
+		out[i] = map[string]any{
+			"sibling":  rule.Sibling,
+			"value":    rule.Value,
+			"presence": rule.Presence.String(),
 		}
 	}
 	return out

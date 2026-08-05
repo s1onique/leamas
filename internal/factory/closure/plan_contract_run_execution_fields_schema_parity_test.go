@@ -76,12 +76,12 @@ func TestRunExecutionFieldsSchemaParity(t *testing.T) {
 // applicabilityHas reports whether the supplied x-applicability
 // list contains a (sibling, value, presence) triple.
 func applicabilityHas(field map[string]any, sibling, value, presence string) bool {
-	rules, ok := field["x-applicability"].([]applicabilityDTO)
+	rules, ok := field["x-applicability"].([]map[string]any)
 	if !ok {
 		return false
 	}
 	for _, r := range rules {
-		if r.Sibling == sibling && r.Value == value && r.Presence == presence {
+		if r["sibling"].(string) == sibling && r["value"].(string) == value && r["presence"].(string) == presence {
 			return true
 		}
 	}

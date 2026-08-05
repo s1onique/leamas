@@ -125,7 +125,7 @@ func TestBuildFieldSchema_ApplicabilityRules(t *testing.T) {
 	if !ok {
 		t.Fatal("x-applicability missing")
 	}
-	rules, ok := appl.([]applicabilityDTO)
+	rules, ok := appl.([]map[string]any)
 	if !ok {
 		t.Fatalf("x-applicability type = %T", appl)
 	}
@@ -256,7 +256,7 @@ func TestBuildFieldSchema_UniqueApplicability(t *testing.T) {
 	if !ok {
 		t.Fatal("x-applicability missing")
 	}
-	rules := appl.([]applicabilityDTO)
+	rules := appl.([]map[string]any)
 	if len(rules) != 2 {
 		t.Errorf("rules = %d, want 2", len(rules))
 	}

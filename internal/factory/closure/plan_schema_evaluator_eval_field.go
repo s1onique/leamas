@@ -10,58 +10,39 @@ import (
 // recursive evaluation. Splitting it from plan_schema_evaluator.go
 // keeps the main evaluator file under the LLM-friendly 400-line
 // threshold.
+//
+// CORRECTION04:
+//   - The applicability walker now takes an explicit
+//     schemaPropertyContext carrying the parent schema,
+//     parent instance, property name, and presence flag.
+//   - Applicability is checked for ALL schema-declared
+//     properties (not just present instances), so absent
+//     required fields under matching mode values are rejected.
+//   - The walker never depends on propSchema["json_name"].
+//   - Absent and explicit null remain distinct.
+//   - Required/forbidden checks precede value validation.
+
+// schemaPropertyContext carries the parent context and the
+// property under evaluation so the applicability walker can
+// resolve sibling conditions without re-discovering the parent.
+type schemaPropertyContext struct {
+	PropertyName   string
+	PropertySchema map[string]any
+	ParentSchema   map[string]any
+	ParentInstance map[string]any
+
+	Value   any
+	Present bool
+
+	SchemaPath   string
+	InstancePath string
+}
 
 // evalField evaluates a single instance value against a property
 // schema. Nested objects and arrays are walked recursively.
 func evalField(propSchema map[string]any, value any, leamasExtensions bool) schemaEvaluation {
 	if propSchema == nil {
 		return acceptAny(leamasExtensions)
-	}
-	// x-applicability: enforce mode-dependent required/forbidden
-	// at the field's own level. The walker reads the sibling
-	// from the parent context (value) when value is a map; when
-	// the value is absent (nil), the walker skips the check
-	// because the parent's own object case already fires
-	// required_property_missing for the absent field.
-	if leamasExtensions {
-		if app, ok := propSchema["x-applicability"].([]any); ok {
-			if value != nil {
-				if parent, ok := value.(map[string]any); ok {
-					for _, a := range app {
-						m, ok := a.(map[string]any)
-						if !ok {
-							continue
-						}
-						sibling, _ := m["sibling"].(string)
-						valueStr, _ := m["value"].(string)
-						presence, _ := m["presence"].(string)
-						if sibling == "" || valueStr == "" {
-							continue
-						}
-						parentVal, present := parent[sibling]
-						if !present {
-							continue
-						}
-						parentStr, _ := parentVal.(string)
-						if parentStr != valueStr {
-							continue
-						}
-						fieldName, _ := propSchema["json_name"].(string)
-						_, fieldPresent := parent[fieldName]
-						switch presence {
-						case "required":
-							if !fieldPresent {
-								return rejectAny(leamasExtensions, "required property missing: "+fieldName)
-							}
-						case "forbidden":
-							if fieldPresent {
-								return rejectAny(leamasExtensions, "forbidden property present: "+fieldName)
-							}
-						}
-					}
-				}
-			}
-		}
 	}
 	if constVal, ok := propSchema["const"]; ok {
 		if !schemaValueEqual(constVal, value) {
@@ -86,47 +67,6 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 	if hasType {
 		if !valueMatchesType(typeStr, value) {
 			return rejectAny(leamasExtensions, fmt.Sprintf("type %q mismatch", typeStr))
-		}
-	}
-	// x-applicability: enforce mode-dependent required/forbidden
-	// BEFORE other value constraints so absent fields under
-	// required mode fire the required diagnostic consistently.
-	if leamasExtensions {
-		if app, ok := propSchema["x-applicability"].([]any); ok {
-			if parent, ok := value.(map[string]any); ok {
-				for _, a := range app {
-					m, ok := a.(map[string]any)
-					if !ok {
-						continue
-					}
-					sibling, _ := m["sibling"].(string)
-					valueStr, _ := m["value"].(string)
-					presence, _ := m["presence"].(string)
-					if sibling == "" || valueStr == "" {
-						continue
-					}
-					parentVal, parentHasSibling := parent[sibling]
-					if !parentHasSibling {
-						continue
-					}
-					parentStr, _ := parentVal.(string)
-					if parentStr != valueStr {
-						continue
-					}
-					fieldName, _ := propSchema["json_name"].(string)
-					_, fieldPresent := parent[fieldName]
-					switch presence {
-					case "required":
-						if !fieldPresent {
-							return rejectAny(leamasExtensions, "required property missing: "+fieldName)
-						}
-					case "forbidden":
-						if fieldPresent {
-							return rejectAny(leamasExtensions, "forbidden property present: "+fieldName)
-						}
-					}
-				}
-			}
 		}
 	}
 	if minLen, ok := propSchema["minLength"].(float64); ok {
@@ -228,44 +168,37 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 	}
 	// Object constraints.
 	if hasType && typeStr == "object" {
-		_ = fmt.Sprintf("object case: %v mode=%v", propSchema["json_name"], value.(map[string]any)["mode"])
 		if asMap, ok := value.(map[string]any); ok {
 			// x-applicability: enforce mode-dependent required/forbidden
-			// on absent properties of this object.
+			// on absent properties of this object. The walker walks the
+			// SCHEMA-declared properties (not the instance properties) so
+			// absent required fields are caught even when the instance
+			// does not include them.
 			if leamasExtensions {
 				if sub, ok := propSchema["properties"].(map[string]any); ok {
-					modeStr, _ := asMap["mode"].(string)
 					for propName, propSchemaAny := range sub {
 						psm, ok := propSchemaAny.(map[string]any)
 						if !ok {
 							continue
 						}
-						app, ok := psm["x-applicability"].([]any)
+						app, ok := psm["x-applicability"].([]map[string]any)
 						if !ok {
 							continue
 						}
-						for _, a := range app {
-							m, ok := a.(map[string]any)
-							if !ok {
-								continue
-							}
-							sibling, _ := m["sibling"].(string)
-							valueStr, _ := m["value"].(string)
-							presence, _ := m["presence"].(string)
-							if sibling != "mode" || valueStr != modeStr {
-								continue
-							}
-							_, fieldPresent := asMap[propName]
-							switch presence {
-							case "required":
-								if !fieldPresent {
-									return rejectAny(leamasExtensions, "required property missing: "+propName)
-								}
-							case "forbidden":
-								if fieldPresent {
-									return rejectAny(leamasExtensions, "forbidden property present: "+propName)
-								}
-							}
+						_, fieldPresent := asMap[propName]
+						ctx := schemaPropertyContext{
+							PropertyName:   propName,
+							PropertySchema: psm,
+							ParentSchema:   propSchema,
+							ParentInstance: asMap,
+							Value:          nil,
+							Present:        fieldPresent,
+						}
+						if fieldPresent {
+							ctx.Value = asMap[propName]
+						}
+						if res := applyApplicabilityRules(ctx, app, leamasExtensions); !res.Accept {
+							return res
 						}
 					}
 				}
@@ -321,6 +254,82 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 				if !ok {
 					return rejectAny(leamasExtensions, reason)
 				}
+			}
+		}
+	}
+	return acceptAny(leamasExtensions)
+}
+
+// applyApplicabilityRules evaluates the x-applicability rules
+// for a single property against the supplied parent context.
+// Fail-closed shape validation is performed so malformed rules
+// never silently pass.
+func applyApplicabilityRules(ctx schemaPropertyContext, rules []map[string]any, leamasExtensions bool) schemaEvaluation {
+	seen := make(map[string]bool)
+	for idx, m := range rules {
+		siblingAny, hasSibling := m["sibling"]
+		if !hasSibling {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: sibling absent", idx))
+		}
+		sibling, ok := siblingAny.(string)
+		if !ok || sibling == "" {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: sibling wrong type", idx))
+		}
+		valueAny, hasValue := m["value"]
+		if !hasValue {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: value absent", idx))
+		}
+		valueStr, ok := valueAny.(string)
+		if !ok || valueStr == "" {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: value wrong type", idx))
+		}
+		presenceAny, hasPresence := m["presence"]
+		if !hasPresence {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: presence absent", idx))
+		}
+		presence, ok := presenceAny.(string)
+		if !ok {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: presence wrong type", idx))
+		}
+		switch presence {
+		case "required", "optional", "forbidden":
+			// accepted
+		default:
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: unknown presence %q", idx, presence))
+		}
+		key := sibling + "=" + valueStr
+		if seen[key] {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability: duplicate rule %s", key))
+		}
+		seen[key] = true
+		// Validate that the sibling is declared in the parent schema.
+		if sub, ok := ctx.ParentSchema["properties"].(map[string]any); ok {
+			if _, declared := sub[sibling]; !declared {
+				return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: sibling %q not declared in parent schema", idx, sibling))
+			}
+		}
+		// Look up the sibling value in the parent instance.
+		siblingVal, hasSiblingVal := ctx.ParentInstance[sibling]
+		if !hasSiblingVal {
+			// Sibling absent: no rule applies.
+			continue
+		}
+		siblingStr, isString := siblingVal.(string)
+		if !isString {
+			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: sibling %q has incompatible type", idx, sibling))
+		}
+		if siblingStr != valueStr {
+			continue
+		}
+		// Rule applies.
+		switch presence {
+		case "required":
+			if !ctx.Present {
+				return rejectAny(leamasExtensions, "required property missing: "+ctx.PropertyName)
+			}
+		case "forbidden":
+			if ctx.Present {
+				return rejectAny(leamasExtensions, "forbidden property present: "+ctx.PropertyName)
 			}
 		}
 	}

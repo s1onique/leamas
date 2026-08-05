@@ -108,10 +108,10 @@ func TestPinnedRunMatrix(t *testing.T) {
 		expected result
 	}{
 		{"both_present", nil, result{standard: true, extension: true, runtime: true}},
-		// ACCEPTANCE-1: extension accepts because the applicability walker cannot see the parent context.
-		{"wd_absent", []string{"delete:working_directory"}, result{standard: true, extension: true, runtime: false}},
-		{"ts_absent", []string{"delete:timeout_seconds"}, result{standard: true, extension: true, runtime: false}},
-		{"both_absent", []string{"delete:working_directory", "delete:timeout_seconds"}, result{standard: true, extension: true, runtime: false}},
+		// CORRECTION04: extension-aware rejects absent required fields.
+		{"wd_absent", []string{"delete:working_directory"}, result{standard: true, extension: false, runtime: false}},
+		{"ts_absent", []string{"delete:timeout_seconds"}, result{standard: true, extension: false, runtime: false}},
+		{"both_absent", []string{"delete:working_directory", "delete:timeout_seconds"}, result{standard: true, extension: false, runtime: false}},
 		{"wd_null", []string{"set:working_directory=null"}, result{standard: false, extension: false, runtime: false}},
 		{"ts_null", []string{"set:timeout_seconds=null"}, result{standard: false, extension: false, runtime: false}},
 	}
@@ -132,9 +132,7 @@ func TestPinnedRunMatrix(t *testing.T) {
 			if runtime != tc.expected.runtime {
 				t.Fatalf("%s: runtime=%v, want %v", tc.name, runtime, tc.expected.runtime)
 			}
-			if extension != runtime {
-				t.Logf("PARITY-DELTA %s: extension=%v runtime=%v (see ACCEPTANCE-1)", tc.name, extension, runtime)
-			}
+			t.Logf("PARITY-CONFIRMED %s: extension=%v runtime=%v", tc.name, extension, runtime)
 		})
 	}
 }
