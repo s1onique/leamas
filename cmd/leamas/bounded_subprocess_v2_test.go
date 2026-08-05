@@ -8,13 +8,29 @@ package main
 // ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1
 // because raw exec.Command(...).Run() does not bound the
 // subprocess lifetime, output sizes, or cleanup.
+//
+// R2B (MAC-CANARY-READINESS01-R2B): the harness now exposes
+// explicit StdoutTruncated / StderrTruncated flags so callers
+// (notably installed-style authority dogfood) can refuse to
+// claim success when subprocess output was discarded. The
+// underlying writer continues to return the requested write
+// length so the subprocess is never silently blocked by an
+// unread pipe; the truncation flag is the only signal a
+// caller may inspect.
+//
+// The bounded buffer uses a plain []byte field rather than
+// embedding bytes.Buffer. Embedding caused the embedded
+// Write method to mask the override in some Go runtime /
+// os/exec dispatch paths, leaving truncation undetected. A
+// plain field keeps the override authoritative.
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
 	"os/exec"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -26,12 +42,19 @@ type boundedSubprocessV2Options struct {
 	Env       []string
 }
 
+// boundedSubprocessV2Result is the bounded subprocess result.
+// R2B adds StdoutTruncated and StderrTruncated: each flag is
+// true when the underlying buffer discarded at least one byte
+// because the configured limit was reached. The flags MUST be
+// inspected by callers that promise bounded output.
 type boundedSubprocessV2Result struct {
-	Stdout   []byte
-	Stderr   []byte
-	ExitCode int
-	Err      error
-	TimedOut bool
+	Stdout          []byte
+	Stderr          []byte
+	StdoutTruncated bool
+	StderrTruncated bool
+	ExitCode        int
+	Err             error
+	TimedOut        bool
 }
 
 func boundedSubprocessV2Defaults() boundedSubprocessV2Options {
@@ -42,6 +65,11 @@ func boundedSubprocessV2Defaults() boundedSubprocessV2Options {
 	}
 }
 
+// boundedSubprocessV2 runs the supplied binary with the
+// supplied argv, capturing stdout / stderr into bounded
+// buffers. The function blocks until the process exits or the
+// timeout fires. The result carries truncation flags for any
+// caller that requires explicit bounded-output semantics.
 func boundedSubprocessV2(binary string, argv []string, opts boundedSubprocessV2Options) boundedSubprocessV2Result {
 	if opts.Timeout == 0 {
 		opts.Timeout = boundedSubprocessV2Defaults().Timeout
@@ -72,8 +100,10 @@ func boundedSubprocessV2(binary string, argv []string, opts boundedSubprocessV2O
 
 	runErr := cmd.Run()
 	result := boundedSubprocessV2Result{
-		Stdout: stdout.Bytes(),
-		Stderr: stderr.Bytes(),
+		Stdout:          stdout.Bytes(),
+		Stderr:          stderr.Bytes(),
+		StdoutTruncated: stdout.Truncated(),
+		StderrTruncated: stderr.Truncated(),
 	}
 	if runErr != nil {
 		result.Err = runErr
@@ -90,27 +120,57 @@ func boundedSubprocessV2(binary string, argv []string, opts boundedSubprocessV2O
 	return result
 }
 
+// boundedBuffer is a fixed-capacity byte buffer. Write
+// returns the full len(p) so the subprocess is never blocked
+// by an unread pipe. When the limit is reached, further bytes
+// are silently discarded and Truncated() begins returning
+// true. Concurrency-safe: Write may be invoked from a
+// background goroutine spawned by os/exec.
 type boundedBuffer struct {
-	bytes.Buffer
-	limit int
+	mu        sync.Mutex
+	limit     int
+	buf       []byte
+	truncated atomic.Bool
 }
 
 func newBoundedBuffer(limit int) *boundedBuffer {
 	return &boundedBuffer{limit: limit}
 }
 
+// Write appends p up to the configured limit. Once the limit
+// is reached, every subsequent Write increments the truncated
+// flag and returns len(p) without growing the buffer.
 func (b *boundedBuffer) Write(p []byte) (int, error) {
-	if b.Len() >= b.limit {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.limit > 0 && len(b.buf) >= b.limit {
+		b.truncated.Store(true)
 		return len(p), nil
 	}
-	remaining := b.limit - b.Len()
-	if len(p) <= remaining {
-		return b.Buffer.Write(p)
+	if b.limit > 0 && len(b.buf)+len(p) > b.limit {
+		remaining := b.limit - len(b.buf)
+		if remaining > 0 {
+			b.buf = append(b.buf, p[:remaining]...)
+		}
+		b.truncated.Store(true)
+		return len(p), nil
 	}
-	if _, err := b.Buffer.Write(p[:remaining]); err != nil {
-		return 0, err
-	}
+	b.buf = append(b.buf, p...)
 	return len(p), nil
+}
+
+// Bytes returns a snapshot of the captured bytes.
+func (b *boundedBuffer) Bytes() []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	out := make([]byte, len(b.buf))
+	copy(out, b.buf)
+	return out
+}
+
+// Truncated reports whether at least one byte was discarded.
+func (b *boundedBuffer) Truncated() bool {
+	return b.truncated.Load()
 }
 
 var _ = io.Discard

@@ -22,44 +22,44 @@
   },
   "files_changed": [
     {
+      "path": "cmd/leamas/bounded_subprocess_v2_test.go",
+      "sha256": "d8729d0e7a2b9a0b3adda3666ba9c0307bac95427e0d405384b92fc13d278f29"
+    },
+    {
       "path": "docs/acts/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1.md",
-      "sha256": "6c5f6e3a7d4b6f9b3c8a0a4b3c8a0a4b3c8a0a4b3c8a0a4b3c8a0a4b3c8a0a4"
+      "sha256": "cee562e48a463e7b170c486165a8565dfe023cd2ba3acd7828b94b1e5e79b6b5"
     },
     {
       "path": "internal/factory/closure/closure_protocol_v2_diagnostic.go",
-      "sha256": "caller_state_unavailable + worktree_inventory_unavailable added"
+      "sha256": "8aea04e1c38c9642014924da3552ca5fa056c9d794d4dbff2f341e95dd624b2b"
     },
     {
       "path": "internal/factory/closure/closure_protocol_v2_executor.go",
-      "sha256": "fail-closed worktree snapshot"
+      "sha256": "7830b179549d031f8d0f93c65483aafc18ab9cd90cb629d95e907f4308bd0ea7"
     },
     {
       "path": "internal/factory/closure/closure_protocol_v2_runner.go",
-      "sha256": "fail-closed caller-state snapshot"
-    },
-    {
-      "path": "internal/factory/closure/v2_lifecycle_invariants.go",
-      "sha256": "result-bearing snapshot types"
-    },
-    {
-      "path": "internal/factory/closure/v2_lifecycle_invariants_test.go",
-      "sha256": "RealGit invariant tests"
-    },
-    {
-      "path": "internal/factory/closure/v2_lifecycle_git_failure_test.go",
-      "sha256": "totality test for fail-closed nil git"
+      "sha256": "3816c3dbc0ea3132c16c35293c94a722fc9a4ccba2be3cb7d02e4268bd2093e2"
     },
     {
       "path": "internal/factory/closure/v2_fail_closed_observation_test.go",
-      "sha256": "six new fail-closed observation tests"
+      "sha256": "194ab643b7b9be5cae7658c5833401d7bbc7cce6c37413f15655eae5e28b01ad"
+    },
+    {
+      "path": "internal/factory/closure/v2_lifecycle_git_failure_test.go",
+      "sha256": "2936fef7f41ae79c7f632d24ecc3b37c802ce90032a1aab99eefdc4703e80b81"
+    },
+    {
+      "path": "internal/factory/closure/v2_lifecycle_invariants.go",
+      "sha256": "bbfe9229daf1d20c33c98a37714ee698b4410fceb752d417564050c9703e1a60"
+    },
+    {
+      "path": "internal/factory/closure/v2_lifecycle_invariants_test.go",
+      "sha256": "bb1db336c6e3d128de5d7340e1e93a384235e35ea375307b65c23cea8b4276c8"
     },
     {
       "path": "internal/factory/execgate/verifier.go",
-      "sha256": "bounded_subprocess_v2_test.go added to allowlist"
-    },
-    {
-      "path": "cmd/leamas/bounded_subprocess_v2_test.go",
-      "sha256": "bounded subprocess harness"
+      "sha256": "367d042f5fc4a3ae469fd8723bba1c98b4092ef31f0276a1a760c09f33de24b1"
     }
   ],
   "checks": [
@@ -180,6 +180,7 @@
     "manifest_sha256": "89be4e71e9bedb2a0b7bbf5adab7926d81e0a151934c112fd6958d90a927a5dc",
     "binary_commit": "25010d160c6b04edc24ec4602af951541ef1ffa8",
     "binary_sha256": "dfbddcc8c20c353b6b9fbb3d03eb3b8392a817f794c14f485d988e1059352db6",
+    "binary_vcs_revision": "25010d160c6b04edc24ec4602af951541ef1ffa8",
     "binary_modified": false,
     "subject_commit": "7e5ea1796a33e38549c7725d1ca47246da556a64",
     "subject_tree": "299576640e00495c1f4c04aa44366bae62876de8",
@@ -187,8 +188,9 @@
     "freeze_tree": "d5071cb742fb4aac3885d54c2a44d8b617c90793",
     "caller_head": "ac6d29902ab01aef29d02116cd92eb8125b86a91",
     "execution_tree": "299576640e00495c1f4c04aa44366bae62876de8",
-    "plan_blob": "30bb1ac6",
-    "plan_sha256": "72d23905",
+    "plan_blob": "",
+    "plan_sha256": "",
+    "plan_note": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1 is a runner-authority correction; it is closed through the v2 hermetic + CLI subprocess tests, not through the v2 closure verifier. No frozen plan is required for an authority-only ACT. The dogfood run did not bind a frozen plan, so plan_blob and plan_sha256 are intentionally empty.",
     "caller_status_before": "",
     "caller_status_after": "",
     "worktree_registrations_before": 1,

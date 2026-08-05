@@ -19,7 +19,7 @@ PASS
 
 ## Checks
 
-Ordered results: 5.
+Ordered results: 6 (R1 fail-closed observation matrix).
 
 | Check | Result | Duration | Exit |
 |---|---|---:|---:|
