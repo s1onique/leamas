@@ -10,15 +10,18 @@ import (
 // them from plan_schema_evaluator.go keeps the main evaluator
 // file under the LLM-friendly 400-line threshold.
 
-// exactRational converts any JSON-decoded numeric value into an
-// exact math/big.Rat. Returns nil and false when the value is not a
-// recognisable JSON number or string-encoded number.
+// exactRational converts a JSON numeric value into an exact
+// math/big.Rat. Returns nil and false when the value is not a
+// JSON numeric wrapper (json.Number, *big.Rat, int, int64) or a
+// Go float64 approximation. JSON strings are NOT numeric values
+// even when their textual content is a number; a JSON string
+// must be type-checked before any numeric interpretation.
 //
-// CORRECTION06: this helper is the authoritative entry point for
-// numeric classification and bound comparison. It does not pass
-// through float64: an exact rational is retained so values that
-// float64 would round across the [1,600] inclusive range still
-// classify correctly.
+// CORRECTION07: parsing strings through exactRational was a
+// silent type-coercion bug. A value of type "60" (JSON string)
+// is a string, not the integer 60. The schema's type=integer
+// branch must reject it on type, before any numeric value
+// recovery is attempted.
 func exactRational(value any) (*big.Rat, bool) {
 	if value == nil {
 		return nil, false
@@ -31,15 +34,13 @@ func exactRational(value any) (*big.Rat, bool) {
 		return new(big.Rat).Set(v), true
 	case json.Number:
 		return parseExactNumber(string(v))
-	case string:
-		return parseExactNumber(v)
 	case int:
 		return new(big.Rat).SetInt64(int64(v)), true
 	case int64:
 		return new(big.Rat).SetInt64(v), true
 	case float64:
 		// Note: float64 inputs are inherently imprecise; production
-		// paths should use json.Number or string.
+		// paths should use json.Number.
 		r := new(big.Rat).SetFloat64(v)
 		return r, true
 	}
@@ -101,27 +102,18 @@ func exactFromInt64(n int64) *big.Rat {
 // valueMatchesType reports whether value matches the supplied
 // JSON Schema type label.
 //
-// CORRECTION05: json.Number (the type emitted by encoding/json
-// when decoder.UseNumber is set) is recognised as integer when
-// the underlying literal text is mathematically integral. This
-// keeps the round-tripped public wire shape compatible with the
-// evaluator.
+// CORRECTION07: a JSON number is not a JSON string; the
+// previous "string, json.Number" union was a type-confusion bug.
+// Unknown type names are rejected (schema issue) rather than
+// permissive-accepting the value.
 func valueMatchesType(t string, value any) bool {
 	switch t {
 	case "string":
-		switch value.(type) {
-		case string, json.Number:
-			return true
-		}
-		return false
+		_, ok := value.(string)
+		return ok
 	case "integer":
-		switch v := value.(type) {
-		case int, int64:
-			return true
-		case float64:
-			return v == float64(int64(v))
-		case json.Number:
-			return isIntegerText(v.String())
+		if r, ok := exactRational(value); ok {
+			return exactIsInteger(r)
 		}
 		return false
 	case "number":
@@ -139,7 +131,10 @@ func valueMatchesType(t string, value any) bool {
 	case "null":
 		return value == nil
 	}
-	return true // unknown type: permissive
+	// CORRECTION07: unknown types must fail closed. The
+	// previous permissive fallback was a hidden default that
+	// masked malformed schemas.
+	return false
 }
 
 // isIntegerText reports whether the supplied literal JSON text
