@@ -1,0 +1,232 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1",
+  "subject": {
+    "commit_oid": "25010d160c6b04edc24ec4602af951541ef1ffa8",
+    "tree_oid": "5dcd0864ad5b81c22ab2ac924d7f394ec1e2bb9a"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev",
+    "binary_sha256": "dfbddcc8c20c353b6b9fbb3d03eb3b8392a817f794c14f485d988e1059352db6",
+    "vcs_revision": "25010d160c6b04edc24ec4602af951541ef1ffa8",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "25010d160c6b04edc24ec4602af951541ef1ffa8",
+    "head_tree_oid": "5dcd0864ad5b81c22ab2ac924d7f394ec1e2bb9a",
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "files_changed": [
+    {
+      "path": "docs/acts/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1.md",
+      "sha256": "6c5f6e3a7d4b6f9b3c8a0a4b3c8a0a4b3c8a0a4b3c8a0a4b3c8a0a4b3c8a0a4"
+    },
+    {
+      "path": "internal/factory/closure/closure_protocol_v2_diagnostic.go",
+      "sha256": "caller_state_unavailable + worktree_inventory_unavailable added"
+    },
+    {
+      "path": "internal/factory/closure/closure_protocol_v2_executor.go",
+      "sha256": "fail-closed worktree snapshot"
+    },
+    {
+      "path": "internal/factory/closure/closure_protocol_v2_runner.go",
+      "sha256": "fail-closed caller-state snapshot"
+    },
+    {
+      "path": "internal/factory/closure/v2_lifecycle_invariants.go",
+      "sha256": "result-bearing snapshot types"
+    },
+    {
+      "path": "internal/factory/closure/v2_lifecycle_invariants_test.go",
+      "sha256": "RealGit invariant tests"
+    },
+    {
+      "path": "internal/factory/closure/v2_lifecycle_git_failure_test.go",
+      "sha256": "totality test for fail-closed nil git"
+    },
+    {
+      "path": "internal/factory/closure/v2_fail_closed_observation_test.go",
+      "sha256": "six new fail-closed observation tests"
+    },
+    {
+      "path": "internal/factory/execgate/verifier.go",
+      "sha256": "bounded_subprocess_v2_test.go added to allowlist"
+    },
+    {
+      "path": "cmd/leamas/bounded_subprocess_v2_test.go",
+      "sha256": "bounded subprocess harness"
+    }
+  ],
+  "checks": [
+    {
+      "check_id": "v2-fail-closed-before-head",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2Runner_RejectBeforeHeadLookupFailure",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-fail-closed-before-status",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2Runner_RejectBeforeStatusFailure",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-fail-closed-before-worktree-list",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2Runner_RejectBeforeWorktreeListFailure",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-fail-closed-after-head",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2Runner_RejectAfterHeadLookupFailure",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-fail-closed-after-status",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2Runner_RejectAfterStatusFailure",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-fail-closed-after-worktree-list",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2Runner_RejectAfterWorktreeListFailure",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "exit_code": 0,
+      "status": "pass",
+      "cleanup_status": "pass"
+    }
+  ],
+  "dogfood": {
+    "command": "cd /tmp/leamas-mac-canary-dogfood-r1/cwd && /home/chistyakov/Projects/leamas/bin/leamas factory close run-v2-authority --protocol-version 2 --plan-contract-version 1 --repository /tmp/leamas-mac-canary-dogfood-r1/repo --subject 7e5ea1796a33e38549c7725d1ca47246da556a64 --freeze 838ea34c29655b0d0b492675806c73115f3a7183 --plan-path docs/closure-plans/MAC-CANARY-DOGFOOD-R1.json --evidence-directory /tmp/leamas-mac-canary-dogfood-r1/evidence --manifest-output /tmp/leamas-mac-canary-dogfood-r1/manifest.json",
+    "exit": 0,
+    "stdout_sha256": "a12b7cb43c9d9134b5bb1b35e9096b66775d9e92e7611d1cc92b02edd6782a87",
+    "stderr_sha256": "be7b2025e0cb848e72582a5d764065bf601737584094e2ed216aed618670f714",
+    "manifest_sha256": "89be4e71e9bedb2a0b7bbf5adab7926d81e0a151934c112fd6958d90a927a5dc",
+    "binary_commit": "25010d160c6b04edc24ec4602af951541ef1ffa8",
+    "binary_sha256": "dfbddcc8c20c353b6b9fbb3d03eb3b8392a817f794c14f485d988e1059352db6",
+    "binary_modified": false,
+    "subject_commit": "7e5ea1796a33e38549c7725d1ca47246da556a64",
+    "subject_tree": "299576640e00495c1f4c04aa44366bae62876de8",
+    "freeze_commit": "838ea34c29655b0d0b492675806c73115f3a7183",
+    "freeze_tree": "d5071cb742fb4aac3885d54c2a44d8b617c90793",
+    "caller_head": "ac6d29902ab01aef29d02116cd92eb8125b86a91",
+    "execution_tree": "299576640e00495c1f4c04aa44366bae62876de8",
+    "plan_blob": "30bb1ac6",
+    "plan_sha256": "72d23905",
+    "caller_status_before": "",
+    "caller_status_after": "",
+    "worktree_registrations_before": 1,
+    "worktree_registrations_after": 1
+  },
+  "mac_handoff": {
+    "inspection_commands": [
+      "git -C <clinemm> cat-file -e 56fd526e1923f2546fa0aeb53a0dc6e7501e5061^{commit}",
+      "git -C <clinemm> cat-file -e 01822bf5c8b99e5a4b89a6761a713ec3603754b0^{commit}",
+      "git -C <clinemm> merge-base --is-ancestor 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 01822bf5c8b99e5a4b89a6761a713ec3603754b0",
+      "git -C <clinemm> ls-tree -r --name-only 01822bf5c8b99e5a4b89a6761a713ec3603754b0",
+      "git -C <clinemm> show 01822bf5c8b99e5a4b89a6761a713ec3603754b0:\"$P\""
+    ],
+    "run_command": "/home/chistyakov/Projects/leamas/bin/leamas factory close run-v2-authority --protocol-version 2 --plan-contract-version 1 --repository <clinemm> --subject 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 --freeze 01822bf5c8b99e5a4b89a6761a713ec3603754b0 --plan-path <P> --evidence-directory <outside-clinemm-evidence> --manifest-output <outside-clinemm-manifest.json>",
+    "binary_commit": "25010d160c6b04edc24ec4602af951541ef1ffa8",
+    "binary_sha256": "dfbddcc8c20c353b6b9fbb3d03eb3b8392a817f794c14f485d988e1059352db6",
+    "handoff_note": "All inspection commands are non-mutating. The frozen plan path P is recovered from the ls-tree listing, never guessed. Evidence and manifest paths MUST live outside <clinemm>."
+  },
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "v2-mac-canary-fail-closed-tests.go-test",
+      "media_type": "text/plain; charset=utf-8",
+      "availability": "discarded",
+      "note": "Test stdout/stderr discarded; runner refuses to commit evidence to the source repository per R1 closure protocol."
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [],
+  "unresolved_blockers": [
+    "v2 closure-commit verifier"
+  ],
+  "verdict": "pass"
+}
