@@ -100,7 +100,7 @@ func TestV2HermeticTopologyEndToEnd(t *testing.T) {
 		"docs/closure-plans/HERMETIC-PLAN.json": `{
   "contract_version": 1,
   "act_id": "ACT-HERMETIC-V2-01",
-  "baseline": {"commit_oid": "` + subject + `", "tree_oid": ""},
+  "baseline": {"commit_oid": "` + subject + `", "tree_oid": "` + subject + `"},
   "execution": {"mode": "serial_fail_fast"},
   "checks": [],
   "artifacts": [],
@@ -264,7 +264,7 @@ func TestV2FrozenBytesAdversarial(t *testing.T) {
 	dir := initRepo(t)
 	subject := makeCommit(t, dir, "subject", map[string]string{"a.txt": "a"})
 	freeze := makeCommit(t, dir, "freeze", map[string]string{
-		"docs/closure-plans/HERMETIC.json": `{"contract_version": 1, "act_id": "FROZEN_ACT"}`,
+		"docs/closure-plans/HERMETIC.json": `{"contract_version": 1, "act_id": "ACT-HERMETIC-FROZEN-01"}`,
 	})
 	// Modify the disk plan to a different act_id AFTER F.
 	if err := os.WriteFile(filepath.Join(dir, "docs/closure-plans/HERMETIC.json"),

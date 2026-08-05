@@ -106,17 +106,48 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 			fmt.Sprintf("create temp dir: %s", err.Error()),
 			"execution_tree", err.Error())
 	}
-	cleanup := func() { _ = os.RemoveAll(worktreePath) }
+	// Phase 5 (CORRECTION01): the cleanup function MUST use
+	// the Git authority (`git worktree remove --force`) before
+	// removing the directory. Skipping the Git step would leak
+	// the worktree registration in the caller repository's
+	// administrative files even when the directory is gone.
+	cleanup := func() v2CleanupReport {
+		report := v2CleanupReport{}
+		rmResult := e.Git.Run(ctx, req.RepositoryRoot,
+			"worktree", "remove", "--force", worktreePath)
+		if rmResult.Err != nil || rmResult.ExitCode != 0 {
+			report.WorktreeRemoveError = fmt.Errorf("git worktree remove --force %s: %s",
+				worktreePath, strings.TrimSpace(string(rmResult.Stderr)))
+		}
+		pruneResult := e.Git.Run(ctx, req.RepositoryRoot, "worktree", "prune")
+		if pruneResult.Err != nil || pruneResult.ExitCode != 0 {
+			report.PruneError = fmt.Errorf("git worktree prune: %s",
+				strings.TrimSpace(string(pruneResult.Stderr)))
+		}
+		if err := os.RemoveAll(worktreePath); err != nil {
+			report.FilesystemRemoveError = err
+		}
+		return report
+	}
 	addResult := e.Git.Run(ctx, req.RepositoryRoot, "worktree", "add", "--detach", worktreePath, req.SubjectCommit)
 	if addResult.Err != nil || addResult.ExitCode != 0 {
-		cleanup()
+		_ = cleanup()
 		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("git worktree add --detach %s %s failed: %s",
 				worktreePath, req.SubjectCommit,
 				strings.TrimSpace(string(addResult.Stderr))),
 			"execution_tree", "")
 	}
-	defer cleanup()
+	var result V2ExecuteResult
+	defer func() {
+		report := cleanup()
+		if report.HasError() {
+			// Cleanup failure is recorded for the caller but
+			// does not retroactively fail a successful run. The
+			// report is preserved in the executor result.
+			result.CleanupError = report.Summary()
+		}
+	}()
 	observedTree, err := runGitValue(ctx, e.Git, worktreePath, "rev-parse", "HEAD^{tree}")
 	if err != nil {
 		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeGitOperationFailed,
@@ -155,6 +186,34 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		CheckResults: checks,
 		Evidence:     evidence,
 	}, nil
+}
+
+// v2CleanupReport records the three cleanup stages that
+// Git's linked-worktree machinery requires. HasError reports
+// whether any stage failed; Summary produces a single-line
+// human-readable digest for V2ExecuteResult.CleanupError.
+type v2CleanupReport struct {
+	WorktreeRemoveError   error
+	PruneError            error
+	FilesystemRemoveError error
+}
+
+func (r v2CleanupReport) HasError() bool {
+	return r.WorktreeRemoveError != nil || r.PruneError != nil || r.FilesystemRemoveError != nil
+}
+
+func (r v2CleanupReport) Summary() string {
+	var parts []string
+	if r.WorktreeRemoveError != nil {
+		parts = append(parts, r.WorktreeRemoveError.Error())
+	}
+	if r.PruneError != nil {
+		parts = append(parts, r.PruneError.Error())
+	}
+	if r.FilesystemRemoveError != nil {
+		parts = append(parts, r.FilesystemRemoveError.Error())
+	}
+	return strings.Join(parts, "; ")
 }
 
 // EnsureV2ExecutionBudget is a small helper that returns the

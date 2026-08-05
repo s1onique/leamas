@@ -200,13 +200,29 @@ type V2CheckResult struct {
 // V2BinaryIdentity records the Leamas binary that produced
 // the v2 manifest. VCSRevision is the full commit OID; the
 // runner derives it via the same identity the v1 manifest
-// already records.
+// already records. LeamasVersion is the stamped semantic
+// version of the binary, matching `leamas version`.
 type V2BinaryIdentity struct {
-	Path        string `json:"path"`
-	SHA256      string `json:"sha256"`
-	VCSRevision string `json:"vcs_revision"`
-	VCSModified bool   `json:"vcs_modified"`
+	Path          string `json:"path"`
+	SHA256        string `json:"sha256"`
+	VCSRevision   string `json:"vcs_revision"`
+	VCSModified   bool   `json:"vcs_modified"`
+	LeamasVersion string `json:"leamas_version"`
 }
+
+// RunningLeamasVersion returns the stamped Leamas version for
+// the running binary. The implementation lives in the version
+// package and is wired here via a thin shim to avoid an
+// import cycle.
+var RunningLeamasVersion = func() string { return "" }
+
+// RunningLeamasVCSRevision returns the full commit OID for the
+// running binary. See RunningLeamasVersion for the rationale.
+var RunningLeamasVCSRevision = func() string { return "" }
+
+// RunningLeamasVCSModified returns the dirty-flag for the
+// running binary. See RunningLeamasVersion for the rationale.
+var RunningLeamasVCSModified = func() bool { return false }
 
 // V2ManifestJSON renders the v2 manifest as a deterministic
 // JSON byte string. The helper exists so callers that need a
