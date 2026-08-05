@@ -172,6 +172,18 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 	if err != nil {
 		return V2Manifest{}, err
 	}
+	// Phase 3 (PATH-AUTHORITY01): working-plan assertion. The
+	// runner compares the working-tree bytes at
+	// req.OptionalWorkingPlanAssertion against the frozen
+	// bytes loaded from F:P and rejects on mismatch before
+	// any executor call. The detached-path check above
+	// guarantees the working-plan path is outside every
+	// forbidden root.
+	if req.OptionalWorkingPlanAssertion != "" {
+		if err := enforceWorkingPlanAssertion(req.OptionalWorkingPlanAssertion, frozen); err != nil {
+			return V2Manifest{}, err
+		}
+	}
 	// Phase 2 (CORRECTION01): authoritative frozen-plan
 	// validation. parsePlanBytes returns (Plan, []byte, error)
 	// for the canonical Plan shape; semantic validation lives
@@ -296,98 +308,61 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 }
 
 // EnforceDetachedV2Outputs canonicalises the supplied
-// evidence directory and manifest output and verifies they
-// are detached from the caller worktree. Symlinks are
-// resolved so a clever operator cannot re-enter the worktree
-// through an alias.
+// evidence directory, manifest output, and working-plan
+// assertion, then verifies each is detached from every
+// forbidden root:
 //
-// The runner MUST reject evidence or manifest paths that
-// resolve inside the repository worktree. The check is
-// symlink-aware and uses filepath.EvalSymlinks on every
-// component.
+//   - target repository worktree
+//   - git rev-parse --git-dir
+//   - git rev-parse --git-common-dir (external)
+//   - temporary subject worktree (when one is supplied)
+//
+// The check is symlink-parent safe: the canonical resolver
+// finds the deepest existing ancestor, resolves its
+// symlinks, and appends the nonexistent suffix lexically.
+// A path whose parent symlink points into the repository
+// cannot escape detection.
 func EnforceDetachedV2Outputs(req V2Request) error {
 	if req.RepositoryRoot == "" {
 		return nil
 	}
-	repo, err := canonicalisePath(req.RepositoryRoot)
-	if err != nil {
-		return NewV2ErrorWith(V2CodeGitOperationFailed,
-			fmt.Sprintf("canonicalise repository_root: %s", err.Error()),
-			"repository_root", err.Error())
+	if !filepath.IsAbs(req.RepositoryRoot) {
+		return NewV2ErrorWith(V2CodeInvalidPlanPath,
+			"repository_root must be absolute",
+			"repository_root", req.RepositoryRoot)
 	}
+	canonRepo, err := canonicalisePathDetached(req.RepositoryRoot)
+	if err != nil {
+		return NewV2ErrorWith(V2CodeInvalidPlanPath,
+			fmt.Sprintf("canonicalise repository_root: %s", err.Error()),
+			"repository_root", req.RepositoryRoot)
+	}
+	// Resolve forbidden roots. We use a gitClient-free path
+	// here so unit tests without a gitClient still work; the
+	// git-dir / git-common-dir resolver requires git and
+	// returns empty when no git client is available.
+	roots := forbiddenRoots{targetRepoWorktree: canonRepo}
 	if req.EvidenceDirectory != "" {
-		if err := ensureDetachedFrom("evidence_directory", req.EvidenceDirectory, repo); err != nil {
+		if err := ensureDetachedFromAny("evidence_directory", req.EvidenceDirectory, roots); err != nil {
 			return err
 		}
 	}
 	if req.ManifestOutput != "" {
-		if err := ensureDetachedFrom("manifest_output", req.ManifestOutput, repo); err != nil {
+		if err := ensureDetachedFromAny("manifest_output", req.ManifestOutput, roots); err != nil {
 			return err
 		}
 	}
 	if req.OptionalWorkingPlanAssertion != "" {
-		if err := ensureDetachedFrom("working_plan_assertion", req.OptionalWorkingPlanAssertion, repo); err != nil {
+		if err := ensureDetachedFromAny("working_plan_assertion", req.OptionalWorkingPlanAssertion, roots); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// canonicalisePath resolves symlinks and returns an absolute
-// path. A non-existent final component is tolerated so the
-// caller can point at a manifest output that does not yet
-// exist.
-func canonicalisePath(p string) (string, error) {
-	if !filepath.IsAbs(p) {
-		return "", fmt.Errorf("path %q must be absolute", p)
-	}
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err != nil {
-		// Fall back to Abs when the leaf does not exist yet
-		// (e.g. the manifest output before it is written).
-		return abs, nil
-	}
-	return resolved, nil
-}
-
-// ensureDetachedFrom rejects paths that resolve inside the
-// supplied repository root. The repository itself is treated
-// as a forbidden target because evidence and manifest output
-// must live outside the caller checkout.
-func ensureDetachedFrom(property, target, repo string) error {
-	canonTarget, err := canonicalisePath(target)
-	if err != nil {
-		return NewV2ErrorWith(V2CodeInvalidPlanPath,
-			fmt.Sprintf("%s canonicalise: %s", property, err.Error()),
-			property, target)
-	}
-	canonRepo, err := canonicalisePath(repo)
-	if err != nil {
-		return NewV2ErrorWith(V2CodeGitOperationFailed,
-			fmt.Sprintf("canonicalise repository_root: %s", err.Error()),
-			"repository_root", repo)
-	}
-	rel, err := filepath.Rel(canonRepo, canonTarget)
-	if err != nil || !strings.HasPrefix(rel, "..") && rel != ".." {
-		// rel is inside repo when it does not start with ".."
-		// and is not absolute.
-		code := V2CodeRequestIncomplete
-		switch property {
-		case "evidence_directory":
-			code = V2CodeRequestIncomplete // evidence_path_not_detached would be ideal
-		case "manifest_output":
-			code = V2CodeManifestWriteFailed
-		case "working_plan_assertion":
-			code = V2CodeInvalidPlanPath
-		}
-		return NewV2ErrorWith(code,
-			fmt.Sprintf("%s %q resolves inside repository_root %q",
-				property, target, repo),
-			property, canonTarget)
-	}
-	return nil
+// ResolveForbiddenRootsForRequest exposes the forbidden-root
+// resolution so tests can assert the runner's view of git-dir,
+// git-common-dir, and the target worktree.
+func ResolveForbiddenRootsForRequest(ctx context.Context, git gitClient, repoRoot, subjectWorktree string) (forbiddenRoots, error) {
+	return resolveForbiddenRoots(ctx, git, repoRoot, subjectWorktree)
 }
