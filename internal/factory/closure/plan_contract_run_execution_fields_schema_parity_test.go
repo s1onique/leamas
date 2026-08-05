@@ -81,7 +81,10 @@ func applicabilityHas(field map[string]any, sibling, value, presence string) boo
 		return false
 	}
 	for _, r := range rules {
-		if r["sibling"].(string) == sibling && r["value"].(string) == value && r["presence"].(string) == presence {
+		rs, _ := r["sibling"].(string)
+		rv, _ := r["value"].(string)
+		rp, _ := r["presence"].(string)
+		if rs == sibling && rv == value && rp == presence {
 			return true
 		}
 	}

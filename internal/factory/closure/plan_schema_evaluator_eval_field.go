@@ -69,14 +69,11 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 			return rejectAny(leamasExtensions, fmt.Sprintf("type %q mismatch", typeStr))
 		}
 	}
-	if minLen, ok := propSchema["minLength"].(float64); ok {
-		if s, ok := value.(string); !ok || float64(len(s)) < minLen {
-			return rejectAny(leamasExtensions, fmt.Sprintf("minLength %v violated", minLen))
-		}
-	}
-	if minLen, ok := propSchema["minLength"].(int); ok {
-		if s, ok := value.(string); !ok || len(s) < minLen {
-			return rejectAny(leamasExtensions, fmt.Sprintf("minLength %v violated", minLen))
+	if minLenRaw, ok := propSchema["minLength"]; ok {
+		if minLen, isNum := numericValue(minLenRaw); isNum {
+			if s, ok := value.(string); !ok || float64(len(s)) < minLen {
+				return rejectAny(leamasExtensions, fmt.Sprintf("minLength %v violated", minLen))
+			}
 		}
 	}
 	if pattern, ok := propSchema["pattern"].(string); ok {
@@ -105,40 +102,23 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 			}
 		}
 	}
-	if min, ok := propSchema["minimum"].(float64); ok {
-		n, isNum := numericValue(value)
-		if !isNum || float64(n) < min {
-			return rejectAny(leamasExtensions, fmt.Sprintf("minimum %v violated", min))
+	// CORRECTION05: bound checks must work with both in-memory
+	// numeric types and the json.Number values produced by
+	// decoder.UseNumber.
+	if minRaw, ok := propSchema["minimum"]; ok {
+		if min, isNum := numericValue(minRaw); isNum {
+			n, isValNum := numericValue(value)
+			if !isValNum || n < min {
+				return rejectAny(leamasExtensions, fmt.Sprintf("minimum %v violated", min))
+			}
 		}
 	}
-	if min, ok := propSchema["minimum"].(int); ok {
-		n, isNum := numericValue(value)
-		if !isNum || n < float64(min) {
-			return rejectAny(leamasExtensions, fmt.Sprintf("minimum %v violated", min))
-		}
-	}
-	if min, ok := propSchema["minimum"].(int64); ok {
-		n, isNum := numericValue(value)
-		if !isNum || n < float64(min) {
-			return rejectAny(leamasExtensions, fmt.Sprintf("minimum %v violated", min))
-		}
-	}
-	if max, ok := propSchema["maximum"].(float64); ok {
-		n, isNum := numericValue(value)
-		if !isNum || float64(n) > max {
-			return rejectAny(leamasExtensions, fmt.Sprintf("maximum %v violated", max))
-		}
-	}
-	if max, ok := propSchema["maximum"].(int); ok {
-		n, isNum := numericValue(value)
-		if !isNum || n > float64(max) {
-			return rejectAny(leamasExtensions, fmt.Sprintf("maximum %v violated", max))
-		}
-	}
-	if max, ok := propSchema["maximum"].(int64); ok {
-		n, isNum := numericValue(value)
-		if !isNum || n > float64(max) {
-			return rejectAny(leamasExtensions, fmt.Sprintf("maximum %v violated", max))
+	if maxRaw, ok := propSchema["maximum"]; ok {
+		if max, isNum := numericValue(maxRaw); isNum {
+			n, isValNum := numericValue(value)
+			if !isValNum || n > max {
+				return rejectAny(leamasExtensions, fmt.Sprintf("maximum %v violated", max))
+			}
 		}
 	}
 	// Array constraints.
@@ -181,7 +161,7 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 						if !ok {
 							continue
 						}
-						app, ok := psm["x-applicability"].([]map[string]any)
+						app, ok := normalizeApplicabilityRules(psm["x-applicability"])
 						if !ok {
 							continue
 						}
@@ -258,6 +238,37 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 		}
 	}
 	return acceptAny(leamasExtensions)
+}
+
+// normalizeApplicabilityRules accepts any of the Go-side shapes the
+// public JSON Schema extension may arrive in: []map[string]any (direct
+// generator output), []any (post-decoding public wire), or nil/missing
+// (no applicability). Each element is normalised to map[string]any.
+//
+// CORRECTION05: the evaluator must not depend on a Go-specific typed
+// slice returned by the generator; an external consumer that decodes
+// the public schema bytes into map[string]any will see JSON arrays as
+// []any regardless of how the generator stores them internally.
+func normalizeApplicabilityRules(raw any) ([]map[string]any, bool) {
+	if raw == nil {
+		return nil, false
+	}
+	switch v := raw.(type) {
+	case []map[string]any:
+		return v, true
+	case []any:
+		out := make([]map[string]any, 0, len(v))
+		for _, item := range v {
+			m, ok := item.(map[string]any)
+			if !ok {
+				return nil, false
+			}
+			out = append(out, m)
+		}
+		return out, true
+	default:
+		return nil, false
+	}
 }
 
 // applyApplicabilityRules evaluates the x-applicability rules

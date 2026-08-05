@@ -1,6 +1,7 @@
 package closure
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -141,8 +142,15 @@ func schemaEval(schema map[string]any, instance map[string]any, leamasExtensions
 // JSON string for equality. The function uses the same encoding
 // choices the JSON Schema ecosystem expects (numbers preserved,
 // strings unescaped).
+//
+// CORRECTION05: json.Number (the type emitted by encoding/json
+// when decoder.UseNumber is set) is rendered with its literal
+// decimal form so equality with float64-derived numeric values
+// remains stable across round trips.
 func jsonStringifyForSchema(v any) (string, bool) {
 	switch x := v.(type) {
+	case json.Number:
+		return x.String(), true
 	case string:
 		return x, true
 	case bool:

@@ -24,7 +24,25 @@ import (
 // host paths.
 //
 //go:embed closure-plan-v1.schema.json
+//go:embed leamas-closure-plan-v1.meta.json
 var files embed.FS
+
+// MetaSchemaIDV1 is the stable identifier of the Leamas Closure
+// Plan v1 dialect meta-schema.
+const MetaSchemaIDV1 = "https://leamas.io/closure-plan/v1/meta.json"
+
+// MetaSchemaBytesV1 returns the embedded Closure Plan v1 dialect
+// meta-schema bytes. The meta-schema declares the Leamas vocabulary
+// and required standard Draft 2020-12 vocabularies.
+func MetaSchemaBytesV1() ([]byte, error) {
+	raw, err := files.ReadFile("leamas-closure-plan-v1.meta.json")
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, len(raw))
+	copy(out, raw)
+	return out, nil
+}
 
 // SchemaIDV1 is the stable URN identifier of the v1 closure-plan
 // schema. It is not a network-fetch requirement; the validation path

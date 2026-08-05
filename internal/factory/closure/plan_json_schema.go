@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+
+	"github.com/s1onique/leamas/internal/factory/closure/schema"
 )
 
 // ErrSchemaGeneration indicates a field with an unknown or malformed descriptor.
@@ -18,7 +20,8 @@ var ErrSchemaGeneration = errors.New("schema generation failed")
 // itself remains a Draft 2020-12 schema; the URI is the stable
 // contract identifier.
 const (
-	leamasClosurePlanV1DialectURI = "https://leamas.io/closure-plan/v1/schema.json"
+	leamasClosurePlanV1DialectURI = "https://leamas.io/closure-plan/v1/meta.json"
+	leamasClosurePlanV1SchemaURI  = "https://leamas.io/closure-plan/v1/schema.json"
 	leamasVocabularyURI           = "https://leamas.io/closure-plan/v1/vocab"
 )
 
@@ -211,6 +214,29 @@ func pathPolicyToMap(p *planPathPolicy) map[string]any {
 		"require_lexically_clean": p.RequireLexicallyClean,
 		"separator":               p.Separator,
 	}
+}
+
+// ClosurePlanV1MetaSchemaURI is the stable URI of the Leamas
+// Closure Plan v1 dialect meta-schema. The runtime validator and
+// any external consumer MUST be able to resolve this URI to the
+// embedded meta-schema resource without network access.
+func ClosurePlanV1MetaSchemaURI() string {
+	return leamasClosurePlanV1DialectURI
+}
+
+// ClosurePlanV1MetaSchemaBytes returns a defensive copy of the
+// embedded Closure Plan v1 meta-schema bytes. The bytes declare
+// the dialect $vocabulary, including the Leamas vocabulary, so
+// an extension-aware evaluator can detect the Leamas keywords
+// without parsing prose.
+func ClosurePlanV1MetaSchemaBytes() []byte {
+	raw, err := schema.MetaSchemaBytesV1()
+	if err != nil {
+		panic("closure: meta-schema bytes unavailable: " + err.Error())
+	}
+	out := make([]byte, len(raw))
+	copy(out, raw)
+	return out
 }
 
 // toApplicabilityMaps converts internal applicability rules to

@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leamas.io/closure-plan/v1/meta.json",
+  "title": "Leamas Closure Plan v1 Meta-Schema",
+  "description": "Meta-schema declaring the Leamas Closure Plan v1 dialect and required vocabularies. The Closure Plan v1 schema resource resolves to this meta-schema through $schema. Implementations MUST understand all listed required vocabularies to validate a Closure Plan v1 document. See ACT-LEAMAS-FACTORY-CLOSE-PLAN-V1-RUN-EXECUTION-FIELDS-CONTRACT-PARITY01-CORRECTION05.",
+  "type": "object",
+  "$vocabulary": {
+    "https://json-schema.org/draft/2020-12/vocab/core": true,
+    "https://json-schema.org/draft/2020-12/vocab/applicator": true,
+    "https://json-schema.org/draft/2020-12/vocab/validation": true,
+    "https://json-schema.org/draft/2020-12/vocab/format-annotation": false,
+    "https://json-schema.org/draft/2020-12/vocab/content": true,
+    "https://json-schema.org/draft/2020-12/vocab/meta-data": false,
+    "https://leamas.io/closure-plan/v1/vocab": true
+  },
+  "$defs": {
+    "leamas-extension-keywords": {
+      "description": "Normative Leamas Closure Plan v1 extension keywords.",
+      "type": "string",
+      "enum": [
+        "x-applicability",
+        "x-leamas-repository-relative-path"
+      ]
+    },
+    "x-applicability-rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sibling", "value", "presence"],
+      "properties": {
+        "sibling": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON name of the sibling field whose value activates the rule."
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Literal sibling value that activates the rule."
+        },
+        "presence": {
+          "type": "string",
+          "enum": ["required", "optional", "forbidden"],
+          "description": "Required/forbidden outcome when the sibling matches."
+        }
+      }
+    },
+    "x-applicability": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/x-applicability-rule" }
+    },
+    "x-leamas-repository-relative-path": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allow_dot",
+        "allow_parent_segments",
+        "require_lexically_clean",
+        "separator"
+      ],
+      "properties": {
+        "allow_dot": {
+          "type": "boolean",
+          "const": true,
+          "description": "Closure Plan v1 invariant: only the literal '.' path is allowed when allow_dot is true."
+        },
+        "allow_parent_segments": {
+          "type": "boolean",
+          "const": false,
+          "description": "Closure Plan v1 invariant: parent traversal segments are always rejected."
+        },
+        "require_lexically_clean": {
+          "type": "boolean",
+          "const": true,
+          "description": "Closure Plan v1 invariant: paths must equal their canonical clean form."
+        },
+        "separator": {
+          "type": "string",
+          "const": "/",
+          "description": "Closure Plan v1 invariant: the only structural path separator is '/'."
+        }
+      }
+    }
+  },
+  "properties": {
+    "x-applicability": { "$ref": "#/$defs/x-applicability" },
+    "x-leamas-repository-relative-path": { "$ref": "#/$defs/x-leamas-repository-relative-path" }
+  }
+}

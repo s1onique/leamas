@@ -1,6 +1,9 @@
 package closure
 
-import ()
+import (
+	"encoding/json"
+	"strconv"
+)
 
 // plan_schema_evaluator_helpers.go centralises the small
 // type-and-shape helpers the schema evaluator uses. Splitting
@@ -22,6 +25,10 @@ func valueMatchesType(t string, value any) bool {
 			// JSON Schema accepts floats that carry an integral
 			// value as integers.
 			return v == float64(int64(v))
+		case json.Number:
+			// UseNumber produces a string-typed wrapper; check
+			// whether the literal text is an integer.
+			return isIntegerText(v.String())
 		}
 		return false
 	case "number":
@@ -49,16 +56,60 @@ func valueMatchesType(t string, value any) bool {
 // whether the supplied value was numeric. The function is
 // host-width safe: it does not truncate or overflow native
 // integers because all comparisons happen in float64.
+//
+// CORRECTION05: json.Number (produced by json.Decoder.UseNumber)
+// is rendered as a float64 so exact-decoded numerics participate
+// in the same bound checks as plain float64 values. The original
+// text form is preserved when needed via jsonStringifyForSchema.
 func numericValue(value any) (float64, bool) {
 	switch v := value.(type) {
 	case int:
 		return float64(v), true
 	case int64:
 		return float64(v), true
+	case float32:
+		return float64(v), true
 	case float64:
 		return v, true
+	case json.Number:
+		n, err := v.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return n, true
+	case string:
+		n, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return 0, false
+		}
+		return n, true
 	}
 	return 0, false
+}
+
+// isIntegerText reports whether the supplied literal JSON text
+// is a mathematically integral number, including exponent forms
+// like 1e0 and 6e2. Non-numeric strings and non-integral forms
+// like 1.5 or 1e-1 return false.
+func isIntegerText(s string) bool {
+	if s == "" {
+		return false
+	}
+	n, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		_, err2 := parseBigInt(s)
+		if err2 != nil {
+			return false
+		}
+		return true
+	}
+	return n == float64(int64(n))
+}
+
+// parseBigInt parses a decimal integer literal and returns the
+// big integer. It accepts the JSON integer subset only.
+func parseBigInt(s string) (any, error) {
+	return strconv.ParseInt(s, 10, 64)
 }
 
 // isEmpty reports whether the supplied value is the JSON
