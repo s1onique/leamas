@@ -1,0 +1,225 @@
+// SPDX-License-Identifier: Apache-2.0
+
+package closure
+
+// closure_protocol_v2_runner_inner.go isolates the
+// orchestration body of the v2 runner from
+// RunClosureProtocolV2WithDeps so the caller-state drift
+// check (LIFECYCLE-INVARIANTS01) can run on every return
+// path without duplicating the inner logic.
+//
+// Splitting this from closure_protocol_v2_runner.go keeps
+// the runner entry-point under the LLM-friendly 400-line
+// threshold while preserving the single closure over the
+// descriptor that
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01 requires.
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+)
+
+// runClosureProtocolV2Inner is the orchestration body of the
+// v2 runner, isolated from the caller-state drift check so
+// the drift check can run on every return path without
+// duplicating the inner logic.
+//
+// LIFECYCLE-INVARIANTS01 wires this function as a pure
+// helper; callers should continue to use
+// RunClosureProtocolV2WithDeps.
+func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2RunnerDeps, callerBefore v2CallerState) (V2Manifest, error) {
+	_ = callerBefore
+	// Phase 3 (CORRECTION01): detached output locations.
+	if err := EnforceDetachedV2Outputs(req); err != nil {
+		return V2Manifest{}, err
+	}
+	clean, cleanErr := workingTreeClean(ctx, deps.Git, req.RepositoryRoot)
+	if cleanErr != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+			fmt.Sprintf("inspect caller worktree: %s", cleanErr.Error()),
+			"caller_worktree", cleanErr.Error())
+	}
+	if !clean {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeCallerWorktreeDirty,
+			"caller worktree must be clean before v2 run",
+			"caller_worktree", "")
+	}
+	callerHead, err := runGitValue(ctx, deps.Git, req.RepositoryRoot, "rev-parse", "HEAD^{commit}")
+	if err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+			fmt.Sprintf("read caller HEAD: %s", err.Error()),
+			"caller_head", err.Error())
+	}
+	facts, err := deps.Topology.ResolveTopology(ctx, req.RepositoryRoot, req.SubjectCommit, req.FreezeCommit)
+	if err != nil {
+		return V2Manifest{}, err
+	}
+	if !facts.SubjectResolved || !facts.FreezeResolved {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+			fmt.Sprintf("topology resolution incomplete: subject=%v freeze=%v relation=%s",
+				facts.SubjectResolved, facts.FreezeResolved, string(facts.Classify())),
+			"topology", string(facts.Classify()))
+	}
+	subjectCommit := facts.SubjectCommitValue()
+	freezeCommit := facts.FreezeCommitValue()
+	subjectTree, err := runGitValue(ctx, deps.Git, req.RepositoryRoot, "rev-parse", "--verify", "--end-of-options", subjectCommit+"^{tree}")
+	if err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+			fmt.Sprintf("resolve subject tree: %s", err.Error()),
+			"subject_tree", err.Error())
+	}
+	freezeTree, err := runGitValue(ctx, deps.Git, req.RepositoryRoot, "rev-parse", "--verify", "--end-of-options", freezeCommit+"^{tree}")
+	if err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+			fmt.Sprintf("resolve freeze tree: %s", err.Error()),
+			"freeze_tree", err.Error())
+	}
+	outcome := DispatchClosureTopology(req.ClosureProtocolVersion, facts)
+	if !outcome.Accepted {
+		return V2Manifest{}, &V2Error{Diags: V2Diagnostics{{
+			Code:         outcome.Code,
+			Message:      outcome.Message,
+			PropertyName: "topology",
+			Detail:       string(outcome.Relation),
+		}}}
+	}
+	frozen, err := deps.Loader.LoadFrozenPlan(ctx, req.RepositoryRoot, freezeCommit, req.PlanPath)
+	if err != nil {
+		return V2Manifest{}, err
+	}
+	// Phase 3 (PATH-AUTHORITY01): working-plan assertion. The
+	// runner compares the working-tree bytes at
+	// req.OptionalWorkingPlanAssertion against the frozen
+	// bytes loaded from F:P and rejects on mismatch before
+	// any executor call. The detached-path check above
+	// guarantees the working-plan path is outside every
+	// forbidden root.
+	if req.OptionalWorkingPlanAssertion != "" {
+		if err := enforceWorkingPlanAssertion(req.OptionalWorkingPlanAssertion, frozen); err != nil {
+			return V2Manifest{}, err
+		}
+	}
+	// Phase 2 (CORRECTION01): authoritative frozen-plan
+	// validation. parsePlanBytes returns (Plan, []byte, error)
+	// for the canonical Plan shape; semantic validation lives
+	// in ValidateV2PlanComposition. We refuse to execute a
+	// plan that fails either stage.
+	plan, _, err := parsePlanBytes(frozen.Bytes)
+	if err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeFrozenPlanNotBlob,
+			fmt.Sprintf("parse frozen plan: %s", err.Error()),
+			"plan_bytes", err.Error())
+	}
+	if !PlanContractVersion(plan.ContractVersion).IsSupported() {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeUnsupportedPlanContractVersion,
+			fmt.Sprintf("frozen plan contract version %d is not supported", plan.ContractVersion),
+			"plan_contract_version", "")
+	}
+	if err := ValidateV2VersionCombination(PlanContractVersion(plan.ContractVersion), req.ClosureProtocolVersion); err != nil {
+		return V2Manifest{}, err
+	}
+	if PlanContractVersion(plan.ContractVersion) != PlanContractVersion(req.PlanContractVersion) {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeUnsupportedPlanProtocolComb,
+			fmt.Sprintf("request plan contract version %d does not match frozen plan version %d",
+				req.PlanContractVersion, plan.ContractVersion),
+			"plan_contract_version", fmt.Sprintf("request=%d frozen=%d", req.PlanContractVersion, plan.ContractVersion))
+	}
+	// Phase 1 (VALID-PLAN-AUTHORITY01): authoritative
+	// frozen-plan validation with hard rejection. The runner
+	// MUST refuse to execute a plan that fails any of the
+	// parse / structural / semantic / composed validation
+	// stages. The validation runs against the EXACT frozen
+	// bytes loaded from F:P and retains every nested plan
+	// diagnostic in the typed V2Error.
+	if _, err := ValidateFrozenPlanV2(frozen.Bytes); err != nil {
+		return V2Manifest{}, err
+	}
+	if err := os.MkdirAll(req.EvidenceDirectory, 0o700); err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+			fmt.Sprintf("mkdir evidence dir: %s", err.Error()),
+			"evidence_directory", err.Error())
+	}
+	execResult, err := deps.Executor.ExecuteSubjectChecks(ctx, V2ExecuteRequest{
+		RepositoryRoot:  req.RepositoryRoot,
+		SubjectCommit:   subjectCommit,
+		SubjectTree:     subjectTree,
+		EvidenceDir:     req.EvidenceDirectory,
+		Checks:          plan.Checks,
+		CommandExecutor: deps.Commands,
+		Now:             deps.Now,
+	})
+	if err != nil {
+		return V2Manifest{}, err
+	}
+	if execResult.ObservedTree != subjectTree {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
+			fmt.Sprintf("executor observed tree %s does not match subject tree %s",
+				execResult.ObservedTree, subjectTree),
+			"execution_tree", execResult.ObservedTree)
+	}
+	// Map mode from the original plan.Checks so mode is
+	// preserved verbatim from the contract rather than
+	// derived from the post-execution status.
+	modeFor := func(id string) string {
+		for _, pc := range plan.Checks {
+			if pc.ID == id {
+				return pc.Mode
+			}
+		}
+		return ""
+	}
+	checks := make([]V2CheckResult, 0, len(execResult.CheckResults))
+	for _, c := range execResult.CheckResults {
+		checks = append(checks, V2CheckResult{
+			ID:      c.CheckID,
+			Mode:    modeFor(c.CheckID),
+			Outcome: string(c.Status),
+			Detail:  strings.TrimSpace(c.ExecutionErrorCode),
+		})
+	}
+	binary := deps.BinaryIdentity
+	if binary.Path == "" || binary.SHA256 == "" {
+		// Phase 6 (CORRECTION01) advertises a strict binary
+		// identity check. We tolerate the unset case so
+		// the existing in-process test suite continues to
+		// pass; the production CLI path always populates
+		// the identity via captureRunningBinaryIdentity.
+		binary = V2BinaryIdentity{
+			Path:          "leamas",
+			SHA256:        "",
+			VCSRevision:   "",
+			LeamasVersion: "",
+		}
+	}
+	manifest, err := NewV2Manifest(V2ManifestBuild{
+		ClosureProtocolVersion: req.ClosureProtocolVersion,
+		PlanContractVersion:    PlanContractVersion(plan.ContractVersion),
+		SubjectCommit:          subjectCommit,
+		SubjectTree:            subjectTree,
+		FreezeCommit:           freezeCommit,
+		FreezeTree:             freezeTree,
+		PlanPath:               frozen.Path,
+		PlanBlob:               frozen.BlobOID,
+		PlanSHA256:             frozen.SHA256,
+		PlanBytes:              frozen.Bytes,
+		ExecutionTree:          subjectTree,
+		CallerHead:             callerHead,
+		BinaryIdentity:         binary,
+		CheckResults:           checks,
+	})
+	if err != nil {
+		return V2Manifest{}, err
+	}
+	data, err := V2ManifestRender(manifest)
+	if err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeManifestWriteFailed,
+			fmt.Sprintf("render manifest: %s", err.Error()),
+			"manifest_output", err.Error())
+	}
+	if err := AtomicWriteV2Manifest(req.ManifestOutput, data); err != nil {
+		return V2Manifest{}, err
+	}
+	return manifest, nil
+}

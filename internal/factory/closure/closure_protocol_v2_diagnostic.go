@@ -34,9 +34,9 @@ const (
 	V2CodeFrozenPlanInvalid                 V2DiagnosticCode = "frozen_plan_invalid"
 	V2CodeInvalidPlanPath                   V2DiagnosticCode = "invalid_plan_path"
 	V2CodeWorkingPlanMismatch               V2DiagnosticCode = "working_plan_mismatch"
-	V2CodeEvidencePathNotDetached            V2DiagnosticCode = "evidence_path_not_detached"
-	V2CodeManifestPathNotDetached            V2DiagnosticCode = "manifest_path_not_detached"
-	V2CodeWorkingPlanPathInvalid             V2DiagnosticCode = "working_plan_path_invalid"
+	V2CodeEvidencePathNotDetached           V2DiagnosticCode = "evidence_path_not_detached"
+	V2CodeManifestPathNotDetached           V2DiagnosticCode = "manifest_path_not_detached"
+	V2CodeWorkingPlanPathInvalid            V2DiagnosticCode = "working_plan_path_invalid"
 	V2CodeCallerWorktreeDirty               V2DiagnosticCode = "caller_worktree_dirty"
 	V2CodeExecutionTreeMismatch             V2DiagnosticCode = "execution_tree_mismatch"
 	V2CodeGitOperationFailed                V2DiagnosticCode = "git_operation_failed"
@@ -44,6 +44,26 @@ const (
 	V2CodeCleanupFailed                     V2DiagnosticCode = "cleanup_failed"
 	V2CodeManifestWriteFailed               V2DiagnosticCode = "manifest_write_failed"
 	V2CodeRequestIncomplete                 V2DiagnosticCode = "request_incomplete"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-LIFECYCLE-INVARIANTS01
+	// adds caller-state authority codes. Each code reports a
+	// specific invariant violation discovered after the
+	// runner returns so the CLI can render the exact cause.
+	V2CodeCallerHeadChanged          V2DiagnosticCode = "caller_head_changed"
+	V2CodeCallerTreeChanged          V2DiagnosticCode = "caller_tree_changed"
+	V2CodeCallerWorktreeDirtyAfter   V2DiagnosticCode = "caller_worktree_dirty_after"
+	V2CodeWorktreeRegistrationLeaked V2DiagnosticCode = "worktree_registration_leaked"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-LIFECYCLE-INVARIANTS01
+	// adds git failure authority codes. These distinguish
+	// genuine missing objects from operational Git failures
+	// (timeout, cancellation, output overflow, spawn failure)
+	// so the CLI can render the right remediation hint.
+	V2CodeGitTimeout           V2DiagnosticCode = "git_timeout"
+	V2CodeGitCancelled         V2DiagnosticCode = "git_cancelled"
+	V2CodeGitOutputOverflow    V2DiagnosticCode = "git_output_overflow"
+	V2CodeGitSpawnFailed       V2DiagnosticCode = "git_spawn_failed"
+	V2CodeGitNotRepository     V2DiagnosticCode = "git_not_repository"
+	V2CodeGitPermissionDenied  V2DiagnosticCode = "git_permission_denied"
+	V2CodeGitMalformedRevision V2DiagnosticCode = "git_malformed_revision"
 )
 
 // V2Diagnostic is the structured diagnostic record emitted by

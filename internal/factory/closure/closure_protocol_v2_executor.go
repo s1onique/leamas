@@ -155,27 +155,34 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 			fmt.Sprintf("create temp dir: %s", err.Error()),
 			"execution_tree", err.Error())
 	}
+	// Phase 3 (LIFECYCLE-INVARIANTS01): capture the
+	// worktree registrations BEFORE we add ours so the
+	// lifecycle cleanup report can detect any leaked
+	// registration after worktree remove + prune + os.RemoveAll.
+	beforeReg := snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
 	// Cleanup runs in-scope so the result captures its
 	// outcome. The previous deferred-local-variable pattern
 	// leaked the report; this model folds the report into the
 	// final return BEFORE propagating.
-	cleanup := func() v2CleanupReport {
-		report := v2CleanupReport{}
+	cleanup := func() v2LifecycleCleanupReport {
+		report := v2LifecycleCleanupReport{Before: beforeReg}
 		rmResult := cleanupGit("worktree", "remove", "--force", worktreePath)
 		if rmResult.Err != nil || rmResult.ExitCode != 0 {
-			report.WorktreeRemoveError = fmt.Errorf("git worktree remove --force %s: %s",
+			report.Stages.WorktreeRemoveError = fmt.Errorf("git worktree remove --force %s: %s",
 				worktreePath, strings.TrimSpace(string(rmResult.Stderr)))
 		}
 		pruneResult := cleanupGit("worktree", "prune")
 		if pruneResult.Err != nil || pruneResult.ExitCode != 0 {
-			report.PruneError = fmt.Errorf("git worktree prune: %s",
+			report.Stages.PruneError = fmt.Errorf("git worktree prune: %s",
 				strings.TrimSpace(string(pruneResult.Stderr)))
 		}
 		if err := os.RemoveAll(worktreePath); err != nil {
-			report.FilesystemRemoveError = err
+			report.Stages.FilesystemRemoveError = err
 		}
+		report.After = snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
 		return report
 	}
+
 	addResult := e.Git.Run(ctx, req.RepositoryRoot, "worktree", "add", "--detach", worktreePath, req.SubjectCommit)
 	if addResult.Err != nil || addResult.ExitCode != 0 {
 		_ = cleanup()
@@ -207,7 +214,7 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		report := cleanup()
 		result := V2ExecuteResult{
 			ObservedTree: observedTree,
-			CleanupError:  report.Summary(),
+			CleanupError: report.Summary(),
 		}
 		return result, wrapWithCleanup(err, report)
 	}
@@ -218,7 +225,7 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		report := cleanup()
 		result := V2ExecuteResult{
 			ObservedTree: observedTree,
-			CleanupError:  report.Summary(),
+			CleanupError: report.Summary(),
 		}
 		return result, wrapWithCleanup(err, report)
 	}
@@ -263,7 +270,7 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 // cleanup report so the CLI can render both the original
 // failure cause and the cleanup outcome. When the supplied
 // error is not already a V2Error, a new V2Error is built.
-func wrapWithCleanup(original error, report v2CleanupReport) error {
+func wrapWithCleanup(original error, report v2LifecycleCleanupReport) error {
 	if !report.HasError() {
 		return original
 	}
