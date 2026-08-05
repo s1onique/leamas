@@ -47,7 +47,7 @@ func JSONSchema() (map[string]any, error) {
 
 	schema := map[string]any{
 		"$schema":                       leamasClosurePlanV1DialectURI,
-		"$id":                           leamasClosurePlanV1DialectURI,
+		"$id":                           leamasClosurePlanV1SchemaURI,
 		"title":                         "Closure Protocol v1 Plan",
 		"type":                          "object",
 		"x-leamas-dialect":              "leamas-closure-plan-v1",
