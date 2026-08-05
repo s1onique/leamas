@@ -1,4 +1,17 @@
-package closure
+// Package evaltest provides the Closure Protocol v1 schema
+// evaluator used exclusively by the closure package's parity
+// tests. The package has NO production callers; every consumer
+// in the repository is a *_test.go file.
+//
+// ACT-LEAMAS-FACTORY-CLOSE-PLAN-V1-RUN-EXECUTION-FIELDS-
+// CONTRACT-PARITY01-CORRECTION16 placed the evaluator here
+// because the structural validator (closure.ValidatePlanStructural)
+// is the production authority. The evaluator in this package
+// is a parity witness: it exercises the round-tripped JSON
+// Schema document so the four-layer matrix (standard,
+// extension-aware, structural, composed) can be compared
+// without re-implementing JSON Schema by hand.
+package evaltest
 
 import (
 	"encoding/json"
@@ -6,33 +19,12 @@ import (
 	"strings"
 )
 
-// plan_schema_evaluator.go implements a generic, schema-driven
-// evaluator for Closure Protocol v1 plans. The evaluator
-// consumes the bytes produced by JSONSchema() — every decision
-// flows from the schema document; the evaluator does not
-// hardcode any field name, value, or rule.
-//
-// The evaluator supports two modes:
-//
-//   - Standard mode: ignores any Leamas-specific extension
-//     (x-leamas-*, x-applicability) so a generic JSON Schema
-//     consumer sees only the portable subset
-//     (type/required/properties/minLength/pattern/minimum/
-//     maximum/items/additionalProperties/const/enum).
-//
-//   - Extension-aware mode: interprets the published Leamas
-//     extensions on top of the standard subset.
-//
-// Both modes report the evaluation result via schemaEvaluation
-// so downstream tooling can distinguish them from the runtime
-// result without parsing message text.
-
-// schemaEvaluation is the typed result of the generic schema
+// SchemaEvaluation is the typed result of the generic schema
 // evaluator. The struct is JSON-marshallable so it can flow
-// through the public CLI without an additional translation
-// step.
-type schemaEvaluation struct {
-	Mode   string   `json:"mode"` // "standard" or "extension_aware"
+// through the parity-test fixtures without an additional
+// translation step.
+type SchemaEvaluation struct {
+	Mode   string   `json:"mode"` // "standard", "extension_aware", or "schema_issue"
 	Accept bool     `json:"accept"`
 	Issues []string `json:"issues,omitempty"`
 }
@@ -40,20 +32,26 @@ type schemaEvaluation struct {
 // acceptStd / acceptExt are pre-built acceptances so the
 // evaluator can return them inline.
 var (
-	acceptStd = schemaEvaluation{Mode: "standard", Accept: true}
-	acceptExt = schemaEvaluation{Mode: "extension_aware", Accept: true}
+	acceptStd = SchemaEvaluation{Mode: "standard", Accept: true}
+	acceptExt = SchemaEvaluation{Mode: "extension_aware", Accept: true}
 )
 
-// evaluateWithSchemaStandard runs the standard JSON Schema
+// EvaluateWithSchemaStandard runs the standard JSON Schema
 // subset (no Leamas extensions) over the supplied instance.
-func evaluateWithSchemaStandard(schema map[string]any, instance map[string]any) schemaEvaluation {
+func EvaluateWithSchemaStandard(schema map[string]any, instance map[string]any) SchemaEvaluation {
 	return schemaEval(schema, instance, false)
 }
 
-// evaluateWithSchemaExtensionAware runs the standard subset AND
-// interprets the Leamas extensions x-applicability and
-// x-leamas-repository-relative-path.
-func evaluateWithSchemaExtensionAware(schema map[string]any, instance map[string]any) schemaEvaluation {
+// EvaluateWithSchemaExtensionAware runs the standard subset
+// AND interprets the Leamas extensions x-applicability and
+// x-leamas-repository-relative-path after the extension-aware
+// evaluator has verified the dialect URI, resolved the embedded
+// Leamas meta-schema, verified $id, read $vocabulary, and
+// rejected unsupported required vocabularies.
+func EvaluateWithSchemaExtensionAware(schema map[string]any, instance map[string]any) SchemaEvaluation {
+	if err := ensureDialectAdmitted(schema); err != nil {
+		return SchemaEvaluation{Mode: "extension_aware", Accept: false, Issues: []string{err.Error()}}
+	}
 	return schemaEval(schema, instance, true)
 }
 
@@ -61,19 +59,19 @@ func evaluateWithSchemaExtensionAware(schema map[string]any, instance map[string
 // When leamasExtensions is false, any x-* extension members are
 // ignored as far as the standard evaluator is concerned; the
 // evaluator still reads them but treats them as opaque metadata.
-func schemaEval(schema map[string]any, instance map[string]any, leamasExtensions bool) schemaEvaluation {
+func schemaEval(schema map[string]any, instance map[string]any, leamasExtensions bool) SchemaEvaluation {
 	if schema == nil {
-		return schemaEvaluation{Accept: false, Issues: []string{"schema is nil"}}
+		return SchemaEvaluation{Accept: false, Issues: []string{"schema is nil"}}
 	}
 	if instance == nil {
-		return schemaEvaluation{Accept: false, Issues: []string{"instance is nil"}}
+		return SchemaEvaluation{Accept: false, Issues: []string{"instance is nil"}}
 	}
 	if t, ok := schema["type"].(string); ok && t != "object" {
-		return schemaEvaluation{Accept: false, Issues: []string{fmt.Sprintf("schema type %q does not match instance", t)}}
+		return SchemaEvaluation{Accept: false, Issues: []string{fmt.Sprintf("schema type %q does not match instance", t)}}
 	}
 	if v, ok := schema["const"]; ok {
 		if !schemaValueEqual(v, instance) {
-			return schemaEvaluation{Accept: false, Issues: []string{"instance does not equal const"}}
+			return SchemaEvaluation{Accept: false, Issues: []string{"instance does not equal const"}}
 		}
 		return acceptAny(leamasExtensions)
 	}
@@ -86,7 +84,7 @@ func schemaEval(schema map[string]any, instance map[string]any, leamasExtensions
 			}
 		}
 		if !matched {
-			return schemaEvaluation{Accept: false, Issues: []string{"instance not in enum"}}
+			return SchemaEvaluation{Accept: false, Issues: []string{"instance not in enum"}}
 		}
 		return acceptAny(leamasExtensions)
 	}
@@ -98,7 +96,47 @@ func schemaEval(schema map[string]any, instance map[string]any, leamasExtensions
 				continue
 			}
 			if _, present := instance[name]; !present {
-				return schemaEvaluation{Accept: false, Issues: []string{"required property missing: " + name}}
+				return SchemaEvaluation{Accept: false, Issues: []string{"required property missing: " + name}}
+			}
+		}
+	}
+	// x-applicability walker for the top-level schema's
+	// properties. The walker runs in extension-aware mode so
+	// the same fail-closed shape validation that fires inside
+	// evalField also fires for the root object's properties.
+	// Properties without an x-applicability extension are
+	// skipped: a missing extension is not a schema failure,
+	// only a malformed one is.
+	if leamasExtensions {
+		if props, hasProps := schema["properties"].(map[string]any); hasProps {
+			for propName, propSchemaAny := range props {
+				psm, ok := propSchemaAny.(map[string]any)
+				if !ok {
+					continue
+				}
+				rawApp, hasApp := psm["x-applicability"]
+				if !hasApp {
+					continue
+				}
+				app, ok, appErr := normalizeApplicabilityRules(rawApp)
+				if !ok {
+					return rejectAny(leamasExtensions, appErr)
+				}
+				_, fieldPresent := instance[propName]
+				ctx := schemaPropertyContext{
+					PropertyName:   propName,
+					PropertySchema: psm,
+					ParentSchema:   schema,
+					ParentInstance: instance,
+					Value:          nil,
+					Present:        fieldPresent,
+				}
+				if fieldPresent {
+					ctx.Value = instance[propName]
+				}
+				if res := applyApplicabilityRules(ctx, app, leamasExtensions); !res.Accept {
+					return res
+				}
 			}
 		}
 	}
@@ -131,7 +169,7 @@ func schemaEval(schema map[string]any, instance map[string]any, leamasExtensions
 						continue
 					}
 				}
-				return schemaEvaluation{Accept: false, Issues: []string{"unknown property: " + k}}
+				return SchemaEvaluation{Accept: false, Issues: []string{"unknown property: " + k}}
 			}
 		}
 	}
@@ -220,7 +258,7 @@ func schemaValueEqual(a, b any) bool {
 
 // acceptAny returns the appropriate accept evaluation for the
 // requested mode.
-func acceptAny(leamasExtensions bool) schemaEvaluation {
+func acceptAny(leamasExtensions bool) SchemaEvaluation {
 	if leamasExtensions {
 		return acceptExt
 	}
@@ -229,9 +267,9 @@ func acceptAny(leamasExtensions bool) schemaEvaluation {
 
 // rejectAny returns the appropriate reject evaluation for the
 // requested mode.
-func rejectAny(leamasExtensions bool, reason string) schemaEvaluation {
+func rejectAny(leamasExtensions bool, reason string) SchemaEvaluation {
 	if leamasExtensions {
-		return schemaEvaluation{Mode: "extension_aware", Accept: false, Issues: []string{reason}}
+		return SchemaEvaluation{Mode: "extension_aware", Accept: false, Issues: []string{reason}}
 	}
-	return schemaEvaluation{Mode: "standard", Accept: false, Issues: []string{reason}}
+	return SchemaEvaluation{Mode: "standard", Accept: false, Issues: []string{reason}}
 }

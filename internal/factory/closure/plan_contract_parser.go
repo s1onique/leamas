@@ -246,3 +246,60 @@ func jsonNumberToInteger(value any) (int, bool) {
 	}
 	return 0, false
 }
+
+// jsonNumberClassify parses a JSON-number-shaped value into a
+// tri-state classification so the structural validator can
+// distinguish:
+//
+//   - non-number              → invalid_type
+//   - non-integral            → invalid_type
+//   - integral, in int64      → supplied int64 value, fits in int
+//   - integral, out of int64  → 0 with oversize=true, leaving
+//     above/below maximum to decide the
+//     stable numeric_above_maximum /
+//     numeric_below_minimum classification
+//     without first coercing to int.
+//
+// CORRECTION16: the range comparison must occur BEFORE any
+// native integer conversion so a mathematical integer like
+// 9223372036854775808 (int64_max + 1) is classified as
+// numeric_above_maximum rather than as invalid_type.
+func jsonNumberClassify(value any) (int64Val int64, oversize, integral bool, ok bool) {
+	switch v := value.(type) {
+	case json.Number:
+		authority := NewExactNumberAuthority()
+		rat, parsed := authority.ParseExactNumber(string(v))
+		if !parsed {
+			return 0, false, false, false
+		}
+		if !authority.IsIntegral(rat) {
+			return 0, false, false, true
+		}
+		iv, fits := authority.ConvertBoundedInteger(rat)
+		if !fits {
+			// Mathematical integer that does not fit in
+			// int64. The validator decides above/below
+			// maximum separately; this function only
+			// reports oversize=true so the caller can
+			// apply the bound check on the rational form.
+			return 0, true, true, true
+		}
+		return iv, false, true, true
+	case float64:
+		authority := NewExactNumberAuthority()
+		rat := new(big.Rat).SetFloat64(v)
+		if !authority.IsIntegral(rat) {
+			return 0, false, false, true
+		}
+		iv, fits := authority.ConvertBoundedInteger(rat)
+		if !fits {
+			return 0, true, true, true
+		}
+		return iv, false, true, true
+	case int:
+		return int64(v), false, true, true
+	case int64:
+		return v, false, true, true
+	}
+	return 0, false, false, false
+}

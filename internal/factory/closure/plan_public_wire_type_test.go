@@ -3,6 +3,7 @@ package closure
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"strings"
 	"testing"
 )
@@ -185,8 +186,8 @@ func TestFourLayerTimeoutParity(t *testing.T) {
 			if err := dec.Decode(&rootMap); err != nil {
 				t.Fatalf("decode: %v", err)
 			}
-			std := evaluateWithSchemaStandard(roundTripped, rootMap)
-			ext := evaluateWithSchemaExtensionAware(roundTripped, rootMap)
+			std := evaltest.EvaluateWithSchemaStandard(roundTripped, rootMap)
+			ext := evaltest.EvaluateWithSchemaExtensionAware(roundTripped, rootMap)
 			composed := ValidatePlanComposed([]byte(body))
 			if std.Accept != c.wantStd {
 				t.Fatalf("%s: standard=%v want %v", c.name, std.Accept, c.wantStd)

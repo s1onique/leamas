@@ -6,11 +6,11 @@ import (
 )
 
 // plan_path_policy.go centralises the platform-independent
-// repository-relative path validator. The validator is the
-// single source of truth for the public v1 path language:
-// separator is "/", backslash is rejected, NUL and control
-// characters are rejected, Windows-volume prefixes are
-// rejected, and the lexically-clean normalisation must hold.
+// repository-relative path validator used by the production
+// runtime. The extension-aware schema evaluator
+// (x-leamas-repository-relative-path) lives in the test-only
+// internal/factory/closure/evaltest package; this file owns
+// the production authority.
 //
 // The runtime's `path = runtime` table maps every diagnostic
 // family to a stable PlanCodePathPolicyViolation /
@@ -148,73 +148,4 @@ func portablePathValidate(path string, allowDot, allowParentSegments bool) error
 // Windows-volume-prefix probe used by portablePathValidate).
 func isASCIILetter(b byte) bool {
 	return (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z')
-}
-
-// portablePathAccepts is the extension-aware schema evaluator.
-// The function takes the *parsed* x-leamas-repository-relative-
-// path extension members plus the value and returns true when
-// the value satisfies the policy. It does not hardcode any
-// field name or value: every decision flows from the supplied
-// extension members.
-//
-// The function fails closed on:
-//   - missing required extension member;
-//   - wrong extension-member type;
-//   - unsupported separator value;
-//   - malformed extension object.
-func portablePathAccepts(value string, ext map[string]any) (bool, string) {
-	if ext == nil {
-		return false, "x-leamas-repository-relative-path extension missing"
-	}
-	allowDot, okDot := boolFromExt(ext, "allow_dot")
-	if !okDot {
-		return false, "x-leamas-repository-relative-path: allow_dot missing or wrong type"
-	}
-	allowParentSegments, okPar := boolFromExt(ext, "allow_parent_segments")
-	if !okPar {
-		return false, "x-leamas-repository-relative-path: allow_parent_segments missing or wrong type"
-	}
-	requireLexicallyClean, okLex := boolFromExt(ext, "require_lexically_clean")
-	if !okLex {
-		return false, "x-leamas-repository-relative-path: require_lexically_clean missing or wrong type"
-	}
-	separator, okSep := stringFromExt(ext, "separator")
-	if !okSep {
-		return false, "x-leamas-repository-relative-path: separator missing or wrong type"
-	}
-	if separator != pathPolicySeparator {
-		return false, fmt.Sprintf("x-leamas-repository-relative-path: unsupported separator %q", separator)
-	}
-	if err := portablePathValidate(value, allowDot, allowParentSegments); err != nil {
-		return false, err.Error()
-	}
-	if requireLexicallyClean {
-		clean := portablePathClean(value)
-		if clean != value {
-			return false, fmt.Sprintf("lexically unclean: canonical form is %q", clean)
-		}
-	}
-	return true, ""
-}
-
-// boolFromExt returns the bool value of key in m and reports
-// whether the key was present with the right type.
-func boolFromExt(m map[string]any, key string) (bool, bool) {
-	v, ok := m[key]
-	if !ok {
-		return false, false
-	}
-	b, ok := v.(bool)
-	return b, ok
-}
-
-// stringFromExt returns the string value of key in m and reports
-// whether the key was present with the right type.
-func stringFromExt(m map[string]any, key string) (string, bool) {
-	v, ok := m[key]
-	if !ok {
-		return "", false
-	}
-	s, ok := v.(string)
-	return s, ok
 }

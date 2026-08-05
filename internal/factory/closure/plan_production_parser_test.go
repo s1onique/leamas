@@ -3,8 +3,9 @@ package closure
 import (
 	"bytes"
 	"encoding/json"
-	"strings"
 	"testing"
+
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 )
 
 // TestProductionParserPublicWireType uses the actual
@@ -60,7 +61,10 @@ func TestProductionParserPublicWireType(t *testing.T) {
 	if len(arr) == 0 {
 		t.Fatalf("checks is empty")
 	}
-	check := arr[0].(map[string]any)
+	check, ok := arr[0].(map[string]any)
+	if !ok {
+		t.Fatalf("checks[0] is not map[string]any: %T", arr[0])
+	}
 	timeout, ok := check["timeout_seconds"]
 	if !ok {
 		t.Fatalf("timeout_seconds missing")
@@ -74,11 +78,19 @@ func TestProductionParserPublicWireType(t *testing.T) {
 }
 
 // TestFourLayerParityIndependentStructural runs the full
-// four-layer matrix through the production parser end to
-// end. The structural result is captured from
-// parseBoundedClosurePlanDocument + the structural
-// validation pipeline; the composed result is captured
-// from ValidatePlanComposed.
+// canonical four-layer matrix and independently captures:
+//
+//	STANDARD                 - evaltest.EvaluateWithSchemaStandard
+//	EXTENSION                - evaltest.EvaluateWithSchemaExtensionAware
+//	STRUCTURAL               - closure.ValidatePlanStructural
+//	STRUCTURAL_DIAGNOSTICS   - closure.ValidatePlanStructural.Errors
+//	COMPOSED                 - closure.ValidatePlanComposed
+//	COMPOSED_STRUCTURAL_DIAGNOSTICS - composed.Structural.Errors
+//
+// The structural validator is invoked independently of the
+// composed pipeline so a structural failure cannot be inferred
+// solely from composed.Valid. Every row of the canonical
+// four-layer matrix from the ACT body is asserted.
 func TestFourLayerParityIndependentStructural(t *testing.T) {
 	schema, err := JSONSchema()
 	if err != nil {
@@ -92,29 +104,33 @@ func TestFourLayerParityIndependentStructural(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 	type tc struct {
-		name        string
-		timeout     string
-		present     bool
-		wantStd     bool
-		wantExt     bool
+		name         string
+		timeout      string
+		present      bool
+		wantStd      bool
+		wantExt      bool
+		wantStruct   bool
 		wantComposed bool
 	}
 	cases := []tc{
-		{"absent", "", false, true, false, false},
-		{"null", "null", true, false, false, false},
-		{"0", "0", true, false, false, false},
-		{"1", "1", true, true, true, true},
-		{"1.0", "1.0", true, true, true, true},
-		{"1e0", "1e0", true, true, true, true},
-		{"1.5", "1.5", true, false, false, false},
-		{"1e-1", "1e-1", true, false, false, false},
-		{"599", "599", true, true, true, true},
-		{"600", "600", true, true, true, true},
-		{"600.0", "600.0", true, true, true, true},
-		{"6e2", "6e2", true, true, true, true},
-		{"601", "601", true, false, false, false},
-		{"1e1000", "1e1000", true, false, false, false},
-		{"quoted", "\"60\"", true, false, false, false},
+		// Canonical four-layer matrix from the ACT.
+		// required presence is supplied through x-applicability,
+		// so the standard absence difference is permitted.
+		{"absent", "", false, true, false, false, false},
+		{"null", "null", true, false, false, false, false},
+		{"0", "0", true, false, false, false, false},
+		{"1", "1", true, true, true, true, true},
+		{"1.0", "1.0", true, true, true, true, true},
+		{"1e0", "1e0", true, true, true, true, true},
+		{"1.5", "1.5", true, false, false, false, false},
+		{"1e-1", "1e-1", true, false, false, false, false},
+		{"599", "599", true, true, true, true, true},
+		{"600", "600", true, true, true, true, true},
+		{"600.0", "600.0", true, true, true, true, true},
+		{"6e2", "6e2", true, true, true, true, true},
+		{"601", "601", true, false, false, false, false},
+		{"1e1000", "1e1000", true, false, false, false, false},
+		{"\"60\"", "\"60\"", true, false, false, false, false},
 	}
 	for _, c := range cases {
 		c := c
@@ -147,28 +163,66 @@ func TestFourLayerParityIndependentStructural(t *testing.T) {
 					"require_diff_check": true
 				}
 			}`
-			dec := json.NewDecoder(strings.NewReader(body))
-			dec.UseNumber()
-			var rootMap map[string]any
-			if err := dec.Decode(&rootMap); err != nil {
-				t.Fatalf("decode: %v", err)
+			planBytes := []byte(body)
+			// Parse through the production bounded parser so
+			// the four-layer parity tests exercise the same
+			// public wire the structural validator uses.
+			rootAny, parseDiags := parseBoundedClosurePlanDocument(planBytes)
+			if len(parseDiags) > 0 {
+				t.Fatalf("parse: %v", parseDiags)
 			}
-			std := evaluateWithSchemaStandard(roundTripped, rootMap)
-			ext := evaluateWithSchemaExtensionAware(roundTripped, rootMap)
-			// Standard and extension schema evaluation are
-			// direct contract authorities; composed is the
-			// full production chain. Structural stage
-			// result is captured through composed structural
-			// errors.
-			composed := ValidatePlanComposed([]byte(body))
+			rootMap, ok := rootAny.(map[string]any)
+			if !ok {
+				t.Fatalf("root is not a map: %T", rootAny)
+			}
+			// STANDARD
+			std := evaltest.EvaluateWithSchemaStandard(roundTripped, rootMap)
 			if std.Accept != c.wantStd {
-				t.Fatalf("%s: standard=%v want %v", c.name, std.Accept, c.wantStd)
+				t.Fatalf("%s: standard=%v want %v (issues=%v)",
+					c.name, std.Accept, c.wantStd, std.Issues)
 			}
+			// EXTENSION
+			ext := evaltest.EvaluateWithSchemaExtensionAware(roundTripped, rootMap)
 			if ext.Accept != c.wantExt {
-				t.Fatalf("%s: extension=%v want %v", c.name, ext.Accept, c.wantExt)
+				t.Fatalf("%s: extension=%v want %v (issues=%v)",
+					c.name, ext.Accept, c.wantExt, ext.Issues)
 			}
+			// STRUCTURAL (independent of composed)
+			structResult := ValidatePlanStructural(planBytes)
+			if structResult.Valid != c.wantStruct {
+				t.Fatalf("%s: structural=%v want %v (errors=%v)",
+					c.name, structResult.Valid, c.wantStruct,
+					structResult.Errors)
+			}
+			// COMPOSED
+			composed := ValidatePlanComposed(planBytes)
 			if composed.Valid != c.wantComposed {
-				t.Fatalf("%s: composed=%v want %v (errors=%v)", c.name, composed.Valid, c.wantComposed, composed.Structural.Errors)
+				t.Fatalf("%s: composed=%v want %v (errors=%v)",
+					c.name, composed.Valid, c.wantComposed,
+					composed.Structural.Errors)
+			}
+			// STRUCTURAL_DIAGNOSTICS and COMPOSED_STRUCTURAL_DIAGNOSTICS
+			// must agree on cardinality, code set, and instance
+			// paths; the composed structural stage is the same
+			// code path as ValidatePlanStructural.
+			if len(structResult.Errors) != len(composed.Structural.Errors) {
+				t.Fatalf("%s: structural=%d composed=%d diagnostics",
+					c.name, len(structResult.Errors),
+					len(composed.Structural.Errors))
+			}
+			for i := range structResult.Errors {
+				if structResult.Errors[i].Code != composed.Structural.Errors[i].Code {
+					t.Fatalf("%s: diag[%d].code mismatch structural=%v composed=%v",
+						c.name, i,
+						structResult.Errors[i].Code,
+						composed.Structural.Errors[i].Code)
+				}
+				if structResult.Errors[i].InstancePath != composed.Structural.Errors[i].InstancePath {
+					t.Fatalf("%s: diag[%d].instance_path mismatch structural=%q composed=%q",
+						c.name, i,
+						structResult.Errors[i].InstancePath,
+						composed.Structural.Errors[i].InstancePath)
+				}
 			}
 		})
 	}

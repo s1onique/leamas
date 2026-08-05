@@ -2,6 +2,7 @@ package closure
 
 import (
 	"encoding/json"
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"testing"
 )
 
@@ -149,8 +150,8 @@ func evaluatePinned(t *testing.T, data []byte) (bool, bool, bool) {
 	if err := json.Unmarshal(data, &rootMap); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	standard := evaluateWithSchemaStandard(schema, rootMap)
-	extension := evaluateWithSchemaExtensionAware(schema, rootMap)
+	standard := evaltest.EvaluateWithSchemaStandard(schema, rootMap)
+	extension := evaltest.EvaluateWithSchemaExtensionAware(schema, rootMap)
 	composed := ValidatePlanComposed(data)
 	return standard.Accept, extension.Accept, composed.Valid
 }

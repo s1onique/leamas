@@ -1,26 +1,10 @@
-package closure
+package evaltest
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
 )
-
-// plan_schema_evaluator_eval_field.go centralises the per-field
-// recursive evaluation. Splitting it from plan_schema_evaluator.go
-// keeps the main evaluator file under the LLM-friendly 400-line
-// threshold.
-//
-// CORRECTION04:
-//   - The applicability walker now takes an explicit
-//     schemaPropertyContext carrying the parent schema,
-//     parent instance, property name, and presence flag.
-//   - Applicability is checked for ALL schema-declared
-//     properties (not just present instances), so absent
-//     required fields under matching mode values are rejected.
-//   - The walker never depends on propSchema["json_name"].
-//   - Absent and explicit null remain distinct.
-//   - Required/forbidden checks precede value validation.
 
 // schemaPropertyContext carries the parent context and the
 // property under evaluation so the applicability walker can
@@ -40,7 +24,7 @@ type schemaPropertyContext struct {
 
 // evalField evaluates a single instance value against a property
 // schema. Nested objects and arrays are walked recursively.
-func evalField(propSchema map[string]any, value any, leamasExtensions bool) schemaEvaluation {
+func evalField(propSchema map[string]any, value any, leamasExtensions bool) SchemaEvaluation {
 	if propSchema == nil {
 		return acceptAny(leamasExtensions)
 	}
@@ -161,9 +145,13 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 						if !ok {
 							continue
 						}
-						app, ok := normalizeApplicabilityRules(psm["x-applicability"])
-						if !ok {
+						rawApp, hasApp := psm["x-applicability"]
+						if !hasApp {
 							continue
+						}
+						app, ok, appErr := normalizeApplicabilityRules(rawApp)
+						if !ok {
+							return rejectAny(leamasExtensions, appErr)
 						}
 						_, fieldPresent := asMap[propName]
 						ctx := schemaPropertyContext{
@@ -249,25 +237,35 @@ func evalField(propSchema map[string]any, value any, leamasExtensions bool) sche
 // slice returned by the generator; an external consumer that decodes
 // the public schema bytes into map[string]any will see JSON arrays as
 // []any regardless of how the generator stores them internally.
-func normalizeApplicabilityRules(raw any) ([]map[string]any, bool) {
+//
+// CORRECTION16: the third return value is a typed schema issue
+// string so a normalization failure surfaces a schema-level
+// rejection rather than the previous `continue` silent skip.
+func normalizeApplicabilityRules(raw any) ([]map[string]any, bool, string) {
 	if raw == nil {
-		return nil, false
+		return nil, false, "x-applicability rule 0: x-applicability missing"
 	}
 	switch v := raw.(type) {
 	case []map[string]any:
-		return v, true
+		if len(v) == 0 {
+			return nil, false, "x-applicability rule 0: array is empty (at least one rule required)"
+		}
+		return v, true, ""
 	case []any:
+		if len(v) == 0 {
+			return nil, false, "x-applicability rule 0: array is empty (at least one rule required)"
+		}
 		out := make([]map[string]any, 0, len(v))
-		for _, item := range v {
+		for i, item := range v {
 			m, ok := item.(map[string]any)
 			if !ok {
-				return nil, false
+				return nil, false, fmt.Sprintf("x-applicability rule %d: entry is not a JSON object", i)
 			}
 			out = append(out, m)
 		}
-		return out, true
+		return out, true, ""
 	default:
-		return nil, false
+		return nil, false, "x-applicability: wrong type (must be an array of objects)"
 	}
 }
 
@@ -275,9 +273,21 @@ func normalizeApplicabilityRules(raw any) ([]map[string]any, bool) {
 // for a single property against the supplied parent context.
 // Fail-closed shape validation is performed so malformed rules
 // never silently pass.
-func applyApplicabilityRules(ctx schemaPropertyContext, rules []map[string]any, leamasExtensions bool) schemaEvaluation {
+func applyApplicabilityRules(ctx schemaPropertyContext, rules []map[string]any, leamasExtensions bool) SchemaEvaluation {
 	seen := make(map[string]bool)
 	for idx, m := range rules {
+		// x-applicability rule shape is validated against the
+		// closed member set {sibling, value, presence}; any
+		// unknown member fails closed so a future schema
+		// author cannot accidentally introduce a typo or
+		// silently ignored field.
+		for k := range m {
+			switch k {
+			case "sibling", "value", "presence":
+			default:
+				return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: unknown member %q", idx, k))
+			}
+		}
 		siblingAny, hasSibling := m["sibling"]
 		if !hasSibling {
 			return rejectAny(leamasExtensions, fmt.Sprintf("x-applicability rule %d: sibling absent", idx))

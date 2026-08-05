@@ -1,28 +1,23 @@
-package closure
+package evaltest
 
 import (
 	"encoding/json"
 	"math/big"
 )
 
-// plan_schema_evaluator_helpers.go centralises the small
-// type-and-shape helpers the schema evaluator uses. Splitting
-// them from plan_schema_evaluator.go keeps the main evaluator
-// file under the LLM-friendly 400-line threshold.
-
-// exactRational converts a JSON numeric value into an exact
+// ExactRational converts a JSON numeric value into an exact
 // math/big.Rat. Returns nil and false when the value is not a
 // JSON numeric wrapper (json.Number, *big.Rat, int, int64) or a
 // Go float64 approximation. JSON strings are NOT numeric values
 // even when their textual content is a number; a JSON string
 // must be type-checked before any numeric interpretation.
 //
-// CORRECTION07: parsing strings through exactRational was a
+// CORRECTION07: parsing strings through ExactRational was a
 // silent type-coercion bug. A value of type "60" (JSON string)
 // is a string, not the integer 60. The schema's type=integer
 // branch must reject it on type, before any numeric value
 // recovery is attempted.
-func exactRational(value any) (*big.Rat, bool) {
+func ExactRational(value any) (*big.Rat, bool) {
 	if value == nil {
 		return nil, false
 	}
@@ -61,9 +56,9 @@ func parseExactNumber(s string) (*big.Rat, bool) {
 	return r, true
 }
 
-// exactIsInteger reports whether the rational is mathematically
+// ExactIsInteger reports whether the rational is mathematically
 // integral (denominator is 1).
-func exactIsInteger(r *big.Rat) bool {
+func ExactIsInteger(r *big.Rat) bool {
 	if r == nil {
 		return false
 	}
@@ -71,7 +66,7 @@ func exactIsInteger(r *big.Rat) bool {
 }
 
 // exactLessThan reports whether a < b in exact rational terms.
-func exactLessThan(a, b *big.Rat) bool {
+func ExactLessThan(a, b *big.Rat) bool {
 	if a == nil || b == nil {
 		return false
 	}
@@ -79,7 +74,7 @@ func exactLessThan(a, b *big.Rat) bool {
 }
 
 // exactGreaterThan reports whether a > b in exact rational terms.
-func exactGreaterThan(a, b *big.Rat) bool {
+func ExactGreaterThan(a, b *big.Rat) bool {
 	if a == nil || b == nil {
 		return false
 	}
@@ -87,7 +82,7 @@ func exactGreaterThan(a, b *big.Rat) bool {
 }
 
 // exactEqual reports whether a == b in exact rational terms.
-func exactEqual(a, b *big.Rat) bool {
+func ExactEqual(a, b *big.Rat) bool {
 	if a == nil || b == nil {
 		return false
 	}
@@ -95,7 +90,7 @@ func exactEqual(a, b *big.Rat) bool {
 }
 
 // exactFromInt64 returns the rational representation of n.
-func exactFromInt64(n int64) *big.Rat {
+func ExactFromInt64(n int64) *big.Rat {
 	return new(big.Rat).SetInt64(n)
 }
 
@@ -112,12 +107,12 @@ func valueMatchesType(t string, value any) bool {
 		_, ok := value.(string)
 		return ok
 	case "integer":
-		if r, ok := exactRational(value); ok {
-			return exactIsInteger(r)
+		if r, ok := ExactRational(value); ok {
+			return ExactIsInteger(r)
 		}
 		return false
 	case "number":
-		_, isNum := exactRational(value)
+		_, isNum := ExactRational(value)
 		return isNum
 	case "boolean":
 		_, ok := value.(bool)
@@ -154,11 +149,11 @@ func isIntegerText(s string) bool {
 
 // numericValue returns the float64 representation of a numeric
 // value. The function is retained for compatibility with code
-// paths that do not yet use exactRational; new numeric code must
-// use exactRational so values that float64 would round across
+// paths that do not yet use ExactRational; new numeric code must
+// use ExactRational so values that float64 would round across
 // the [1,600] inclusive range still classify correctly.
 func numericValue(value any) (float64, bool) {
-	r, ok := exactRational(value)
+	r, ok := ExactRational(value)
 	if !ok {
 		return 0, false
 	}
@@ -167,7 +162,7 @@ func numericValue(value any) (float64, bool) {
 		return f, true
 	}
 	// Return the float64 approximation but mark it as inexact
-	// for the caller; callers should use exactRational for
+	// for the caller; callers should use ExactRational for
 	// authoritative numeric checks.
 	return f, true
 }

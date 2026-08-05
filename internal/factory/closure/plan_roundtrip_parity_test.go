@@ -3,6 +3,7 @@ package closure
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"testing"
 )
 
@@ -52,8 +53,8 @@ func TestPinnedRunMatrixRoundTripped(t *testing.T) {
 			if err := json.Unmarshal(data, &rootMap); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
-			standard := evaluateWithSchemaStandard(roundTripped, rootMap)
-			extension := evaluateWithSchemaExtensionAware(roundTripped, rootMap)
+			standard := evaltest.EvaluateWithSchemaStandard(roundTripped, rootMap)
+			extension := evaltest.EvaluateWithSchemaExtensionAware(roundTripped, rootMap)
 			composed := ValidatePlanComposed(data)
 			if standard.Accept != tc.want.standard {
 				t.Fatalf("standard=%v want %v", standard.Accept, tc.want.standard)

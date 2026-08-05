@@ -72,7 +72,13 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 			diagnostics = append(diagnostics, validateStringConstraints(field, path, strVal)...)
 		}
 	case kindInteger:
-		intVal, ok := jsonNumberToInteger(value)
+		// CORRECTION16: route every integer-shaped value
+		// through the exact-number authority so 9223372036854775808
+		// (int64_max+1) and 1e1000 classify as
+		// numeric_above_maximum rather than invalid_type. The
+		// authority's InRange decides below/above on the
+		// rational form before any int conversion.
+		iv, oversize, integral, ok := jsonNumberClassify(value)
 		if !ok {
 			diagnostics = append(diagnostics, PlanValidationError{
 				InstancePath:  path,
@@ -83,7 +89,29 @@ func validatePlanField(field planFieldDescriptor, path string, value any, parent
 				RejectedValue: value,
 				PropertyName:  field.JSONName,
 			})
+		} else if !integral {
+			// Mathematically non-integral; the schema's
+			// type=integer branch rejects it on type. The
+			// bound check would otherwise misclassify it
+			// as numeric_below_minimum when the value is
+			// between 0 and 1.
+			diagnostics = append(diagnostics, PlanValidationError{
+				InstancePath:  path,
+				SchemaPath:    path,
+				Code:          PlanCodeInvalidType,
+				Keyword:       KeywordType,
+				Message:       "property \"" + field.JSONName + "\" must be an integer, got " + typeNameOf(value),
+				RejectedValue: value,
+				PropertyName:  field.JSONName,
+			})
+		} else if oversize {
+			// Mathematical integer that does not fit in int64.
+			// Decide below/above maximum from the rational
+			// form so the bound check fires before any int
+			// coercion.
+			diagnostics = append(diagnostics, validateOversizeInteger(field, path, value)...)
 		} else {
+			intVal := int(iv)
 			diagnostics = append(diagnostics, validateIntegerConstraints(field, path, intVal)...)
 			if field.ConstantValue != nil {
 				if cv, ok := field.ConstantValue.(int); ok && intVal != cv {
@@ -243,44 +271,6 @@ func validateIntegerConstraints(field planFieldDescriptor, path string, value in
 		})
 	}
 	return diagnostics
-}
-
-// integerBoundRange renders the inclusive [min, max] bound range
-// for integer diagnostics. Missing bounds render as "*" so the
-// canonical encoding is unambiguous on both sides.
-func integerBoundRange(field planFieldDescriptor) []string {
-	minStr := "*"
-	if field.Minimum != nil {
-		minStr = itoa64(*field.Minimum)
-	}
-	maxStr := "*"
-	if field.Maximum != nil {
-		maxStr = itoa64(*field.Maximum)
-	}
-	return []string{"[" + minStr + ", " + maxStr + "]"}
-}
-
-// itoa64 renders an int64 as a base-10 string.
-func itoa64(v int64) string {
-	if v == 0 {
-		return "0"
-	}
-	negative := v < 0
-	if negative {
-		v = -v
-	}
-	var buf [20]byte
-	pos := len(buf)
-	for v > 0 {
-		pos--
-		buf[pos] = byte('0' + v%10)
-		v /= 10
-	}
-	if negative {
-		pos--
-		buf[pos] = '-'
-	}
-	return string(buf[pos:])
 }
 
 // validatePlanArray walks an array against its descriptor.

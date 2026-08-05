@@ -1,6 +1,7 @@
 package closure
 
 import (
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"math"
 	"testing"
 )
@@ -66,6 +67,12 @@ func TestDifferentialMutationSensitivity(t *testing.T) {
 			wantStd: false,
 			wantExt: false,
 		},
+		// CORRECTION16: Leamas Closure Plan v1 mandates the
+		// canonical invariant set. Mutations that swap a
+		// canonical invariant for a non-canonical value
+		// must be rejected by the extension evaluator with
+		// the noncanonical invariant message so a future
+		// schema author cannot silently widen the policy.
 		{
 			name: "allow_parent_segments_true",
 			mutate: func(s map[string]any) {
@@ -73,8 +80,8 @@ func TestDifferentialMutationSensitivity(t *testing.T) {
 			},
 			value:   "../escape",
 			timeout: 60,
-			wantStd: true, // standard pattern matches ".."
-			wantExt: true, // extension accepts (allow_parent_segments=true)
+			wantStd: true,  // standard pattern matches ".."
+			wantExt: false, // noncanonical invariant
 		},
 		{
 			name: "require_lexically_clean_false",
@@ -84,7 +91,7 @@ func TestDifferentialMutationSensitivity(t *testing.T) {
 			value:   "foo/./bar",
 			timeout: 60,
 			wantStd: true,  // standard pattern matches
-			wantExt: false, // allow_dot still false (default); single-dot still rejected
+			wantExt: false, // noncanonical invariant
 		},
 		{
 			name: "separator_unsupported",
@@ -104,7 +111,7 @@ func TestDifferentialMutationSensitivity(t *testing.T) {
 			value:   ".",
 			timeout: 60,
 			wantStd: true,
-			wantExt: false,
+			wantExt: false, // noncanonical invariant
 		},
 		{
 			name: "timeout_beyond_native",
@@ -151,8 +158,8 @@ func TestDifferentialMutationSensitivity(t *testing.T) {
 					"require_diff_check":          true,
 				},
 			}
-			standard := evaluateWithSchemaStandard(schema, instance)
-			extension := evaluateWithSchemaExtensionAware(schema, instance)
+			standard := evaltest.EvaluateWithSchemaStandard(schema, instance)
+			extension := evaltest.EvaluateWithSchemaExtensionAware(schema, instance)
 			if standard.Accept != m.wantStd {
 				t.Fatalf("%s: standard accept=%v, want %v (issues=%v)",
 					m.name, standard.Accept, m.wantStd, standard.Issues)

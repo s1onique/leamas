@@ -34,11 +34,11 @@ const (
 // timeout decoding. It carries enough structure for the
 // diagnostic stage to surface a stable contract.
 type TimeoutDecodeError struct {
-	Kind        string
-	Raw         string
-	Minimum     int64
-	Maximum     int64
-	Cause       error
+	Kind    string
+	Raw     string
+	Minimum int64
+	Maximum int64
+	Cause   error
 }
 
 // Error implements the error interface.

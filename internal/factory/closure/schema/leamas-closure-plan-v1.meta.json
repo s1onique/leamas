@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://leamas.io/closure-plan/v1/meta.json",
   "title": "Leamas Closure Plan v1 Meta-Schema",
-  "description": "Meta-schema declaring the Leamas Closure Plan v1 dialect and required vocabularies. The Closure Plan v1 schema resource resolves to this meta-schema through $schema. Implementations MUST understand all listed required vocabularies to validate a Closure Plan v1 document. See ACT-LEAMAS-FACTORY-CLOSE-PLAN-V1-RUN-EXECUTION-FIELDS-CONTRACT-PARITY01-CORRECTION05.",
+  "description": "Leamas Closure Plan v1 dialect meta-schema. The Closure Plan v1 schema resolves here via $schema. Implementations MUST understand every required vocabulary below to validate a Closure Plan v1 document.",
   "type": "object",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,

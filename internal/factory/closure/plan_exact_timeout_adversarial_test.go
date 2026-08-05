@@ -3,6 +3,7 @@ package closure
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"math/big"
 	"testing"
 )
@@ -82,7 +83,7 @@ func TestExactTimeoutMatrixAdversarialBoundaries(t *testing.T) {
 			if err := dec.Decode(&rootMap); err != nil {
 				t.Fatalf("decode: %v", err)
 			}
-			got := evaluateWithSchemaExtensionAware(roundTripped, rootMap)
+			got := evaltest.EvaluateWithSchemaExtensionAware(roundTripped, rootMap)
 			if got.Accept != c.want {
 				t.Fatalf("timeout=%s extension=%v want %v (issues=%v)",
 					c.timeout, got.Accept, c.want, got.Issues)
@@ -91,7 +92,7 @@ func TestExactTimeoutMatrixAdversarialBoundaries(t *testing.T) {
 	}
 }
 
-// TestExactRationalAdversarialDecoding proves the exactRational
+// TestExactRationalAdversarialDecoding proves the evaltest.ExactRational
 // helper classifies adversarial boundaries correctly.
 func TestExactRationalAdversarialDecoding(t *testing.T) {
 	type tc struct {
@@ -109,15 +110,15 @@ func TestExactRationalAdversarialDecoding(t *testing.T) {
 	for _, c := range cases {
 		c := c
 		t.Run(c.input, func(t *testing.T) {
-			r, ok := exactRational(json.Number(c.input))
+			r, ok := evaltest.ExactRational(json.Number(c.input))
 			if !ok {
-				t.Fatalf("exactRational failed for %s", c.input)
+				t.Fatalf("evaltest.ExactRational failed for %s", c.input)
 			}
-			if got := exactIsInteger(r); got != c.wantInt {
+			if got := evaltest.ExactIsInteger(r); got != c.wantInt {
 				t.Fatalf("%s integer: got %v want %v", c.input, got, c.wantInt)
 			}
-			one := exactFromInt64(1)
-			if got := exactLessThan(r, one); got != c.wantBelow1 {
+			one := evaltest.ExactFromInt64(1)
+			if got := evaltest.ExactLessThan(r, one); got != c.wantBelow1 {
 				t.Fatalf("%s below 1: got %v want %v", c.input, got, c.wantBelow1)
 			}
 		})
@@ -125,7 +126,7 @@ func TestExactRationalAdversarialDecoding(t *testing.T) {
 }
 
 // TestBigRatPreservesHighPrecision demonstrates that the
-// exactRational helper uses math/big.Rat so values that
+// evaltest.ExactRational helper uses math/big.Rat so values that
 // float64 would round across the [1,600] inclusive range
 // are still classified correctly.
 func TestBigRatPreservesHighPrecision(t *testing.T) {

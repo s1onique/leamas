@@ -3,6 +3,7 @@ package closure
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"math"
 
 	"testing"
@@ -89,8 +90,8 @@ func buildCheckInstance(t *testing.T, base []byte, mutate func(c map[string]any)
 // runEvalDiff composes the three outcomes for the supplied
 // instance bytes.
 type runEvalDiff struct {
-	Standard       schemaEvaluation
-	ExtensionAware schemaEvaluation
+	Standard       evaltest.SchemaEvaluation
+	ExtensionAware evaltest.SchemaEvaluation
 	Runtime        bool
 	RuntimeIssues  []string
 }
@@ -108,8 +109,8 @@ func evaluateRunDiff(t *testing.T, instance []byte) runEvalDiff {
 		t.Fatalf("unmarshal instance: %v", err)
 	}
 	t.Logf("instance: %s", string(instance))
-	standard := evaluateWithSchemaStandard(schema, rootMap)
-	extension := evaluateWithSchemaExtensionAware(schema, rootMap)
+	standard := evaltest.EvaluateWithSchemaStandard(schema, rootMap)
+	extension := evaltest.EvaluateWithSchemaExtensionAware(schema, rootMap)
 	composed := ValidatePlanComposed(instance)
 	var issues []string
 	for _, d := range composed.Structural.Errors {

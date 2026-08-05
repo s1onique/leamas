@@ -3,6 +3,7 @@ package closure
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"testing"
 )
 
@@ -10,10 +11,10 @@ import (
 // and the runtime composed validator agree on every literal
 // timeout value in the exact matrix, including the absent case.
 //
-//   ACCEPT 1, 1.0, 1e0, 599, 600, 600.0, 6e2
-//   REJECT every value below 1, every value above 600,
-//          every nonintegral number, every non-number,
-//          null, absent
+//	ACCEPT 1, 1.0, 1e0, 599, 600, 600.0, 6e2
+//	REJECT every value below 1, every value above 600,
+//	       every nonintegral number, every non-number,
+//	       null, absent
 func TestThreeLayerTimeoutParity(t *testing.T) {
 	schema, err := JSONSchema()
 	if err != nil {
@@ -28,12 +29,12 @@ func TestThreeLayerTimeoutParity(t *testing.T) {
 	}
 
 	type tc struct {
-		name     string
-		timeout  string
-		present  bool
-		wantStd  bool
-		wantExt  bool
-		wantRt   bool
+		name    string
+		timeout string
+		present bool
+		wantStd bool
+		wantExt bool
+		wantRt  bool
 	}
 	cases := []tc{
 		{"0_absent", "", false, true, false, false}, // standard mode does not require via x-applicability
@@ -47,7 +48,7 @@ func TestThreeLayerTimeoutParity(t *testing.T) {
 		{"599", "599", true, true, true, true},
 		{"600", "600", true, true, true, true},
 		{"600.0", "600.0", true, true, true, true}, // CORRECTION11
-		{"6e2", "6e2", true, true, true, true}, // CORRECTION11
+		{"6e2", "6e2", true, true, true, true},     // CORRECTION11
 		{"601", "601", true, false, false, false},
 		{"1e1000", "1e1000", true, false, false, false},
 		{"quoted", "\"60\"", true, false, false, false},
@@ -89,8 +90,8 @@ func TestThreeLayerTimeoutParity(t *testing.T) {
 			if err := dec.Decode(&rootMap); err != nil {
 				t.Fatalf("decode: %v", err)
 			}
-			std := evaluateWithSchemaStandard(roundTripped, rootMap)
-			ext := evaluateWithSchemaExtensionAware(roundTripped, rootMap)
+			std := evaltest.EvaluateWithSchemaStandard(roundTripped, rootMap)
+			ext := evaltest.EvaluateWithSchemaExtensionAware(roundTripped, rootMap)
 			composed := ValidatePlanComposed([]byte(body))
 			if std.Accept != c.wantStd {
 				t.Fatalf("standard=%v want %v (issues=%v)", std.Accept, c.wantStd, std.Issues)

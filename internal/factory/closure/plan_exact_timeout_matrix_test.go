@@ -3,6 +3,7 @@ package closure
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/s1onique/leamas/internal/factory/closure/evaltest"
 	"strings"
 	"testing"
 )
@@ -12,10 +13,10 @@ import (
 // the actual schema emitted by JSONSchema() (round-tripped through
 // marshal + generic decode with UseNumber).
 //
-//   ACCEPT 1, 1.0, 1e0, 599, 600, 600.0, 6e2
-//   REJECT every value below 1, every value above 600,
-//          every nonintegral number, every non-number,
-//          null, absent
+//	ACCEPT 1, 1.0, 1e0, 599, 600, 600.0, 6e2
+//	REJECT every value below 1, every value above 600,
+//	       every nonintegral number, every non-number,
+//	       null, absent
 func TestExactTimeoutMatrixRoundTripped(t *testing.T) {
 	schema, err := JSONSchema()
 	if err != nil {
@@ -32,9 +33,9 @@ func TestExactTimeoutMatrixRoundTripped(t *testing.T) {
 	}
 
 	type tc struct {
-		name     string
-		timeout  string
-		want     bool
+		name    string
+		timeout string
+		want    bool
 	}
 	cases := []tc{
 		{"below_0_neg_big", "-9223372036854775809", false},
@@ -98,7 +99,7 @@ func TestExactTimeoutMatrixRoundTripped(t *testing.T) {
 			if err := dec.Decode(&rootMap); err != nil {
 				t.Fatalf("decode: %v", err)
 			}
-			got := evaluateWithSchemaExtensionAware(roundTripped, rootMap)
+			got := evaltest.EvaluateWithSchemaExtensionAware(roundTripped, rootMap)
 			if got.Accept != tc.want {
 				t.Fatalf("timeout_seconds=%s extension=%v want %v (issues=%v)",
 					tc.timeout, got.Accept, tc.want, got.Issues)
