@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -206,18 +207,42 @@ func parseDiagnosticFromErr(path string, err error) PlanValidationError {
 }
 
 // jsonNumberToInteger parses a JSON-number-shaped value into an int.
-// The contract follows the typed Go decoder: only JSON number tokens
-// lexically valid for Go int fields are accepted. Forms like
-// "1.0", "1e0", or "1.5" are rejected with invalid_type. Strings are
-// also rejected. Returns (0, false) when the value is not a
-// lexically-valid integer.
+// CORRECTION12: the conversion routes through the production
+// exact-number authority (plan_exact_number.go) so 1, 1.0, 1e0,
+// 600, 600.0, 6e2, and any other mathematically integral JSON
+// number are all accepted. Non-integral forms (1.5, 1e-1,
+// 600.000...001) are rejected.
 func jsonNumberToInteger(value any) (int, bool) {
 	switch v := value.(type) {
 	case json.Number:
-		s := string(v)
-		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return int(i), true
+		authority := NewExactNumberAuthority()
+		rat, ok := authority.ParseExactNumber(string(v))
+		if !ok {
+			return 0, false
 		}
+		if !authority.IsIntegral(rat) {
+			return 0, false
+		}
+		iv, ok := authority.ConvertBoundedInteger(rat)
+		if !ok {
+			return 0, false
+		}
+		return int(iv), true
+	case float64:
+		authority := NewExactNumberAuthority()
+		rat := new(big.Rat).SetFloat64(v)
+		if !authority.IsIntegral(rat) {
+			return 0, false
+		}
+		iv, ok := authority.ConvertBoundedInteger(rat)
+		if !ok {
+			return 0, false
+		}
+		return int(iv), true
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
 	}
 	return 0, false
 }
