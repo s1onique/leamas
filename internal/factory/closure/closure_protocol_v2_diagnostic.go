@@ -31,6 +31,7 @@ const (
 	V2CodeSubjectFreezeUnrelated            V2DiagnosticCode = "subject_freeze_unrelated"
 	V2CodeFrozenPlanPathMissing             V2DiagnosticCode = "frozen_plan_path_missing"
 	V2CodeFrozenPlanNotBlob                 V2DiagnosticCode = "frozen_plan_not_blob"
+	V2CodeFrozenPlanInvalid                 V2DiagnosticCode = "frozen_plan_invalid"
 	V2CodeInvalidPlanPath                   V2DiagnosticCode = "invalid_plan_path"
 	V2CodeWorkingPlanMismatch               V2DiagnosticCode = "working_plan_mismatch"
 	V2CodeCallerWorktreeDirty               V2DiagnosticCode = "caller_worktree_dirty"

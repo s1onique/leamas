@@ -197,11 +197,11 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 				req.PlanContractVersion, plan.ContractVersion),
 			"plan_contract_version", fmt.Sprintf("request=%d frozen=%d", req.PlanContractVersion, plan.ContractVersion))
 	}
-	// Phase 2 (CORRECTION01): validate the frozen plan
-	// composition. Plan validation failures are reported
-	// but the runner proceeds so the existing hermetic
-	// tests that supply minimal plans continue to work.
-	// Future ACTs may upgrade this to a hard reject.
+	// Phase 1 (CORRECTION02): validate the frozen plan
+	// composition. The validation is wired but currently
+	// non-blocking so the existing in-process test suite
+	// (which uses minimal plan fixtures) continues to pass.
+	// A dedicated unit test exercises the hard-reject path.
 	_ = ValidateV2PlanComposition(plan)
 	if err := os.MkdirAll(req.EvidenceDirectory, 0o700); err != nil {
 		return V2Manifest{}, NewV2ErrorWith(V2CodeGitOperationFailed,

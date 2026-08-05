@@ -71,7 +71,7 @@ func v2PlanReportToError(report V2PlanValidationReport) error {
 	diags := make(V2Diagnostics, 0, len(report.Failures))
 	for _, f := range report.Failures {
 		diags = append(diags, V2Diagnostic{
-			Code:         V2CodeFrozenPlanNotBlob,
+			Code:         V2CodeFrozenPlanInvalid,
 			Message:      fmt.Sprintf("plan validation [%s] %s: %s", f.Code, f.InstancePath, f.Message),
 			PropertyName: f.InstancePath,
 			Detail:       fmt.Sprintf("code=%s keyword=%s schema=%s", f.Code, f.Keyword, f.SchemaPath),
