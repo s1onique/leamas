@@ -164,6 +164,16 @@ func TestParityRequiredFieldDeletionAtEveryObject(t *testing.T) {
 			path: "/checks/0/mode",
 		},
 		{
+			name: "missing-run-environment",
+			mut: func(p map[string]any) {
+				p["checks"] = []any{map[string]any{
+					"id": "noop", "mode": CheckModeRun, "argv": []any{"true"},
+					"working_directory": ".", "timeout_seconds": float64(60),
+				}}
+			},
+			path: "/checks/0/environment",
+		},
+		{
 			name: "missing-artifacts",
 			mut:  func(p map[string]any) { delete(p, "artifacts") },
 			path: "/artifacts",
@@ -185,6 +195,9 @@ func TestParityRequiredFieldDeletionAtEveryObject(t *testing.T) {
 			found := false
 			for _, e := range result.Errors {
 				if e.Code == PlanCodeRequiredPropertyMissing && e.InstancePath == d.path {
+					if d.name == "missing-run-environment" && (e.Keyword != KeywordRequired || e.PropertyName != "environment") {
+						t.Fatalf("environment diagnostic = %+v, want required/environment", e)
+					}
 					found = true
 					break
 				}

@@ -301,8 +301,8 @@ func validateModeDependentApplicabilityWithObserver(root any, contract planContr
 							InstancePath: fieldPath,
 							SchemaPath:   fieldPath,
 							Code:         PlanCodeRequiredPropertyMissing,
-							Keyword:      KeywordIfThenElse,
-							Message:      "property \"" + fieldName + "\" is required when mode=\"" + modeStr + "\"",
+							Keyword:      KeywordRequired,
+							Message:      "required property \"" + fieldName + "\" is missing",
 							PropertyName: fieldName,
 						})
 					}

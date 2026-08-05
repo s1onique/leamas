@@ -126,6 +126,30 @@ func TestSchemaParityArrayMinItems(t *testing.T) {
 	}
 }
 
+// TestSchemaParityEnvironmentRequiredForRun proves the public schema describes
+// the same required presence rule enforced by the structural validator.
+func TestSchemaParityEnvironmentRequiredForRun(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if exit := runFactoryClosePlanSchema(nil, &stdout, &stderr); exit != 0 {
+		t.Fatalf("schema exit = %d, want 0", exit)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	checks := schema["properties"].(map[string]any)["checks"].(map[string]any)
+	item := checks["items"].(map[string]any)
+	props := item["properties"].(map[string]any)
+	env := props["environment"].(map[string]any)
+	if env["description"] != "Per-check environment overrides (free-form string map). Required when mode='run'; {} means no environment overrides; forbidden when mode='exclude'." {
+		t.Fatalf("environment description = %v", env["description"])
+	}
+	app := env["x-applicability"].([]any)
+	if len(app) != 2 || app[0].(map[string]any)["presence"] != "required" {
+		t.Fatalf("environment applicability = %v, want run required and exclude forbidden", app)
+	}
+}
+
 // TestSchemaParityEnvironmentStringMap proves environment emits a string-valued additionalProperties.
 func TestSchemaParityEnvironmentStringMap(t *testing.T) {
 	var stdout, stderr bytes.Buffer

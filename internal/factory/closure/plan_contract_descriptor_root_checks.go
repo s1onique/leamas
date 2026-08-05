@@ -11,8 +11,8 @@ package closure
 // validateRunnableCheck) are encoded exhaustively via
 // ApplicabilityRules so both branches are documented:
 //
-//   - mode=run: argv required; working_directory/timeout_seconds/
-//     environment optional; reason forbidden.
+//   - mode=run: argv and environment required; working_directory/
+//     timeout_seconds optional; reason forbidden.
 //   - mode=exclude: reason required; argv/working_directory/
 //     timeout_seconds/environment forbidden.
 func planContractV1ChecksField() planFieldDescriptor {
@@ -122,10 +122,10 @@ func planContractV1ChecksField() planFieldDescriptor {
 						Kind:         kindObject,
 						Required:     false,
 						SemanticRule: "validateRunnableCheck(Environment)",
-						Description:  "Per-check environment overrides (free-form string map). Optional when mode='run'; forbidden when mode='exclude'.",
+						Description:  "Per-check environment overrides (free-form string map). Required when mode='run'; {} means no environment overrides; forbidden when mode='exclude'.",
 						ExampleValue: map[string]any{"FOO": "bar"},
 						ApplicabilityRules: []fieldApplicabilityRule{
-							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceOptional},
+							{Sibling: "mode", Value: CheckModeRun, Presence: PresenceRequired},
 							{Sibling: "mode", Value: CheckModeExclude, Presence: PresenceForbidden},
 						},
 						Children: &planObjectDescriptor{
