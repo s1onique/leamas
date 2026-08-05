@@ -1,0 +1,36 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-AUTHORITY-CORRECTION03",
+  "artifacts": [],
+  "baseline": {
+    "commit_oid": "a731975307ca65f690da2629c555818447d44326",
+    "tree_oid": "6c5dcb79c098a5953060ac359ac0ef9c0328937b"
+  },
+  "checks": [
+    {
+      "argv": ["go", "test", "-count=1", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-correction03-closure-tests",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "vet", "./..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-correction03-vet",
+      "mode": "run",
+      "timeout_seconds": 120,
+      "working_directory": "."
+    }
+  ],
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  },
+  "contract_version": 1
+}
