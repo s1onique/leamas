@@ -26,6 +26,18 @@ import (
 // versions MUST be appended; existing versions are immutable.
 const ClosureEvidenceSchemaVersion = 1
 
+// EvidenceCompleteness is the derived validity of a closure
+// evidence document. INCOMPLETE means the document lacks one or
+// more authoritative observations (check results, caller state,
+// binary authority, gate classification). COMPLETE means every
+// authoritative observation is present and consistent.
+type EvidenceCompleteness string
+
+const (
+	EvidenceIncomplete EvidenceCompleteness = "INCOMPLETE"
+	EvidenceComplete   EvidenceCompleteness = "COMPLETE"
+)
+
 // CheckEvidence records the typed result of one runtime check.
 // The schema mirrors the small matrix the closure command
 // publishes alongside the aggregate gate capture.
@@ -58,7 +70,7 @@ type ClosureEvidence struct {
 	CallerStateBefore CallerState `json:"caller_state_before"`
 	CallerStateAfter  CallerState `json:"caller_state_after"`
 
-	Valid bool `json:"valid"`
+	Completeness EvidenceCompleteness `json:"completeness"`
 }
 
 // RuntimeContextSubset is the projected runtime context the
@@ -118,7 +130,7 @@ func PublishClosureEvidence(req PublicationRequest) (PublicationResult, error) {
 	if req.Now == nil {
 		req.Now = time.Now
 	}
-	if !req.Evidence.Valid {
+	if req.Evidence.Completeness != EvidenceComplete {
 		return PublicationResult{}, errors.New("evidence: cannot publish invalid closure evidence")
 	}
 	if req.Evidence.SchemaVersion != ClosureEvidenceSchemaVersion {
@@ -187,8 +199,8 @@ func ValidateClosureEvidence(evidence ClosureEvidence) error {
 	if evidence.SchemaVersion != ClosureEvidenceSchemaVersion {
 		return fmt.Errorf("evidence: schema_version %d is not supported", evidence.SchemaVersion)
 	}
-	if !evidence.Valid {
-		return errors.New("evidence: valid flag is false")
+	if evidence.Completeness != EvidenceComplete {
+		return errors.New("evidence: completeness is not COMPLETE")
 	}
 	if evidence.Runtime.ACTID == "" {
 		return errors.New("evidence: runtime.act_id is empty")

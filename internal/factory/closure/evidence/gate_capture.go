@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package evidence - gate_capture.go implements Phase 4 (per-run
-// gate capture) of CORRECTION01. GateCollector owns the capture
-// state for a single ExecuteClose invocation; there is no
-// process-global cache.
+// Package evidence - gate_capture.go implements Phase 4
+// (exactly-once per-run gate capture) and Phase 3
+// (authoritative bounded result fields) of CORRECTION01-R1.
+//
+// GateCollector owns the capture state for exactly one closure
+// run. The first Capture call executes the gate via the runner;
+// every subsequent call returns the same immutable GateCapture
+// and error without invoking the runner again. Concurrent
+// callers are serialised through a sync.Mutex that protects
+// the runner call, the cached capture, and the cached error.
 
 package evidence
 
@@ -16,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -50,6 +57,7 @@ type GateCapture struct {
 	TimedOut        bool `json:"timed_out"`
 	StdoutTruncated bool `json:"stdout_truncated"`
 	StderrTruncated bool `json:"stderr_truncated"`
+	Canceled        bool `json:"canceled"`
 
 	StdoutSHA256 string `json:"stdout_sha256"`
 	StderrSHA256 string `json:"stderr_sha256"`
@@ -73,20 +81,27 @@ type CommandRunner interface {
 	Run(ctx context.Context, name string, args []string, dir string, env []string) CommandResult
 }
 
-// CommandResult is the typed outcome of a single process
-// invocation.
+// CommandResult is the authoritative bounded process result.
+// Truncation comes from the writer's authoritative flag, not
+// from a length comparison.
 type CommandResult struct {
 	ExitCode      int
 	TimedOut      bool
+	Canceled      bool
 	Stdout        []byte
 	Stderr        []byte
+	StdoutTrunc   bool
+	StderrTrunc   bool
+	Err           error
 	StartedAtUTC  time.Time
 	FinishedAtUTC time.Time
 }
 
-// OsRunner is the production CommandRunner.
+// OsRunner is the production CommandRunner. WaitDelay is finite
+// so the bounded execution authority is enforced.
 type OsRunner struct {
 	OutputCap int
+	WaitDelay time.Duration
 }
 
 // Run invokes the supplied argv through the OS process package.
@@ -95,12 +110,17 @@ func (r *OsRunner) Run(ctx context.Context, name string, args []string, dir stri
 	if cap == 0 {
 		cap = 8 << 20
 	}
+	waitDelay := r.WaitDelay
+	if waitDelay == 0 {
+		waitDelay = 5 * time.Second
+	}
 	started := time.Now().UTC()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	if len(env) > 0 {
 		cmd.Env = env
 	}
+	cmd.WaitDelay = waitDelay
 	var stdoutBuf, stderrBuf truncatedBuffer
 	stdoutBuf.cap = cap
 	stderrBuf.cap = cap
@@ -108,7 +128,11 @@ func (r *OsRunner) Run(ctx context.Context, name string, args []string, dir stri
 	cmd.Stderr = &stderrBuf
 	err := cmd.Start()
 	if err != nil {
-		return CommandResult{ExitCode: 127, Stderr: []byte(err.Error()), StartedAtUTC: started, FinishedAtUTC: time.Now().UTC()}
+		return CommandResult{
+			ExitCode: 127, Err: err,
+			Stdout:       []byte(err.Error()),
+			StartedAtUTC: started, FinishedAtUTC: time.Now().UTC(),
+		}
 	}
 	waitErr := cmd.Wait()
 	finished := time.Now().UTC()
@@ -116,13 +140,17 @@ func (r *OsRunner) Run(ctx context.Context, name string, args []string, dir stri
 		ExitCode:      exitCodeFromWait(waitErr),
 		Stdout:        stdoutBuf.bytes(),
 		Stderr:        stderrBuf.bytes(),
+		StdoutTrunc:   stdoutBuf.truncated,
+		StderrTrunc:   stderrBuf.truncated,
 		StartedAtUTC:  started,
 		FinishedAtUTC: finished,
+		Err:           waitErr,
 	}
-	if waitErr != nil {
-		if ctx.Err() == context.DeadlineExceeded {
-			result.TimedOut = true
-		}
+	if ctx.Err() == context.DeadlineExceeded {
+		result.TimedOut = true
+	}
+	if ctx.Err() == context.Canceled {
+		result.Canceled = true
 	}
 	return result
 }
@@ -138,7 +166,10 @@ func exitCodeFromWait(err error) int {
 	return 1
 }
 
-// truncatedBuffer caps the captured bytes and records overflow.
+// truncatedBuffer is the authoritative writer. Its truncated
+// flag is set when overflow occurs; downstream consumers MUST
+// read this flag rather than re-deriving truncation from byte
+// length.
 type truncatedBuffer struct {
 	cap       int
 	buf       bytes.Buffer
@@ -164,12 +195,16 @@ func (b *truncatedBuffer) bytes() []byte {
 	return append([]byte(nil), b.buf.Bytes()...)
 }
 
-// GateCollector is the per-run owner of gate capture state.
-// A new collector MUST be constructed for every ExecuteClose
-// invocation so two independent runs do not share data.
+// GateCollector owns exactly one closure run. The first Capture
+// call invokes the runner; every subsequent call returns the
+// cached result. Two collectors never share state.
 type GateCollector struct {
-	runner CommandRunner
-	calls  int
+	mu         sync.Mutex
+	once       sync.Once
+	runner     CommandRunner
+	done       bool
+	capture    GateCapture
+	captureErr error
 }
 
 // NewGateCollector constructs an empty per-run collector.
@@ -180,17 +215,24 @@ func NewGateCollector(runner CommandRunner) *GateCollector {
 	return &GateCollector{runner: runner}
 }
 
-// Calls returns the number of gate processes invoked so far.
+// Calls returns the number of runner invocations the collector
+// has performed. Exactly-once means this is 0 before Capture
+// and 1 after any number of Capture calls.
 func (c *GateCollector) Calls() int {
 	if c == nil {
 		return 0
 	}
-	return c.calls
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.done {
+		return 1
+	}
+	return 0
 }
 
-// Capture runs the fast lane once via the collector's runner
-// and records the typed result. Two collectors never share
-// state.
+// Capture returns the gate capture for this run. The first call
+// invokes the runner exactly once; every subsequent call
+// returns the cached result.
 func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (GateCapture, error) {
 	if c == nil {
 		return GateCapture{}, errors.New("evidence: GateCollector is nil")
@@ -201,7 +243,18 @@ func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (Ga
 	if strings.TrimSpace(req.EvidenceDir) == "" {
 		return GateCapture{}, errors.New("evidence: evidence directory is required")
 	}
-	c.calls++
+	c.once.Do(func() {
+		c.capture, c.captureErr = c.runCapture(ctx, req)
+	})
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.done = true
+	return c.capture, c.captureErr
+}
+
+// runCapture performs the actual gate invocation. It is called
+// exactly once per collector via sync.Once.
+func (c *GateCollector) runCapture(ctx context.Context, req GateCaptureRequest) (GateCapture, error) {
 	if err := os.MkdirAll(req.EvidenceDir, 0o700); err != nil {
 		return GateCapture{}, fmt.Errorf("evidence: create evidence directory: %w", err)
 	}
@@ -220,8 +273,9 @@ func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (Ga
 	capture := GateCapture{
 		ExitCode:               result.ExitCode,
 		TimedOut:               result.TimedOut,
-		StdoutTruncated:        stdoutOverflowed(result.Stdout),
-		StderrTruncated:        stderrOverflowed(result.Stderr),
+		StdoutTruncated:        result.StdoutTrunc,
+		StderrTruncated:        result.StderrTrunc,
+		Canceled:               result.Canceled,
 		StdoutSHA256:           SHA256HexBytes(result.Stdout),
 		StderrSHA256:           SHA256HexBytes(result.Stderr),
 		RawOutputPath:          rawPath,
@@ -234,18 +288,6 @@ func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (Ga
 		DurationMS:             finished.Sub(started).Milliseconds(),
 	}
 	return capture, nil
-}
-
-// stdoutOverflowed reports whether the supplied bytes were
-// truncated by the writer.
-func stdoutOverflowed(stdout []byte) bool {
-	return len(stdout) >= 8<<20
-}
-
-// stderrOverflowed reports whether the supplied bytes were
-// truncated by the writer.
-func stderrOverflowed(stderr []byte) bool {
-	return len(stderr) >= 8<<20
 }
 
 // SHA256HexBytes is the small helper that hashes arbitrary bytes.

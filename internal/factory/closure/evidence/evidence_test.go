@@ -65,7 +65,7 @@ func TestClosureSingleGateCapture(t *testing.T) {
 		t.Errorf("findings: %d", len(capture.PreExistingFindings))
 	}
 	if collector.Calls() != 1 {
-		t.Errorf("calls: %d", collector.Calls())
+		t.Errorf("calls: %d (exactly-once)", collector.Calls())
 	}
 	// Second collector does not see the first collector's calls.
 	collector2 := NewGateCollector(&fakeRunner{out: "lane test:OK\n", code: 0})
@@ -108,8 +108,8 @@ func TestClosureGateCaptureRunScoped(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	if collector.Calls() != 8 {
-		t.Errorf("calls: %d", collector.Calls())
+	if collector.Calls() != 1 {
+		t.Errorf("calls: %d (exactly-once)", collector.Calls())
 	}
 }
 
@@ -241,7 +241,7 @@ func TestClosureEvidenceAtomicPublication(t *testing.T) {
 			BinaryPath:   "/tmp/bin/leamas",
 			BinarySHA256: strings.Repeat("c", 64),
 		},
-		Valid: true,
+		Completeness: EvidenceComplete,
 	}
 	outputPath := filepath.Join(tmp, "evidence.json")
 	pub, err := PublishClosureEvidence(PublicationRequest{
@@ -283,7 +283,7 @@ func TestClosureEvidenceValidityPredicate(t *testing.T) {
 	}{
 		{name: "valid", mutate: nil, expectErr: false},
 		{name: "schema_version", mutate: func(e *ClosureEvidence) { e.SchemaVersion = 99 }, expectErr: true},
-		{name: "hardcoded_invalid", mutate: func(e *ClosureEvidence) { e.Valid = false }, expectErr: true},
+		{name: "hardcoded_invalid", mutate: func(e *ClosureEvidence) { e.Completeness = "" }, expectErr: true},
 		{name: "empty_act", mutate: func(e *ClosureEvidence) { e.Runtime.ACTID = "" }, expectErr: true},
 		{name: "bad_freeze", mutate: func(e *ClosureEvidence) { e.Runtime.FreezeCommit = "x" }, expectErr: true},
 		{name: "bad_subject", mutate: func(e *ClosureEvidence) { e.Runtime.SubjectCommit = "x" }, expectErr: true},
@@ -328,7 +328,7 @@ func goodClosureEvidence() ClosureEvidence {
 			BinaryPath:   "/tmp/bin/leamas",
 			BinarySHA256: strings.Repeat("c", 64),
 		},
-		Valid: true,
+		Completeness: EvidenceComplete,
 	}
 }
 

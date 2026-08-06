@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package main - factory_close_execute.go implements the dry-run
-// variant of `factory close execute` required by CORRECTION01.
-// Full lifecycle mutation is rejected; only dry-run authority is
-// exposed.
+// variant of `factory close execute` required by CORRECTION01-R1.
+// Full lifecycle mutation remains deferred to CORRECTION02.
 
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -36,7 +36,7 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "factory close execute: missing flags")
 		printExecuteUsage(stderr)
-		return 2
+		return exitRequestError
 	}
 	fs := flag.NewFlagSet("factory close execute", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -49,8 +49,8 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 	fs.StringVar(&req.EvidenceDirectory, "evidence-directory", "", "absolute evidence directory outside the repository")
 	fs.BoolVar(&req.JSON, "json", false, "emit JSON-formatted output")
 	if err := fs.Parse(args); err != nil {
-		fmt.Fprintf(stderr, "factory close execute: %v\n", err)
-		return 2
+		fmt.Fprintln(stderr, "factory close execute: ", err)
+		return exitRequestError
 	}
 	for _, field := range []struct {
 		name, value string
@@ -65,13 +65,13 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 		if strings.TrimSpace(field.value) == "" {
 			fmt.Fprintf(stderr, "factory close execute: %s is required\n", field.name)
 			printExecuteUsage(stderr)
-			return 2
+			return exitRequestError
 		}
 	}
 	result, verdict, err := ExecuteCloseDryRun(context.Background(), req)
 	if err != nil {
-		fmt.Fprintf(stderr, "factory close execute: %v\n", err)
-		return exitCodeForError(verdict)
+		fmt.Fprintln(stderr, "factory close execute: ", err)
+		return exitCodeForVerdict(verdict)
 	}
 	if req.JSON {
 		encoded, _ := json.MarshalIndent(result, "", "  ")
@@ -83,6 +83,14 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "verdict=%s\n", verdict)
 	return exitCodeForVerdict(verdict)
 }
+
+// Exit codes follow the dry-run contract.
+const (
+	exitPass         = 0
+	exitRequestError = 2
+	exitFail         = 3
+	exitUnavailable  = 4
+)
 
 // ExecuteCloseDryRun performs the dry-run pipeline and returns
 // the typed result plus the derived verdict.
@@ -110,13 +118,17 @@ func ExecuteCloseDryRun(ctx context.Context, req ExecuteDryRunRequest) (ExecuteC
 	if err != nil {
 		return ExecuteCloseResult{}, "UNAVAILABLE", err
 	}
-	verdict := "PASS"
-	if capture.ExitCode != 0 {
-		verdict = "FAIL"
-	}
-	if capture.TimedOut || capture.StdoutTruncated || capture.StderrTruncated {
-		verdict = "UNAVAILABLE"
-	}
+	// The dry-run verdict MUST come from the classifier, not
+	// from the raw gate exit code.
+	verdict := string(evidence.ClassifyACTOwnedGate(evidence.ClassificationInputs{
+		ObservedStatus:   capture.ExecGateObservedStatus,
+		ObservedFindings: capture.PreExistingFindings,
+		BaselineFindings: nil,
+		ACTOwnedPaths:    nil,
+		LaneMissing:      capture.ExecGateObservedStatus == "UNKNOWN",
+		LaneTimedOut:     capture.TimedOut,
+		LaneTruncated:    capture.StdoutTruncated || capture.StderrTruncated,
+	}))
 	result := ExecuteCloseResult{
 		FreezeCommit:  rc.FreezeCommit,
 		SubjectCommit: rc.SubjectCommit,
@@ -130,40 +142,29 @@ type ExecuteCloseResult struct {
 	SubjectCommit string `json:"subject_commit"`
 }
 
-// exitCodeForVerdict is the deterministic mapping from the
-// derived verdict to an exit code. A derived FAIL or UNAVAILABLE
-// MUST never return 0.
+// exitCodeForVerdict is the deterministic mapping from verdict
+// to exit code.
 func exitCodeForVerdict(verdict string) int {
 	switch verdict {
 	case "PASS":
-		return 0
+		return exitPass
 	case "FAIL":
-		return 3
+		return exitFail
 	default:
-		return 4
+		return exitUnavailable
 	}
 }
 
-// exitCodeForError maps a Go error into the dry-run exit code.
-// CLI/path/observation errors return 2; verification failures
-// return 3; observer/publication failures return 4.
-func exitCodeForError(verdict string) int {
-	if verdict == "FAIL" {
-		return 3
-	}
-	if verdict == "UNAVAILABLE" {
-		return 4
-	}
-	return 2
-}
-
-// verdictForRuntimeError maps a runtime error into a verdict.
+// verdictForRuntimeError uses the standard errors.As to map a
+// RuntimeContextError into the dry-run verdict. The function
+// never panics: if no typed error matches, the verdict is
+// UNAVAILABLE.
 func verdictForRuntimeError(err error) string {
 	if err == nil {
 		return "PASS"
 	}
 	var rce *closure.RuntimeContextError
-	if errAs(err, &rce) {
+	if errors.As(err, &rce) {
 		switch rce.Kind {
 		case "dirty_worktree", "freeze_equals_subject", "freeze_not_ancestor",
 			"unsupported_object_format", "plan_path_invalid", "empty_field":
@@ -173,24 +174,6 @@ func verdictForRuntimeError(err error) string {
 		}
 	}
 	return "UNAVAILABLE"
-}
-
-// errAs is the typed wrapper around errors.As used by the
-// dry-run verdict mapper. It is intentionally unexported.
-func errAs(err error, target interface{}) bool {
-	type asTarget interface{}
-	_, ok := target.(**closure.RuntimeContextError)
-	if !ok {
-		return false
-	}
-	if err == nil {
-		return false
-	}
-	if e, ok := err.(*closure.RuntimeContextError); ok {
-		_ = e
-		return true
-	}
-	return false
 }
 
 func printExecuteUsage(w io.Writer) {
