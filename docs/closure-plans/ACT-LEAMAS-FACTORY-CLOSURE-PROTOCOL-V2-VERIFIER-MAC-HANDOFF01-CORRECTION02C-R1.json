@@ -14,17 +14,23 @@
     {
       "kind": "gate_summary_prev",
       "path": ".factory/gate-summary.prev.json",
-      "produced_by": "v2-verifier-aggregate-fast-lane-single-capture"
+      "produced_by": "v2-verifier-aggregate-fast-lane-single-capture",
+      "conditional": true
     },
     {
       "kind": "built_binary_version",
       "path": ".factory/evidence/built-binary.version",
       "produced_by": "v2-verifier-hermetic-build-with-binary-predicates"
+    },
+    {
+      "kind": "built_binary_sha256",
+      "path": ".factory/evidence/built-binary.sha256",
+      "produced_by": "v2-verifier-hermetic-build-with-binary-predicates"
     }
   ],
   "baseline": {
-    "commit_oid": "4578148cb43a808fe5626b74c9ece25e026b4c68",
-    "tree_oid": "9379732ed623518cd81a135c5a6189c4facadc34"
+    "commit_oid": "8c7183bad249ebd013bc3c39db71edd4c79e1a2d",
+    "tree_oid": "1969cfb2416d6550517e5bb86205284638eff1e7"
   },
   "checks": [
     {
@@ -76,7 +82,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["gofmt", "-l", "cmd/leamas/factory_close_v2_verifier_cli.go", "cmd/leamas/factory_close_v2_verifier_cli_flags.go", "cmd/leamas/factory_close_v2_verifier_cli_errorsas.go", "cmd/leamas/factory_close_v2_verifier_cli_helpers.go", "cmd/leamas/factory_close_v2_verifier_cli_writers.go", "cmd/leamas/factory_close_v2_verifier_duplicate_test.go", "cmd/leamas/factory_close_v2_verifier_duplicate_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_exit_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_help_contract_test.go", "cmd/leamas/factory_close_v2_verifier_public_negative_test.go", "cmd/leamas/factory_close_v2_verifier_terminal_trailer_test.go", "cmd/leamas/factory_close_v2_verifier_json_eof_test.go", "cmd/leamas/factory_close_v2_verifier_pre_observation_test.go", "cmd/leamas/factory_close_v2_verifier_metadata_obs_test.go", "internal/factory/closure/v2_verifier_orchestrator.go", "internal/factory/closure/v2_verifier_tag.go", "internal/factory/closure/v2_verifier_tag_metadata.go", "internal/factory/closure/v2_verifier_tag_metadata_parse_trailers.go"],
+      "argv": ["gofmt", "-l", "cmd/leamas/factory_close_v2_verifier_cli.go", "cmd/leamas/factory_close_v2_verifier_cli_flags.go", "cmd/leamas/factory_close_v2_verifier_cli_errorsas.go", "cmd/leamas/factory_close_v2_verifier_cli_helpers.go", "cmd/leamas/factory_close_v2_verifier_cli_writers.go", "cmd/leamas/factory_close_v2_verifier_duplicate_test.go", "cmd/leamas/factory_close_v2_verifier_duplicate_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_exit_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_help_contract_test.go", "cmd/leamas/factory_close_v2_verifier_public_negative_test.go", "cmd/leamas/factory_close_v2_verifier_terminal_trailer_test.go", "cmd/leamas/factory_close_v2_verifier_json_eof_test.go", "cmd/leamas/factory_close_v2_verifier_pre_observation_test.go", "cmd/leamas/factory_close_v2_verifier_metadata_obs_test.go", "cmd/leamas/gate_summary_collector/main.go", "internal/factory/closure/v2_verifier_orchestrator.go", "internal/factory/closure/v2_verifier_tag.go", "internal/factory/closure/v2_verifier_tag_metadata.go", "internal/factory/closure/v2_verifier_tag_metadata_parse_trailers.go"],
       "environment": {},
       "id": "v2-verifier-gofmt",
       "mode": "run",
@@ -84,7 +90,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["git", "diff", "--check", "4578148cb43a808fe5626b74c9ece25e026b4c68", "HEAD"],
+      "argv": ["bash", "-c", "set -euo pipefail; if [ -z \"${F7_COMMIT:-}\" ]; then echo 'DIFF_RANGE_UNRESOLVED: F7_COMMIT not provided by closure runner'; exit 2; fi; git diff --check \"$F7_COMMIT\" HEAD"],
       "environment": {},
       "id": "v2-verifier-range-diff-check",
       "mode": "run",
@@ -132,7 +138,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory; raw=.factory/gate-summary.raw; json=.factory/gate-summary.json; prev=.factory/gate-summary.prev.json; if [ -e \"$json\" ]; then mv \"$json\" \"$prev\"; fi; bin/leamas factory gate --lane=fast > \"$raw\" 2>&1; rc=$?; if [ -e \"$prev\" ] && cmp -s \"$prev\" \"$json\"; then echo 'GATE_SUMMARY_FRESHNESS=stale'; exit 2; fi; echo 'GATE_SUMMARY_FRESHNESS=fresh'; go run ./internal/factory/closure/gate_summary_collector --raw \"$raw\" --json \"$json\" --prev \"$prev\"; exit 0"],
+      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory; raw=.factory/gate-summary.raw; json=.factory/gate-summary.json; prev=.factory/gate-summary.prev.json; if [ -e \"$json\" ]; then mv \"$json\" \"$prev\"; fi; bin/leamas factory gate --lane=fast > \"$raw\" 2>&1; rc=$?; if [ -e \"$prev\" ]; then cp \"$prev\" \"$prev.fingerprint\"; sha256sum < \"$prev\" | awk '{print $1}' > \"$prev.fingerprint\"; fi; if [ -z \"${SUBJECT_COMMIT:-}\" ]; then SUBJECT_COMMIT_ARG=; else SUBJECT_COMMIT_ARG=--subject-commit \"$SUBJECT_COMMIT\"; fi; if [ -n \"${RUN_ID:-}\" ]; then RUN_ID_ARG=--run-id \"$RUN_ID\"; else RUN_ID_ARG=--run-id \"$rc-$$\"; fi; go run ./cmd/leamas/gate_summary_collector --raw \"$raw\" --json \"$json\" --prev \"$prev\" --aggregate-rc \"$rc\" $SUBJECT_COMMIT_ARG $RUN_ID_ARG; if [ ! -e \"$json\" ]; then echo 'GATE_SUMMARY_FRESHNESS=missing'; exit 2; fi; if [ -e \"$prev\" ] && cmp -s \"$prev\" \"$json\"; then echo 'GATE_SUMMARY_FRESHNESS=stale'; exit 2; fi; echo 'GATE_SUMMARY_FRESHNESS=fresh'; exit 0"],
       "environment": {"LEAMAS_GATE_CALLER": "cline"},
       "id": "v2-verifier-aggregate-fast-lane-single-capture",
       "mode": "run",
@@ -140,11 +146,19 @@
       "working_directory": "."
     },
     {
-      "argv": ["bash", "-c", "set -euo pipefail; if [ ! -e .factory/gate-summary.json ]; then echo 'GATE_SUMMARY_FRESHNESS=missing'; exit 2; fi; if ! command -v jq >/dev/null 2>&1; then echo 'GATE_SUMMARY_FRESHNESS=jq_missing'; exit 2; fi; json_rc=\"$(jq -r '.aggregate_rc' .factory/gate-summary.json)\"; head_oid=\"$(git rev-parse HEAD)\"; json_head=\"$(jq -r '.head_oid' .factory/gate-summary.json)\"; if [ \"$json_head\" != \"$head_oid\" ]; then echo 'DIGEST_SELF_CONSISTENCY=head_mismatch'; exit 2; fi; for lane in agent-context docs doctrine doctrine-agent-contracts domain-boundaries exec-gate executable-contract-first forbidden-patterns git-hooks language llm-friendly; do json_status=\"$(jq -r --arg l \"$lane\" '.lanes[$l]' .factory/gate-summary.json)\"; if [ \"$json_status\" = 'null' ] || [ -z \"$json_status\" ]; then echo \"DIGEST_SELF_CONSISTENCY=lane_missing:$lane\"; exit 2; fi; done; echo \"DIGEST_SELF_CONSISTENCY=ok\""],
+      "argv": ["bash", "-c", "set -euo pipefail; if [ ! -e .factory/gate-summary.json ]; then echo 'DIGEST_SELF_CONSISTENCY=missing_json'; exit 2; fi; if [ ! -e .factory/gate-summary.raw ]; then echo 'DIGEST_SELF_CONSISTENCY=missing_raw'; exit 2; fi; if ! command -v jq >/dev/null 2>&1; then echo 'DIGEST_SELF_CONSISTENCY=jq_missing'; exit 2; fi; head_oid=\"$(git rev-parse HEAD)\"; json_head=\"$(jq -r '.head_oid // empty' .factory/gate-summary.json)\"; if [ -z \"$json_head\" ] || [ \"$json_head\" != \"$head_oid\" ]; then echo \"DIGEST_SELF_CONSISTENCY=head_mismatch:$json_head:$head_oid\"; exit 2; fi; json_rc=\"$(jq -r '.aggregate_rc // empty' .factory/gate-summary.json)\"; raw_rc_count=\"$(grep -c 'EXIT_RC=' .factory/gate-summary.raw || true)\"; if [ -z \"$json_rc\" ] || [ \"$json_rc\" = 'null' ]; then echo 'DIGEST_SELF_CONSISTENCY=aggregate_rc_missing_in_json'; exit 2; fi; for lane in agent-context docs doctrine doctrine-agent-contracts domain-boundaries exec-gate executable-contract-first forbidden-patterns git-hooks language llm-friendly; do json_status=\"$(jq -r --arg l \"$lane\" '.lanes[$l] // empty' .factory/gate-summary.json)\"; if [ -z \"$json_status\" ] || [ \"$json_status\" = 'null' ]; then echo \"DIGEST_SELF_CONSISTENCY=lane_missing:$lane\"; exit 2; fi; raw_status=\"$(awk -v l=\"$lane\" 'index($0, \"--- \" l \" \") == 1 { for (i=1; i<=NF; i++) if ($i == \"OK\" || $i == \"FAILED\" || $i == \"SKIP\") { print $i; exit } }' .factory/gate-summary.raw)\"; if [ -n \"$raw_status\" ] && [ \"$json_status\" != \"$raw_status\" ]; then echo \"DIGEST_SELF_CONSISTENCY=lane_status_mismatch:$lane:$json_status:$raw_status\"; exit 2; fi; done; echo 'DIGEST_SELF_CONSISTENCY=ok'"],
       "environment": {"LEAMAS_GATE_CALLER": "cline"},
       "id": "v2-verifier-digest-self-consistency",
       "mode": "run",
       "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "argv": ["bash", "-c", "set -euo pipefail; count=$(grep -c 'factory gate --lane=fast' \"$PLAN_PATH\" || true); if [ \"$count\" != '1' ]; then echo \"ONE_FAST_LANE_GUARD=violation:$count\"; exit 2; fi; echo 'ONE_FAST_LANE_GUARD=ok'"],
+      "environment": {"PLAN_PATH": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02C-R1.json"},
+      "id": "v2-verifier-one-fast-lane-guard",
+      "mode": "run",
+      "timeout_seconds": 10,
       "working_directory": "."
     }
   ],
