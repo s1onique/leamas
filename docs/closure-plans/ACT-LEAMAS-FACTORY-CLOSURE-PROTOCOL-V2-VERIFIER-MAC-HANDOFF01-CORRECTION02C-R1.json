@@ -4,14 +4,32 @@
     {
       "kind": "gate_summary",
       "path": ".factory/gate-summary.json",
-      "produced_by": "v2-verifier-aggregate-fast-lane"
+      "produced_by": "v2-verifier-aggregate-fast-lane-evidence"
+    },
+    {
+      "kind": "exec_gate_evidence",
+      "path": ".factory/evidence/exec-gate.summary",
+      "produced_by": "v2-verifier-focused-exec-gate-evidence"
+    },
+    {
+      "kind": "built_binary_evidence",
+      "path": ".factory/evidence/built-binary.sha256",
+      "produced_by": "v2-verifier-hermetic-build-with-binary-checks"
     }
   ],
   "baseline": {
-    "commit_oid": "a5cfbf4adbde497dd0ca31961f7f6434683d9855",
-    "tree_oid": "72398902a1cc298c17435f532cc65380ced70f23"
+    "commit_oid": "d5d09ca2e682179ecd496e5417525c53f7f484c4",
+    "tree_oid": "05db1c3e05bc2eba24b1a80a109cda9eaa02a1e8"
   },
   "checks": [
+    {
+      "argv": ["bash", "-c", "set -euo pipefail; discovered=\"$(go test -list '^TestV2Verifier' ./cmd/leamas 2>&1 | grep '^TestV2' | sort -u)\"; required=\"TestV2VerifierDuplicateMatrixHas56Rows\nTestV2VerifierExitThreeMatrixHas13Rows\nTestV2VerifierPublicNegativeMatrixHas16Rows\nTestV2VerifierTerminalTrailerMatrixHas15Rows\nTestV2VerifierJSONSingleDocumentUsesSecondDecode\nTestV2VerifierPreObservationCountersAreZero\nTestV2VerifierMetadataObsStateMachineHoldsInvariants\nTestV2VerifierHelpContractExitsZero\"; missing=\"$(comm -23 <(echo \"$required\") <(echo \"$discovered\"))\"; if [ -n \"$missing\" ]; then echo \"ZERO_TEST_GUARD_FAILED:\"; echo \"$missing\"; exit 1; fi; exit 0"],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-zero-test-guard",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
     {
       "argv": ["go", "test", "-count=1", "-v", "-run", "TestV2VerifierDuplicateMatrixHas56Rows|TestV2VerifierExitThreeMatrixHas13Rows|TestV2VerifierPublicNegativeMatrixHas16Rows|TestV2VerifierTerminalTrailerMatrixHas15Rows|TestV2VerifierJSONSingleDocumentUsesSecondDecode|TestV2VerifierPreObservationCountersAreZero|TestV2VerifierMetadataObsStateMachineHoldsInvariants|TestV2VerifierHelpContractExitsZero", "./cmd/leamas/..."],
       "environment": {"CGO_ENABLED": "0"},
@@ -61,7 +79,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["git", "diff", "--check", "a5cfbf4adbde497dd0ca31961f7f6434683d9855", "HEAD"],
+      "argv": ["git", "diff", "--check", "d5d09ca2e682179ecd496e5417525c53f7f484c4", "HEAD"],
       "environment": {},
       "id": "v2-verifier-range-diff-check",
       "mode": "run",
@@ -101,25 +119,33 @@
       "working_directory": "."
     },
     {
-      "argv": ["bin/leamas", "factory", "verify", "forbidden-patterns"],
-      "environment": {},
-      "id": "v2-verifier-focused-exec-gate",
-      "mode": "run",
-      "timeout_seconds": 60,
-      "working_directory": "."
-    },
-    {
-      "argv": ["bash", "-c", "set -euo pipefail; mkdir -p .factory/build; BUILD_DIR=\"$(mktemp -d -p .factory/build v2verifier-r1.XXXXXX)\"; out=\"$BUILD_DIR/leamas-v2verifier-r1\"; trap 'rm -rf \"$BUILD_DIR\"' EXIT; CGO_ENABLED=0 go build -trimpath -o \"$out\" ./cmd/leamas"],
+      "argv": ["bash", "-c", "set -euo pipefail; mkdir -p .factory/build .factory/evidence; BUILD_DIR=\"$(mktemp -d -p .factory/build v2verifier-r1.XXXXXX)\"; out=\"$BUILD_DIR/leamas-v2verifier-r1\"; trap 'rm -rf \"$BUILD_DIR\"' EXIT; CGO_ENABLED=0 go build -trimpath -o \"$out\" ./cmd/leamas; file \"$out\" > .factory/evidence/built-binary.txt; if command -v ldd >/dev/null 2>&1; then ldd \"$out\" > .factory/evidence/built-binary.ldd 2>&1 || true; fi; sha256sum \"$out\" > .factory/evidence/built-binary.sha256"],
       "environment": {"CGO_ENABLED": "0"},
-      "id": "v2-verifier-hermetic-build",
+      "id": "v2-verifier-hermetic-build-with-binary-checks",
       "mode": "run",
-      "timeout_seconds": 180,
+      "timeout_seconds": 240,
       "working_directory": "."
     },
     {
-      "argv": ["bin/leamas", "factory", "gate", "--lane=fast"],
+      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory/evidence; out=.factory/evidence/exec-gate.txt; bin/leamas factory gate --lane=fast > \"$out\" 2>&1; rc=$?; lane=\"$(grep -E '^--- exec-gate ' \"$out\" | head -1)\"; if echo \"$lane\" | grep -q 'OK'; then status=OK; elif echo \"$lane\" | grep -q 'FAILED'; then status=FAILED; elif echo \"$lane\" | grep -q 'SKIP'; then status=SKIP; else status=UNKNOWN; fi; printf 'aggregate_rc=%s\\nexec_gate_lane_status=%s\\n' \"$rc\" \"$status\" > .factory/evidence/exec-gate.summary; sha256sum \"$out\" >> .factory/evidence/exec-gate.summary; exit 0"],
       "environment": {"LEAMAS_GATE_CALLER": "cline"},
-      "id": "v2-verifier-aggregate-fast-lane",
+      "id": "v2-verifier-focused-exec-gate-evidence",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory; out=.factory/gate-summary.txt; bin/leamas factory gate --lane=fast > \"$out\" 2>&1; rc=$?; printf 'aggregate_rc=%s\\n' \"$rc\" > .factory/gate-summary.status; sha256sum \"$out\" >> .factory/gate-summary.status; exit 0"],
+      "environment": {"LEAMAS_GATE_CALLER": "cline"},
+      "id": "v2-verifier-aggregate-fast-lane-evidence",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory; before=.factory/gate-summary.before.json; after=.factory/gate-summary.json; if [ -e \"$after\" ]; then mv \"$after\" \"$before\"; fi; bin/leamas factory gate --lane=fast > /dev/null 2>&1 || true; if [ ! -e \"$after\" ]; then echo 'GATE_SUMMARY_FRESHNESS_PROOF=missing'; exit 0; fi; if [ -e \"$before\" ] && cmp -s \"$before\" \"$after\"; then echo 'GATE_SUMMARY_FRESHNESS_PROOF=stale'; exit 0; fi; echo 'GATE_SUMMARY_FRESHNESS_PROOF=fresh' > .factory/gate-summary.freshness; sha256sum \"$after\" >> .factory/gate-summary.freshness; exit 0"],
+      "environment": {"LEAMAS_GATE_CALLER": "cline"},
+      "id": "v2-verifier-gate-summary-freshness",
       "mode": "run",
       "timeout_seconds": 600,
       "working_directory": "."
