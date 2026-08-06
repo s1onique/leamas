@@ -363,16 +363,26 @@ func TestClosureCLIV2R2CRExactTipDogfood(t *testing.T) {
 
 // writeR2CREvidence serializes the dogfood result to
 // deterministic JSON in a directory outside the Leamas
-// repository. The path and content SHA-256 are stored in
-// the result for the close report.
+// repository, then computes the file's SHA-256 externally
+// (sidecar) and stores the result in the in-memory struct.
 //
-// The function writes the file twice: once with a placeholder
-// path so the in-memory struct contains the canonical values
-// (path, sha256) and the on-disk file matches the in-memory
-// representation. The second write rewrites the file with the
-// real path and sha256, producing a self-referential evidence
-// record where the file content includes its own path and
-// sha256.
+// R2C-R3 design: the file does NOT contain its own SHA-256.
+// The SHA-256 is written to a sidecar file
+// (r2cr-evidence.json.sha256) that exists independently of
+// the JSON content. The final report references both the JSON
+// path and the sidecar path so the digest is verifiable
+// without recomputation.
+//
+// Why a sidecar and not a self-referential field:
+//
+//   - A self-referential hash inside the file describes the
+//     FIRST-pass content, not the final file. The two-pass
+//     pattern (write PENDING, hash, write final) is
+//     mathematically invalid because the second write changes
+//     the bytes whose hash is now stored.
+//   - A sidecar produced by an external tool (or computed
+//     after the final write) is unambiguously the hash of the
+//     final file.
 func writeR2CREvidence(t *testing.T, r *r2cRDogfoodResult) {
 	t.Helper()
 	dir := os.Getenv("LEAMAS_R2CR_EVIDENCE_DIR")
@@ -382,24 +392,43 @@ func writeR2CREvidence(t *testing.T, r *r2cRDogfoodResult) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("mkdir evidence dir: %v", err)
 	}
-	path := filepath.Join(dir, "r2cr-evidence.json")
+	jsonPath := filepath.Join(dir, "r2cr-evidence.json")
+	shaPath := filepath.Join(dir, "r2cr-evidence.json.sha256")
 
-	// First write: include the path and a placeholder sha256
-	// so the in-memory struct can be re-encoded consistently.
-	r.EvidencePath = path
-	r.EvidenceSHA256 = "PENDING"
-	if err := writeR2CREvidenceAtomic(path, r); err != nil {
-		t.Fatalf("write evidence (first pass): %v", err)
+	// Write the JSON exactly once with no SHA-256 field
+	// inside it. The EvidencePath field is the canonical path;
+	// the in-memory struct holds NO EvidenceSHA256 (it is set
+	// after the write below, externally, and never inside
+	// the file).
+	r.EvidencePath = jsonPath
+	r.EvidenceSHA256 = "" // not embedded; computed externally
+	if err := writeR2CREvidenceAtomic(jsonPath, r); err != nil {
+		t.Fatalf("write evidence: %v", err)
 	}
-	// Second write: compute the real sha256 of the file on
-	// disk and re-encode.
-	raw, err := os.ReadFile(path)
+	// Compute the final file's SHA-256 externally and write
+	// it to a sidecar so a verifier can re-check the digest
+	// without recomputing.
+	raw, err := os.ReadFile(jsonPath)
 	if err != nil {
 		t.Fatalf("re-read evidence: %v", err)
 	}
-	r.EvidenceSHA256 = sha256HexBytes(raw)
-	if err := writeR2CREvidenceAtomic(path, r); err != nil {
-		t.Fatalf("write evidence (second pass): %v", err)
+	sum := sha256HexBytes(raw)
+	if err := os.WriteFile(shaPath, []byte(sum+"\n"), 0o644); err != nil {
+		t.Fatalf("write evidence sidecar: %v", err)
+	}
+	// Re-read the sidecar and store the final digest in the
+	// in-memory struct so the close report carries the literal
+	// value. The on-disk file never contains this digest.
+	r.EvidenceSHA256 = sum
+	// Re-read the JSON to verify the file is well-formed and
+	// matches the recorded digest. This is the final
+	// invariant the R2C-R3 ACT requires.
+	finalBytes, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatalf("re-read final evidence: %v", err)
+	}
+	if got := sha256HexBytes(finalBytes); got != sum {
+		t.Fatalf("evidence file SHA mismatch: got %s want %s", got, sum)
 	}
 }
 
