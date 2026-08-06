@@ -149,6 +149,37 @@ const (
 	V2VerifierStateCaptureWorktreeFailed V2VerifierCode = "state_capture_worktree_failed"
 	V2VerifierStateCaptureRefsFailed     V2VerifierCode = "state_capture_refs_failed"
 	V2VerifierStateMutationDetected      V2VerifierCode = "state_mutation_detected"
+
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION01
+	// adds the read-only output authority code. The CLI
+	// rejects --output paths that resolve inside the target
+	// repository before any Git observation, so a rejected
+	// invocation never touches the object database.
+	V2VerifierOutputPathNotDetached V2VerifierCode = "verifier_output_path_not_detached"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION01
+	// adds the duplicate CLI flag code. The parser rejects
+	// repeated occurrences of any scalar flag (including
+	// repeats with the same value) before any Git observation.
+	V2VerifierDuplicateCLIFlag V2VerifierCode = "duplicate_cli_flag"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION01
+	// adds the closure-tag metadata mismatch code. When the
+	// closure protocol metadata contract is authoritative
+	// (the preferred contract), any deviation between the
+	// tagged metadata fields and the supplied request is
+	// rejected with this code.
+	V2VerifierClosureTagMetadataMismatch V2VerifierCode = "closure_tag_metadata_mismatch"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION01
+	// adds the output-publication failure code. The atomic
+	// writer surfaces a typed diagnostic when --output
+	// publication fails (temp create, write, fsync, close,
+	// chmod, rename, or dir fsync).
+	V2VerifierOutputPublicationFailed V2VerifierCode = "verifier_output_publication_failed"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION01
+	// adds the observer-class failure code. The JSON
+	// envelope's failure_class is always one of "observer"
+	// or "verifier"; the observer branch is reserved for
+	// broken Git authority.
+	V2VerifierObserverClass V2VerifierCode = "observer_class"
 )
 
 // V2VerifierDiagnostic is the structured diagnostic record

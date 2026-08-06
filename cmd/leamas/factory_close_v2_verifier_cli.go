@@ -4,7 +4,11 @@ package main
 
 // factory_close_v2_verifier_cli.go implements the public
 // `leamas factory close verify-v2-authority` command for
-// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-CLI-TAG-STATE01.
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-CLI-TAG-STATE01,
+// with the read-only output authority, duplicate-flag
+// rejection, atomic publication, and exact observer exit
+// classification required by
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION01.
 //
 // The CLI exposes the v2 closure verifier end-to-end:
 //
@@ -13,14 +17,18 @@ package main
 //   --plan-path / --manifest-path
 //   --working-manifest-assertion (optional)
 //   --expected-tag (optional)
-//   --output (text or JSON target path)
+//   --output (text or JSON target path, MUST live outside the
+//             target repository and any of its linked worktrees)
 //   --json (single JSON document on stdout)
 //   --help (the dedicated help contract from ACT 4)
 //
 // The CLI never infers C from HEAD, M from convention, or P
-// from the working tree. The verifier itself is read-only;
-// the CLI captures caller state before/after when the
-// --capture-caller-state test surface flag is supplied.
+// from the working tree. The CLI rejects --output paths that
+// resolve inside the target repository BEFORE any Git
+// observation, rejects duplicate flag occurrences BEFORE
+// any Git observation, and publishes the verdict-derived
+// artifact via an atomic temp+rename write so a partial
+// write can never leave a half-formed file behind.
 //
 // Text output:
 //
@@ -32,12 +40,12 @@ package main
 //   stdout  = single deterministic JSON envelope
 //   stderr  = empty for success, diagnostics for failure
 //
-// Exit codes:
+// Exit codes (Phase 3 of correction01):
 //
-//   0 = success / invalid_pass (verifier reported valid=true)
-//   2 = usage error (missing flag, unknown flag)
-//   3 = verifier failure (topology, manifest, tag mismatch)
-//   4 = observer failure (git authority broken)
+//   0 = valid verifier result
+//   2 = CLI usage failure
+//   3 = authoritative verification rejection
+//   4 = observer/infrastructure failure
 
 import (
 	"context"
@@ -48,6 +56,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/closure"
 )
@@ -56,7 +65,7 @@ import (
 // downstream tooling.
 //
 //	0 -> verifier reported valid=true
-//	2 -> usage error (unknown flag, missing required flag)
+//	2 -> usage error (unknown flag, missing required flag, duplicate flag)
 //	3 -> verifier failure (topology / manifest / tag / state)
 //	4 -> observer failure (git authority unavailable)
 const (
@@ -68,9 +77,10 @@ const (
 
 // v2VerifierParsedInput captures the parsed CLI arguments
 // before they reach the orchestrator. The parser rejects
-// unknown flags and missing-required combinations before
-// any Git observation so the CLI never observes a half-built
-// request.
+// unknown flags, missing-required combinations, repeated
+// flags, and --output paths that are not safely detached
+// from the target repository before any Git observation
+// so the CLI never observes a half-built request.
 type v2VerifierParsedInput struct {
 	Request             closure.V2ClosureVerifyRequest
 	ExpectedTag         string
@@ -88,22 +98,13 @@ type v2VerifierParsedInput struct {
 type v2VerifierJSONEnvelope struct {
 	OK           bool                          `json:"ok"`
 	OutputPath   string                        `json:"output_path,omitempty"`
+	FailureClass string                        `json:"failure_class,omitempty"`
 	Verification closure.V2ClosureVerification `json:"verification"`
 }
 
 // v2VerifierUsage is the stable help text printed by the
 // --help flag and on `factory close verify-v2-authority`
-// without arguments. The text is intentionally long because
-// ACT 4's Phase 3 help-contract requirement specifies that
-// the help MUST explain:
-//
-//	S = execution subject
-//	F = frozen-plan authority
-//	C = closure commit
-//	P loaded from F
-//	M loaded from C
-//	HEAD is not authority
-//	C need not appear inside M
+// without arguments.
 const v2VerifierUsage = `Usage: leamas factory close verify-v2-authority [flags]
 
 Verify the immutable authority of a Closure Protocol v2 closure
@@ -116,6 +117,11 @@ Authority OIDs required:
   --closure  C  the externally supplied closure commit (NOT HEAD)
   --plan-path     P loaded from F:F:P, never from HEAD or working tree
   --manifest-path M loaded from C:C:M, never from HEAD or working tree
+
+--output (when set) MUST resolve outside the target repository
+and every linked worktree. The CLI rejects inside-the-repo
+--output paths BEFORE any Git observation, so a rejected
+invocation never touches the object database.
 
 Verifier never requires:
   - manifest.closure_commit to equal C  (self-reference doctrine)
@@ -141,35 +147,110 @@ Options:
                          tag must exist, be annotated (not lightweight),
                          and dereference to C exactly.
   --output <path>        optional path for the structured text summary;
-                         when absent the summary is written to stdout
+                         when absent the summary is written to stdout.
+                         The path MUST live outside the target
+                         repository and every linked worktree.
   --json                 emit exactly one JSON document on stdout
   --capture-caller-state capture pre/post caller state (test surface)
   --help                 print this help and exit 0
 
 Exit codes:
   0  verifier reported valid=true
-  2  usage error (unknown flag, missing flag)
+  2  usage error (unknown flag, missing flag, duplicate flag, bad output)
   3  verifier failure (topology / manifest / tag / state mismatch)
   4  observer failure (git authority unavailable)
-
-Examples:
-  leamas factory close verify-v2-authority \
-    --repository /path/to/repo \
-    --subject 56fd526e1923f2546fa0aeb53a0dc6e7501e5061 \
-    --freeze  01822bf5c8b99e5a4b89a6761a713ec3603754b0 \
-    --closure <C> \
-    --plan-path docs/closure-plans/ACT-…json \
-    --manifest-path docs/closure-manifests/ACT-…json \
-    --expected-tag act/your-tag-name \
-    --json
 `
+
+// v2VerifierScalarFlagNames is the closed set of scalar
+// flags the duplicate-detection pass walks over. Each name
+// is the canonical CLI flag without the leading "--".
+// The parser rejects repeated occurrences of any name in
+// the list (including repeats with the same value).
+var v2VerifierScalarFlagNames = []string{
+	"repository",
+	"protocol-version",
+	"plan-contract-version",
+	"subject",
+	"freeze",
+	"closure",
+	"plan-path",
+	"manifest-path",
+	"working-manifest-assertion",
+	"expected-tag",
+	"output",
+}
+
+// detectDuplicateV2VerifierFlags scans args for repeated
+// occurrences of any scalar flag and returns a typed
+// *V2VerifierError with code V2VerifierDuplicateCLIFlag
+// naming the first duplicate. The check runs BEFORE
+// flag.Parse so the duplicate surfaces before any Git
+// observation.
+func detectDuplicateV2VerifierFlags(args []string) error {
+	seen := make(map[string]int, len(args))
+	for _, a := range args {
+		name, isFlag := stripV2VerifierFlagName(a)
+		if !isFlag {
+			continue
+		}
+		if !isTrackedV2VerifierFlag(name) {
+			continue
+		}
+		seen[name]++
+		if seen[name] > 1 {
+			return closure.NewV2VerifierError(closure.V2VerifierDiagnostic{
+				Code:         closure.V2VerifierDuplicateCLIFlag,
+				Message:      fmt.Sprintf("duplicate flag: --%s", name),
+				PropertyName: "flag",
+			})
+		}
+	}
+	return nil
+}
+
+// stripV2VerifierFlagName returns the canonical flag
+// name and true when arg is a --flag or --flag=value
+// token. The function tolerates "-flag" as a synonym for
+// "--flag" to match Go's flag package conventions; a
+// positional or non-flag argument returns ("", false).
+func stripV2VerifierFlagName(arg string) (string, bool) {
+	if arg == "" {
+		return "", false
+	}
+	if !strings.HasPrefix(arg, "-") {
+		return "", false
+	}
+	trimmed := strings.TrimLeft(arg, "-")
+	if trimmed == "" {
+		return "", false
+	}
+	if eq := strings.IndexByte(trimmed, '='); eq >= 0 {
+		trimmed = trimmed[:eq]
+	}
+	return trimmed, true
+}
+
+// isTrackedV2VerifierFlag reports whether name is in
+// the closed set of scalar flags the duplicate detector
+// tracks. The detector is intentionally narrow: a stray
+// unknown flag will be caught by flag.Parse below.
+func isTrackedV2VerifierFlag(name string) bool {
+	for _, n := range v2VerifierScalarFlagNames {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
 
 // parseV2VerifierFlags parses the command arguments. The
 // function returns a fully populated request or a typed
-// usage error. The parser rejects repeated flags, unknown
-// flags, and missing-required flags before any orchestrator
-// state is touched.
+// usage error.
 func parseV2VerifierFlags(name string, stderr io.Writer, args []string) (v2VerifierParsedInput, error) {
+	if err := detectDuplicateV2VerifierFlags(args); err != nil {
+		return v2VerifierParsedInput{}, err
+	}
+
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -189,7 +270,7 @@ func parseV2VerifierFlags(name string, stderr io.Writer, args []string) (v2Verif
 	fs.StringVar(&in.ExpectedTag, "expected-tag", "",
 		"optional annotated-tag name that must target C")
 	fs.StringVar(&in.OutputPath, "output", "",
-		"optional path for the structured text summary")
+		"optional path for the structured text summary; MUST live outside --repository")
 	fs.BoolVar(&in.JSONOutput, "json", false, "emit exactly one JSON document on stdout")
 	fs.BoolVar(&in.CaptureCallerState, "capture-caller-state", false,
 		"capture pre/post caller state (test surface)")
@@ -197,7 +278,6 @@ func parseV2VerifierFlags(name string, stderr io.Writer, args []string) (v2Verif
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			// Surfaces as success exit 0 below.
 			return v2VerifierParsedInput{}, flag.ErrHelp
 		}
 		return v2VerifierParsedInput{}, fmt.Errorf("%s: %w", name, err)
@@ -236,6 +316,10 @@ func parseV2VerifierFlags(name string, stderr io.Writer, args []string) (v2Verif
 		}
 	}
 
+	if err := closure.ValidateDetachedVerifierOutputPath(in.Request.RepositoryRoot, in.OutputPath); err != nil {
+		return v2VerifierParsedInput{}, err
+	}
+
 	if in.WorkingManifestPath != "" {
 		bytes, err := os.ReadFile(in.WorkingManifestPath)
 		if err != nil {
@@ -248,11 +332,7 @@ func parseV2VerifierFlags(name string, stderr io.Writer, args []string) (v2Verif
 }
 
 // runFactoryCloseVerifyV2Authority is the CLI entry point
-// for `factory close verify-v2-authority`. The function
-// returns the process exit code so the dispatcher in
-// factory_close.go can route the value directly to
-// os.Exit; the function never writes to process CWD and
-// never mutates the target repository.
+// for `factory close verify-v2-authority`.
 func runFactoryCloseVerifyV2Authority(args []string, stdout, stderr io.Writer) int {
 	const command = "factory close verify-v2-authority"
 
@@ -261,6 +341,10 @@ func runFactoryCloseVerifyV2Authority(args []string, stdout, stderr io.Writer) i
 		if errors.Is(err, flag.ErrHelp) {
 			fmt.Fprint(stdout, v2VerifierUsage)
 			return v2VerifierExitSuccess
+		}
+		if isV2VerifierOutputPathError(err) {
+			fmt.Fprintf(stderr, "%s: %v\n", command, err)
+			return v2VerifierExitObserverBroken
 		}
 		fmt.Fprintf(stderr, "%s: %v\n", command, err)
 		return v2VerifierExitUsage
@@ -284,11 +368,25 @@ func runFactoryCloseVerifyV2Authority(args []string, stdout, stderr io.Writer) i
 	return writeV2VerifierText(command, stdout, stderr, in.OutputPath, runResult)
 }
 
+// isV2VerifierOutputPathError reports whether err
+// originates from the output-path resolver.
+func isV2VerifierOutputPathError(err error) bool {
+	var vErr *closure.V2VerifierError
+	if !errors.As(err, &vErr) {
+		return false
+	}
+	for _, d := range vErr.Diags {
+		if d.Code == closure.V2VerifierOutputPathNotDetached {
+			return true
+		}
+	}
+	return false
+}
+
 // writeV2VerifierText renders the verifier outcome in the
-// stable text contract: success prints one summary line per
-// the ACT 4 contract; failure prints the typed diagnostics
-// in deterministic order. Either way the same single error
-// or single summary reaches the destination stream.
+// stable text contract. On success the summary is published
+// via the atomic writer. On failure the optional --output
+// file is NEVER written.
 func writeV2VerifierText(command string, stdout, stderr io.Writer, outputPath string, run closure.V2RunResult) int {
 	if !run.Verification.Valid {
 		diags := run.Verification.Diagnostics
@@ -302,9 +400,6 @@ func writeV2VerifierText(command string, stdout, stderr io.Writer, outputPath st
 			}
 		}
 		if outputPath != "" {
-			// On failure the verifier NEVER writes the
-			// optional --output file: a clean summary
-			// is the only success signal there.
 			fmt.Fprintf(stderr, "%s: --output %s suppressed on failure\n", command, outputPath)
 		}
 		return v2VerifierExitVerifier
@@ -319,7 +414,7 @@ func writeV2VerifierText(command string, stdout, stderr io.Writer, outputPath st
 		run.Verification.PlanSHA256,
 	)
 	if outputPath != "" {
-		if err := os.WriteFile(outputPath, []byte(summary+"\n"), 0o644); err != nil {
+		if err := closure.WriteFileAtomic(outputPath, []byte(summary+"\n"), 0o644); err != nil {
 			fmt.Fprintf(stderr, "%s: --output %s write failed: %v\n", command, outputPath, err)
 			return v2VerifierExitVerifier
 		}
@@ -331,29 +426,30 @@ func writeV2VerifierText(command string, stdout, stderr io.Writer, outputPath st
 
 // writeV2VerifierJSON renders the verifier outcome as a
 // single deterministic JSON document on stdout. The output
-// envelope is stable regardless of success or failure so
-// downstream parsers can rely on a single schema.
+// envelope is stable regardless of success or failure.
 func writeV2VerifierJSON(command string, stdout, stderr io.Writer, outputPath string, run closure.V2RunResult) int {
 	envelope := v2VerifierJSONEnvelope{
 		OK:           run.Verification.Valid,
+		OutputPath:   outputPath,
 		Verification: run.Verification,
+	}
+	if !run.Verification.Valid {
+		envelope.FailureClass = classifyV2VerifierFailure(run.Verification.Diagnostics)
 	}
 	bytes, err := json.MarshalIndent(envelope, "", "  ")
 	if err != nil {
 		fmt.Fprintf(stderr, "%s: marshal JSON envelope: %v\n", command, err)
 		return v2VerifierExitObserverBroken
 	}
+	stdoutBytes := append(bytes, '\n')
 	if outputPath != "" {
-		if err := os.WriteFile(outputPath, append(bytes, '\n'), 0o644); err != nil {
+		if err := closure.WriteFileAtomic(outputPath, stdoutBytes, 0o644); err != nil {
 			fmt.Fprintf(stderr, "%s: --output %s write failed: %v\n", command, outputPath, err)
 			return v2VerifierExitObserverBroken
 		}
-		// When --output is set the JSON also goes to
-		// stdout so the CWD-detached witness bundle
-		// can still capture it.
-		fmt.Fprintln(stdout, string(bytes))
+		stdout.Write(stdoutBytes)
 	} else {
-		fmt.Fprintln(stdout, string(bytes))
+		stdout.Write(stdoutBytes)
 	}
 
 	if !run.Verification.Valid {
@@ -362,10 +458,35 @@ func writeV2VerifierJSON(command string, stdout, stderr io.Writer, outputPath st
 	return v2VerifierExitSuccess
 }
 
+// classifyV2VerifierFailure returns the canonical failure
+// class token ("observer" or "verifier") for the supplied
+// diagnostics. The function never returns an empty string.
+func classifyV2VerifierFailure(diags closure.V2VerifierDiagnostics) string {
+	for _, d := range diags {
+		switch d.Code {
+		case closure.V2VerifierObjectFormatUnavailable,
+			closure.V2VerifierUnsupportedObjectFormat,
+			closure.V2VerifierStateCaptureHeadFailed,
+			closure.V2VerifierStateCaptureStatusFailed,
+			closure.V2VerifierStateCaptureWorktreeFailed,
+			closure.V2VerifierStateCaptureRefsFailed,
+			closure.V2VerifierTopologyObservationFailed,
+			closure.V2VerifierFrozenPlanReadFailed,
+			closure.V2VerifierClosureManifestReadFailed,
+			closure.V2VerifierRepositoryUnavailable,
+			closure.V2VerifierClosureTagUnreadable,
+			closure.V2VerifierOutputPublicationFailed,
+			closure.V2VerifierObserverClass:
+			return "observer"
+		}
+	}
+	return "verifier"
+}
+
 // writeV2VerifierFailure handles the orchestrator-failure
-// path: a "git authority unavailable" error is treated as
-// an observer failure (exit 4); any other failure path is
-// routed through the standard failure writers.
+// path. The function never emits an empty {ok:false}
+// envelope: even when no diagnostics are available the
+// failure_class is set to "observer".
 func writeV2VerifierFailure(
 	command string,
 	stdout, stderr io.Writer,
@@ -374,36 +495,51 @@ func writeV2VerifierFailure(
 	_ closure.V2RunResult,
 	err error,
 ) int {
-	if vErr, ok := err.(*closure.V2VerifierError); ok && vErr != nil {
-		for _, d := range vErr.Diags {
-			if d.Code == closure.V2VerifierRepositoryUnavailable {
-				if jsonOutput {
-					envelope := v2VerifierJSONEnvelope{OK: false, Verification: closure.V2ClosureVerification{
-						Diagnostics: closure.V2VerifierDiagnostics{d},
-					}}
-					bytes, _ := json.MarshalIndent(envelope, "", "  ")
-					fmt.Fprintln(stdout, string(bytes))
-					return v2VerifierExitObserverBroken
-				}
-				fmt.Fprintf(stderr, "%s: %s: %s\n", command, d.Code, d.Message)
-				return v2VerifierExitObserverBroken
-			}
-		}
+	diags := closure.V2VerifierDiagnostics{}
+	var vErr *closure.V2VerifierError
+	if errors.As(err, &vErr) && vErr != nil {
+		diags = vErr.Diags
+	}
+	verifier := closure.V2ClosureVerification{
+		Valid:       false,
+		Diagnostics: diags,
+	}
+	envelope := v2VerifierJSONEnvelope{
+		OK:           false,
+		OutputPath:   outputPath,
+		FailureClass: classifyV2VerifierFailure(diags),
+		Verification: verifier,
+	}
+	if envelope.FailureClass == "" {
+		envelope.FailureClass = "observer"
 	}
 	if jsonOutput {
-		envelope := v2VerifierJSONEnvelope{OK: false}
-		bytes, _ := json.MarshalIndent(envelope, "", "  ")
-		fmt.Fprintln(stdout, string(bytes))
+		bytes, mErr := json.MarshalIndent(envelope, "", "  ")
+		if mErr != nil {
+			fmt.Fprintf(stderr, "%s: marshal JSON envelope: %v\n", command, mErr)
+			return v2VerifierExitObserverBroken
+		}
+		stdout.Write(append(bytes, '\n'))
+		if envelope.FailureClass == "observer" {
+			return v2VerifierExitObserverBroken
+		}
 		return v2VerifierExitVerifier
 	}
-	fmt.Fprintf(stderr, "%s: %v\n", command, err)
+	for _, d := range sortedV2DiagsForText(diags) {
+		fmt.Fprintf(stderr, "%s: %s [%s]: %s\n", command, d.Code, d.PropertyName, d.Message)
+	}
+	if len(diags) == 0 {
+		fmt.Fprintf(stderr, "%s: %v\n", command, err)
+	}
+	if envelope.FailureClass == "observer" {
+		return v2VerifierExitObserverBroken
+	}
 	return v2VerifierExitVerifier
 }
 
 // sortedV2DiagsForText returns the diagnostics in a
 // deterministic order for text rendering: by Code, then by
-// PropertyName, then by Message. The function ensures the
-// text failure rendering is reproducible across runs.
+// PropertyName, then by Message.
 func sortedV2DiagsForText(in closure.V2VerifierDiagnostics) closure.V2VerifierDiagnostics {
 	out := make(closure.V2VerifierDiagnostics, len(in))
 	copy(out, in)
