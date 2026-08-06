@@ -84,6 +84,44 @@ const (
 	// depending on the runner diagnostic file.
 	V2VerifierObjectFormatUnavailable V2VerifierCode = "object_format_unavailable"
 	V2VerifierUnsupportedObjectFormat V2VerifierCode = "unsupported_object_format"
+
+	// Manifest identity codes. Emitted by
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MANIFEST-RESULTS01
+	// when the committed manifest at C:M disagrees with the
+	// independently computed Git authority or with the frozen
+	// plan at F:P. Each code names exactly the manifest field
+	// that failed to bind so callers can route the rejection
+	// without re-parsing the manifest.
+	V2VerifierManifestProtocolVersionMismatch     V2VerifierCode = "manifest_protocol_version_mismatch"
+	V2VerifierManifestPlanContractVersionMismatch V2VerifierCode = "manifest_plan_contract_version_mismatch"
+	V2VerifierManifestSubjectMismatch             V2VerifierCode = "manifest_subject_mismatch"
+	V2VerifierManifestSubjectTreeMismatch         V2VerifierCode = "manifest_subject_tree_mismatch"
+	V2VerifierManifestFreezeMismatch              V2VerifierCode = "manifest_freeze_mismatch"
+	V2VerifierManifestFreezeTreeMismatch          V2VerifierCode = "manifest_freeze_tree_mismatch"
+	V2VerifierManifestExecutionTreeMismatch       V2VerifierCode = "manifest_execution_tree_mismatch"
+	V2VerifierManifestPlanPathMismatch            V2VerifierCode = "manifest_plan_path_mismatch"
+	V2VerifierManifestPlanBlobMismatch            V2VerifierCode = "manifest_plan_blob_mismatch"
+	V2VerifierManifestPlanSHA256Mismatch          V2VerifierCode = "manifest_plan_sha256_mismatch"
+
+	// Binary-identity and result-bijection codes. Emitted by
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MANIFEST-RESULTS01
+	// when the committed manifest's binary identity is
+	// structurally invalid, when the per-check result set is
+	// not a bijection against the frozen-plan checks, or when
+	// the run success / cleanup state is internally
+	// inconsistent.
+	V2VerifierManifestBinaryIdentityInvalid      V2VerifierCode = "manifest_binary_identity_invalid"
+	V2VerifierManifestCheckResultBijectionFailed V2VerifierCode = "manifest_check_result_bijection_failed"
+	V2VerifierManifestUnsuccessfulRun            V2VerifierCode = "manifest_unsuccessful_run"
+	V2VerifierManifestCheckResultsInvalid        V2VerifierCode = "manifest_check_results_invalid"
+
+	// Frozen-plan check inventory codes. Emitted when the
+	// committed manifest references checks that are not in
+	// the frozen plan at F:P, or when the frozen-plan
+	// document fails the production parser before the
+	// manifest is consulted.
+	V2VerifierFrozenPlanInvalid      V2VerifierCode = "frozen_plan_invalid"
+	V2VerifierManifestUnknownCheckID V2VerifierCode = "manifest_unknown_check_id"
 )
 
 // V2VerifierDiagnostic is the structured diagnostic record
