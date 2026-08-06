@@ -151,6 +151,10 @@ func TestClosureCLIV2VerifierMacHandoff(t *testing.T) {
 	// on top of F in the hermetic repository. The commit
 	// message names the act so the verifier can be
 	// reproduced by the same act_id.
+	manifestDir := filepath.Join(repository, filepath.Dir(macHandoffManifestPath))
+	if err := os.MkdirAll(manifestDir, 0o755); err != nil {
+		t.Fatalf("mkdir manifest dir: %v", err)
+	}
 	mustWriteFile(t, filepath.Join(repository, macHandoffManifestPath), string(manifestBytes))
 	mustWriteFile(t, filepath.Join(repository, "closure-only.txt"), "closure-only\n")
 	runR2CRGit(t, repository, "add", ".")
