@@ -6,8 +6,8 @@ PASS
 
 ## Subject
 
-- Commit: `87575b89bacf6dbdd151d0c1e46ee6169daccc00`
-- Tree: `1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95`
+- Commit: `ba1bfa8652d50196eacecfbadc41068a2422d5a5`
+- Tree: `44bfd2c18136bc9e85b01955536ef1455aa40cca`
 
 ## Plan
 
@@ -20,12 +20,12 @@ Ordered results: 6.
 
 | Check | Result | Duration | Exit |
 |---|---|---:|---:|
-| v2-verifier-mac-handoff-focused-tests | PASS | 4517ms | 0 |
-| v2-verifier-mac-handoff-dogfood | PASS | 2978ms | 0 |
-| v2-verifier-mac-handoff-vet | PASS | 1525ms | 0 |
-| v2-verifier-mac-handoff-gofmt | PASS | 20ms | 0 |
+| v2-verifier-mac-handoff-focused-tests | PASS | 4611ms | 0 |
+| v2-verifier-mac-handoff-dogfood | PASS | 3008ms | 0 |
+| v2-verifier-mac-handoff-vet | PASS | 1574ms | 0 |
+| v2-verifier-mac-handoff-gofmt | PASS | 22ms | 0 |
 | v2-verifier-mac-handoff-diff-check | PASS | 9ms | 0 |
-| v2-verifier-mac-handoff-static-build | PASS | 1777ms | 0 |
+| v2-verifier-mac-handoff-static-build | PASS | 1767ms | 0 |
 
 ## Artifacts
 
