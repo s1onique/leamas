@@ -1,15 +1,21 @@
 {
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02C-R1",
-  "artifacts": [],
+  "artifacts": [
+    {
+      "kind": "gate_summary",
+      "path": ".factory/gate-summary.json",
+      "produced_by": "v2-verifier-aggregate-fast-lane"
+    }
+  ],
   "baseline": {
-    "commit_oid": "056c1b4fd4aa5a4c2b94a42cc6d3b2040a949d09",
-    "tree_oid": "9f090baafcdf54db3315814ca542803a484cbb9c"
+    "commit_oid": "a5cfbf4adbde497dd0ca31961f7f6434683d9855",
+    "tree_oid": "72398902a1cc298c17435f532cc65380ced70f23"
   },
   "checks": [
     {
-      "argv": ["go", "test", "-count=1", "-run", "TestV2VerifierDuplicate|TestV2VerifierExit|TestV2VerifierPublic|TestV2VerifierTerminal|TestV2VerifierJSON|TestV2VerifierMetadataObs|TestV2VerifierPreObservation|TestV2VerifierHelp", "./cmd/leamas/..."],
+      "argv": ["go", "test", "-count=1", "-v", "-run", "TestV2VerifierDuplicateMatrixHas56Rows|TestV2VerifierExitThreeMatrixHas13Rows|TestV2VerifierPublicNegativeMatrixHas16Rows|TestV2VerifierTerminalTrailerMatrixHas15Rows|TestV2VerifierJSONSingleDocumentUsesSecondDecode|TestV2VerifierPreObservationCountersAreZero|TestV2VerifierMetadataObsStateMachineHoldsInvariants|TestV2VerifierHelpContractExitsZero", "./cmd/leamas/..."],
       "environment": {"CGO_ENABLED": "0"},
-      "id": "v2-verifier-focused-tests",
+      "id": "v2-verifier-row-count-tests",
       "mode": "run",
       "timeout_seconds": 300,
       "working_directory": "."
@@ -47,7 +53,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["gofmt", "-l", "cmd/leamas/factory_close_v2_verifier_cli.go", "cmd/leamas/factory_close_v2_verifier_cli_flags.go", "cmd/leamas/factory_close_v2_verifier_cli_errorsas.go", "cmd/leamas/factory_close_v2_verifier_cli_helpers.go", "cmd/leamas/factory_close_v2_verifier_cli_writers.go", "cmd/leamas/factory_close_v2_verifier_duplicate_test.go", "cmd/leamas/factory_close_v2_verifier_duplicate_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_exit_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_help_contract_test.go", "cmd/leamas/factory_close_v2_verifier_public_negative_test.go", "cmd/leamas/factory_close_v2_verifier_terminal_trailer_test.go", "cmd/leamas/factory_close_v2_verifier_json_eof_test.go", "cmd/leamas/factory_close_v2_verifier_pre_observation_test.go", "internal/factory/closure/v2_verifier_orchestrator.go", "internal/factory/closure/v2_verifier_tag.go", "internal/factory/closure/v2_verifier_tag_metadata.go", "internal/factory/closure/v2_verifier_tag_metadata_parse_trailers.go"],
+      "argv": ["gofmt", "-l", "cmd/leamas/factory_close_v2_verifier_cli.go", "cmd/leamas/factory_close_v2_verifier_cli_flags.go", "cmd/leamas/factory_close_v2_verifier_cli_errorsas.go", "cmd/leamas/factory_close_v2_verifier_cli_helpers.go", "cmd/leamas/factory_close_v2_verifier_cli_writers.go", "cmd/leamas/factory_close_v2_verifier_duplicate_test.go", "cmd/leamas/factory_close_v2_verifier_duplicate_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_exit_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_help_contract_test.go", "cmd/leamas/factory_close_v2_verifier_public_negative_test.go", "cmd/leamas/factory_close_v2_verifier_terminal_trailer_test.go", "cmd/leamas/factory_close_v2_verifier_json_eof_test.go", "cmd/leamas/factory_close_v2_verifier_pre_observation_test.go", "cmd/leamas/factory_close_v2_verifier_metadata_obs_test.go", "internal/factory/closure/v2_verifier_orchestrator.go", "internal/factory/closure/v2_verifier_tag.go", "internal/factory/closure/v2_verifier_tag_metadata.go", "internal/factory/closure/v2_verifier_tag_metadata_parse_trailers.go"],
       "environment": {},
       "id": "v2-verifier-gofmt",
       "mode": "run",
@@ -55,7 +61,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["git", "diff", "--check", "$F2_COMMIT", "HEAD"],
+      "argv": ["git", "diff", "--check", "a5cfbf4adbde497dd0ca31961f7f6434683d9855", "HEAD"],
       "environment": {},
       "id": "v2-verifier-range-diff-check",
       "mode": "run",
@@ -63,7 +69,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["make", "verify-llm-friendly"],
+      "argv": ["bin/leamas", "factory", "verify", "llm-friendly"],
       "environment": {},
       "id": "v2-verifier-llm-friendly",
       "mode": "run",
@@ -71,7 +77,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["make", "verify-tooling-boundaries"],
+      "argv": ["bin/leamas", "factory", "verify", "tooling-boundaries"],
       "environment": {},
       "id": "v2-verifier-tooling-boundaries",
       "mode": "run",
@@ -79,7 +85,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["make", "verify-static"],
+      "argv": ["bin/leamas", "factory", "verify", "static-binary"],
       "environment": {},
       "id": "v2-verifier-static-binary",
       "mode": "run",
@@ -87,24 +93,32 @@
       "working_directory": "."
     },
     {
-      "argv": ["bash", "-c", "mkdir -p \"$BUILD_DIR\" && CGO_ENABLED=0 go build -trimpath -o \"$BUILD_DIR/leamas-v2verifier-r1\" ./cmd/leamas && rm -f \"$BUILD_DIR/leamas-v2verifier-r1\""],
-      "environment": {"CGO_ENABLED": "0", "BUILD_DIR": ".factory/build/v2verifier-r1"},
+      "argv": ["bin/leamas", "factory", "verify", "long-test-policy"],
+      "environment": {},
+      "id": "v2-verifier-long-test-policy",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "argv": ["bin/leamas", "factory", "verify", "forbidden-patterns"],
+      "environment": {},
+      "id": "v2-verifier-focused-exec-gate",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "argv": ["bash", "-c", "set -euo pipefail; mkdir -p .factory/build; BUILD_DIR=\"$(mktemp -d -p .factory/build v2verifier-r1.XXXXXX)\"; out=\"$BUILD_DIR/leamas-v2verifier-r1\"; trap 'rm -rf \"$BUILD_DIR\"' EXIT; CGO_ENABLED=0 go build -trimpath -o \"$out\" ./cmd/leamas"],
+      "environment": {"CGO_ENABLED": "0"},
       "id": "v2-verifier-hermetic-build",
       "mode": "run",
       "timeout_seconds": 180,
       "working_directory": "."
     },
     {
-      "argv": ["make", "build"],
-      "environment": {"CGO_ENABLED": "0"},
-      "id": "v2-verifier-build-binary",
-      "mode": "run",
-      "timeout_seconds": 180,
-      "working_directory": "."
-    },
-    {
-      "argv": ["bash", "-c", "mkdir -p .factory && CGO_ENABLED=0 ./bin/leamas factory gate --lane=fast --output .factory/gate-summary.json --json-output .factory/gate-summary.json; rc=$?; echo \"GATE_RC=$rc\"; cat .factory/gate-summary.json; exit $rc"],
-      "environment": {"CGO_ENABLED": "0", "LEAMAS_GATE_CALLER": "cline"},
+      "argv": ["bin/leamas", "factory", "gate", "--lane=fast"],
+      "environment": {"LEAMAS_GATE_CALLER": "cline"},
       "id": "v2-verifier-aggregate-fast-lane",
       "mode": "run",
       "timeout_seconds": 600,
