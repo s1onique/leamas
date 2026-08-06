@@ -28,6 +28,7 @@ import (
 // Git repository built with the production execution helpers.
 type testResolver struct {
 	repoDir string
+	format  string
 }
 
 func (r *testResolver) CatFile(oid string) ([]byte, error) {
@@ -36,6 +37,15 @@ func (r *testResolver) CatFile(oid string) ([]byte, error) {
 		return nil, fmt.Errorf("git cat-file %s: %w", oid, err)
 	}
 	return []byte(out), nil
+}
+
+// ObjectFormat returns the configured test format. The default
+// is "sha1"; tests override it to drive the format matrix.
+func (r *testResolver) ObjectFormat() (string, error) {
+	if r.format == "" {
+		return "sha1", nil
+	}
+	return r.format, nil
 }
 
 // writeSubjectRepo creates a small Git repository containing
@@ -320,6 +330,13 @@ func (r *gitCatFileResolver) CatFile(oid string) ([]byte, error) {
 		return nil, fmt.Errorf("git cat-file -p %s: exit %d err %v", oid, result.ExitCode, result.Err)
 	}
 	return result.Stdout, nil
+}
+
+// ObjectFormat returns "sha1" for any repository built with
+// the test harness. The R2B verifier rejects "sha256" and
+// other formats before any OID validation runs.
+func (r *gitCatFileResolver) ObjectFormat() (string, error) {
+	return "sha1", nil
 }
 
 // TestR2BEvidenceVerifier_AcceptsCommittedR1Manifest proves

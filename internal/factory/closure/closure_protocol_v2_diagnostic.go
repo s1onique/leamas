@@ -74,6 +74,15 @@ const (
 	// reports the exact field that failed.
 	V2CodeCallerStateUnavailable       V2DiagnosticCode = "caller_state_unavailable"
 	V2CodeWorktreeInventoryUnavailable V2DiagnosticCode = "worktree_inventory_unavailable"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R2C-R4
+	// adds object-format policy codes. The verifier MUST
+	// reject before any OID validation when the resolver
+	// cannot produce a storage format, or when the format
+	// is not "sha1". The two codes keep the failure modes
+	// distinguishable: an observation failure is not the
+	// same as an unsupported repository state.
+	V2CodeObjectFormatUnavailable V2DiagnosticCode = "object_format_unavailable"
+	V2CodeUnsupportedObjectFormat V2DiagnosticCode = "unsupported_object_format"
 )
 
 // V2Diagnostic is the structured diagnostic record emitted by
@@ -122,8 +131,22 @@ func (d V2Diagnostics) Codes() []V2DiagnosticCode {
 // V2Error wraps a non-empty diagnostic list with a Go error
 // so callers can choose between typed inspection (Diags) and
 // the standard error interface (Error).
+//
+// R2C-R4: when the runner encounters a non-*V2Error failure
+// from an inner authority (e.g. a plain error from the
+// executor), it retains the original error as Cause so the
+// wrapped error remains discoverable via errors.Is and
+// errors.As through Unwrap. The Diags list carries the
+// deterministic first diagnostic for the inner failure and
+// any appended post-availability or drift diagnostics.
 type V2Error struct {
 	Diags V2Diagnostics
+	// Cause is the underlying error the runner wrapped,
+	// when the original failure was not already a typed
+	// V2Error. It is nil when the original failure was
+	// already a *V2Error. Unwrap returns Cause so the
+	// standard errors.Is / errors.As helpers work.
+	Cause error
 }
 
 func (e *V2Error) Error() string {
@@ -135,6 +158,17 @@ func (e *V2Error) Error() string {
 		return string(first.Code)
 	}
 	return string(first.Code) + ": " + first.Message
+}
+
+// Unwrap returns the wrapped cause so errors.Is and
+// errors.As can reach the original error. It returns nil
+// when there is no cause (e.g. the original failure was
+// already a typed *V2Error).
+func (e *V2Error) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
 }
 
 // NewV2Error constructs a V2Error carrying a single code and

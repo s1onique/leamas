@@ -65,6 +65,14 @@ type GitObjectResolver interface {
 	// trees it returns the tree object bytes; for blobs it
 	// returns the blob content bytes.
 	CatFile(oid string) ([]byte, error)
+	// ObjectFormat returns the Git object storage format
+	// reported by `git rev-parse --show-object-format`.
+	// Production implementations MUST execute the real git
+	// command and propagate every observation failure.
+	// Test fakes return a hard-coded format ("sha1" by
+	// default; other values are used to drive the format
+	// matrix tests).
+	ObjectFormat() (string, error)
 }
 
 // EvidenceVerifierOptions configures the evidence verifier.
@@ -171,6 +179,16 @@ func VerifyClosureManifestR2B(opts EvidenceVerifierOptions) (EvidenceVerifierRes
 	}
 	if opts.Resolver == nil {
 		return EvidenceVerifierResult{}, errors.New("git object resolver is required")
+	}
+	// R2C-R4 SHA-1 policy: programmatic object-format
+	// enforcement runs BEFORE any OID validation. A
+	// sha256 repository whose OIDs are 64 chars would
+	// otherwise be rejected by the length check with a
+	// misleading "not a 40-char OID" diagnostic; the
+	// typed unsupported_object_format diagnostic is the
+	// authoritative verdict.
+	if v2err := EnforceSHA1ObjectFormat(opts.Resolver); v2err != nil {
+		return EvidenceVerifierResult{}, v2err
 	}
 	commitBytes, err := opts.Resolver.CatFile(opts.SubjectCommit)
 	if err != nil {

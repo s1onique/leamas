@@ -194,16 +194,32 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 		// appended. The original inner diagnostic is preserved
 		// in front of the after diagnostics so the CLI sees
 		// both root-cause and symptom.
+		//
+		// R2C-R4: when the inner runner returns a non-*V2Error,
+		// the runner retains the original error as Cause and
+		// emits a deterministic first diagnostic representing
+		// the inner failure. The drift / availability
+		// diagnostics follow. The runner never returns a
+		// drift-only error: errors.Is(result, sentinel) stays
+		// true through Cause / Unwrap.
 		callerAfter := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
 		post := mergeAfterWithBeforeDiagnostics(callerBefore, callerAfter)
 		if v2err, ok := err.(*V2Error); ok {
 			v2err.Diags = append(v2err.Diags, post...)
 			return V2Manifest{}, v2err
 		}
-		if len(post) > 0 {
-			return V2Manifest{}, &V2Error{Diags: append(V2Diagnostics(nil), post...)}
+		// Non-typed inner error: wrap deterministically,
+		// preserve the original via Cause, and append any
+		// post-snapshot diagnostics.
+		inner := buildInnerFallbackDiagnostic(err)
+		wrapped := &V2Error{
+			Diags: V2Diagnostics{inner},
+			Cause: err,
 		}
-		return V2Manifest{}, err
+		if len(post) > 0 {
+			wrapped.Diags = append(wrapped.Diags, post...)
+		}
+		return V2Manifest{}, wrapped
 	}
 	// Publication barrier: capture the after-state snapshot
 	// BEFORE writing the candidate bytes to disk. Any failure
@@ -278,6 +294,29 @@ func mergeAfterWithBeforeDiagnostics(before, after v2CallerStateSnapshot) V2Diag
 	}
 	out = append(out, before.State.Diff(after.State)...)
 	return out
+}
+
+// buildInnerFallbackDiagnostic builds the deterministic first
+// diagnostic representing an inner-failure error that was
+// not already a typed *V2Error. The diagnostic code is
+// V2CodeExecutionFailed so the CLI can render a consistent
+// root cause regardless of the underlying error type, and
+// the original error is preserved on the wrapping V2Error's
+// Cause field so errors.Is and errors.As can reach it.
+func buildInnerFallbackDiagnostic(err error) V2Diagnostic {
+	if err == nil {
+		return V2Diagnostic{
+			Code:         V2CodeExecutionFailed,
+			Message:      "inner runner returned a nil error",
+			PropertyName: "inner_failure",
+		}
+	}
+	return V2Diagnostic{
+		Code:         V2CodeExecutionFailed,
+		Message:      fmt.Sprintf("inner runner returned non-typed error: %s", err.Error()),
+		PropertyName: "inner_failure",
+		Detail:       err.Error(),
+	}
 }
 
 // runClosureProtocolV2Inner is implemented in closure_protocol_v2_runner_inner.go.
