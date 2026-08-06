@@ -294,14 +294,14 @@ func TestClosureCLIV2VerifierMacHandoff(t *testing.T) {
 		t.Fatalf("verifier envelope OK=false: %s", string(verifierOutput))
 	}
 	var v struct {
-		SubjectCommit string `json:"subject_commit"`
-		FreezeCommit  string `json:"freeze_commit"`
-		ClosureCommit string `json:"closure_commit"`
-		PlanBlob      string `json:"plan_blob"`
-		PlanSHA256    string `json:"plan_sha256"`
-		ManifestBlob  string `json:"manifest_blob"`
+		SubjectCommit  string `json:"subject_commit"`
+		FreezeCommit   string `json:"freeze_commit"`
+		ClosureCommit  string `json:"closure_commit"`
+		PlanBlob       string `json:"plan_blob"`
+		PlanSHA256     string `json:"plan_sha256"`
+		ManifestBlob   string `json:"manifest_blob"`
 		ManifestSHA256 string `json:"manifest_sha256"`
-		Valid         bool   `json:"valid"`
+		Valid          bool   `json:"valid"`
 	}
 	if err := json.Unmarshal(envelope.Verification, &v); err != nil {
 		t.Fatalf("decode verification: %v", err)
