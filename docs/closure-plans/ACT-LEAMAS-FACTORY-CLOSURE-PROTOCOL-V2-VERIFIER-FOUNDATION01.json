@@ -15,6 +15,14 @@
       "working_directory": "."
     },
     {
+      "argv": ["go", "test", "-count=1", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-package-tests",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
       "argv": ["go", "vet", "./..."],
       "environment": {"CGO_ENABLED": "0"},
       "id": "v2-verifier-vet",
@@ -39,11 +47,11 @@
       "working_directory": "."
     },
     {
-      "argv": ["make", "gate-fast"],
+      "argv": ["go", "build", "-trimpath", "-o", "/tmp/leamas-v2verifier-foundation", "./cmd/leamas"],
       "environment": {"CGO_ENABLED": "0"},
-      "id": "v2-verifier-gate-fast",
+      "id": "v2-verifier-static-build",
       "mode": "run",
-      "timeout_seconds": 600,
+      "timeout_seconds": 120,
       "working_directory": "."
     }
   ],
