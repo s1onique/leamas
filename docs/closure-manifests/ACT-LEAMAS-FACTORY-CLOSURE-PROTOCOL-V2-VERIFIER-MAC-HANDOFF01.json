@@ -1,0 +1,305 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01",
+  "plan": {
+    "sha256": "4d6c407275ad6b73b63cc044e65dfc681ba17454eecc8603576a4a655374b8c3",
+    "path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "b3a47ab1cd1da4f6f2516b0c07b6630641c09086",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01.json",
+    "plan_blob_oid": "dd4c8689e3e76eb5f2fc6a588b545e6613ae4684",
+    "plan_sha256": "4d6c407275ad6b73b63cc044e65dfc681ba17454eecc8603576a4a655374b8c3",
+    "subject_commit": "1fb07f055d9d1842401ff0e8f93afe01be0ec2fa"
+  },
+  "subject": {
+    "commit_oid": "1fb07f055d9d1842401ff0e8f93afe01be0ec2fa",
+    "tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev.1fb07f055d9d.20260806T103257Z",
+    "binary_sha256": "53b3abc134d02a131f6c5b833f18a505ea4de8c71f4ad44cae6e668cdf26e221",
+    "vcs_revision": "1fb07f055d9d1842401ff0e8f93afe01be0ec2fa",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "1fb07f055d9d1842401ff0e8f93afe01be0ec2fa",
+    "head_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+    "origin_main_commit_oid": "72eb4626073d3b91664d3943d7b353a72c7349f5",
+    "ahead_by": 22,
+    "behind_by": 1,
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "checks": [
+    {
+      "check_id": "v2-verifier-mac-handoff-focused-tests",
+      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestV2Verifier|TestV2CallerState|TestClosureCLIV2VerifierMacHandoff",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-06T10:34:17.600477114Z",
+      "finished_at_utc": "2026-08-06T10:34:26.000854173Z",
+      "duration_ms": 8400,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "41f31a75c615d29c4dce842aef90651de509330e4335ead0f738136ee268fd7c",
+      "stdout_byte_count": 285,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 285,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-verifier-mac-handoff-dogfood",
+      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureCLIV2VerifierMacHandoff",
+        "./cmd/leamas/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-06T10:34:26.004358608Z",
+      "finished_at_utc": "2026-08-06T10:34:28.86887762Z",
+      "duration_ms": 2864,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "949db9893a66b7f5d9526705e01ed11c09314f464f656666495233ae9f09e4a4",
+      "stdout_byte_count": 50,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 50,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-verifier-mac-handoff-vet",
+      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "argv": [
+        "go",
+        "vet",
+        "./..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-06T10:34:28.874247018Z",
+      "finished_at_utc": "2026-08-06T10:34:30.403494821Z",
+      "duration_ms": 1529,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-verifier-mac-handoff-gofmt",
+      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "argv": [
+        "gofmt",
+        "-l",
+        "cmd/leamas/factory_close_v2_verifier_mac_handoff_test.go"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [],
+      "started_at_utc": "2026-08-06T10:34:30.409040637Z",
+      "finished_at_utc": "2026-08-06T10:34:30.431606687Z",
+      "duration_ms": 22,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "b93b4621240966d429c514eb78fa6b89c342ce42acbae4e0952bd59c4269e56f",
+      "stdout_byte_count": 57,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 57,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-verifier-mac-handoff-diff-check",
+      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [],
+      "started_at_utc": "2026-08-06T10:34:30.433418208Z",
+      "finished_at_utc": "2026-08-06T10:34:30.442618213Z",
+      "duration_ms": 9,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "v2-verifier-mac-handoff-static-build",
+      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-v2verifier-mac-handoff",
+        "./cmd/leamas"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-06T10:34:30.444161935Z",
+      "finished_at_utc": "2026-08-06T10:34:31.609053851Z",
+      "duration_ms": 1164,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    }
+  ],
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "v2-verifier-mac-handoff-focused-tests.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "41f31a75c615d29c4dce842aef90651de509330e4335ead0f738136ee268fd7c",
+      "byte_count": 285,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-focused-tests.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-dogfood.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "949db9893a66b7f5d9526705e01ed11c09314f464f656666495233ae9f09e4a4",
+      "byte_count": 50,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-dogfood.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-vet.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-vet.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-gofmt.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "b93b4621240966d429c514eb78fa6b89c342ce42acbae4e0952bd59c4269e56f",
+      "byte_count": 57,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-gofmt.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-diff-check.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-diff-check.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-static-build.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "v2-verifier-mac-handoff-static-build.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "runner.diagnostics",
+      "media_type": "application/json",
+      "sha256": "d19a2c9d5b87a8fd001f6574fc7ecdfa42418ada8ad59840b8ba6a64187d9c84",
+      "byte_count": 166,
+      "availability": "detached"
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [],
+  "verdict": "pass"
+}
