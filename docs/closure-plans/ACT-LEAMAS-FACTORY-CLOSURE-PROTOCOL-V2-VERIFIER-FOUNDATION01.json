@@ -1,0 +1,60 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-FOUNDATION01",
+  "artifacts": [],
+  "baseline": {
+    "commit_oid": "5a01f5f19687203ce7a95f15f52aa54732b751bc",
+    "tree_oid": "97f9d97d58f048db605b88f61b4e933b0d20300d"
+  },
+  "checks": [
+    {
+      "argv": ["go", "test", "-count=1", "-run", "TestV2Verifier", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-focused-tests",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "vet", "./..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-vet",
+      "mode": "run",
+      "timeout_seconds": 180,
+      "working_directory": "."
+    },
+    {
+      "argv": ["gofmt", "-l", "internal/factory/closure/v2_verifier_authority.go", "internal/factory/closure/v2_verifier_authority_test.go", "internal/factory/closure/v2_verifier_diagnostic.go", "internal/factory/closure/v2_verifier_format.go", "internal/factory/closure/v2_verifier_request.go", "internal/factory/closure/v2_verifier_validate.go", "internal/factory/closure/v2_verifier_validate_test.go"],
+      "environment": {},
+      "id": "v2-verifier-gofmt",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["git", "diff", "--check"],
+      "environment": {},
+      "id": "v2-verifier-diff-check",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["make", "gate-fast"],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-gate-fast",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    }
+  ],
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  },
+  "contract_version": 1
+}
