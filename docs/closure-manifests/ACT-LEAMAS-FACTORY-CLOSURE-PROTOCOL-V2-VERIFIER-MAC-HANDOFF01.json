@@ -10,11 +10,11 @@
     "plan_path": "docs/closure-plans/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01.json",
     "plan_blob_oid": "dd4c8689e3e76eb5f2fc6a588b545e6613ae4684",
     "plan_sha256": "4d6c407275ad6b73b63cc044e65dfc681ba17454eecc8603576a4a655374b8c3",
-    "subject_commit": "1fb07f055d9d1842401ff0e8f93afe01be0ec2fa"
+    "subject_commit": "87575b89bacf6dbdd151d0c1e46ee6169daccc00"
   },
   "subject": {
-    "commit_oid": "1fb07f055d9d1842401ff0e8f93afe01be0ec2fa",
-    "tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8"
+    "commit_oid": "87575b89bacf6dbdd151d0c1e46ee6169daccc00",
+    "tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95"
   },
   "runner": {
     "leamas_version": "0.1.0+dev.1fb07f055d9d.20260806T103257Z",
@@ -26,10 +26,10 @@
     "root": ".",
     "remote_url": "git@github.com:s1onique/leamas.git",
     "branch": "main",
-    "head_commit_oid": "1fb07f055d9d1842401ff0e8f93afe01be0ec2fa",
-    "head_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+    "head_commit_oid": "87575b89bacf6dbdd151d0c1e46ee6169daccc00",
+    "head_tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95",
     "origin_main_commit_oid": "72eb4626073d3b91664d3943d7b353a72c7349f5",
-    "ahead_by": 22,
+    "ahead_by": 25,
     "behind_by": 1,
     "working_tree_clean_before": true,
     "working_tree_clean_after": true
@@ -37,7 +37,7 @@
   "checks": [
     {
       "check_id": "v2-verifier-mac-handoff-focused-tests",
-      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "subject_tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95",
       "argv": [
         "go",
         "test",
@@ -51,12 +51,12 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-08-06T10:34:17.600477114Z",
-      "finished_at_utc": "2026-08-06T10:34:26.000854173Z",
-      "duration_ms": 8400,
+      "started_at_utc": "2026-08-06T10:44:46.900166035Z",
+      "finished_at_utc": "2026-08-06T10:44:51.41764221Z",
+      "duration_ms": 4517,
       "exit_code": 0,
       "status": "pass",
-      "stdout_sha256": "41f31a75c615d29c4dce842aef90651de509330e4335ead0f738136ee268fd7c",
+      "stdout_sha256": "bd8a6289d2dd0422f0ba39fe91530d84a3c93828f30036288f87d79abdac6793",
       "stdout_byte_count": 285,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
@@ -67,7 +67,7 @@
     },
     {
       "check_id": "v2-verifier-mac-handoff-dogfood",
-      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "subject_tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95",
       "argv": [
         "go",
         "test",
@@ -80,12 +80,12 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-08-06T10:34:26.004358608Z",
-      "finished_at_utc": "2026-08-06T10:34:28.86887762Z",
-      "duration_ms": 2864,
+      "started_at_utc": "2026-08-06T10:44:51.421211861Z",
+      "finished_at_utc": "2026-08-06T10:44:54.39927811Z",
+      "duration_ms": 2978,
       "exit_code": 0,
       "status": "pass",
-      "stdout_sha256": "949db9893a66b7f5d9526705e01ed11c09314f464f656666495233ae9f09e4a4",
+      "stdout_sha256": "f41e141f535b06ae76062dc6cc18f8508726c0999ca5e9380a7e90899f4ca41c",
       "stdout_byte_count": 50,
       "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "stderr_byte_count": 0,
@@ -96,7 +96,7 @@
     },
     {
       "check_id": "v2-verifier-mac-handoff-vet",
-      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "subject_tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95",
       "argv": [
         "go",
         "vet",
@@ -106,9 +106,9 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-08-06T10:34:28.874247018Z",
-      "finished_at_utc": "2026-08-06T10:34:30.403494821Z",
-      "duration_ms": 1529,
+      "started_at_utc": "2026-08-06T10:44:54.405162898Z",
+      "finished_at_utc": "2026-08-06T10:44:55.930937633Z",
+      "duration_ms": 1525,
       "exit_code": 0,
       "status": "pass",
       "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -122,7 +122,7 @@
     },
     {
       "check_id": "v2-verifier-mac-handoff-gofmt",
-      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "subject_tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95",
       "argv": [
         "gofmt",
         "-l",
@@ -130,9 +130,9 @@
       ],
       "working_directory": ".",
       "overridden_environment": [],
-      "started_at_utc": "2026-08-06T10:34:30.409040637Z",
-      "finished_at_utc": "2026-08-06T10:34:30.431606687Z",
-      "duration_ms": 22,
+      "started_at_utc": "2026-08-06T10:44:55.935779562Z",
+      "finished_at_utc": "2026-08-06T10:44:55.956619992Z",
+      "duration_ms": 20,
       "exit_code": 0,
       "status": "pass",
       "stdout_sha256": "b93b4621240966d429c514eb78fa6b89c342ce42acbae4e0952bd59c4269e56f",
@@ -146,7 +146,7 @@
     },
     {
       "check_id": "v2-verifier-mac-handoff-diff-check",
-      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "subject_tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95",
       "argv": [
         "git",
         "diff",
@@ -154,8 +154,8 @@
       ],
       "working_directory": ".",
       "overridden_environment": [],
-      "started_at_utc": "2026-08-06T10:34:30.433418208Z",
-      "finished_at_utc": "2026-08-06T10:34:30.442618213Z",
+      "started_at_utc": "2026-08-06T10:44:55.95834985Z",
+      "finished_at_utc": "2026-08-06T10:44:55.967692713Z",
       "duration_ms": 9,
       "exit_code": 0,
       "status": "pass",
@@ -170,7 +170,7 @@
     },
     {
       "check_id": "v2-verifier-mac-handoff-static-build",
-      "subject_tree_oid": "f9a8a9ceb2d26e79d817ced072f00878684404d8",
+      "subject_tree_oid": "1fabaa3ec64bea28e74c21c9e6d87925a1a5fe95",
       "argv": [
         "go",
         "build",
@@ -183,9 +183,9 @@
       "overridden_environment": [
         "CGO_ENABLED"
       ],
-      "started_at_utc": "2026-08-06T10:34:30.444161935Z",
-      "finished_at_utc": "2026-08-06T10:34:31.609053851Z",
-      "duration_ms": 1164,
+      "started_at_utc": "2026-08-06T10:44:55.969229531Z",
+      "finished_at_utc": "2026-08-06T10:44:57.746534493Z",
+      "duration_ms": 1777,
       "exit_code": 0,
       "status": "pass",
       "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -203,7 +203,7 @@
     {
       "logical_name": "v2-verifier-mac-handoff-focused-tests.stdout",
       "media_type": "text/plain; charset=utf-8",
-      "sha256": "41f31a75c615d29c4dce842aef90651de509330e4335ead0f738136ee268fd7c",
+      "sha256": "bd8a6289d2dd0422f0ba39fe91530d84a3c93828f30036288f87d79abdac6793",
       "byte_count": 285,
       "availability": "detached"
     },
@@ -217,7 +217,7 @@
     {
       "logical_name": "v2-verifier-mac-handoff-dogfood.stdout",
       "media_type": "text/plain; charset=utf-8",
-      "sha256": "949db9893a66b7f5d9526705e01ed11c09314f464f656666495233ae9f09e4a4",
+      "sha256": "f41e141f535b06ae76062dc6cc18f8508726c0999ca5e9380a7e90899f4ca41c",
       "byte_count": 50,
       "availability": "detached"
     },
