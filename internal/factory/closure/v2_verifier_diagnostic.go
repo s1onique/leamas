@@ -122,6 +122,33 @@ const (
 	// manifest is consulted.
 	V2VerifierFrozenPlanInvalid      V2VerifierCode = "frozen_plan_invalid"
 	V2VerifierManifestUnknownCheckID V2VerifierCode = "manifest_unknown_check_id"
+
+	// Tag-assertion codes. Emitted by
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-CLI-TAG-STATE01
+	// when --expected-tag is supplied and the optional tag
+	// path classifies the supplied ref as missing,
+	// lightweight, targeting a commit other than C, or
+	// otherwise unreadable. The codes are paired with stable
+	// text so external tooling can route the rejection
+	// without re-parsing the message.
+	V2VerifierClosureTagMissing        V2VerifierCode = "closure_tag_missing"
+	V2VerifierClosureTagLightweight    V2VerifierCode = "closure_tag_lightweight"
+	V2VerifierClosureTagTargetMismatch V2VerifierCode = "closure_tag_target_mismatch"
+	V2VerifierClosureTagUnreadable     V2VerifierCode = "closure_tag_unreadable"
+
+	// State-capture codes. Emitted only when the optional
+	// read-only-state-capture phase fails to classify a
+	// caller-state observation (timeout, output overflow,
+	// spawn failure, cancellation). The codes never gate
+	// verification success: a state-capture failure is a
+	// non-authoritative warning, not a verdict-changing
+	// rejection, because the verifier itself remains
+	// read-only regardless of the capture result.
+	V2VerifierStateCaptureHeadFailed     V2VerifierCode = "state_capture_head_failed"
+	V2VerifierStateCaptureStatusFailed   V2VerifierCode = "state_capture_status_failed"
+	V2VerifierStateCaptureWorktreeFailed V2VerifierCode = "state_capture_worktree_failed"
+	V2VerifierStateCaptureRefsFailed     V2VerifierCode = "state_capture_refs_failed"
+	V2VerifierStateMutationDetected      V2VerifierCode = "state_mutation_detected"
 )
 
 // V2VerifierDiagnostic is the structured diagnostic record

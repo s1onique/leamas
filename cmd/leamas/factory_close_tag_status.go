@@ -58,4 +58,8 @@ func printFactoryCloseUsage(writer io.Writer) {
 	fmt.Fprintln(writer, "  leamas factory close render --manifest <manifest.json> --output <report.md>")
 	fmt.Fprintln(writer, "  leamas factory close tag create --manifest <manifest.json> --report <report.md> --tag <name> --target <commit>")
 	fmt.Fprintln(writer, "  leamas factory close status --manifest <manifest.json> --report <report.md> --tag <name> [--remote origin]")
+	fmt.Fprintln(writer, "")
+	fmt.Fprintln(writer, "Closure Protocol v2 commands:")
+	fmt.Fprintln(writer, "  leamas factory close verify-v2-authority --repository <dir> --subject <S> --freeze <F> --closure <C> --plan-path <P> --manifest-path <M> [--expected-tag <name>] [--working-manifest-assertion <file>] [--json] [--output <path>]")
+	fmt.Fprintln(writer, "  leamas factory close run-v2-authority --protocol-version 2 --plan <plan.json> --subject <commit> --repository <dir> (legacy v2 runner)")
 }

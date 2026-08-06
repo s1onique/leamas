@@ -31,6 +31,8 @@ func runFactoryClose(args []string, stdout, stderr io.Writer) int {
 		return runFactoryCloseRun(args[1:], stdout, stderr)
 	case "run-v2-authority":
 		return runFactoryCloseRunV2Authority(args[1:], stdout, stderr)
+	case "verify-v2-authority":
+		return runFactoryCloseVerifyV2Authority(args[1:], stdout, stderr)
 	case "verify":
 		return runFactoryCloseVerify(args[1:], stdout, stderr)
 	case "render":
