@@ -68,6 +68,9 @@ func ClassifyACTOwnedGate(inputs ClassificationInputs) ACTOwnedClassification {
 	case "OK":
 		return ACTOwnedPass
 	case "FAILED":
+		if len(inputs.ObservedFindings) == 0 {
+			return ACTOwnedUnavailable
+		}
 		// fall through to finding-level classification
 	case "SKIP", "UNKNOWN", "":
 		return ACTOwnedUnavailable

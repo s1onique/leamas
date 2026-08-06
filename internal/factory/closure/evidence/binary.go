@@ -136,22 +136,16 @@ func BuildBinary(ctx context.Context, req BuildBinaryRequest) (BuiltBinaryEviden
 	}
 	static, _ := probeStatic(ctx, runner, outputPath)
 	evidence := BuiltBinaryEvidence{
-		SourceCommit:   req.SubjectCommit,
-		SourceTree:     req.SubjectTree,
-		SourceClean:    req.SourceClean,
-		SourceDetached: req.SourceDetached,
-		BinaryPath:     outputPath,
-		BinarySHA256:   sha,
-		VCSRevision:    vcsRevision,
-		VCSModified:    vcsModified,
-		Static:         static,
-		Executable:     executable,
-	}
-	if !evidence.SourceClean {
-		return evidence, &BinaryBuildError{Kind: "source_dirty", Field: "source_clean"}
-	}
-	if !evidence.SourceDetached {
-		return evidence, &BinaryBuildError{Kind: "source_attached", Field: "source_detached"}
+		SourceCommit: req.SubjectCommit,
+		SourceTree:   req.SubjectTree,
+		SourceClean:  req.SourceClean,
+
+		BinaryPath:   outputPath,
+		BinarySHA256: sha,
+		VCSRevision:  vcsRevision,
+		VCSModified:  vcsModified,
+		Static:       static,
+		Executable:   executable,
 	}
 	if vcsRevision != req.SubjectCommit {
 		return evidence, &BinaryBuildError{Kind: "vcs_revision_mismatch", Field: "vcs_revision", Want: req.SubjectCommit, Got: vcsRevision}

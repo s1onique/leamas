@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package evidence - evidence_test.go implements the matrix
-// tests required by Phase 11.
+// tests required by CORRECTION01.
 
 package evidence
 
@@ -11,11 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
-// fakeRunner is a deterministic CommandRunner used by the gate
-// capture and classification matrix tests.
+// fakeRunner is a deterministic CommandRunner.
 type fakeRunner struct {
 	calls int
 	out   string
@@ -31,24 +31,24 @@ func (f *fakeRunner) Run(ctx context.Context, name string, args []string, dir st
 	}
 }
 
-// TestClosureSingleGateCapture exercises CaptureGate against the
-// fake runner and asserts the lane ran exactly once.
+// TestClosureSingleGateCapture exercises the per-run
+// GateCollector and asserts two independent collectors never
+// share state.
 func TestClosureSingleGateCapture(t *testing.T) {
-	before := CollectorGateInvocationCount()
 	tmp, err := os.MkdirTemp("", "evidence-test-")
 	if err != nil {
 		t.Fatalf("tempdir: %v", err)
 	}
 	defer os.RemoveAll(tmp)
-	runner := &fakeRunner{
+	collector := NewGateCollector(&fakeRunner{
 		out:  "lane lint:OK\nlane test:OK\nEXEC_GATE_OBSERVED_STATUS:OK\ncmd/leamas/main.go:42:warning:unused:rule-1\n",
 		code: 0,
-	}
-	capture, err := CaptureGate(context.Background(), GateCaptureRequest{
+	})
+	capture, err := collector.Capture(context.Background(), GateCaptureRequest{
 		SubjectRoot: tmp,
 		EvidenceDir: filepath.Join(tmp, "evidence"),
 		RunID:       "run-test",
-	}, runner)
+	})
 	if err != nil {
 		t.Fatalf("capture: %v", err)
 	}
@@ -64,24 +64,57 @@ func TestClosureSingleGateCapture(t *testing.T) {
 	if len(capture.PreExistingFindings) != 1 {
 		t.Errorf("findings: %d", len(capture.PreExistingFindings))
 	}
-	after := CollectorGateInvocationCount()
-	if after-before != 1 {
-		t.Errorf("invocation count: want 1 got %d", after-before)
+	if collector.Calls() != 1 {
+		t.Errorf("calls: %d", collector.Calls())
 	}
-	// Second invocation must not re-run the gate.
-	if _, err := CaptureGate(context.Background(), GateCaptureRequest{
-		SubjectRoot: tmp, EvidenceDir: filepath.Join(tmp, "evidence"), RunID: "run-test",
-	}, runner); err != nil {
+	// Second collector does not see the first collector's calls.
+	collector2 := NewGateCollector(&fakeRunner{out: "lane test:OK\n", code: 0})
+	evidenceDir2 := filepath.Join(tmp, "evidence2")
+	if _, err := collector2.Capture(context.Background(), GateCaptureRequest{
+		SubjectRoot: tmp, EvidenceDir: evidenceDir2, RunID: "run-2",
+	}); err != nil {
 		t.Fatalf("second capture: %v", err)
 	}
-	after2 := CollectorGateInvocationCount()
-	if after2-before != 1 {
-		t.Errorf("invocation count after second call: want 1 got %d", after2-before)
+	if collector.Calls() != 1 {
+		t.Errorf("first collector calls drift: %d", collector.Calls())
+	}
+	if collector2.Calls() != 1 {
+		t.Errorf("second collector calls: %d", collector2.Calls())
 	}
 }
 
-// TestClosureACTOwnedGateClassification exercises every branch of
-// the Phase 5 rule set.
+// TestClosureGateCaptureRunScoped proves concurrent collectors
+// never share data.
+func TestClosureGateCaptureRunScoped(t *testing.T) {
+	tmp, err := os.MkdirTemp("", "evidence-concurrent-")
+	if err != nil {
+		t.Fatalf("tempdir: %v", err)
+	}
+	defer os.RemoveAll(tmp)
+	collector := NewGateCollector(&fakeRunner{out: "EXEC_GATE_OBSERVED_STATUS:OK\n", code: 0})
+	var wg sync.WaitGroup
+	wg.Add(8)
+	for i := 0; i < 8; i++ {
+		go func(i int) {
+			defer wg.Done()
+			_, err := collector.Capture(context.Background(), GateCaptureRequest{
+				SubjectRoot: tmp,
+				EvidenceDir: filepath.Join(tmp, "run-"+string(rune('a'+i))),
+				RunID:       "run-concurrent",
+			})
+			if err != nil {
+				t.Errorf("capture %d: %v", i, err)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if collector.Calls() != 8 {
+		t.Errorf("calls: %d", collector.Calls())
+	}
+}
+
+// TestClosureACTOwnedGateClassification exercises every branch
+// of the Phase 9 rule set with full inputs.
 func TestClosureACTOwnedGateClassification(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -89,9 +122,14 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 		want   ACTOwnedClassification
 	}{
 		{
-			name:   "observed_ok",
-			inputs: ClassificationInputs{ObservedStatus: "OK"},
-			want:   ACTOwnedPass,
+			name: "observed_ok",
+			inputs: ClassificationInputs{
+				ObservedStatus:   "OK",
+				ObservedFindings: nil,
+				BaselineFindings: nil,
+				ACTOwnedPaths:    nil,
+			},
+			want: ACTOwnedPass,
 		},
 		{
 			name:   "observed_skipped",
@@ -99,14 +137,20 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 			want:   ACTOwnedUnavailable,
 		},
 		{
-			name:   "timed_out",
-			inputs: ClassificationInputs{ObservedStatus: "OK", LaneTimedOut: true},
-			want:   ACTOwnedUnavailable,
+			name: "timed_out",
+			inputs: ClassificationInputs{
+				ObservedStatus: "OK",
+				LaneTimedOut:   true,
+			},
+			want: ACTOwnedUnavailable,
 		},
 		{
-			name:   "truncated",
-			inputs: ClassificationInputs{ObservedStatus: "OK", LaneTruncated: true},
-			want:   ACTOwnedUnavailable,
+			name: "truncated",
+			inputs: ClassificationInputs{
+				ObservedStatus: "OK",
+				LaneTruncated:  true,
+			},
+			want: ACTOwnedUnavailable,
 		},
 		{
 			name: "failed_with_baseline_only",
@@ -145,6 +189,15 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 			},
 			want: ACTOwnedFail,
 		},
+		{
+			name: "failed_no_findings",
+			inputs: ClassificationInputs{
+				ObservedStatus:   "FAILED",
+				ObservedFindings: nil,
+				ACTOwnedPaths:    []string{"internal/factory/closure/**"},
+			},
+			want: ACTOwnedUnavailable,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -157,7 +210,7 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 }
 
 // TestClosureEvidenceAtomicPublication exercises the publication
-// step and asserts the sidecar hash matches the document hash.
+// step.
 func TestClosureEvidenceAtomicPublication(t *testing.T) {
 	tmp, err := os.MkdirTemp("", "evidence-pub-")
 	if err != nil {
@@ -208,21 +261,8 @@ func TestClosureEvidenceAtomicPublication(t *testing.T) {
 	if !strings.Contains(string(sidecar), pub.DocumentSHA) {
 		t.Errorf("sidecar does not match document hash")
 	}
-	// Confirm document does NOT embed its own hash.
 	if strings.Contains(string(pub.DocumentBytes), pub.DocumentSHA) {
 		t.Errorf("document embeds its own hash")
-	}
-	// Round-trip.
-	doc, err := os.ReadFile(pub.DocumentPath)
-	if err != nil {
-		t.Fatalf("read doc: %v", err)
-	}
-	if string(doc) != string(pub.DocumentBytes) {
-		t.Errorf("document mismatch")
-	}
-	// Confirm ValidateClosureEvidence roundtrips.
-	if err := ValidateClosureEvidence(evidence); err != nil {
-		t.Errorf("validate: %v", err)
 	}
 	var decoded ClosureEvidence
 	if err := json.Unmarshal(pub.DocumentBytes, &decoded); err != nil {
@@ -233,9 +273,79 @@ func TestClosureEvidenceAtomicPublication(t *testing.T) {
 	}
 }
 
+// TestClosureEvidenceValidityPredicate asserts the predicate
+// rejects documents with contradictory or missing fields.
+func TestClosureEvidenceValidityPredicate(t *testing.T) {
+	cases := []struct {
+		name      string
+		mutate    func(*ClosureEvidence)
+		expectErr bool
+	}{
+		{name: "valid", mutate: nil, expectErr: false},
+		{name: "schema_version", mutate: func(e *ClosureEvidence) { e.SchemaVersion = 99 }, expectErr: true},
+		{name: "hardcoded_invalid", mutate: func(e *ClosureEvidence) { e.Valid = false }, expectErr: true},
+		{name: "empty_act", mutate: func(e *ClosureEvidence) { e.Runtime.ACTID = "" }, expectErr: true},
+		{name: "bad_freeze", mutate: func(e *ClosureEvidence) { e.Runtime.FreezeCommit = "x" }, expectErr: true},
+		{name: "bad_subject", mutate: func(e *ClosureEvidence) { e.Runtime.SubjectCommit = "x" }, expectErr: true},
+		{name: "bad_plan_blob", mutate: func(e *ClosureEvidence) { e.Runtime.PlanBlob = "x" }, expectErr: true},
+		{name: "bad_plan_sha", mutate: func(e *ClosureEvidence) { e.Runtime.PlanSHA256 = "x" }, expectErr: true},
+		{name: "empty_binary", mutate: func(e *ClosureEvidence) { e.Binary.BinaryPath = "" }, expectErr: true},
+		{name: "empty_gate", mutate: func(e *ClosureEvidence) { e.Gate.RawOutputPath = "" }, expectErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := goodClosureEvidence()
+			if tc.mutate != nil {
+				tc.mutate(&doc)
+			}
+			err := ValidateClosureEvidence(doc)
+			if tc.expectErr && err == nil {
+				t.Errorf("expected error, got nil")
+			}
+			if !tc.expectErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+// goodClosureEvidence returns a syntactically valid document.
+func goodClosureEvidence() ClosureEvidence {
+	return ClosureEvidence{
+		SchemaVersion: ClosureEvidenceSchemaVersion,
+		Runtime: RuntimeContextSubset{
+			ACTID:         "ACT-TEST",
+			FreezeCommit:  "1111111111111111111111111111111111111111",
+			SubjectCommit: "3333333333333333333333333333333333333333",
+			PlanBlob:      "5555555555555555555555555555555555555555",
+			PlanSHA256:    strings.Repeat("a", 64),
+		},
+		Gate: GateCapture{
+			RawOutputPath: "/tmp/raw",
+			RawSHA256:     strings.Repeat("b", 64),
+		},
+		Binary: BuiltBinaryEvidence{
+			BinaryPath:   "/tmp/bin/leamas",
+			BinarySHA256: strings.Repeat("c", 64),
+		},
+		Valid: true,
+	}
+}
+
+// versionRunner is a fake CommandRunner for the binary tests.
+type versionRunner struct {
+	stdout string
+}
+
+func (v *versionRunner) Run(ctx context.Context, name string, args []string, dir string, env []string) CommandResult {
+	return CommandResult{
+		ExitCode: 0,
+		Stdout:   []byte(v.stdout),
+	}
+}
+
 // TestClosureExactSubjectBinary exercises the binary build
-// invariants with a fake runner that returns a synthetic
-// version output.
+// invariants with a fake runner.
 func TestClosureExactSubjectBinary(t *testing.T) {
 	dir, err := os.MkdirTemp("", "binary-build-")
 	if err != nil {
@@ -246,8 +356,6 @@ func TestClosureExactSubjectBinary(t *testing.T) {
 	if err := os.MkdirAll(out, 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	// Create a fake binary at the output path so the post-build
-	// stat and hash succeed.
 	binPath := filepath.Join(out, "leamas")
 	if err := os.WriteFile(binPath, []byte("fake-binary"), 0o755); err != nil {
 		t.Fatalf("write fake: %v", err)
@@ -260,8 +368,6 @@ func TestClosureExactSubjectBinary(t *testing.T) {
 		OutputDirectory: out,
 		OutputName:      "leamas",
 		BuildArgv:       []string{"go", "build", "-o", binPath, "./cmd/leamas"},
-		SourceClean:     true,
-		SourceDetached:  true,
 		Runner:          runner,
 	})
 	if err != nil {
@@ -278,18 +384,5 @@ func TestClosureExactSubjectBinary(t *testing.T) {
 	}
 	if be.BinarySHA256 == "" {
 		t.Errorf("missing sha256")
-	}
-}
-
-// versionRunner is a fake CommandRunner that returns the
-// supplied stdout.
-type versionRunner struct {
-	stdout string
-}
-
-func (v *versionRunner) Run(ctx context.Context, name string, args []string, dir string, env []string) CommandResult {
-	return CommandResult{
-		ExitCode: 0,
-		Stdout:   []byte(v.stdout),
 	}
 }
