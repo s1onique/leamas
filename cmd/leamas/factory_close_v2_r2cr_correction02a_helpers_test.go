@@ -18,6 +18,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -116,4 +117,32 @@ func isHeadDetached(worktreePath string) bool {
 	cmd := exec.Command("git", "symbolic-ref", "--quiet", "--short", "HEAD")
 	cmd.Dir = worktreePath
 	return cmd.Run() != nil
+}
+
+// buildSFWithPlan creates the S and F commits in the
+// supplied repository using a caller-specified plan
+// path. The plan contract is the same one
+// buildCorrection01SF uses; only the path differs so
+// multiple dogfood harnesses can co-exist in the same
+// test binary.
+func buildSFWithPlan(t *testing.T, repo, _ string, planPath string) (subject, subjectTree, freeze, freezeTree string) {
+	t.Helper()
+	mustWriteFile(t, filepath.Join(repo, "subject-only.txt"), "subject\n")
+	runR2CRGit(t, repo, "add", "subject-only.txt")
+	runR2CRGit(t, repo, "commit", "-m", "subject")
+	subject = runR2CRGit(t, repo, "rev-parse", "HEAD")
+	subjectTree = runR2CRGit(t, repo, "rev-parse", subject+"^{tree}")
+
+	planDir := filepath.Join(repo, filepath.Dir(planPath))
+	if err := os.MkdirAll(planDir, 0o755); err != nil {
+		t.Fatalf("mkdir plan dir: %v", err)
+	}
+	planJSON := buildCorrection01Plan(subject, subjectTree)
+	mustWriteFile(t, filepath.Join(repo, planPath), planJSON)
+	mustWriteFile(t, filepath.Join(repo, "freeze-only.txt"), "freeze-only\n")
+	runR2CRGit(t, repo, "add", ".")
+	runR2CRGit(t, repo, "commit", "-m", "freeze: add plan")
+	freeze = runR2CRGit(t, repo, "rev-parse", "HEAD")
+	freezeTree = runR2CRGit(t, repo, "rev-parse", freeze+"^{tree}")
+	return subject, subjectTree, freeze, freezeTree
 }

@@ -103,7 +103,7 @@ func TestClosureCLIV2VerifierMacHandoffCorrection02A(t *testing.T) {
 
 	// 6. Build the hermetic S < F < C repository.
 	repository := initCorrection01Repo(t)
-	subject, subjectTree, freeze, freezeTree := buildCorrection01SF(t, repository, leamasRepoRoot)
+	subject, subjectTree, freeze, freezeTree := buildSFWithPlan(t, repository, leamasRepoRoot, correction02aPlanPath)
 
 	// 7. Run the production v2 runner with full bounded
 	//    subprocess assertion.
