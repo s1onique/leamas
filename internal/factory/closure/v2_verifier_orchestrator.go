@@ -247,11 +247,37 @@ func (o V2VerifierOrchestrator) Run(
 	// keyed on the resolved closure commit so a substituted
 	// C never desynchronises the tag wiring.
 	var tagAssertion V2VerifierTagAssertion
+	var tagMetadataObs V2ClosureTagMetadataObservation
 	if runReq.Request.HasExpectedTag() {
 		tagAssertion = ResolveV2ClosureTagAssertion(ctx, authority, runReq.Request.ExpectedTagName, topologyFacts.Topology.ClosureCommit)
+		// Phase I-2 (CORRECTION02C): when --expected-tag is
+		// supplied, read the annotated tag-object bytes and
+		// bind the metadata to the externally supplied
+		// S/F/C/P/M. The observation is recorded even when
+		// the structural assertion rejects the tag, so the
+		// caller sees a stable shape regardless of branch.
+		if tagAssertion.Annotated && tagAssertion.Found {
+			tagMetadataObs = ResolveV2ClosureTagMetadataObservation(
+				ctx,
+				authority,
+				tagAssertion.Target,
+				runReq.Request.ExpectedTagName,
+				runReq.Request.SubjectCommit,
+				runReq.Request.FreezeCommit,
+				runReq.Request.ClosureCommit,
+				runReq.Request.PlanPath,
+				runReq.Request.ManifestPath,
+				runReq.Request.ClosureProtocolVersion,
+				runReq.Request.PlanContractVersion,
+			)
+		}
 	}
 
-	// Phase J: assemble verdict.
+	// Phase J: assemble verdict. The tag-metadata observation
+	// only contributes diagnostics when the caller supplied
+	// --expected-tag; otherwise the observation is the zero
+	// value and contributes nothing.
+	combinedDiags := combineDiagnostics(topologyFacts, frozenPlan, committedManifest, optionalAssertion, tagAssertion, manifestFacts, tagMetadataObs)
 	result.Verification = assembleVerification(
 		runReq.Request,
 		topologyFacts,
@@ -260,7 +286,7 @@ func (o V2VerifierOrchestrator) Run(
 		optionalAssertion,
 		tagAssertion,
 		manifestFacts,
-		combineDiagnostics(topologyFacts, frozenPlan, committedManifest, optionalAssertion, tagAssertion, manifestFacts),
+		combinedDiags,
 	)
 	result.StateAfter, result.StateDiags = captureAfterIfNeeded(ctx, authority, runReq.CaptureCallerState, result.StateBefore)
 	if len(result.StateDiags) > 0 {
@@ -299,6 +325,7 @@ func combineDiagnostics(
 	optionalAssertion V2OptionalManifestAssertion,
 	tagAssertion V2VerifierTagAssertion,
 	manifestFacts V2ManifestIdentityFacts,
+	tagMetadata V2ClosureTagMetadataObservation,
 ) V2VerifierDiagnostics {
 	combined := V2VerifierDiagnostics{}
 	combined = append(combined, topology.Diagnostics...)
@@ -309,6 +336,7 @@ func combineDiagnostics(
 	}
 	if tagAssertion.Expected {
 		combined = append(combined, tagAssertion.Diagnostics...)
+		combined = append(combined, tagMetadata.Diagnostics...)
 	}
 	combined = append(combined, manifestFacts.Diagnostics...)
 	return combined
@@ -364,6 +392,12 @@ func buildInvalidResultForRequest(req V2ClosureVerifyRequest, requestDiags V2Ver
 // optional mutable-manifest assertion is recorded as
 // informational evidence only — a mismatch never overrides
 // the C:M binding.
+//
+// The metadata observation drives the verdict through the
+// combinedDiags slice: when --expected-tag is supplied the
+// orchestrator adds the metadata diagnostics to the
+// combined slice, and a non-empty metadata-mismatch
+// diagnostic short-circuits tagValid.
 func assembleVerification(
 	req V2ClosureVerifyRequest,
 	topology V2ClosureTopologyFacts,
@@ -379,8 +413,10 @@ func assembleVerification(
 	if tagAssertion.Expected {
 		tagValid = tagAssertion.Found && tagAssertion.Annotated &&
 			tagAssertion.Target == topology.Topology.ClosureCommit &&
-			len(tagAssertion.Diagnostics) == 0
+			len(tagAssertion.Diagnostics) == 0 &&
+			!combinedDiags.HasCode(V2VerifierClosureTagMetadataMismatch)
 	}
+	_ = optionalAssertion // Optional assertion never gates verdict.
 
 	topologyValid := topologyAccepted(topology) && len(frozenPlan.Diagnostics) == 0
 	manifestValid := manifestFacts.ManifestIdentityValid &&
@@ -388,8 +424,6 @@ func assembleVerification(
 		len(committedManifest.Diagnostics) == 0 &&
 		tagValid
 	resultSetValid := manifestFacts.BijectionValid && manifestFacts.SuccessValid
-
-	_ = optionalAssertion // Optional assertion never gates verdict.
 
 	build := V2VerificationBuild{
 		ClosureProtocolVersion: req.ClosureProtocolVersion,

@@ -136,6 +136,19 @@ const (
 	V2VerifierClosureTagTargetMismatch V2VerifierCode = "closure_tag_target_mismatch"
 	V2VerifierClosureTagUnreadable     V2VerifierCode = "closure_tag_unreadable"
 
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02C
+	// adds the annotated-tag metadata contract. The metadata
+	// block is read from raw tag-object bytes; the diagnostic
+	// taxonomy below covers missing, duplicate, unknown,
+	// malformed, and mismatch failures separately so external
+	// tooling can route the rejection without re-parsing the
+	// diagnostic message.
+	V2VerifierClosureTagMetadataMissing   V2VerifierCode = "closure_tag_metadata_missing"
+	V2VerifierClosureTagMetadataDuplicate V2VerifierCode = "closure_tag_metadata_duplicate"
+	V2VerifierClosureTagMetadataUnknown   V2VerifierCode = "closure_tag_metadata_unknown"
+	V2VerifierClosureTagMetadataMalformed V2VerifierCode = "closure_tag_metadata_malformed"
+	V2VerifierClosureTagMetadataMismatch  V2VerifierCode = "closure_tag_metadata_mismatch"
+
 	// State-capture codes. Emitted only when the optional
 	// read-only-state-capture phase fails to classify a
 	// caller-state observation (timeout, output overflow,
@@ -166,8 +179,12 @@ const (
 	// closure protocol metadata contract is authoritative
 	// (the preferred contract), any deviation between the
 	// tagged metadata fields and the supplied request is
-	// rejected with this code.
-	V2VerifierClosureTagMetadataMismatch V2VerifierCode = "closure_tag_metadata_mismatch"
+	// rejected with this code. ACT-CORRECTION02C keeps the
+	// same code value but moves the constant to the
+	// dedicated CORRECTION02C metadata block above so the
+	// duplicate-cli-flag and output-publication families
+	// remain at the bottom of the const block.
+	//
 	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION01
 	// adds the output-publication failure code. The atomic
 	// writer surfaces a typed diagnostic when --output

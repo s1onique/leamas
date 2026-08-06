@@ -25,6 +25,15 @@ import (
 // is the canonical CLI flag without the leading "--".
 // The parser rejects repeated occurrences of any name in
 // the list (including repeats with the same value).
+//
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02C
+// expanded the registry to every public flag of
+// `factory close verify-v2-authority`, including the three
+// boolean flags --json, --capture-caller-state, --help.
+// Boolean duplicates are caught here rather than relying
+// on the stdlib `flag` package which would silently accept
+// the second --flag occurrence as a positional-argument
+// spell or skip it entirely.
 var v2VerifierScalarFlagNames = []string{
 	"repository",
 	"protocol-version",
@@ -37,6 +46,9 @@ var v2VerifierScalarFlagNames = []string{
 	"working-manifest-assertion",
 	"expected-tag",
 	"output",
+	"json",
+	"capture-caller-state",
+	"help",
 }
 
 // detectDuplicateV2VerifierFlags scans args for repeated

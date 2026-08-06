@@ -32,6 +32,7 @@ package closure
 
 import (
 	"context"
+	"fmt"
 	"strings"
 )
 
@@ -182,14 +183,24 @@ func ResolveV2ClosureTagAssertion(
 }
 
 // authorityGitValue is the transport shape returned by the
-// private helpers below. The struct keeps the three fields
-// ACT 4 needs (stdout bytes, stderr bytes, exit code) without
-// leaking the package-private gitCommandResult type across
-// the helper boundary.
+// private helpers below. The struct keeps the four fields
+// ACT 4 needs (stdout bytes, stderr bytes, exit code, err)
+// without leaking the package-private gitCommandResult
+// type across the helper boundary.
 type authorityGitValue struct {
 	stdout   []byte
 	stderr   []byte
 	exitCode int
+	err      error
+}
+
+// errAsError reports the supplied command error, returning
+// nil when no error was recorded. The helper exists so the
+// public read paths do not depend on the package-private
+// gitCommandResult type while still distinguishing spawn
+// failure from non-zero exit code.
+func (v authorityGitValue) errAsError() error {
+	return v.err
 }
 
 // authorityRunGitRevParse runs `git rev-parse` against the
@@ -205,6 +216,19 @@ func authorityRunGitRevParse(ctx context.Context, authority V2ClosureGitAuthorit
 // the bound authority.
 func authorityRunGitCatFileT(ctx context.Context, authority V2ClosureGitAuthority, oid string) authorityGitValue {
 	return authorityRunGit(ctx, authority, "cat-file", "-t", oid)
+}
+
+// authorityRunGitCatFileTag runs `git cat-file tag <oid>`
+// against the bound authority. The helper is the single
+// read path for raw annotated-tag object bytes used by
+// the metadata parser (Phase 5 of
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02C).
+func authorityRunGitCatFileTag(ctx context.Context, authority V2ClosureGitAuthority, oid string) ([]byte, error) {
+	result := authorityRunGit(ctx, authority, "cat-file", "tag", oid)
+	if result.exitCode != 0 || result.errAsError() != nil {
+		return nil, fmt.Errorf("git cat-file tag %s failed", oid)
+	}
+	return append([]byte(nil), result.stdout...), nil
 }
 
 // authorityRunGit is the single helper used by both

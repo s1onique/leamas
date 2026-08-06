@@ -121,7 +121,9 @@ const v2VerifierUsage = `Usage: leamas factory close verify-v2-authority [flags]
 
 Verify the immutable authority of a Closure Protocol v2 closure
 transaction. The verifier is read-only and never infers C from HEAD,
-M from convention, or P from the working tree.
+M from convention, or P from the working tree. The expected tag, when
+supplied, is read from raw annotated-tag-object bytes and bound to
+S/F/C/P/M via the Leamas-Closure-Protocol-Version trailer block.
 
 Authority OIDs required:
   --subject  S  the execution subject commit (resolved via F^{commit})
@@ -141,6 +143,19 @@ Verifier never requires:
   - HEAD to point at C
   - the working tree to be clean
 
+Required metadata trailer block (when --expected-tag is set):
+  Leamas-Closure-Protocol-Version: 2
+  Leamas-Plan-Contract-Version: 1
+  Leamas-Subject-Commit:          <S>
+  Leamas-Freeze-Commit:           <F>
+  Leamas-Closure-Commit:          <C>
+  Leamas-Plan-Path:               <P>
+  Leamas-Manifest-Path:           <M>
+  Each key MUST appear exactly once. Abbreviated OIDs and unknown
+  Leamas-* keys are rejected with a typed diagnostic. The trailer
+  block lives inside the annotated-tag-object body; lightweight tags
+  are rejected before the trailers are read.
+
 Options:
   --repository           path to a Git repository root (required)
   --protocol-version 2   closure protocol version (only 2 is accepted)
@@ -157,7 +172,8 @@ Options:
                          a mismatch NEVER replaces the C:M binding.
   --expected-tag <name>  optional annotated-tag name. When set the
                          tag must exist, be annotated (not lightweight),
-                         and dereference to C exactly.
+                         dereference to C exactly, and carry the
+                         Leamas-* metadata trailer block above.
   --output <path>        optional path for the structured text summary;
                          when absent the summary is written to stdout.
                          The path MUST live outside the target
@@ -167,12 +183,21 @@ Options:
   --help                 print this help and exit 0
 
 Exit codes:
-  0  verifier reported valid=true
-  2  usage error (unknown flag, missing flag, duplicate flag, bad output)
-  3  verifier failure (topology / manifest / tag / state mismatch)
-  4  observer failure (git authority unavailable)
+  0  verifier reported valid=true (and --output, if set, was published)
+  2  usage error: unknown flag, missing flag, duplicate flag, unsafe
+     output path, unsupported --protocol-version, unsupported
+     --plan-contract-version, unreadable --working-manifest-assertion
+  3  verifier rejection: invalid topology, identity mismatch, frozen-
+     plan mismatch, manifest mismatch, result-bijection failure,
+     hidden unsuccessful result, missing/lightweight tag, tag target
+     mismatch, tag metadata missing/duplicate/unknown/malformed/
+     mismatch, unsupported object format (sha256 repository)
+  4  observer failure: repository unavailable, git spawn / timeout /
+     cancellation / output overflow, object-format observation
+     unavailable, tag object unreadable, caller-state capture
+     unavailable, worktree-inventory unavailable, output publication
+     not_published or directory-sync failure
 `
-
 
 // runFactoryCloseVerifyV2Authority is the CLI entry point
 // for `factory close verify-v2-authority`.
