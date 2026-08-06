@@ -364,3 +364,12 @@ func (d V2VerifierDiagnostic) withObserved(value string) V2VerifierDiagnostic {
 	d.Observed = value
 	return d
 }
+
+// withExpected attaches the expected value to a diagnostic.
+// Used by comparison diagnostics where the verifier reports
+// asserted vs actual (for example the optional manifest
+// assertion mismatch path).
+func (d V2VerifierDiagnostic) withExpected(value string) V2VerifierDiagnostic {
+	d.Expected = value
+	return d
+}

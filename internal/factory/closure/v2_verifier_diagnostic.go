@@ -69,6 +69,12 @@ const (
 	V2VerifierClosureManifestReadFailed      V2VerifierCode = "closure_manifest_read_failed"
 	V2VerifierClosureManifestInvalidJSON     V2VerifierCode = "closure_manifest_invalid_json"
 	V2VerifierClosureManifestContractInvalid V2VerifierCode = "closure_manifest_contract_invalid"
+	// Closure-manifest assertion mismatch. Emitted by the
+	// optional mutable-manifest assertion path when the
+	// supplied bytes do not match C:M bytes. The assertion
+	// is non-authoritative: a mismatch NEVER replaces the
+	// C:M binding.
+	V2VerifierClosureManifestAssertionMismatch V2VerifierCode = "closure_manifest_assertion_mismatch"
 
 	// Object-format policy codes. Reuses the runner's
 	// existing V2CodeObjectFormatUnavailable /
