@@ -1,0 +1,76 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02C-R1",
+  "artifacts": [],
+  "baseline": {
+    "commit_oid": "5ba0cf0cfcb14e133ea4425c930a2badade0e0fd",
+    "tree_oid": "5392ad67261d55405fbff4f84c1d959c6fbbcd51"
+  },
+  "checks": [
+    {
+      "argv": ["go", "test", "-count=1", "-run", "TestV2Verifier", "./cmd/leamas/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-focused-tests",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "test", "-count=1", "-run", "TestV2Verifier", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-closure-focused-tests",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "test", "-count=1", "./cmd/leamas/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-package-tests",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "vet", "./cmd/leamas/...", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-vet",
+      "mode": "run",
+      "timeout_seconds": 180,
+      "working_directory": "."
+    },
+    {
+      "argv": ["gofmt", "-l", "cmd/leamas/factory_close_v2_verifier_cli.go", "cmd/leamas/factory_close_v2_verifier_cli_flags.go", "cmd/leamas/factory_close_v2_verifier_cli_errorsas.go", "cmd/leamas/factory_close_v2_verifier_cli_helpers.go", "cmd/leamas/factory_close_v2_verifier_cli_writers.go", "cmd/leamas/factory_close_v2_verifier_duplicate_test.go", "cmd/leamas/factory_close_v2_verifier_exit_matrix_test.go", "cmd/leamas/factory_close_v2_verifier_help_contract_test.go", "cmd/leamas/factory_close_v2_verifier_public_negative_test.go", "internal/factory/closure/v2_verifier_orchestrator.go", "internal/factory/closure/v2_verifier_tag.go", "internal/factory/closure/v2_verifier_tag_metadata.go", "internal/factory/closure/v2_verifier_tag_metadata_parse_trailers.go"],
+      "environment": {},
+      "id": "v2-verifier-gofmt",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["git", "diff", "--check"],
+      "environment": {},
+      "id": "v2-verifier-diff-check",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "build", "-trimpath", "-o", "/tmp/leamas-v2verifier-r1", "./cmd/leamas"],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-static-build",
+      "mode": "run",
+      "timeout_seconds": 120,
+      "working_directory": "."
+    }
+  ],
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  },
+  "contract_version": 1
+}
