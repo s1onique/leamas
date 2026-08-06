@@ -91,10 +91,25 @@ type v2VerifierParsedInput struct {
 }
 
 // v2VerifierJSONEnvelope is the deterministic JSON document
-// rendered on stdout for --json. The struct always includes
-// the underlying verification result plus a stable
-// diagnostics slice; success and failure share the same
-// envelope so downstream JSON parsers need a single schema.
+// rendered on stdout for --json and on disk through
+// --output. The struct always includes the underlying
+// verification result plus a stable diagnostics slice;
+// success and failure share the same envelope so downstream
+// JSON parsers need a single schema.
+//
+// The publication state (published, published but directory
+// fsync failed, not published) is NOT included in the JSON
+// envelope: the same bytes cannot both DESCRIBE and PRODUCE
+// the publication atomically. The CLI instead surfaces the
+// publication state through:
+//   - the exit code (0 = published, 4 = published_but_*_failed
+//     or not_published)
+//   - a single stderr line in the format:
+//     publication_state=<state>
+//     prefixed with `leamas: ` so consumers can grep it.
+//
+// Result: stdout JSON and --output JSON are always byte-
+// identical (apart from the documented trailing-newline rule).
 type v2VerifierJSONEnvelope struct {
 	OK           bool                          `json:"ok"`
 	OutputPath   string                        `json:"output_path,omitempty"`
@@ -350,9 +365,37 @@ func runFactoryCloseVerifyV2Authority(args []string, stdout, stderr io.Writer) i
 		return v2VerifierExitUsage
 	}
 
+	// Inventory worktrees and prepare the publication authority
+	// BEFORE any verifier Git/object observation. The CLI never
+	// publishes on failure paths, so failure here short-circuits
+	// the orchestrator without committing to a verifier result.
+	var prepared *closure.VerifierOutputAuthority
+	if in.OutputPath != "" {
+		inventory, invErr := closure.InventoryRepositoryWorktrees(
+			context.Background(),
+			in.Request.RepositoryRoot,
+			nil,
+		)
+		if invErr != nil {
+			fmt.Fprintf(stderr, "%s: %v\n", command, invErr)
+			return v2VerifierExitObserverBroken
+		}
+		auth, prepErr := closure.PrepareVerifierOutput(
+			in.Request.RepositoryRoot,
+			in.OutputPath,
+			canonicalWorktreesFrom(inventory),
+		)
+		if prepErr != nil {
+			fmt.Fprintf(stderr, "%s: %v\n", command, prepErr)
+			return v2VerifierExitObserverBroken
+		}
+		prepared = auth
+		defer prepared.Close()
+	}
+
 	authority, err := closure.NewV2ClosureGitAuthority(in.Request.RepositoryRoot)
 	if err != nil {
-		return writeV2VerifierFailure(command, stdout, stderr, in.JSONOutput, in.OutputPath, closure.V2RunResult{}, err)
+		return writeV2VerifierFailure(command, stdout, stderr, in.JSONOutput, prepared, in.OutputPath, closure.V2RunResult{}, err)
 	}
 
 	orchestrator := closure.NewV2VerifierOrchestrator()
@@ -363,9 +406,22 @@ func runFactoryCloseVerifyV2Authority(args []string, stdout, stderr io.Writer) i
 	runResult := orchestrator.Run(context.Background(), authority, runReq)
 
 	if in.JSONOutput {
-		return writeV2VerifierJSON(command, stdout, stderr, in.OutputPath, runResult)
+		return writeV2VerifierJSON(command, stdout, stderr, prepared, in.OutputPath, runResult)
 	}
-	return writeV2VerifierText(command, stdout, stderr, in.OutputPath, runResult)
+	return writeV2VerifierText(command, stdout, stderr, prepared, in.OutputPath, runResult)
+}
+
+// canonicalWorktreesFrom converts the internal inventory into
+// the public CanonicalWorktree slice expected by
+// PrepareVerifierOutput. The slice is reused verbatim so the
+// CLI never has to canonicalize the inventory twice.
+func canonicalWorktreesFrom(inv closure.RepositoryWorktreeInventory) []closure.CanonicalWorktree {
+	roots := inv.RootsView()
+	out := make([]closure.CanonicalWorktree, len(roots))
+	for i, r := range roots {
+		out[i] = closure.CanonicalWorktree{Path: r}
+	}
+	return out
 }
 
 // isV2VerifierOutputPathError reports whether err
@@ -385,9 +441,15 @@ func isV2VerifierOutputPathError(err error) bool {
 
 // writeV2VerifierText renders the verifier outcome in the
 // stable text contract. On success the summary is published
-// via the atomic writer. On failure the optional --output
-// file is NEVER written.
-func writeV2VerifierText(command string, stdout, stderr io.Writer, outputPath string, run closure.V2RunResult) int {
+// via the prepared authority (or, when no --output was
+// supplied, written to stdout). On failure the optional
+// --output file is NEVER written.
+//
+// The CLI's bytes-on-disk policy is: a single trailing newline
+// is appended to whichever path publishes the bytes (file or
+// stdout). When --output is set, the file path is bytes-identical
+// to what would have been emitted to stdout (summary + "\n").
+func writeV2VerifierText(command string, stdout, stderr io.Writer, prepared *closure.VerifierOutputAuthority, outputPath string, run closure.V2RunResult) int {
 	if !run.Verification.Valid {
 		diags := run.Verification.Diagnostics
 		header := fmt.Sprintf("%s: verifier rejected closure authority", command)
@@ -413,21 +475,52 @@ func writeV2VerifierText(command string, stdout, stderr io.Writer, outputPath st
 		run.Verification.ManifestSHA256,
 		run.Verification.PlanSHA256,
 	)
-	if outputPath != "" {
-		if err := closure.WriteFileAtomic(outputPath, []byte(summary+"\n"), 0o644); err != nil {
-			fmt.Fprintf(stderr, "%s: --output %s write failed: %v\n", command, outputPath, err)
-			return v2VerifierExitVerifier
+	bytes := []byte(summary + "\n")
+	if prepared != nil {
+		res := prepared.Publish(bytes)
+		if res.State == closure.PublicationNotPublished {
+			fmt.Fprintf(stderr, "%s: --output %s write failed: %v\n", command, outputPath, res.Err)
+			return v2VerifierExitObserverBroken
 		}
-	} else {
-		fmt.Fprintln(stdout, summary)
+		stdout.Write(bytes)
+		// Stable CLI contract: published_but_directory_sync_failed
+		// is an observer-class outcome and maps to exit 4. The
+		// text-mode path does not have a JSON envelope so the
+		// surface communicates durability state via stderr alone.
+		if res.State == closure.PublicationPublishedButDirectorySyncFailed {
+			fmt.Fprintf(stderr, "%s: --output %s published but directory fsync failed: %v\n",
+				command, outputPath, res.Err)
+			return v2VerifierExitObserverBroken
+		}
+		return v2VerifierExitSuccess
 	}
+	stdout.Write(bytes)
 	return v2VerifierExitSuccess
 }
 
 // writeV2VerifierJSON renders the verifier outcome as a
-// single deterministic JSON document on stdout. The output
-// envelope is stable regardless of success or failure.
-func writeV2VerifierJSON(command string, stdout, stderr io.Writer, outputPath string, run closure.V2RunResult) int {
+// single deterministic JSON document. The output envelope
+// is stable regardless of success or failure. The CLI
+// publishes the JSON EXACTLY ONCE through the prepared
+// authority (or writes it to stdout if --output is unset)
+// so the published file and the stdout document are
+// byte-identical.
+//
+// Documented newline rule: the JSON envelope always ends
+// with a single trailing '\n'. The CLI does NOT emit a
+// trailing newline beyond that single character.
+//
+// Publication durability is signaled via:
+//   - exit code 0 (published) vs 4 (published_but_*_failed)
+//   - a single stderr line in the format:
+//     <command>: publication_state=<state>
+//
+// The JSON envelope itself intentionally does NOT include
+// the publication state: the same bytes cannot both DESCRIBE
+// and PRODUCE the publication atomically. Consumers parse the
+// exit code for the durable verdict; the stderr line is a
+// stable, parseable human-readable trace.
+func writeV2VerifierJSON(command string, stdout, stderr io.Writer, prepared *closure.VerifierOutputAuthority, outputPath string, run closure.V2RunResult) int {
 	envelope := v2VerifierJSONEnvelope{
 		OK:           run.Verification.Valid,
 		OutputPath:   outputPath,
@@ -442,16 +535,27 @@ func writeV2VerifierJSON(command string, stdout, stderr io.Writer, outputPath st
 		return v2VerifierExitObserverBroken
 	}
 	stdoutBytes := append(bytes, '\n')
-	if outputPath != "" {
-		if err := closure.WriteFileAtomic(outputPath, stdoutBytes, 0o644); err != nil {
-			fmt.Fprintf(stderr, "%s: --output %s write failed: %v\n", command, outputPath, err)
+	if prepared != nil {
+		res := prepared.Publish(stdoutBytes)
+		if res.State == closure.PublicationNotPublished {
+			fmt.Fprintf(stderr, "%s: --output %s write failed: %v\n", command, outputPath, res.Err)
+			// Do NOT emit the JSON envelope to stdout: the
+			// publication was supposed to install it on disk and
+			// failed. Emit a typed failure instead.
+			fmt.Fprintf(stderr, "%s: publication_state=not_published\n", command)
 			return v2VerifierExitObserverBroken
 		}
 		stdout.Write(stdoutBytes)
-	} else {
-		stdout.Write(stdoutBytes)
+		if res.State == closure.PublicationPublishedButDirectorySyncFailed {
+			fmt.Fprintf(stderr, "%s: --output %s published but directory fsync failed: %v\n",
+				command, outputPath, res.Err)
+			fmt.Fprintf(stderr, "%s: publication_state=published_but_directory_sync_failed\n", command)
+			return v2VerifierExitObserverBroken
+		}
+		fmt.Fprintf(stderr, "%s: publication_state=published\n", command)
+		return v2VerifierExitSuccess
 	}
-
+	stdout.Write(stdoutBytes)
 	if !run.Verification.Valid {
 		return v2VerifierExitVerifier
 	}
@@ -487,10 +591,18 @@ func classifyV2VerifierFailure(diags closure.V2VerifierDiagnostics) string {
 // path. The function never emits an empty {ok:false}
 // envelope: even when no diagnostics are available the
 // failure_class is set to "observer".
+//
+// The prepared authority parameter accepts the publication
+// handle acquired by runFactoryCloseVerifyV2Authority before
+// the orchestrator ran; on the failure path the CLI MUST NOT
+// publish to --output, so the authority is recorded in
+// stderr for diagnostic clarity but never written. The
+// caller remains responsible for closing the authority.
 func writeV2VerifierFailure(
 	command string,
 	stdout, stderr io.Writer,
 	jsonOutput bool,
+	prepared *closure.VerifierOutputAuthority,
 	outputPath string,
 	_ closure.V2RunResult,
 	err error,
@@ -512,6 +624,9 @@ func writeV2VerifierFailure(
 	}
 	if envelope.FailureClass == "" {
 		envelope.FailureClass = "observer"
+	}
+	if prepared != nil && outputPath != "" {
+		fmt.Fprintf(stderr, "%s: --output %s suppressed on orchestrator failure\n", command, outputPath)
 	}
 	if jsonOutput {
 		bytes, mErr := json.MarshalIndent(envelope, "", "  ")

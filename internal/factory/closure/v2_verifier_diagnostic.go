@@ -180,6 +180,15 @@ const (
 	// or "verifier"; the observer branch is reserved for
 	// broken Git authority.
 	V2VerifierObserverClass V2VerifierCode = "observer_class"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02B
+	// adds the worktree-inventory unavailable code. Emitted when
+	// the linked-worktree inventory authority cannot observe the
+	// repository through `git worktree list --porcelain -z`
+	// (spawn failure, timeout, cancellation, output overflow,
+	// malformed porcelain, empty inventory, or canonicalization
+	// failure). The code is paired with stable text so downstream
+	// tooling can refuse the invocation without parsing message.
+	V2VerifierWorktreeInventoryUnavailable V2VerifierCode = "worktree_inventory_unavailable"
 )
 
 // V2VerifierDiagnostic is the structured diagnostic record
