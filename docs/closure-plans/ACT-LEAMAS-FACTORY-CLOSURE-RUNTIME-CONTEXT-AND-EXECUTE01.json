@@ -1,0 +1,124 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01",
+  "baseline": {
+    "commit_oid": "8c7183bad249ebd013bc3c39db71edd4c79e1a2d",
+    "tree_oid": "PLACEHOLDER"
+  },
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "checks": [
+    {
+      "id": "runtime-context-matrix",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureRuntimeContextMatrix",
+        "./internal/factory/closure/..."
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "placeholder-matrix",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosurePlaceholderMatrix",
+        "./internal/factory/closure/..."
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "single-gate-capture",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureSingleGateCapture",
+        "./internal/factory/closure/evidence/..."
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "act-owned-classification",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureACTOwnedGateClassification",
+        "./internal/factory/closure/evidence/..."
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "exact-subject-binary",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureExactSubjectBinary",
+        "./internal/factory/closure/evidence/..."
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "evidence-publication",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureEvidenceAtomicPublication",
+        "./internal/factory/closure/evidence/..."
+      ],
+      "timeout_seconds": 60
+    },
+    {
+      "id": "execute-dry-run",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureExecuteDryRun",
+        "./cmd/leamas/..."
+      ],
+      "timeout_seconds": 120
+    },
+    {
+      "id": "execute-full-lifecycle",
+      "mode": "run",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestClosureExecuteFullLifecycle",
+        "./cmd/leamas/..."
+      ],
+      "timeout_seconds": 120
+    }
+  ],
+  "artifacts": [],
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}

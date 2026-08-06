@@ -45,6 +45,8 @@ func runFactoryClose(args []string, stdout, stderr io.Writer) int {
 		return runFactoryCloseChain(args[1:], stdout, stderr)
 	case "attest":
 		return runFactoryCloseAttest(args[1:], stdout, stderr)
+	case "execute":
+		return RunFactoryCloseExecute(args[1:], stdout, stderr)
 	default:
 		fmt.Fprintf(stderr, "factory close: unknown subcommand %q\n", args[0])
 		printFactoryCloseUsage(stderr)
