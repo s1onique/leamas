@@ -1,0 +1,67 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MANIFEST-RESULTS01",
+  "baseline": {
+    "commit_oid": "819a0098d02ea7b0d8151e170f3140114bae1ca1",
+    "tree_oid": "690c9912fe63d32f3897550a70a632b69c38f050"
+  },
+  "checks": [
+    {
+      "argv": ["go", "test", "-count=1", "-run", "TestV2Verifier", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-focused-tests",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "test", "-count=1", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-package-tests",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "vet", "./..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-vet",
+      "mode": "run",
+      "timeout_seconds": 180,
+      "working_directory": "."
+    },
+    {
+      "argv": ["gofmt", "-l", "internal/factory/closure/v2_verifier_diagnostic.go", "internal/factory/closure/v2_verifier_format.go", "internal/factory/closure/v2_verifier_manifest.go", "internal/factory/closure/v2_verifier_manifest_bijection_test.go", "internal/factory/closure/v2_verifier_manifest_determinism_test.go", "internal/factory/closure/v2_verifier_manifest_helpers_test.go", "internal/factory/closure/v2_verifier_manifest_matrix_test.go", "internal/factory/closure/v2_verifier_request.go", "internal/factory/closure/v2_verifier_result.go", "internal/factory/closure/v2_verifier_topology.go", "internal/factory/closure/v2_verifier_validate.go"],
+      "environment": {},
+      "id": "v2-verifier-gofmt",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["git", "diff", "--check"],
+      "environment": {},
+      "id": "v2-verifier-diff-check",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "build", "-trimpath", "-o", "/tmp/leamas-v2verifier-manifest", "./cmd/leamas"],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "v2-verifier-static-build",
+      "mode": "run",
+      "timeout_seconds": 120,
+      "working_directory": "."
+    }
+  ],
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  },
+  "contract_version": 1
+}
