@@ -16,7 +16,7 @@ package closure
 // keeps the verifier close to the test corpus while
 // preserving the LLM-friendly 400-line threshold.
 
-// R2C-R2 OBJECT-FORMAT POLICY:
+// R2C-R4 OBJECT-FORMAT POLICY:
 //
 // Leamas currently supports only the SHA-1 object format. All
 // hash-shaped fields in the closure manifest must therefore
@@ -28,16 +28,18 @@ package closure
 //   - SHA-256 file digests:    64 lowercase hex chars
 //
 // Future object formats (e.g. SHA-256, sha256d) are out of
-// scope for R2C-R2. The verifier rejects any field whose
+// scope for R2C-R4. The verifier rejects any field whose
 // length does not match these expectations so a repository
 // whose `git rev-parse --show-object-format` is not `sha1`
 // produces a typed diagnostic rather than a silent corruption.
 //
-// The verifier itself never calls `git rev-parse
-// --show-object-format` because the runner does not own the
-// repository state at this layer; instead it requires every
-// caller to pre-confirm the object format matches the
-// expectations below.
+// R2C-R4 enforces the policy in-process: the verifier calls
+// EnforceSHA1ObjectFormat, which in turn calls
+// GitObjectResolver.ObjectFormat, which executes
+// `git rev-parse --show-object-format` in the resolver's
+// bound repository root. The format check happens BEFORE any
+// OID validation so a sha256 repository is rejected with
+// V2CodeUnsupportedObjectFormat before any OID-length check.
 
 import (
 	"crypto/sha256"

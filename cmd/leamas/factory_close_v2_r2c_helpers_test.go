@@ -95,7 +95,13 @@ func buildInDetachedWorktree(t *testing.T, worktreePath, finalCommit string) {
 // prepareR2CRDogfoodRepo constructs the S < F < D repository used
 // by the R2C-R1 dogfood. It returns enough identifiers for the
 // test to assert exact manifest bindings.
-func prepareR2CRDogfoodRepo(t *testing.T, leamasRepoRoot string) (repository, subject, subjectTree, freeze, freezeTree, d, planPath, planBlobOID, planBytes string, planSHA256, descendantPlanBytes string) {
+//
+// R2C-R4: the frozen plan bytes and the descendant plan bytes
+// are returned as raw []byte read via `git cat-file blob <oid>`
+// (runR2CRGitRaw). No `git show`, no TrimSpace, and no string
+// conversion is performed on the byte-authority path; SHA-256 is
+// computed over the literal blob bytes.
+func prepareR2CRDogfoodRepo(t *testing.T, leamasRepoRoot string) (repository, subject, subjectTree, freeze, freezeTree, d, planPath, planBlobOID string, planBytes []byte, planSHA256 string, descendantPlanBytes []byte) {
 	t.Helper()
 	repository = t.TempDir()
 	runR2CRGit(t, repository, "init", "-b", "main")
@@ -112,21 +118,25 @@ func prepareR2CRDogfoodRepo(t *testing.T, leamasRepoRoot string) (repository, su
 	subject = runR2CRGit(t, repository, "rev-parse", "HEAD")
 	subjectTree = runR2CRGit(t, repository, "rev-parse", subject+"^{tree}")
 
-	// F: plan + freeze-only file.
+	// F: plan + freeze-only file. planJSON is built first as a
+	// canonical contract-valid document; the runner reads F:P
+	// via the byte-authority path below.
 	planPath = "docs/closure-plans/R2CR-DOGFOOD.json"
 	planDir := filepath.Join(repository, filepath.Dir(planPath))
 	if err := os.MkdirAll(planDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	planBytes = buildR2CRDogfoodPlan(t, subject, subjectTree, leamasRepoRoot)
-	mustWriteFile(t, filepath.Join(repository, planPath), planBytes)
+	planJSON := buildR2CRDogfoodPlan(t, subject, subjectTree, leamasRepoRoot)
+	mustWriteFile(t, filepath.Join(repository, planPath), planJSON)
 	mustWriteFile(t, filepath.Join(repository, "freeze-only.txt"), "freeze-only\n")
 	runR2CRGit(t, repository, "add", ".")
 	runR2CRGit(t, repository, "commit", "-m", "freeze: add plan")
 	freeze = runR2CRGit(t, repository, "rev-parse", "HEAD")
 	freezeTree = runR2CRGit(t, repository, "rev-parse", freeze+"^{tree}")
 
-	// D: mutate the plan + descendant-only file.
+	// D: mutate the plan + descendant-only file. The muta is
+	// the canonical contract-valid document; the runner must
+	// reject it via working-plan-mismatch in the R2C-R1 case.
 	muta := []byte(`{"contract_version": 1, "act_id": "ACT-R2CR-DOGFOOD-MUTATED"}`)
 	mustWriteFile(t, filepath.Join(repository, planPath), string(muta))
 	mustWriteFile(t, filepath.Join(repository, "descendant-only.txt"), "descendant-only\n")
@@ -134,16 +144,20 @@ func prepareR2CRDogfoodRepo(t *testing.T, leamasRepoRoot string) (repository, su
 	runR2CRGit(t, repository, "commit", "-m", "descendant: mutate plan")
 	d = runR2CRGit(t, repository, "rev-parse", "HEAD")
 
-	// Resolve F:P blob OID, F:P exact bytes, and D:P exact bytes
-	// via the production git client (no mutable checkout).
+	// Resolve F:P and D:P blob OIDs, then read the raw blob
+	// bytes via `git cat-file blob <oid>`. The byte-authority
+	// path never uses `git show` or TrimSpace.
 	planBlobOID = runR2CRGit(t, repository, "rev-parse", freeze+":"+planPath)
 	descPlanBlob := runR2CRGit(t, repository, "rev-parse", d+":"+planPath)
 	if planBlobOID == descPlanBlob {
 		t.Fatalf("F:P and D:P blob OIDs must differ: got %s for both", planBlobOID)
 	}
-	planBytes = runR2CRGit(t, repository, "show", freeze+":"+planPath)
-	descendantPlanBytes = runR2CRGit(t, repository, "show", d+":"+planPath)
-	planSHA256 = sha256HexBytes([]byte(planBytes))
+	planBytes = runR2CRGitRaw(t, repository, planBlobOID)
+	descendantPlanBytes = runR2CRGitRaw(t, repository, descPlanBlob)
+	if bytes.Equal(descendantPlanBytes, planBytes) {
+		t.Fatalf("descendant plan bytes must differ from frozen plan bytes")
+	}
+	planSHA256 = sha256HexBytes(planBytes)
 
 	return
 }

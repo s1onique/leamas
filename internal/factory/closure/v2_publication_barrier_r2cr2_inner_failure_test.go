@@ -75,8 +75,13 @@ func runInnerFailureWithDrift(t *testing.T, driftKind string, expectedDriftCode 
 		t.Fatalf("expected *V2Error, got %T: %v", err, err)
 	}
 
-	if len(v2err.Diags) < 2 {
-		t.Fatalf("expected at least 2 diagnostics (inner + drift); got %d: %+v",
+// R2C-R4-R1: exact cardinality. Each single-drift fixture
+// produces exactly two diagnostics: the inner one FIRST, and
+// the drift one SECOND. Any additional diagnostics would
+// indicate a regression in the inner-error / drift
+// composition; the test fails closed.
+	if len(v2err.Diags) != 2 {
+		t.Fatalf("expected exactly 2 diagnostics (inner + drift); got %d: %+v",
 			len(v2err.Diags), v2err.Diags)
 	}
 	if v2err.Diags[0].Code != innerCode {
@@ -85,6 +90,11 @@ func runInnerFailureWithDrift(t *testing.T, driftKind string, expectedDriftCode 
 	}
 	if !strings.Contains(v2err.Diags[0].Message, innerMessage) {
 		t.Fatalf("inner diagnostic message lost; got %q", v2err.Diags[0].Message)
+	}
+	// R2C-R4-R1: drift diagnostic must be exactly at index 1.
+	if v2err.Diags[1].Code != expectedDriftCode {
+		t.Fatalf("diag[1].Code: got=%s want=%s",
+			v2err.Diags[1].Code, expectedDriftCode)
 	}
 	driftCount := 0
 	for _, d := range v2err.Diags {

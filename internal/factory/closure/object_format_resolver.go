@@ -7,11 +7,13 @@ package closure
 // programmatic SHA-1 policy required by
 // ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R2C-R4.
 //
-// The production resolver is a thin wrapper over RealGit that
-// delegates CatFile and ObjectFormat to git. ObjectFormat()
+// R2C-R4-R1 design: the resolver is bound to a single
+// repository root at construction time. Every call routes to
+// that root regardless of the caller's CWD. ObjectFormat()
 // executes `git rev-parse --show-object-format` and propagates
 // every observation failure so the verifier can emit a typed
-// diagnostic before it ever touches an OID.
+// diagnostic before it ever touches an OID. CatFile() executes
+// `git cat-file -p <oid>` against the same root.
 //
 // The EnforceSHA1ObjectFormat helper applies the SHA-1 policy
 // programmatically: the verifier rejects any repository whose
@@ -28,11 +30,12 @@ import (
 )
 
 // r2crGitObjectResolver implements GitObjectResolver against
-// the production RealGit client. It is the default resolver
-// wired into evidence verifiers and verifier authorities that
-// need to talk to a real repository.
+// the production RealGit client. It is bound to a single
+// repository root at construction time; CatFile and
+// ObjectFormat never use the caller's CWD.
 type r2crGitObjectResolver struct {
-	git gitClient
+	git      gitClient
+	repoRoot string
 }
 
 // r2crGitRaw executes `git cat-file blob <oid>` against the
@@ -72,14 +75,24 @@ func runR2CRGitRaw(ctx context.Context, repoRoot, oid string) ([]byte, error) {
 	return r2crGitRaw(ctx, RealGit{}, repoRoot, oid)
 }
 
-// CatFile reads a Git object via `git cat-file -p <oid>` and
-// returns the raw bytes. Production wiring uses the default
-// RealGit client.
+// CatFile reads a Git object via `git cat-file -p <oid>` from
+// the resolver's bound repository root and returns the raw
+// bytes. Production wiring uses the default RealGit client.
+//
+// R2C-R4-R1: this method NEVER uses the process CWD. The
+// resolver is bound at construction time so callers cannot
+// accidentally mix repositories.
 func (r *r2crGitObjectResolver) CatFile(oid string) ([]byte, error) {
 	if r == nil || r.git == nil {
 		return nil, fmt.Errorf("git object resolver has no client")
 	}
-	result := r.git.Run(context.Background(), ".", "cat-file", "-p", oid)
+	if strings.TrimSpace(r.repoRoot) == "" {
+		return nil, fmt.Errorf("git object resolver has no repository root")
+	}
+	if strings.TrimSpace(oid) == "" {
+		return nil, fmt.Errorf("blob OID is empty")
+	}
+	result := r.git.Run(context.Background(), r.repoRoot, "cat-file", "-p", oid)
 	if result.Err != nil || result.ExitCode != 0 {
 		detail := strings.TrimSpace(string(result.Stderr))
 		if detail == "" && result.Err != nil {
@@ -92,15 +105,22 @@ func (r *r2crGitObjectResolver) CatFile(oid string) ([]byte, error) {
 }
 
 // ObjectFormat executes `git rev-parse --show-object-format`
-// and returns the trimmed storage format. The function
-// propagates every observation failure (no git binary, no
-// repository, malformed output) so the verifier can emit
-// V2CodeObjectFormatUnavailable.
+// in the resolver's bound repository root and returns the
+// trimmed storage format. The function propagates every
+// observation failure (no git binary, no repository, malformed
+// output) so the verifier can emit V2CodeObjectFormatUnavailable.
+//
+// R2C-R4-R1: this method NEVER uses the process CWD. The
+// resolver is bound at construction time so callers cannot
+// accidentally read the wrong repository.
 func (r *r2crGitObjectResolver) ObjectFormat() (string, error) {
 	if r == nil || r.git == nil {
 		return "", fmt.Errorf("git object resolver has no client")
 	}
-	result := r.git.Run(context.Background(), ".", "rev-parse", "--show-object-format")
+	if strings.TrimSpace(r.repoRoot) == "" {
+		return "", fmt.Errorf("git object resolver has no repository root")
+	}
+	result := r.git.Run(context.Background(), r.repoRoot, "rev-parse", "--show-object-format")
 	if result.Err != nil || result.ExitCode != 0 {
 		detail := strings.TrimSpace(string(result.Stderr))
 		if detail == "" && result.Err != nil {
@@ -116,13 +136,22 @@ func (r *r2crGitObjectResolver) ObjectFormat() (string, error) {
 	return format, nil
 }
 
-// NewR2CRGitObjectResolver constructs the production
-// resolver. A nil client defaults to RealGit{}.
-func NewR2CRGitObjectResolver(g gitClient) GitObjectResolver {
+// NewR2CRGitObjectResolver constructs a repository-bound
+// production resolver. It returns a typed error (not a V2Error)
+// when repoRoot is empty or git is nil because the caller
+// MUST supply a real repoRoot to make the resolver meaningful.
+//
+// A nil git client defaults to RealGit{}. The resolver will
+// route every call to repoRoot; the CWD of the process is
+// ignored for every operation.
+func NewR2CRGitObjectResolver(g gitClient, repoRoot string) (GitObjectResolver, error) {
 	if g == nil {
 		g = RealGit{}
 	}
-	return &r2crGitObjectResolver{git: g}
+	if strings.TrimSpace(repoRoot) == "" {
+		return nil, fmt.Errorf("repository root is required for git object resolver")
+	}
+	return &r2crGitObjectResolver{git: g, repoRoot: repoRoot}, nil
 }
 
 // EnforceSHA1ObjectFormat validates that the resolver reports
