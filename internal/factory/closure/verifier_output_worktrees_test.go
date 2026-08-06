@@ -256,20 +256,21 @@ func TestParseWorktreeInventory_RejectsMissingPrefix(t *testing.T) {
 // containment check classifies both equality and strict
 // descendants; non-members are rejected.
 func TestRepositoryWorktreeInventory_Contains(t *testing.T) {
-	inv, err := NewRepositoryWorktreeInventoryForTest([]string{"/tmp/owner"})
+	owner := t.TempDir()
+	inv, err := newRepositoryWorktreeInventoryFromCanonical([]string{owner})
 	if err != nil {
 		t.Fatalf("NewRepositoryWorktreeInventory: %v", err)
 	}
 	_ = err
 	mustContain := []string{
-		"/tmp/owner",
-		"/tmp/owner/file",
-		"/tmp/owner/sub/dir/x",
+		owner,
+		filepath.Join(owner, "file"),
+		filepath.Join(owner, "sub/dir/x"),
 	}
 	mustNot := []string{
-		"/tmp/other",
-		"/tmp/ownered", // sibling with same prefix but not a child
-		"/tmp",
+		filepath.Join(filepath.Dir(owner), "other"),
+		owner + "ed", // sibling with same prefix but not a child
+		filepath.Dir(owner),
 	}
 	for _, c := range mustContain {
 		if !inv.Contains(c) {
@@ -286,14 +287,23 @@ func TestRepositoryWorktreeInventory_Contains(t *testing.T) {
 // TestInventoryRoots_ReturnsCopy enforces that callers cannot
 // mutate the inventory's underlying slice.
 func TestInventoryRoots_ReturnsCopy(t *testing.T) {
-	inv, err := NewRepositoryWorktreeInventoryForTest([]string{"/tmp/a", "/tmp/b"})
+	root := t.TempDir()
+	a := filepath.Join(root, "a")
+	b := filepath.Join(root, "b")
+	if err := os.MkdirAll(a, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(b, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	inv, err := newRepositoryWorktreeInventoryFromCanonical([]string{a, b})
 	if err != nil {
 		t.Fatalf("NewRepositoryWorktreeInventory: %v", err)
 	}
 	c1 := inv.RootsView()
-	c1[0] = "/tmp/c"
+	c1[0] = filepath.Join(root, "c")
 	c2 := inv.RootsView()
-	if c2[0] != "/tmp/a" {
+	if c2[0] != a {
 		t.Fatalf("inventory was mutated through the copy: %v", c2)
 	}
 }

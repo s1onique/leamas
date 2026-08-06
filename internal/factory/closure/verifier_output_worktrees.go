@@ -49,6 +49,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/s1onique/leamas/internal/execution"
 )
@@ -100,16 +101,11 @@ type RepositoryWorktreeInventory struct {
 	roots []string
 }
 
-// NewRepositoryWorktreeInventoryForTest is a same-package test
-// entry point that lets the test files construct an inventory
-// from canonical roots without going through the production
-// inventory observation path. The function is exported only
-// because Go's test packages live in the same package; it
-// must NOT be used from non-test code. The function does no
-// validation beyond the empty-input check; tests are
-// responsible for producing canonical paths the same way the
-// production parser does.
-func NewRepositoryWorktreeInventoryForTest(roots []string) (RepositoryWorktreeInventory, error) {
+// newRepositoryWorktreeInventoryFromCanonical constructs the
+// production inventory from already observed roots. It still
+// validates the authority boundary so callers cannot smuggle
+// relative, dirty, unresolved, or duplicate roots into it.
+func newRepositoryWorktreeInventoryFromCanonical(roots []string) (RepositoryWorktreeInventory, error) {
 	if len(roots) == 0 {
 		return RepositoryWorktreeInventory{}, NewV2VerifierError(V2VerifierDiagnostic{
 			Code:         V2VerifierWorktreeInventoryUnavailable,
@@ -117,9 +113,26 @@ func NewRepositoryWorktreeInventoryForTest(roots []string) (RepositoryWorktreeIn
 			PropertyName: "worktree_inventory",
 		})
 	}
-	copied := make([]string, len(roots))
-	copy(copied, roots)
-	return RepositoryWorktreeInventory{roots: copied}, nil
+	seen := make(map[string]struct{}, len(roots))
+	canonical := make([]string, 0, len(roots))
+	for _, root := range roots {
+		if !filepath.IsAbs(root) || filepath.Clean(root) != root {
+			return RepositoryWorktreeInventory{}, newWorktreeInventoryError("worktree root is not absolute and clean: %q", root)
+		}
+		resolved, err := canonicalizeWorktreeRoot(root)
+		if err != nil {
+			return RepositoryWorktreeInventory{}, newWorktreeInventoryError("canonicalize worktree root %q: %s", root, err)
+		}
+		if resolved != root {
+			return RepositoryWorktreeInventory{}, newWorktreeInventoryError("worktree root is not canonical: %q", root)
+		}
+		if _, ok := seen[root]; ok {
+			continue
+		}
+		seen[root] = struct{}{}
+		canonical = append(canonical, root)
+	}
+	return RepositoryWorktreeInventory{roots: canonical}, nil
 }
 
 // RootsView returns a stable, deduplicated copy of the
@@ -204,7 +217,7 @@ func InventoryRepositoryWorktrees(ctx context.Context, repoRoot string, runner G
 	if err != nil {
 		return RepositoryWorktreeInventory{}, err
 	}
-	return NewRepositoryWorktreeInventoryForTest(roots)
+	return newRepositoryWorktreeInventoryFromCanonical(roots)
 }
 
 // worktreeRecordSeparator is the byte sequence that ends a

@@ -56,7 +56,9 @@ package closure
 // open the temp file with the target perm in one syscall.
 
 import (
+	"crypto/rand"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -86,11 +88,13 @@ const (
 	// rename succeeded but the parent-directory fsync failed
 	// (or the parent directory could not be opened for fsync
 	// on a platform where the op is exposed).
-	// visible_after_rename is confirmed; crash_durability is
-	// UNCONFIRMED. Callers may surface the fsync failure but
-	// must NOT retry a successful rename and must NOT claim
-	// the destination is durable.
 	PublicationPublishedButDirectorySyncFailed
+
+	// PublicationPublishedButPostPublishObservationFailed means
+	// the rename and directory fsync succeeded, but observing the
+	// post-publish directory handle failed. The publication is
+	// visible and durable, but the observer contract is broken.
+	PublicationPublishedButPostPublishObservationFailed
 )
 
 // String returns the canonical snake_case token for the
@@ -104,6 +108,8 @@ func (s PublicationState) String() string {
 		return "published"
 	case PublicationPublishedButDirectorySyncFailed:
 		return "published_but_directory_sync_failed"
+	case PublicationPublishedButPostPublishObservationFailed:
+		return "published_but_post_publish_observation_failed"
 	default:
 		return "unknown_publication_state"
 	}
@@ -112,8 +118,7 @@ func (s PublicationState) String() string {
 // PublicationResult is the structured outcome of a Publish
 // call. State is authoritative; Err is non-nil only when the
 // publication sequence failed (state == not_published) or the
-// post-rename directory sync errored (state ==
-// published_but_directory_sync_failed).
+// post-rename directory sync or observation errored.
 type PublicationResult struct {
 	State         PublicationState
 	CanonicalPath string
@@ -140,13 +145,17 @@ type publicationFilesystem interface {
 // It uses only root-relative operations on the supplied
 // *os.Root so the authority never re-resolves the lexical
 // path through mutable ancestors.
-type defaultPublicationFilesystem struct{}
+var cryptoRandomReader io.Reader = rand.Reader
 
-func (defaultPublicationFilesystem) createTemp(root *os.Root, mode fs.FileMode) (string, *os.File, error) {
+type defaultPublicationFilesystem struct {
+	random io.Reader
+}
+
+func (f defaultPublicationFilesystem) createTemp(root *os.Root, mode fs.FileMode) (string, *os.File, error) {
 	const tempPrefix = ".verifier-output-"
 	const tempSuffix = ".tmp"
 	for attempt := uint64(0); attempt < (1 << 20); attempt++ {
-		name, err := randomizedTempName(tempPrefix, tempSuffix)
+		name, err := randomizedTempNameFromReader(tempPrefix, tempSuffix, f.random)
 		if err != nil {
 			// CSPRNG failure: the production loop is fail-closed
 			// here too; an attacker that controls the CSPRNG can
@@ -250,7 +259,7 @@ func PrepareVerifierOutput(repositoryRoot, outputPath string, worktrees []Canoni
 		})
 	}
 	roots := worktreeRootsForCanonical(worktrees)
-	inventory, err := NewRepositoryWorktreeInventoryForTest(roots)
+	inventory, err := newRepositoryWorktreeInventoryFromCanonical(roots)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +290,7 @@ func PrepareVerifierOutput(repositoryRoot, outputPath string, worktrees []Canoni
 		canonical:     filepath.Join(root.Name(), relName),
 		perm:          0o644,
 		supportsFs:    runtime.GOOS != "windows",
-		publicationFS: defaultPublicationFilesystem{},
+		publicationFS: defaultPublicationFilesystem{random: cryptoRandomReader},
 	}, nil
 }
 

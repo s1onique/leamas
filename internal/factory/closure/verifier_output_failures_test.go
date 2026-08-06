@@ -174,7 +174,7 @@ func TestFailures_ParentSwappedBeforePublication(t *testing.T) {
 		// The destination must NOT be reachable from the
 		// worktree. We assert it does not match any
 		// worktree-inventory member.
-		inv, _ := NewRepositoryWorktreeInventoryForTest([]string{fx.worktree})
+		inv, _ := newRepositoryWorktreeInventoryFromCanonical([]string{fx.worktree})
 		if inv.Contains(auth.CanonicalPath()) {
 			t.Fatalf("publication landed inside worktree: %s", auth.CanonicalPath())
 		}

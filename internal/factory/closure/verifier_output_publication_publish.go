@@ -62,7 +62,7 @@ func (a *VerifierOutputAuthority) Publish(data []byte) PublicationResult {
 		}
 	}
 	if a.publicationFS == nil {
-		a.publicationFS = defaultPublicationFilesystem{}
+		a.publicationFS = defaultPublicationFilesystem{random: cryptoRandomReader}
 	}
 
 	tempRel, tmp, err := a.publicationFS.createTemp(a.root, a.perm)
@@ -113,15 +113,9 @@ func (a *VerifierOutputAuthority) Publish(data []byte) PublicationResult {
 		}
 	}
 	if closeErr != nil {
-		// The directory Sync completed successfully, so the
-		// file-system state is durable; the close-on-file
-		// handle failed, so we keep the state as PublicationPublished
-		// (the bytes are durable on disk) but surface a typed
-		// post-publish observation error. The state name does
-		// not mislabel the file-system as unsafe.
-		a.state = PublicationPublished
+		a.state = PublicationPublishedButPostPublishObservationFailed
 		return PublicationResult{
-			State:         PublicationPublished,
+			State:         PublicationPublishedButPostPublishObservationFailed,
 			CanonicalPath: a.canonical,
 			Err:           fmt.Errorf("VerifierOutputAuthority: post-publish observation failed: close parent: %w", closeErr),
 		}

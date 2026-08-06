@@ -171,7 +171,7 @@ func TestV2VerifierCLIRepositoryMissingRoutesToObserverError(t *testing.T) {
 		t.Fatalf("decode JSON envelope: %v (stdout=%s)", err, stdout.String())
 	}
 	if _, err := dec.Token(); err == nil {
-			t.Fatalf("JSON output must be exactly one document, got extra tokens")
+		t.Fatalf("JSON output must be exactly one document, got extra tokens")
 	}
 }
 

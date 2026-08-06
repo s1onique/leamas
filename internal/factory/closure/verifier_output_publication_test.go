@@ -64,6 +64,7 @@ func TestPublicationState_String(t *testing.T) {
 		{PublicationNotPublished, "not_published"},
 		{PublicationPublished, "published"},
 		{PublicationPublishedButDirectorySyncFailed, "published_but_directory_sync_failed"},
+		{PublicationPublishedButPostPublishObservationFailed, "published_but_post_publish_observation_failed"},
 		{PublicationState(99), "unknown_publication_state"},
 	}
 	for _, c := range cases {

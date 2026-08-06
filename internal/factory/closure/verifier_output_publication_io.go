@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 )
 
 // randomizedTempName returns a basename for a temp file the
@@ -40,8 +41,15 @@ import (
 // would let an attacker pre-create the predictable name and
 // break the openat race window.
 func randomizedTempName(prefix, suffix string) (string, error) {
+	return randomizedTempNameFromReader(prefix, suffix, rand.Reader)
+}
+
+func randomizedTempNameFromReader(prefix, suffix string, reader io.Reader) (string, error) {
+	if reader == nil {
+		reader = rand.Reader
+	}
 	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	if _, err := io.ReadFull(reader, raw[:]); err != nil {
 		return "", fmt.Errorf("crypto/rand: %w", err)
 	}
 	return prefix + hex.EncodeToString(raw[:]) + suffix, nil

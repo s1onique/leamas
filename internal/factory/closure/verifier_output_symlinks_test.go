@@ -117,7 +117,7 @@ func newSymlinkFixture(t *testing.T) *symlinkFixture {
 }
 
 func inventoryWithRoots(roots ...string) RepositoryWorktreeInventory {
-	inv, err := NewRepositoryWorktreeInventoryForTest(roots)
+	inv, err := newRepositoryWorktreeInventoryFromCanonical(roots)
 	if err != nil {
 		panic(err)
 	}
