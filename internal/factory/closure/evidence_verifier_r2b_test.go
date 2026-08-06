@@ -331,10 +331,16 @@ func (r *gitCatFileResolver) CatFile(oid string) ([]byte, error) {
 // manifest is expected to pass after the R2B hash
 // regeneration.
 func TestR2BEvidenceVerifier_AcceptsCommittedR1Manifest(t *testing.T) {
-	repoRoot := "/home/chistyakov/Projects/leamas"
+	// Resolve the Leamas repository root dynamically via
+	// `git rev-parse --show-toplevel` so the test is
+	// host-independent: it works from any clone, on any OS,
+	// and from inside a detached worktree. The hardcoded
+	// /home/chistyakov/Projects/leamas path was removed by
+	// R2C-R2.
+	repoRoot := r2bTestRepoRoot(t)
 	resolver := &gitCatFileResolver{RepoDir: repoRoot}
 	subject := "25010d160c6b04edc24ec4602af951541ef1ffa8"
-	manifestPath := repoRoot + "/docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1.json"
+	manifestPath := r2bTestRepoRoot(t) + "/docs/closure-manifests/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-MAC-CANARY-READINESS01-R1.json"
 	res, err := VerifyClosureManifestR2B(EvidenceVerifierOptions{
 		ManifestPath:  manifestPath,
 		SubjectCommit: subject,
@@ -346,6 +352,21 @@ func TestR2BEvidenceVerifier_AcceptsCommittedR1Manifest(t *testing.T) {
 	if !res.OK {
 		t.Fatalf("verifier rejected committed R1 manifest: %+v", res.Diagnostics)
 	}
+}
+
+// r2bTestRepoRoot resolves the Leamas repository root via
+// `git rev-parse --show-toplevel` from the current working
+// directory. Used by the R2B verifier test suite so it works
+// from any clone, on any OS, and from inside a detached
+// worktree. The test process must run from inside the Leamas
+// checkout.
+func r2bTestRepoRoot(t *testing.T) string {
+	t.Helper()
+	root, err := runGitValue(context.Background(), RealGit{}, ".", "rev-parse", "--show-toplevel")
+	if err != nil {
+		t.Fatalf("resolve repo root: %v", err)
+	}
+	return root
 }
 
 // lookupBlobOID resolves the tree's blob OID for the supplied

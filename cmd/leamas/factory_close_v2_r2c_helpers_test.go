@@ -277,6 +277,42 @@ func runR2CRSubprocess(t *testing.T, binary string, argv []string) (string, stri
 	return stdout.String(), stderr.String(), err
 }
 
+// runR2CRGitRaw returns the exact raw bytes of the supplied Git
+// object without trimming. It uses `git cat-file blob <oid>` for
+// blob content and `git cat-file -p <oid>` for tree/commit content
+// only when explicitly requested. SHA-256 hashes computed over
+// the returned bytes are guaranteed to match the literal blob.
+func runR2CRGitRaw(t *testing.T, dir, oid string) []byte {
+	t.Helper()
+	// `git cat-file blob <oid>` writes the raw blob content to
+	// stdout with no trailing newline added. This is the only
+	// command that returns the exact blob bytes.
+	out, err := runR2CRGitE(t, dir, "cat-file", "blob", oid)
+	if err != nil {
+		t.Fatalf("git cat-file blob %s: %v", oid, err)
+	}
+	return []byte(out)
+}
+
+// runR2CRGitRawShow returns the raw bytes of `git cat-file -p
+// <oid>` output for non-blob objects. Trailing newlines are NOT
+// trimmed.
+func runR2CRGitRawShow(t *testing.T, dir, oid string) []byte {
+	t.Helper()
+	// exec directly to preserve the raw output (runGitValue
+	// trims). We capture both stdout and stderr so we can
+	// surface any error message.
+	cmd := exec.Command("git", "cat-file", "-p", oid)
+	cmd.Dir = dir
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git cat-file -p %s: %v stderr=%s", oid, err, stderr.String())
+	}
+	return stdout.Bytes()
+}
+
 // sha256HexFile returns the lowercase hex SHA-256 of path's
 // contents.
 func sha256HexFile(t *testing.T, path string) string {

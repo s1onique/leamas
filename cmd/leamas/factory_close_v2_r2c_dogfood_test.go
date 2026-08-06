@@ -33,6 +33,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -91,6 +92,8 @@ type r2cRDogfoodResult struct {
 	StderrTruncated        bool
 	TruncationRejectionMsg string
 	RunErr                 error
+	EvidencePath           string
+	EvidenceSHA256         string
 }
 
 var lastR2CRDogfood r2cRDogfoodResult
@@ -348,6 +351,81 @@ func TestClosureCLIV2R2CRExactTipDogfood(t *testing.T) {
 		TruncationRejectionMsg: rejMsg,
 		RunErr:                 bounded.Err,
 	}
+
+	// R2C-R2 Phase 6: write durable, deterministic evidence
+	// outside the Leamas repository. The evidence path is
+	// either LEAMAS_R2CR_EVIDENCE_DIR/<r2cr-evidence.json> or
+	// t.TempDir()/r2cr-evidence.json. The path and SHA-256
+	// are recorded in the result so the close report can
+	// identify the exact historical run.
+	writeR2CREvidence(t, &lastR2CRDogfood)
+}
+
+// writeR2CREvidence serializes the dogfood result to
+// deterministic JSON in a directory outside the Leamas
+// repository. The path and content SHA-256 are stored in
+// the result for the close report.
+//
+// The function writes the file twice: once with a placeholder
+// path so the in-memory struct contains the canonical values
+// (path, sha256) and the on-disk file matches the in-memory
+// representation. The second write rewrites the file with the
+// real path and sha256, producing a self-referential evidence
+// record where the file content includes its own path and
+// sha256.
+func writeR2CREvidence(t *testing.T, r *r2cRDogfoodResult) {
+	t.Helper()
+	dir := os.Getenv("LEAMAS_R2CR_EVIDENCE_DIR")
+	if dir == "" {
+		dir = t.TempDir()
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir evidence dir: %v", err)
+	}
+	path := filepath.Join(dir, "r2cr-evidence.json")
+
+	// First write: include the path and a placeholder sha256
+	// so the in-memory struct can be re-encoded consistently.
+	r.EvidencePath = path
+	r.EvidenceSHA256 = "PENDING"
+	if err := writeR2CREvidenceAtomic(path, r); err != nil {
+		t.Fatalf("write evidence (first pass): %v", err)
+	}
+	// Second write: compute the real sha256 of the file on
+	// disk and re-encode.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("re-read evidence: %v", err)
+	}
+	r.EvidenceSHA256 = sha256HexBytes(raw)
+	if err := writeR2CREvidenceAtomic(path, r); err != nil {
+		t.Fatalf("write evidence (second pass): %v", err)
+	}
+}
+
+// writeR2CREvidenceAtomic writes the supplied result to path
+// via a temp-file rename so a partial write can never leave a
+// half-formed evidence file behind.
+func writeR2CREvidenceAtomic(path string, r *r2cRDogfoodResult) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".r2cr-evidence-*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp evidence: %w", err)
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }()
+	enc := json.NewEncoder(tmp)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(r); err != nil {
+		tmp.Close()
+		return fmt.Errorf("encode evidence: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp evidence: %w", err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("rename evidence: %w", err)
+	}
+	return nil
 }
 
 // mustPrepareR2CRBuildEnv resolves the leamas repo root via

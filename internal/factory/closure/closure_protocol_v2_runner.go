@@ -186,13 +186,22 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 		// after-state observation so it can surface drift
 		// diagnostics. No manifest bytes have been written;
 		// the candidate is unpublished.
+		//
+		// R2C-R2: the inner-error path now ALWAYS processes
+		// the after snapshot. If the snapshot is unavailable
+		// the availability diagnostics are appended; if it
+		// is available the before-vs-after drift is
+		// appended. The original inner diagnostic is preserved
+		// in front of the after diagnostics so the CLI sees
+		// both root-cause and symptom.
 		callerAfter := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
-		if post := mergeAfterDiagnostics(callerAfter); len(post) > 0 {
-			if v2err, ok := err.(*V2Error); ok {
-				v2err.Diags = append(v2err.Diags, post...)
-				return V2Manifest{}, v2err
-			}
-			return V2Manifest{}, &V2Error{Diags: post}
+		post := mergeAfterWithBeforeDiagnostics(callerBefore, callerAfter)
+		if v2err, ok := err.(*V2Error); ok {
+			v2err.Diags = append(v2err.Diags, post...)
+			return V2Manifest{}, v2err
+		}
+		if len(post) > 0 {
+			return V2Manifest{}, &V2Error{Diags: append(V2Diagnostics(nil), post...)}
 		}
 		return V2Manifest{}, err
 	}
@@ -223,16 +232,52 @@ func RunClosureProtocolV2WithDeps(ctx context.Context, req V2Request, deps V2Run
 	return candidate.Manifest, nil
 }
 
-// mergeAfterDiagnostics returns the diagnostics from an
-// after-state snapshot when the snapshot was unavailable. When
-// the snapshot is available the function returns nil so the
-// caller does not synthesise diagnostics for a healthy after
-// observation.
+// mergeAfterDiagnostics returns diagnostics appropriate for the
+// supplied after-state snapshot. It is used on the inner-failure
+// path so callers always see caller-state corruption even when
+// the inner runner already failed.
+//
+// Behavior:
+//   - snapshot unavailable: emit the snapshot's availability
+//     diagnostics so the caller knows the after-observation
+//     itself failed
+//   - snapshot available but drifted from the before snapshot:
+//     emit the drift diagnostics in canonical Diff order
+//   - snapshot available with no drift: emit nil so the caller
+//     does not synthesise diagnostics for a healthy after
+//     observation
+//
+// The drift comparison requires the matching before-state. When
+// the caller has not supplied one (e.g. the runner entry point
+// before any caller snapshot was taken) the function returns
+// nil rather than guess.
 func mergeAfterDiagnostics(after v2CallerStateSnapshot) V2Diagnostics {
-	if after.Available {
-		return nil
+	if !after.Available {
+		return after.Diagnostics
 	}
-	return after.Diagnostics
+	return nil
+}
+
+// mergeAfterWithBeforeDiagnostics returns the diagnostics that
+// should be appended to an inner-failure error. It is the
+// fail-closed companion of mergeAfterDiagnostics: it ALWAYS
+// emits the supplied after-observation diagnostics plus the
+// before-vs-after drift diagnostics in canonical Diff order, so
+// an inner failure that coincides with caller-state drift is
+// surfaced to the CLI.
+//
+// Diagnostic order is deterministic:
+//
+//  1. caller-after availability diagnostics, if any
+//  2. caller-before vs caller-after drift diagnostics
+func mergeAfterWithBeforeDiagnostics(before, after v2CallerStateSnapshot) V2Diagnostics {
+	var out V2Diagnostics
+	if !after.Available {
+		out = append(out, after.Diagnostics...)
+		return out
+	}
+	out = append(out, before.State.Diff(after.State)...)
+	return out
 }
 
 // runClosureProtocolV2Inner is implemented in closure_protocol_v2_runner_inner.go.
