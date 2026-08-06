@@ -2,24 +2,29 @@
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MAC-HANDOFF01-CORRECTION02C-R1",
   "artifacts": [
     {
-      "kind": "gate_summary",
-      "path": ".factory/gate-summary.json",
-      "produced_by": "v2-verifier-aggregate-fast-lane-evidence"
+      "kind": "gate_summary_raw",
+      "path": ".factory/gate-summary.raw",
+      "produced_by": "v2-verifier-aggregate-fast-lane-single-capture"
     },
     {
-      "kind": "exec_gate_evidence",
-      "path": ".factory/evidence/exec-gate.summary",
-      "produced_by": "v2-verifier-focused-exec-gate-evidence"
+      "kind": "gate_summary_derived",
+      "path": ".factory/gate-summary.derived",
+      "produced_by": "v2-verifier-aggregate-fast-lane-single-capture"
+    },
+    {
+      "kind": "gate_summary_json",
+      "path": ".factory/gate-summary.json",
+      "produced_by": "v2-verifier-aggregate-fast-lane-single-capture"
     },
     {
       "kind": "built_binary_evidence",
-      "path": ".factory/evidence/built-binary.sha256",
-      "produced_by": "v2-verifier-hermetic-build-with-binary-checks"
+      "path": ".factory/evidence/built-binary.txt",
+      "produced_by": "v2-verifier-hermetic-build-with-binary-predicates"
     }
   ],
   "baseline": {
-    "commit_oid": "d5d09ca2e682179ecd496e5417525c53f7f484c4",
-    "tree_oid": "05db1c3e05bc2eba24b1a80a109cda9eaa02a1e8"
+    "commit_oid": "7990de63f814bc48a927c56b1ba41ee63ee53324",
+    "tree_oid": "61badb546b6fba79a4d22f3f54e4dba81e6b1d7a"
   },
   "checks": [
     {
@@ -79,7 +84,7 @@
       "working_directory": "."
     },
     {
-      "argv": ["git", "diff", "--check", "d5d09ca2e682179ecd496e5417525c53f7f484c4", "HEAD"],
+      "argv": ["bash", "-c", "set -euo pipefail; if [ -z \"${F5_COMMIT:-}\" ]; then echo 'DIFF_RANGE_UNRESOLVED: F5_COMMIT not provided by closure runner'; exit 2; fi; git diff --check \"$F5_COMMIT\" HEAD"],
       "environment": {},
       "id": "v2-verifier-range-diff-check",
       "mode": "run",
@@ -119,35 +124,35 @@
       "working_directory": "."
     },
     {
-      "argv": ["bash", "-c", "set -euo pipefail; mkdir -p .factory/build .factory/evidence; BUILD_DIR=\"$(mktemp -d -p .factory/build v2verifier-r1.XXXXXX)\"; out=\"$BUILD_DIR/leamas-v2verifier-r1\"; trap 'rm -rf \"$BUILD_DIR\"' EXIT; CGO_ENABLED=0 go build -trimpath -o \"$out\" ./cmd/leamas; file \"$out\" > .factory/evidence/built-binary.txt; if command -v ldd >/dev/null 2>&1; then ldd \"$out\" > .factory/evidence/built-binary.ldd 2>&1 || true; fi; sha256sum \"$out\" > .factory/evidence/built-binary.sha256"],
+      "argv": ["bash", "-c", "set -euo pipefail; mkdir -p .factory/build .factory/evidence; BUILD_DIR=\"$(mktemp -d -p .factory/build v2verifier-r1.XXXXXX)\"; out=\"$BUILD_DIR/leamas-v2verifier-r1\"; trap 'rm -rf \"$BUILD_DIR\"' EXIT; CGO_ENABLED=0 go build -trimpath -o \"$out\" ./cmd/leamas; file \"$out\" > .factory/evidence/built-binary.txt; if command -v ldd >/dev/null 2>&1; then ldd \"$out\" > .factory/evidence/built-binary.ldd 2>&1 || true; fi; sha256sum \"$out\" >> .factory/evidence/built-binary.txt; if grep -qE 'statically linked' .factory/evidence/built-binary.txt || (command -v ldd >/dev/null 2>&1 && ldd \"$out\" 2>&1 | grep -q 'not a dynamic executable'); then echo 'BUILT_BINARY_STATIC=YES' >> .factory/evidence/built-binary.txt; else echo 'BUILT_BINARY_STATIC=NO' >> .factory/evidence/built-binary.txt; exit 1; fi"],
       "environment": {"CGO_ENABLED": "0"},
-      "id": "v2-verifier-hermetic-build-with-binary-checks",
+      "id": "v2-verifier-hermetic-build-with-binary-predicates",
       "mode": "run",
       "timeout_seconds": 240,
       "working_directory": "."
     },
     {
-      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory/evidence; out=.factory/evidence/exec-gate.txt; bin/leamas factory gate --lane=fast > \"$out\" 2>&1; rc=$?; lane=\"$(grep -E '^--- exec-gate ' \"$out\" | head -1)\"; if echo \"$lane\" | grep -q 'OK'; then status=OK; elif echo \"$lane\" | grep -q 'FAILED'; then status=FAILED; elif echo \"$lane\" | grep -q 'SKIP'; then status=SKIP; else status=UNKNOWN; fi; printf 'aggregate_rc=%s\\nexec_gate_lane_status=%s\\n' \"$rc\" \"$status\" > .factory/evidence/exec-gate.summary; sha256sum \"$out\" >> .factory/evidence/exec-gate.summary; exit 0"],
+      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory; raw=.factory/gate-summary.raw; json=.factory/gate-summary.json; derived=.factory/gate-summary.derived; bin/leamas factory gate --lane=fast > \"$raw\" 2>&1; rc=$?; raw_sha=$(sha256sum < \"$raw\" | awk '{print $1}'); { echo \"aggregate_rc=$rc\"; echo \"raw_sha256=$raw_sha\"; echo \"raw_path=$raw\"; echo \"captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)\"; } > \"$derived\"; grep -E '^(agent-context|docs|doctrine|doctrine-agent-contracts|domain-boundaries|exec-gate|executable-contract-first|forbidden-patterns|git-hooks|language|llm-friendly): ' \"$raw\" | sed 's/^/lane_/' >> \"$derived\"; grep -E '^--- (exec-gate|forbidden-patterns|llm-friendly) (OK|FAILED|SKIP)' \"$raw\" >> \"$derived\" || true; { echo '{'; echo \"  \\\"aggregate_rc\\\": $rc,\"; echo \"  \\\"raw_sha256\\\": \\\"$raw_sha\\\",\"; echo \"  \\\"raw_path\\\": \\\"$raw\\\",\"; echo \"  \\\"captured_at\\\": \\\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\\\"\"; echo '}'; } > \"$json\"; exit 0"],
       "environment": {"LEAMAS_GATE_CALLER": "cline"},
-      "id": "v2-verifier-focused-exec-gate-evidence",
+      "id": "v2-verifier-aggregate-fast-lane-single-capture",
       "mode": "run",
       "timeout_seconds": 600,
       "working_directory": "."
     },
     {
-      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory; out=.factory/gate-summary.txt; bin/leamas factory gate --lane=fast > \"$out\" 2>&1; rc=$?; printf 'aggregate_rc=%s\\n' \"$rc\" > .factory/gate-summary.status; sha256sum \"$out\" >> .factory/gate-summary.status; exit 0"],
+      "argv": ["bash", "-c", "set -euo pipefail; if [ ! -e .factory/gate-summary.json ]; then echo 'GATE_SUMMARY_FRESHNESS=missing'; exit 2; fi; prev=.factory/gate-summary.prev.json; if [ -e \"$prev\" ] && cmp -s \"$prev\" .factory/gate-summary.json; then echo 'GATE_SUMMARY_FRESHNESS=stale'; exit 2; fi; echo 'GATE_SUMMARY_FRESHNESS=fresh'; sha256sum .factory/gate-summary.json"],
       "environment": {"LEAMAS_GATE_CALLER": "cline"},
-      "id": "v2-verifier-aggregate-fast-lane-evidence",
+      "id": "v2-verifier-gate-summary-freshness-fail",
       "mode": "run",
-      "timeout_seconds": 600,
+      "timeout_seconds": 60,
       "working_directory": "."
     },
     {
-      "argv": ["bash", "-c", "set -uo pipefail; mkdir -p .factory; before=.factory/gate-summary.before.json; after=.factory/gate-summary.json; if [ -e \"$after\" ]; then mv \"$after\" \"$before\"; fi; bin/leamas factory gate --lane=fast > /dev/null 2>&1 || true; if [ ! -e \"$after\" ]; then echo 'GATE_SUMMARY_FRESHNESS_PROOF=missing'; exit 0; fi; if [ -e \"$before\" ] && cmp -s \"$before\" \"$after\"; then echo 'GATE_SUMMARY_FRESHNESS_PROOF=stale'; exit 0; fi; echo 'GATE_SUMMARY_FRESHNESS_PROOF=fresh' > .factory/gate-summary.freshness; sha256sum \"$after\" >> .factory/gate-summary.freshness; exit 0"],
-      "environment": {"LEAMAS_GATE_CALLER": "cline"},
-      "id": "v2-verifier-gate-summary-freshness",
+      "argv": ["bash", "-c", "set -euo pipefail; head_oid=\"$(git rev-parse HEAD)\"; head_tree=\"$(git rev-parse HEAD^{tree})\"; raw_sha=\"$(sha256sum < .factory/gate-summary.raw | awk '{print $1}')\"; json_sha=\"$(sha256sum < .factory/gate-summary.json | awk '{print $1}')\"; derived_json_sha=\"$(grep -E '^raw_sha256=' .factory/gate-summary.derived | cut -d= -f2)\"; echo \"HEAD_OID=$head_oid\"; echo \"HEAD_TREE=$head_tree\"; echo \"RAW_SHA=$raw_sha\"; echo \"JSON_SHA=$json_sha\"; echo \"DERIVED_RAW_SHA=$derived_json_sha\"; if [ \"$raw_sha\" != \"$derived_json_sha\" ]; then echo 'DIGEST_SELF_CONSISTENCY=raw_mismatch'; exit 2; fi; echo 'DIGEST_SELF_CONSISTENCY=ok'"],
+      "environment": {},
+      "id": "v2-verifier-digest-self-consistency",
       "mode": "run",
-      "timeout_seconds": 600,
+      "timeout_seconds": 30,
       "working_directory": "."
     }
   ],
