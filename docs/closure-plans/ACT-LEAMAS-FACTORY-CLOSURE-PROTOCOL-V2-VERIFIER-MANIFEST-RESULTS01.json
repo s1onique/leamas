@@ -1,5 +1,6 @@
 {
   "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-VERIFIER-MANIFEST-RESULTS01",
+  "artifacts": [],
   "baseline": {
     "commit_oid": "819a0098d02ea7b0d8151e170f3140114bae1ca1",
     "tree_oid": "690c9912fe63d32f3897550a70a632b69c38f050"
