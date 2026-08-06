@@ -193,6 +193,7 @@ func TestClosureCLIV2VerifierMacHandoff(t *testing.T) {
 		"--closure", closure,
 		"--plan-path", macHandoffPlanPath,
 		"--manifest-path", macHandoffManifestPath,
+		"--json",
 		"--output", verifierOutputPath,
 	}, boundedSubprocessV2Options{
 		Timeout:   60 * time.Second,
@@ -225,7 +226,11 @@ func TestClosureCLIV2VerifierMacHandoff(t *testing.T) {
 			callerBefore.refsSHA, callerAfter.refsSHA)
 	}
 
-	// Phase 4: verifier output assertions.
+	// Phase 4: verifier output assertions. The CLI is
+	// invoked with --json so stdout is a single JSON
+	// envelope; the text-summary keys are not on stdout.
+	// The non-zero exit and the typed-diagnostics surface
+	// remain the primary failure signal.
 	if verifierResult.ExitCode != 0 {
 		t.Fatalf("verifier exit %d: stdout=%s stderr=%s",
 			verifierResult.ExitCode,
@@ -238,27 +243,31 @@ func TestClosureCLIV2VerifierMacHandoff(t *testing.T) {
 	if verifierResult.StdoutTruncated || verifierResult.StderrTruncated {
 		t.Fatalf("verifier output was truncated")
 	}
-	if !bytes.Contains(verifierResult.Stdout, []byte("valid=true")) {
+	if !bytes.Contains(verifierResult.Stdout, []byte("\"ok\": true")) {
+		t.Fatalf("verifier did not report ok=true: stdout=%q",
+			string(verifierResult.Stdout))
+	}
+	if !bytes.Contains(verifierResult.Stdout, []byte("\"valid\": true")) {
 		t.Fatalf("verifier did not report valid=true: stdout=%q",
 			string(verifierResult.Stdout))
 	}
-	if !bytes.Contains(verifierResult.Stdout, []byte("subject="+subject)) {
-		t.Fatalf("verifier stdout missing subject=%s: %q",
+	if !bytes.Contains(verifierResult.Stdout, []byte("\"subject_commit\": \""+subject+"\"")) {
+		t.Fatalf("verifier stdout missing subject_commit=%s: %q",
 			subject, string(verifierResult.Stdout))
 	}
-	if !bytes.Contains(verifierResult.Stdout, []byte("freeze="+freeze)) {
-		t.Fatalf("verifier stdout missing freeze=%s: %q",
+	if !bytes.Contains(verifierResult.Stdout, []byte("\"freeze_commit\": \""+freeze+"\"")) {
+		t.Fatalf("verifier stdout missing freeze_commit=%s: %q",
 			freeze, string(verifierResult.Stdout))
 	}
-	if !bytes.Contains(verifierResult.Stdout, []byte("closure="+closure)) {
-		t.Fatalf("verifier stdout missing closure=%s: %q",
+	if !bytes.Contains(verifierResult.Stdout, []byte("\"closure_commit\": \""+closure+"\"")) {
+		t.Fatalf("verifier stdout missing closure_commit=%s: %q",
 			closure, string(verifierResult.Stdout))
 	}
-	if !bytes.Contains(verifierResult.Stdout, []byte("manifest_sha256="+manifestSHA)) {
+	if !bytes.Contains(verifierResult.Stdout, []byte("\"manifest_sha256\": \""+manifestSHA+"\"")) {
 		t.Fatalf("verifier stdout missing manifest_sha256=%s: %q",
 			manifestSHA, string(verifierResult.Stdout))
 	}
-	if !bytes.Contains(verifierResult.Stdout, []byte("plan_sha256="+planSHA)) {
+	if !bytes.Contains(verifierResult.Stdout, []byte("\"plan_sha256\": \""+planSHA+"\"")) {
 		t.Fatalf("verifier stdout missing plan_sha256=%s: %q",
 			planSHA, string(verifierResult.Stdout))
 	}
