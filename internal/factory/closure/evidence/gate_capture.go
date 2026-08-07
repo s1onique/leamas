@@ -130,7 +130,8 @@ func (r *OsRunner) Run(ctx context.Context, name string, args []string, dir stri
 	if err != nil {
 		return CommandResult{
 			ExitCode: 127, Err: err,
-			Stdout:       []byte(err.Error()),
+			Stderr:       []byte(err.Error()),
+			Stdout:       nil,
 			StartedAtUTC: started, FinishedAtUTC: time.Now().UTC(),
 		}
 	}
@@ -200,8 +201,25 @@ func (b *truncatedBuffer) bytes() []byte {
 // cached result. Two collectors never share state.
 // sameGateRequest compares two GateCaptureRequest values.
 // SubjectRoot and EvidenceDir are the identity-bearing fields.
+// sameGateRequest compares two GateCaptureRequest values.
+// All identity-bearing fields are compared; MakeExecutable is
+// compared element-by-element in declaration order.
 func sameGateRequest(a, b GateCaptureRequest) bool {
-	return a.SubjectRoot == b.SubjectRoot && a.EvidenceDir == b.EvidenceDir
+	if a.RepositoryRoot != b.RepositoryRoot ||
+		a.SubjectRoot != b.SubjectRoot ||
+		a.EvidenceDir != b.EvidenceDir ||
+		a.RunID != b.RunID {
+		return false
+	}
+	if len(a.MakeExecutable) != len(b.MakeExecutable) {
+		return false
+	}
+	for i := range a.MakeExecutable {
+		if a.MakeExecutable[i] != b.MakeExecutable[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // ErrCollectorRequestMismatch is the typed error returned when

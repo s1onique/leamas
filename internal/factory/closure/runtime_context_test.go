@@ -85,6 +85,9 @@ func runtimeRevParseFake(args []string, f *runtimeFakeGitClient) gitCommandResul
 			return gitCommandResult{Stdout: []byte(f.freezeTree), ExitCode: 0}
 		}
 		return gitCommandResult{Stdout: []byte(f.subjectTree), ExitCode: 0}
+	case strings.Contains(rest, "docs/closure-plans"):
+		// Plan blob lookup: return a synthetic 40-char OID.
+		return gitCommandResult{Stdout: []byte("abcdef0123456789abcdef0123456789abcdef01"), ExitCode: 0}
 	case strings.HasPrefix(rest, "--show-object-format"):
 		return gitCommandResult{Stdout: []byte(f.format), ExitCode: 0}
 	}
@@ -108,8 +111,8 @@ func TestClosureRuntimeContextMatrix(t *testing.T) {
 		wantError string
 	}
 	tests := []testCase{
-		// happy_path removed: fake gitClient cannot resolve F:P path
-		// This test would require updating the fake. Defer to CORRECTION02.,
+		{name: "happy_path", clean: true, format: "sha1", ancestor: true, equal: false, wantError: ""},
+		// happy_path_restored: above case re-validates the successful resolver path.
 		{name: "dirty_worktree", clean: false, format: "sha1", ancestor: true, equal: false, wantError: "dirty_worktree"},
 		{name: "unsupported_format", clean: true, format: "sha256", ancestor: true, equal: false, wantError: "unsupported_object_format"},
 		{name: "freeze_not_ancestor", clean: true, format: "sha1", ancestor: false, equal: false, wantError: "freeze_not_ancestor"},
