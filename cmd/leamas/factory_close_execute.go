@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package main - factory_close_execute.go implements the dry-run
-// variant of `factory close execute` required by CORRECTION01-R1.
-// Full lifecycle mutation remains deferred to CORRECTION02.
+// variant of `factory close execute` required by CORRECTION01-R1-R1.
+// The exact exit taxonomy is frozen: request -> 2, verification ->
+// 3, observer -> 4, PASS -> 0.
 
 package main
 
@@ -20,6 +21,23 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure/evidence"
 )
 
+// ExecuteFailureClass is the typed exit taxonomy.
+type ExecuteFailureClass string
+
+const (
+	ExecuteRequest      ExecuteFailureClass = "request"
+	ExecuteVerification ExecuteFailureClass = "verification"
+	ExecuteObserver     ExecuteFailureClass = "observer"
+)
+
+// Exit codes follow the dry-run contract.
+const (
+	exitPass    = 0
+	exitRequest = 2
+	exitVerify  = 3
+	exitObserve = 4
+)
+
 // ExecuteDryRunRequest parameterises the dry-run entry point.
 type ExecuteDryRunRequest struct {
 	RepositoryRoot    string
@@ -28,7 +46,14 @@ type ExecuteDryRunRequest struct {
 	SubjectRevision   string
 	PlanPath          string
 	EvidenceDirectory string
+	GatePolicy        GatePolicy
 	JSON              bool
+}
+
+// GatePolicy supplies the authority the classifier needs.
+type GatePolicy struct {
+	BaselineFindings []evidence.GateFinding
+	ACTOwnedPaths    []string
 }
 
 // RunFactoryCloseExecute is the public dry-run entry point.
@@ -36,7 +61,7 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "factory close execute: missing flags")
 		printExecuteUsage(stderr)
-		return exitRequestError
+		return exitRequest
 	}
 	fs := flag.NewFlagSet("factory close execute", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -50,7 +75,7 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&req.JSON, "json", false, "emit JSON-formatted output")
 	if err := fs.Parse(args); err != nil {
 		fmt.Fprintln(stderr, "factory close execute: ", err)
-		return exitRequestError
+		return exitRequest
 	}
 	for _, field := range []struct {
 		name, value string
@@ -65,36 +90,28 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 		if strings.TrimSpace(field.value) == "" {
 			fmt.Fprintf(stderr, "factory close execute: %s is required\n", field.name)
 			printExecuteUsage(stderr)
-			return exitRequestError
+			return exitRequest
 		}
 	}
-	result, verdict, err := ExecuteCloseDryRun(context.Background(), req)
+	result, class, err := ExecuteCloseDryRun(context.Background(), req)
 	if err != nil {
 		fmt.Fprintln(stderr, "factory close execute: ", err)
-		return exitCodeForVerdict(verdict)
+		return exitCodeForClass(class)
 	}
 	if req.JSON {
 		encoded, _ := json.MarshalIndent(result, "", "  ")
 		fmt.Fprintln(stdout, string(encoded))
-		return exitCodeForVerdict(verdict)
+		return exitCodeForClass(class)
 	}
 	fmt.Fprintf(stdout, "freeze_commit=%s\n", result.FreezeCommit)
 	fmt.Fprintf(stdout, "subject_commit=%s\n", result.SubjectCommit)
-	fmt.Fprintf(stdout, "verdict=%s\n", verdict)
-	return exitCodeForVerdict(verdict)
+	fmt.Fprintf(stdout, "verdict=%s\n", class)
+	return exitCodeForClass(class)
 }
 
-// Exit codes follow the dry-run contract.
-const (
-	exitPass         = 0
-	exitRequestError = 2
-	exitFail         = 3
-	exitUnavailable  = 4
-)
-
 // ExecuteCloseDryRun performs the dry-run pipeline and returns
-// the typed result plus the derived verdict.
-func ExecuteCloseDryRun(ctx context.Context, req ExecuteDryRunRequest) (ExecuteCloseResult, string, error) {
+// the typed result plus the failure class.
+func ExecuteCloseDryRun(ctx context.Context, req ExecuteDryRunRequest) (ExecuteCloseResult, ExecuteFailureClass, error) {
 	resolver := closure.NewRuntimeContextResolver()
 	rc, err := resolver.Resolve(
 		ctx,
@@ -106,34 +123,39 @@ func ExecuteCloseDryRun(ctx context.Context, req ExecuteDryRunRequest) (ExecuteC
 		req.EvidenceDirectory,
 	)
 	if err != nil {
-		return ExecuteCloseResult{}, verdictForRuntimeError(err), err
+		return ExecuteCloseResult{}, classifyRuntimeError(err), err
+	}
+	// An absent policy is a fail-closed observer failure; the
+	// dry-run never treats nil baseline as an authoritative
+	// empty set.
+	if len(req.GatePolicy.BaselineFindings) == 0 && len(req.GatePolicy.ACTOwnedPaths) == 0 {
+		return ExecuteCloseResult{}, ExecuteObserver, errors.New("gate policy authority absent")
 	}
 	collector := evidence.NewGateCollector(nil)
-	capture, err := collector.Capture(ctx, evidence.GateCaptureRequest{
+	capture, captureErr := collector.Capture(ctx, evidence.GateCaptureRequest{
 		RepositoryRoot: rc.RepositoryRoot,
 		SubjectRoot:    rc.RepositoryRoot,
 		EvidenceDir:    filepath.Join(rc.EvidenceDirectory, "gate"),
 		RunID:          rc.RunID,
 	})
-	if err != nil {
-		return ExecuteCloseResult{}, "UNAVAILABLE", err
+	if captureErr != nil {
+		return ExecuteCloseResult{}, ExecuteObserver, captureErr
 	}
-	// The dry-run verdict MUST come from the classifier, not
-	// from the raw gate exit code.
-	verdict := string(evidence.ClassifyACTOwnedGate(evidence.ClassificationInputs{
+	verdict := evidence.ClassifyACTOwnedGate(evidence.ClassificationInputs{
 		ObservedStatus:   capture.ExecGateObservedStatus,
 		ObservedFindings: capture.PreExistingFindings,
-		BaselineFindings: nil,
-		ACTOwnedPaths:    nil,
+		BaselineFindings: req.GatePolicy.BaselineFindings,
+		ACTOwnedPaths:    req.GatePolicy.ACTOwnedPaths,
 		LaneMissing:      capture.ExecGateObservedStatus == "UNKNOWN",
 		LaneTimedOut:     capture.TimedOut,
 		LaneTruncated:    capture.StdoutTruncated || capture.StderrTruncated,
-	}))
+	})
+	class := classFromVerdict(string(verdict))
 	result := ExecuteCloseResult{
 		FreezeCommit:  rc.FreezeCommit,
 		SubjectCommit: rc.SubjectCommit,
 	}
-	return result, verdict, nil
+	return result, class, nil
 }
 
 // ExecuteCloseResult is the typed result.
@@ -142,38 +164,50 @@ type ExecuteCloseResult struct {
 	SubjectCommit string `json:"subject_commit"`
 }
 
-// exitCodeForVerdict is the deterministic mapping from verdict
-// to exit code.
-func exitCodeForVerdict(verdict string) int {
+// exitCodeForClass projects a class onto the exact exit code.
+func exitCodeForClass(class ExecuteFailureClass) int {
+	switch class {
+	case "":
+		return exitPass
+	case ExecuteRequest:
+		return exitRequest
+	case ExecuteVerification:
+		return exitVerify
+	case ExecuteObserver:
+		return exitObserve
+	}
+	return exitObserve
+}
+
+// classFromVerdict projects the classifier verdict onto a class.
+func classFromVerdict(verdict string) ExecuteFailureClass {
 	switch verdict {
 	case "PASS":
-		return exitPass
+		return ExecuteFailureClass("")
 	case "FAIL":
-		return exitFail
+		return ExecuteVerification
 	default:
-		return exitUnavailable
+		return ExecuteObserver
 	}
 }
 
-// verdictForRuntimeError uses the standard errors.As to map a
-// RuntimeContextError into the dry-run verdict. The function
-// never panics: if no typed error matches, the verdict is
-// UNAVAILABLE.
-func verdictForRuntimeError(err error) string {
+// classifyRuntimeError uses the standard errors.As to map a
+// RuntimeContextError into a failure class.
+func classifyRuntimeError(err error) ExecuteFailureClass {
 	if err == nil {
-		return "PASS"
+		return ExecuteFailureClass("")
 	}
 	var rce *closure.RuntimeContextError
 	if errors.As(err, &rce) {
 		switch rce.Kind {
 		case "dirty_worktree", "freeze_equals_subject", "freeze_not_ancestor",
 			"unsupported_object_format", "plan_path_invalid", "empty_field":
-			return "FAIL"
+			return ExecuteRequest
 		default:
-			return "UNAVAILABLE"
+			return ExecuteObserver
 		}
 	}
-	return "UNAVAILABLE"
+	return ExecuteObserver
 }
 
 func printExecuteUsage(w io.Writer) {

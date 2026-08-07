@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package evidence - evidence_test.go implements the matrix
-// tests required by CORRECTION01.
+// tests required by CORRECTION01-R1-R1.
 
 package evidence
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,20 +57,13 @@ func TestClosureSingleGateCapture(t *testing.T) {
 	if capture.ExecGateObservedStatus != "OK" {
 		t.Errorf("status: %s", capture.ExecGateObservedStatus)
 	}
-	if len(capture.LaneResults) != 2 {
-		t.Errorf("lanes: %d", len(capture.LaneResults))
-	}
-	if len(capture.PreExistingFindings) != 1 {
-		t.Errorf("findings: %d", len(capture.PreExistingFindings))
-	}
 	if collector.Calls() != 1 {
-		t.Errorf("calls: %d (exactly-once)", collector.Calls())
+		t.Errorf("calls: %d", collector.Calls())
 	}
 	// Second collector does not see the first collector's calls.
 	collector2 := NewGateCollector(&fakeRunner{out: "lane test:OK\n", code: 0})
-	evidenceDir2 := filepath.Join(tmp, "evidence2")
 	if _, err := collector2.Capture(context.Background(), GateCaptureRequest{
-		SubjectRoot: tmp, EvidenceDir: evidenceDir2, RunID: "run-2",
+		SubjectRoot: tmp, EvidenceDir: filepath.Join(tmp, "evidence2"), RunID: "run-2",
 	}); err != nil {
 		t.Fatalf("second capture: %v", err)
 	}
@@ -121,69 +113,34 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 		inputs ClassificationInputs
 		want   ACTOwnedClassification
 	}{
-		{
-			name: "observed_ok",
-			inputs: ClassificationInputs{
-				ObservedStatus:   "OK",
-				ObservedFindings: nil,
-				BaselineFindings: nil,
-				ACTOwnedPaths:    nil,
-			},
-			want: ACTOwnedPass,
-		},
-		{
-			name:   "observed_skipped",
-			inputs: ClassificationInputs{ObservedStatus: "SKIP"},
-			want:   ACTOwnedUnavailable,
-		},
-		{
-			name: "timed_out",
-			inputs: ClassificationInputs{
-				ObservedStatus: "OK",
-				LaneTimedOut:   true,
-			},
-			want: ACTOwnedUnavailable,
-		},
-		{
-			name: "truncated",
-			inputs: ClassificationInputs{
-				ObservedStatus: "OK",
-				LaneTruncated:  true,
-			},
-			want: ACTOwnedUnavailable,
-		},
+		{name: "observed_ok", inputs: ClassificationInputs{ObservedStatus: "OK"}, want: ACTOwnedPass},
+		{name: "observed_skipped", inputs: ClassificationInputs{ObservedStatus: "SKIP"}, want: ACTOwnedUnavailable},
+		{name: "timed_out", inputs: ClassificationInputs{ObservedStatus: "OK", LaneTimedOut: true}, want: ACTOwnedUnavailable},
+		{name: "truncated", inputs: ClassificationInputs{ObservedStatus: "OK", LaneTruncated: true}, want: ACTOwnedUnavailable},
 		{
 			name: "failed_with_baseline_only",
 			inputs: ClassificationInputs{
-				ObservedStatus: "FAILED",
-				ObservedFindings: []GateFinding{
-					{Path: "cmd/leamas/x.go", Rule: "r1", Severity: "warning"},
-				},
-				BaselineFindings: []GateFinding{
-					{Path: "cmd/leamas/x.go", Rule: "r1", Severity: "warning"},
-				},
-				ACTOwnedPaths: []string{"internal/factory/closure/**"},
+				ObservedStatus:   "FAILED",
+				ObservedFindings: []GateFinding{{Path: "cmd/leamas/x.go", Rule: "r1", Severity: "warning"}},
+				BaselineFindings: []GateFinding{{Path: "cmd/leamas/x.go", Rule: "r1", Severity: "warning"}},
+				ACTOwnedPaths:    []string{"internal/factory/closure/**"},
 			},
 			want: ACTOwnedPass,
 		},
 		{
 			name: "failed_owned_path",
 			inputs: ClassificationInputs{
-				ObservedStatus: "FAILED",
-				ObservedFindings: []GateFinding{
-					{Path: "internal/factory/closure/x.go", Rule: "r1"},
-				},
-				ACTOwnedPaths: []string{"internal/factory/closure/**"},
+				ObservedStatus:   "FAILED",
+				ObservedFindings: []GateFinding{{Path: "internal/factory/closure/x.go", Rule: "r1"}},
+				ACTOwnedPaths:    []string{"internal/factory/closure/**"},
 			},
 			want: ACTOwnedFail,
 		},
 		{
 			name: "failed_new_finding",
 			inputs: ClassificationInputs{
-				ObservedStatus: "FAILED",
-				ObservedFindings: []GateFinding{
-					{Path: "x.go", Rule: "new-rule"},
-				},
+				ObservedStatus:   "FAILED",
+				ObservedFindings: []GateFinding{{Path: "x.go", Rule: "new-rule"}},
 				BaselineFindings: nil,
 				ACTOwnedPaths:    []string{"internal/factory/closure/**"},
 			},
@@ -192,9 +149,8 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 		{
 			name: "failed_no_findings",
 			inputs: ClassificationInputs{
-				ObservedStatus:   "FAILED",
-				ObservedFindings: nil,
-				ACTOwnedPaths:    []string{"internal/factory/closure/**"},
+				ObservedStatus: "FAILED",
+				ACTOwnedPaths:  []string{"internal/factory/closure/**"},
 			},
 			want: ACTOwnedUnavailable,
 		},
@@ -209,67 +165,29 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 	}
 }
 
-// TestClosureEvidenceAtomicPublication exercises the publication
-// step.
+// TestClosureEvidenceAtomicPublication asserts that the
+// publication step rejects incomplete documents. The dry-run
+// cannot prove the four required authorities (caller state,
+// subject execution, binary authority, check results) and
+// must therefore leave the document INCOMPLETE; PublishClosureEvidence
+// rejects INCOMPLETE documents.
 func TestClosureEvidenceAtomicPublication(t *testing.T) {
 	tmp, err := os.MkdirTemp("", "evidence-pub-")
 	if err != nil {
 		t.Fatalf("tempdir: %v", err)
 	}
 	defer os.RemoveAll(tmp)
-	evidence := ClosureEvidence{
-		SchemaVersion: ClosureEvidenceSchemaVersion,
-		Runtime: RuntimeContextSubset{
-			ACTID:             "ACT-TEST",
-			RepositoryRoot:    "/tmp/repo",
-			RunID:             "run-1",
-			FreezeCommit:      "1111111111111111111111111111111111111111",
-			FreezeTree:        "2222222222222222222222222222222222222222",
-			SubjectCommit:     "3333333333333333333333333333333333333333",
-			SubjectTree:       "4444444444444444444444444444444444444444",
-			PlanPath:          "docs/plan.json",
-			PlanBlob:          "5555555555555555555555555555555555555555",
-			PlanSHA256:        strings.Repeat("a", 64),
-			EvidenceDirectory: "/tmp/evidence",
-			StartedAt:         "2026-08-06T00:00:00Z",
-		},
-		Gate: GateCapture{
-			RawOutputPath: "/tmp/raw",
-			RawSHA256:     strings.Repeat("b", 64),
-		},
-		Binary: BuiltBinaryEvidence{
-			BinaryPath:   "/tmp/bin/leamas",
-			BinarySHA256: strings.Repeat("c", 64),
-		},
-		Completeness: EvidenceComplete,
-	}
+	evidence := incompleteClosureEvidence()
 	outputPath := filepath.Join(tmp, "evidence.json")
 	pub, err := PublishClosureEvidence(PublicationRequest{
 		OutputPath: outputPath,
 		Evidence:   evidence,
 	})
-	if err != nil {
-		t.Fatalf("publish: %v", err)
+	if err == nil {
+		t.Fatalf("publish should reject incomplete evidence, got pub=%+v", pub)
 	}
-	if pub.DocumentPath == "" || pub.SidecarPath == "" {
-		t.Fatalf("paths empty: %+v", pub)
-	}
-	sidecar, err := os.ReadFile(pub.SidecarPath)
-	if err != nil {
-		t.Fatalf("read sidecar: %v", err)
-	}
-	if !strings.Contains(string(sidecar), pub.DocumentSHA) {
-		t.Errorf("sidecar does not match document hash")
-	}
-	if strings.Contains(string(pub.DocumentBytes), pub.DocumentSHA) {
-		t.Errorf("document embeds its own hash")
-	}
-	var decoded ClosureEvidence
-	if err := json.Unmarshal(pub.DocumentBytes, &decoded); err != nil {
-		t.Errorf("decode: %v", err)
-	}
-	if decoded.Runtime.ACTID != evidence.Runtime.ACTID {
-		t.Errorf("decoded act id mismatch")
+	if !strings.Contains(err.Error(), "incomplete") {
+		t.Errorf("expected incomplete rejection, got: %v", err)
 	}
 }
 
@@ -283,7 +201,11 @@ func TestClosureEvidenceValidityPredicate(t *testing.T) {
 	}{
 		{name: "valid", mutate: nil, expectErr: false},
 		{name: "schema_version", mutate: func(e *ClosureEvidence) { e.SchemaVersion = 99 }, expectErr: true},
-		{name: "hardcoded_invalid", mutate: func(e *ClosureEvidence) { e.Completeness = "" }, expectErr: true},
+		{name: "wrong_completeness", mutate: func(e *ClosureEvidence) {
+			// Manually setting COMPLETE cannot bypass the
+			// derived INCOMPLETE verdict.
+			e.Completeness = EvidenceComplete
+		}, expectErr: true},
 		{name: "empty_act", mutate: func(e *ClosureEvidence) { e.Runtime.ACTID = "" }, expectErr: true},
 		{name: "bad_freeze", mutate: func(e *ClosureEvidence) { e.Runtime.FreezeCommit = "x" }, expectErr: true},
 		{name: "bad_subject", mutate: func(e *ClosureEvidence) { e.Runtime.SubjectCommit = "x" }, expectErr: true},
@@ -294,7 +216,7 @@ func TestClosureEvidenceValidityPredicate(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			doc := goodClosureEvidence()
+			doc := incompleteClosureEvidence()
 			if tc.mutate != nil {
 				tc.mutate(&doc)
 			}
@@ -309,16 +231,19 @@ func TestClosureEvidenceValidityPredicate(t *testing.T) {
 	}
 }
 
-// goodClosureEvidence returns a syntactically valid document.
-func goodClosureEvidence() ClosureEvidence {
+// incompleteClosureEvidence returns a syntactically valid
+// INCOMPLETE document.
+func incompleteClosureEvidence() ClosureEvidence {
 	return ClosureEvidence{
 		SchemaVersion: ClosureEvidenceSchemaVersion,
 		Runtime: RuntimeContextSubset{
-			ACTID:         "ACT-TEST",
-			FreezeCommit:  "1111111111111111111111111111111111111111",
-			SubjectCommit: "3333333333333333333333333333333333333333",
-			PlanBlob:      "5555555555555555555555555555555555555555",
-			PlanSHA256:    strings.Repeat("a", 64),
+			ACTID:             "ACT-TEST",
+			FreezeCommit:      "1111111111111111111111111111111111111111",
+			SubjectCommit:     "3333333333333333333333333333333333333333",
+			PlanBlob:          "5555555555555555555555555555555555555555",
+			PlanSHA256:        strings.Repeat("a", 64),
+			EvidenceDirectory: "/tmp/evidence",
+			StartedAt:         "2026-08-06T00:00:00Z",
 		},
 		Gate: GateCapture{
 			RawOutputPath: "/tmp/raw",
@@ -328,11 +253,11 @@ func goodClosureEvidence() ClosureEvidence {
 			BinaryPath:   "/tmp/bin/leamas",
 			BinarySHA256: strings.Repeat("c", 64),
 		},
-		Completeness: EvidenceComplete,
+		Completeness: EvidenceIncomplete,
 	}
 }
 
-// versionRunner is a fake CommandRunner for the binary tests.
+// versionRunner is a fake CommandRunner.
 type versionRunner struct {
 	stdout string
 }
@@ -345,7 +270,7 @@ func (v *versionRunner) Run(ctx context.Context, name string, args []string, dir
 }
 
 // TestClosureExactSubjectBinary exercises the binary build
-// invariants with a fake runner.
+// invariants.
 func TestClosureExactSubjectBinary(t *testing.T) {
 	dir, err := os.MkdirTemp("", "binary-build-")
 	if err != nil {

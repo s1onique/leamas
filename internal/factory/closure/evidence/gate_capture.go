@@ -198,13 +198,30 @@ func (b *truncatedBuffer) bytes() []byte {
 // GateCollector owns exactly one closure run. The first Capture
 // call invokes the runner; every subsequent call returns the
 // cached result. Two collectors never share state.
+// sameGateRequest compares two GateCaptureRequest values.
+// SubjectRoot and EvidenceDir are the identity-bearing fields.
+func sameGateRequest(a, b GateCaptureRequest) bool {
+	return a.SubjectRoot == b.SubjectRoot && a.EvidenceDir == b.EvidenceDir
+}
+
+// ErrCollectorRequestMismatch is the typed error returned when
+// a subsequent Capture call supplies a different GateCaptureRequest.
+var ErrCollectorRequestMismatch = errors.New("evidence: collector request identity mismatch")
+
+// collector-request-mismatch error.
+func CollectorRequestMismatch(err error) bool {
+	return err != nil && errors.Is(err, ErrCollectorRequestMismatch)
+}
+
 type GateCollector struct {
-	mu         sync.Mutex
-	once       sync.Once
-	runner     CommandRunner
-	done       bool
-	capture    GateCapture
-	captureErr error
+	mu                   sync.Mutex
+	once                 sync.Once
+	runner               CommandRunner
+	done                 bool
+	firstReq             GateCaptureRequest
+	capture              GateCapture
+	captureErr           error
+	collectorMismatchErr error
 }
 
 // NewGateCollector constructs an empty per-run collector.
