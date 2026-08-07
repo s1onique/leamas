@@ -43,6 +43,10 @@ func executeChecks(ctx context.Context, request checkExecutionRequest, executor 
 	evidence := make([]EvidenceRecord, 0, len(request.Checks)*2)
 	priorFailure := false
 	for _, check := range request.Checks {
+		if check.Mode == CheckModeExclude {
+			results = append(results, excludedResult(check, request.SubjectTreeOID))
+			continue
+		}
 		if check.Mode != CheckModeRun {
 			continue
 		}
@@ -182,4 +186,28 @@ func writeDetachedBytes(directory, logicalName, mediaType string, data []byte) (
 		ByteCount:    int64(len(data)),
 		Availability: "detached",
 	}, nil
+}
+
+// excludedResult returns a typed CheckResult for an exclude-mode
+// check. The argv is NEVER executed; the runner only records
+// that the plan declared the check as out of scope. The
+// caller verifies the sentinel file is absent to confirm the
+// production executor did not inadvertently run the
+// argv.
+func excludedResult(check PlanCheck, subjectTreeOID string) CheckResult {
+	zero := 0
+	return CheckResult{
+		CheckID:          check.ID,
+		SubjectTreeOID:   subjectTreeOID,
+		Argv:             append([]string(nil), check.Argv...),
+		WorkingDirectory: check.WorkingDirectory,
+		StartedAtUTC:     "",
+		FinishedAtUTC:    "",
+		DurationMS:       0,
+		ExitCode:         &zero,
+		Status:           "excluded",
+		StdoutSHA256:     "",
+		StderrSHA256:     "",
+		OutputTruncated:  false,
+	}
 }

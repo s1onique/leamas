@@ -55,6 +55,11 @@ const (
 	V2CodeCallerTreeChanged          V2DiagnosticCode = "caller_tree_changed"
 	V2CodeCallerWorktreeDirtyAfter   V2DiagnosticCode = "caller_worktree_dirty_after"
 	V2CodeWorktreeRegistrationLeaked V2DiagnosticCode = "worktree_registration_leaked"
+	// ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01-CORRECTION02
+	// adds caller refs drift code. The snapshot captures
+	// `git for-each-ref` output and any drift between BEFORE
+	// and AFTER produces this typed diagnostic.
+	V2CodeCallerRefsChanged V2DiagnosticCode = "caller_refs_changed"
 	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-RUNNER-LIFECYCLE-INVARIANTS01
 	// adds git failure authority codes. These distinguish
 	// genuine missing objects from operational Git failures

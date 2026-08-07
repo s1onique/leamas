@@ -1,6 +1,4 @@
-package closure
-
-import "encoding/json"
+// SPDX-License-Identifier: Apache-2.0
 
 // plan_contract_v2_lifecycle.go centralises the Closure Protocol
 // v2 lifecycle constants, topology validators, and version
@@ -18,6 +16,9 @@ import "encoding/json"
 // ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01 is preserved
 // unchanged: the v1 direction is still freeze F ancestor of
 // subject S, with checks executing against F^{tree}.
+package closure
+
+import "encoding/json"
 
 // ClosureProtocolVersion is the explicit lifecycle version
 // dispatched before topology validation. v1 and v2 are the
@@ -53,8 +54,8 @@ func (v ClosureProtocolVersion) IsSupported() bool {
 
 // V2Topology captures the three lifecycle anchors of
 // Closure Protocol v2. Subject, freeze, and closure are
-// pairwise distinct; S is a strict ancestor of F; F is a
-// strict ancestor of C.
+// pairwise distinct; S is a strict ancestor of F; F is a strict
+// ancestor of C.
 type V2Topology struct {
 	SubjectCommit string
 	SubjectTree   string

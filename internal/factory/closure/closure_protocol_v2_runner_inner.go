@@ -39,7 +39,7 @@ import (
 // LIFECYCLE-INVARIANTS01 wires this function as a pure
 // helper; callers should continue to use
 // RunClosureProtocolV2WithDeps.
-func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2RunnerDeps, callerBefore v2CallerState) (v2RunCandidate, error) {
+func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2RunnerDeps, callerBefore v2CallerState, topology executionTopology) (v2RunCandidate, error) {
 	_ = callerBefore
 	// Phase 3 (CORRECTION01): detached output locations.
 	if err := EnforceDetachedV2Outputs(req); err != nil {
@@ -86,7 +86,7 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 			fmt.Sprintf("resolve freeze tree: %s", err.Error()),
 			"freeze_tree", err.Error())
 	}
-	outcome := DispatchClosureTopology(req.ClosureProtocolVersion, facts)
+	outcome := dispatchClosureTopology(req.ClosureProtocolVersion, topology, facts)
 	if !outcome.Accepted {
 		return v2RunCandidate{}, &V2Error{Diags: V2Diagnostics{{
 			Code:         outcome.Code,

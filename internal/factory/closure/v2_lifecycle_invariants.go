@@ -182,11 +182,18 @@ func snapshotWorktreeRegistrations(ctx context.Context, git gitClient, repoRoot 
 // step. The struct is compared bit-for-bit against a post-run
 // snapshot; every difference produces a typed V2Diagnostic so
 // the runner cannot claim success when it mutated the caller.
+//
+// ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01-CORRECTION02
+// adds RefsBytes and RefsHash so the snapshot also covers the
+// `git for-each-ref` output. Both fields are fail-closed: an
+// observation failure leaves the snapshot non-Available.
 type v2CallerState struct {
 	HEADCommit            string
 	HEADTree              string
 	StatusPorcelain       string
 	WorktreeRegistrations v2WorktreeRegistrationSet
+	RefsBytes             string
+	RefsHash              string
 }
 
 // v2CallerStateSnapshot is the fail-closed result of capturing
@@ -260,6 +267,18 @@ func snapshotCallerState(ctx context.Context, git gitClient, repoRoot string) v2
 			PropertyName: "caller_state",
 		})
 	}
+	// ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01-CORRECTION02:
+	// refs bytes/hash. Captured from `git for-each-ref` via the
+	// typed snapshot helper. Any observation failure marks the
+	// caller-state snapshot as unavailable so the runner refuses
+	// to claim success.
+	refsBytes, refsHash, refsDiags, refsAvailable := snapshotCallerRefs(ctx, git, repoRoot)
+	if refsAvailable {
+		snap.State.RefsBytes = refsBytes
+		snap.State.RefsHash = refsHash
+	} else {
+		snap.Diagnostics = append(snap.Diagnostics, refsDiags...)
+	}
 	snap.Available = len(snap.Diagnostics) == 0
 	return snap
 }
@@ -314,6 +333,22 @@ func (s v2CallerState) Diff(after v2CallerState) V2Diagnostics {
 			Message:      fmt.Sprintf("linked worktree registration leaked: %s", strings.Join(paths, ", ")),
 			PropertyName: "worktree_registration",
 			Detail:       strings.Join(paths, ","),
+		})
+	}
+	// ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01-CORRECTION02:
+	// refs drift. We compare by deterministic bytes; an empty
+	// before-refs field is treated as "unknown" and does not
+	// produce a diagnostic.
+	// refs authority must be byte-for-byte equal. An empty before-refs
+	// snapshot is a valid initial state; the outer snapshot barrier
+	// decides whether either observation was unavailable, so Diff
+	// itself never collapses the comparison to "unknown".
+	if s.RefsBytes != after.RefsBytes {
+		out = append(out, V2Diagnostic{
+			Code:         V2CodeCallerRefsChanged,
+			Message:      fmt.Sprintf("caller refs changed: before=%s after=%s", s.RefsHash, after.RefsHash),
+			PropertyName: "caller_refs",
+			Detail:       after.RefsHash,
 		})
 	}
 	return out
