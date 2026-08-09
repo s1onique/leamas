@@ -9,6 +9,8 @@ package closure
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	osexec "os/exec"
@@ -227,58 +229,115 @@ func TestClosureSubjectWorktreeAuthority(t *testing.T) {
 
 func TestClosureCheckResultBijection(t *testing.T) {
 	t.Parallel()
-	good := []evidence.CheckResultRecord{
+	// Build a fully valid candidate so DeriveClosureEvidenceCompleteness
+	// returns EvidenceComplete. The B2 canonical predicate is a closed
+	// AND of all 43 authorities; the test mutates only the plan/result
+	// bijection invariants.
+	planBytes := []byte("{\"contract_version\":1,\"checks\":[]}")
+	planSum := sha256.Sum256(planBytes)
+	planSHA := hex.EncodeToString(planSum[:])
+	subjectCommit := "3333333333333333333333333333333333333333"
+	subjectTree := "4444444444444444444444444444444444444444"
+	build := func(results []evidence.CheckResult) evidence.ClosureEvidence {
+		return evidence.ClosureEvidence{
+			SchemaVersion: evidence.ClosureEvidenceSchemaVersion,
+			Protocol:      evidence.ClosureProtocolVersion,
+			Runtime: evidence.RuntimeAuthority{
+				RepositoryRoot:      "/repo",
+				FreezeCommit:        "1111111111111111111111111111111111111111",
+				FreezeTree:          "2222222222222222222222222222222222222222",
+				SubjectCommit:       subjectCommit,
+				SubjectTree:         subjectTree,
+				ExecutionTree:       subjectTree,
+				PlanPath:            "plan",
+				PlanBlob:            "5555555555555555555555555555555555555555",
+				PlanSHA256:          planSHA,
+				PlanBytes:           planBytes,
+				FAncestorOfSVerified: true,
+			},
+			Plan: evidence.PlanAuthority{
+				ExpectedChecks: []evidence.PlanCheckSpec{
+					{ID: "c1", Mode: "run"},
+					{ID: "c2", Mode: "run"},
+					{ID: "c3", Mode: "exclude"},
+				},
+			},
+			Results: results,
+			Gate: evidence.GateAuthority{
+				ObservedStatus:  "OK",
+				Classification:  "PASS",
+				InvocationCount: 1,
+				RepositoryRoot:  "/repo",
+				SubjectRoot:     "/subject",
+			},
+			Binary: evidence.BinaryAuthority{
+				BinaryPath:                "/tmp/leamas",
+				BinarySHA256:              planSHA,
+				BinaryCommit:              subjectCommit,
+				BinaryModified:            false,
+				SourceCommit:              subjectCommit,
+				SourceTree:                subjectTree,
+				SourceClean:               true,
+				SourceDetached:            true,
+				OutputOutsideAllWorktrees: true,
+				Executable:                true,
+			},
+			CallerBefore: evidence.CallerStateSnapshot{
+				Available:             true,
+				Head:                  subjectCommit,
+				Tree:                  subjectTree,
+				StatusHash:            "status",
+				RefsHash:              "refs",
+				WorktreeInventoryHash: "wt",
+			},
+			CallerAfter: evidence.CallerStateSnapshot{
+				Available:             true,
+				Head:                  subjectCommit,
+				Tree:                  subjectTree,
+				StatusHash:            "status",
+				RefsHash:              "refs",
+				WorktreeInventoryHash: "wt",
+			},
+		}
+	}
+	good := []evidence.CheckResult{
 		{CheckID: "c1", Mode: "run", Outcome: "pass"},
 		{CheckID: "c2", Mode: "run", Outcome: "pass"},
 		{CheckID: "c3", Mode: "exclude", Outcome: "excluded"},
 	}
-	env := evidence.ClosureEvidenceEx{
-		SchemaVersion: 2,
-		Authorities: evidence.CompletenessAuthorities{
-			Runtime: evidence.RuntimeAuthorityRecord{
-				PlanCheckIDs:   []string{"c1", "c2", "c3"},
-				PlanCheckModes: []string{"run", "run", "exclude"},
-			},
-			Checks: good,
-		},
-	}
-	if !env.CheckResultBijectionValid() {
+	env := build(good)
+	if got := evidence.DeriveClosureEvidenceCompleteness(env); got != evidence.EvidenceComplete {
 		t.Fatalf("valid bijection must pass: %+v", env)
 	}
-	badOrder := env
-	badOrder.Authorities.Checks = []evidence.CheckResultRecord{
+	badOrder := build([]evidence.CheckResult{
 		{CheckID: "c2", Mode: "run", Outcome: "pass"},
 		{CheckID: "c1", Mode: "run", Outcome: "pass"},
 		{CheckID: "c3", Mode: "exclude", Outcome: "excluded"},
-	}
-	if badOrder.CheckResultBijectionValid() {
+	})
+	if got := evidence.DeriveClosureEvidenceCompleteness(badOrder); got != evidence.EvidenceIncomplete {
 		t.Fatalf("out-of-order results must reject")
 	}
-	badUnknown := env
-	badUnknown.Authorities.Checks = []evidence.CheckResultRecord{
+	badUnknown := build([]evidence.CheckResult{
 		{CheckID: "c1", Mode: "run", Outcome: "pass"},
 		{CheckID: "c2", Mode: "run", Outcome: "pass"},
 		{CheckID: "ghost", Mode: "exclude", Outcome: "excluded"},
-	}
-	if badUnknown.CheckResultBijectionValid() {
+	})
+	if got := evidence.DeriveClosureEvidenceCompleteness(badUnknown); got != evidence.EvidenceIncomplete {
 		t.Fatalf("unknown ID must reject")
 	}
-	badDup := env
-	badDup.Authorities.Checks = []evidence.CheckResultRecord{
+	badDup := build([]evidence.CheckResult{
 		{CheckID: "c1", Mode: "run", Outcome: "pass"},
 		{CheckID: "c1", Mode: "run", Outcome: "pass"},
 		{CheckID: "c3", Mode: "exclude", Outcome: "excluded"},
-	}
-	if badDup.CheckResultBijectionValid() {
+	})
+	if got := evidence.DeriveClosureEvidenceCompleteness(badDup); got != evidence.EvidenceIncomplete {
 		t.Fatalf("duplicate ID must reject")
 	}
-	envEmpty := evidence.ClosureEvidenceEx{
-		Authorities: evidence.CompletenessAuthorities{
-			Runtime: evidence.RuntimeAuthorityRecord{},
-			Checks:  good,
-		},
-	}
-	if envEmpty.CheckResultBijectionValid() {
+	// Empty plan: build a candidate whose only mutation is the missing
+	// expected-checks list. The closed-AND predicate must reject.
+	empty := build(good)
+	empty.Plan.ExpectedChecks = nil
+	if got := evidence.DeriveClosureEvidenceCompleteness(empty); got != evidence.EvidenceIncomplete {
 		t.Fatalf("empty plan must reject")
 	}
 }

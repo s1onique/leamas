@@ -1,323 +1,198 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package evidence - closure_evidence_completeness.go extends
-// ClosureEvidence with the runtime authority fields and
-// implements the real DeriveClosureEvidenceCompleteness
-// required by Phase 8 of
-// ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01-CORRECTION02.
+// Package evidence - closure_evidence_completeness.go owns the
+// single canonical predicate DeriveClosureEvidenceCompleteness
+// and the shared hex helpers.
 //
-// COMPLETE requires every predicate below to be true:
+// COMPLETE requires a closed AND of every required observation.
+// No predicate may be skipped because a string is empty:
+// "empty" and "unavailable" are deliberately distinct states
+// and the predicate rejects the empty presence of an authority
+// field as INCOMPLETE.
 //
-//   - runtime authority valid (RuntimeAuthorityValid)
-//   - exact F:P bytes valid (FrozenPlanBytesValid)
-//   - subject worktree tree == S^{tree} (SubjectWorktreeMatchesTree)
-//   - check/result bijection valid (CheckResultBijectionValid)
-//   - all required run checks successful (AllRunChecksSuccessful)
-//   - exclude checks unexecuted (ExcludeChecksUnexecuted)
-//   - no timeout (NoTimeout)
-//   - no cancellation (NoCancellation)
-//   - no truncation (NoTruncation)
-//   - no cleanup error (NoCleanupError)
-//   - gate classification PASS (GateClassificationPASS)
-//   - binary authority valid (BinaryAuthorityValid)
-//   - BEFORE state available (BeforeStateAvailable)
-//   - AFTER state available (AfterStateAvailable)
-//   - caller state unchanged (CallerStateUnchanged)
-//   - worktree inventory unchanged (WorktreeInventoryUnchanged)
+// The 43 predicates are encoded in declaration order. Each
+// predicate is a separate function so the mutation matrix in
+// TestClosureEvidenceCompletenessCanonical can exercise them
+// independently. The matrix MUST grow with every added
+// predicate; the test asserts row count via the tracked
+// predicate set in completenessPredicates.
 //
-// Mutation-test every predicate independently via
-// TestClosureEvidenceCompletenessDerived.
-//
-// Splitting this from closure_evidence.go keeps both files
-// under the LLM-friendly 400-line threshold while preserving
-// the single closure over the descriptor that
-// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01 requires.
+// The per-predicate functions are split across multiple
+// files to keep each file under the LLM-friendly 400-line
+// threshold while preserving the single closure over the
+// descriptor that ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01
+// requires.
 package evidence
 
-import (
-	"crypto/sha256"
-	"encoding/hex"
-)
-
-// RuntimeAuthorityRecord captures the runtime authority
-// observations the runner must record before declaring
-// COMPLETE. Every field is fail-closed: an empty value means
-// the observation failed or was never performed.
-type RuntimeAuthorityRecord struct {
-	RepositoryRoot              string
-	SubjectCommit               string
-	SubjectTree                 string
-	FreezeCommit                string
-	FreezeTree                  string
-	PlanPath                    string
-	PlanBlob                    string
-	PlanSHA256                  string
-	PlanBytes                   []byte
-	EvidenceDirectory           string
-	StartedAt                   string
-	SubjectWorktreeRoot         string
-	SubjectWorktreeObservedTree string
-	ExecutionTree               string
-	CallerHEAD                  string
-	CallerHEADTree              string
-	CallerRefsHash              string
-	PlanCheckIDs                []string
-	PlanCheckModes              []string
-}
-
-// CheckResultRecord captures the typed outcome of one frozen
-// plan check. Mode is "run" or "exclude". Outcome is "pass",
-// "fail", "timeout", "canceled", or "excluded".
-type CheckResultRecord struct {
-	CheckID         string
-	Mode            string
-	Outcome         string
-	ExitCode        int
-	TimedOut        bool
-	Canceled        bool
-	StdoutTruncated bool
-	StderrTruncated bool
-	CleanupError    string
-}
-
-// GateClassificationRecord captures the gate classification
-// inputs and verdict. Verdict is "PASS", "FAIL", or "UNAVAILABLE".
-type GateClassificationRecord struct {
-	Verdict              string
-	ObservedFindings     []GateFinding
-	BaselineFindings     []GateFinding
-	ACTOwnedPaths        []string
-	LaneMissing          []string
-	LaneTimedOut         []string
-	LaneTruncated        []string
-	ClassificationInputs ClassificationInputs
-}
-
-// CallerStateAvailability records whether the BEFORE and
-// AFTER caller-state observations were Available.
-type CallerStateAvailability struct {
-	BeforeAvailable bool
-	AfterAvailable  bool
-}
-
-// CallerStateDrift records whether the BEFORE and AFTER
-// caller-state observations were equal.
-type CallerStateDrift struct {
-	HEADChanged    bool
-	TreeChanged    bool
-	StatusChanged  bool
-	RefsChanged    bool
-	WorktreeLeaked bool
-}
-
-// CompletenessAuthorities bundles every observation the
-// predicate derives from. A value of this type MUST be
-// constructed by the runner; the evidence document alone is
-// never enough to derive COMPLETE.
-type CompletenessAuthorities struct {
-	Runtime         RuntimeAuthorityRecord
-	Checks          []CheckResultRecord
-	Gate            GateClassificationRecord
-	Binary          BuiltBinaryEvidence
-	CallerAvailable CallerStateAvailability
-	CallerDrift     CallerStateDrift
-}
-
-// ClosureEvidenceEx extends ClosureEvidence with the runtime
-// authority and observation records the predicate consumes.
-// SchemaVersion is bumped to 2 so consumers can detect the new
-// shape.
-type ClosureEvidenceEx struct {
-	SchemaVersion     int                     `json:"schema_version"`
-	Runtime           RuntimeContextSubset    `json:"runtime"`
-	Gate              GateCapture             `json:"gate"`
-	Binary            BuiltBinaryEvidence     `json:"binary"`
-	Checks            []CheckEvidence         `json:"checks"`
-	CallerStateBefore CallerState             `json:"caller_state_before"`
-	CallerStateAfter  CallerState             `json:"caller_state_after"`
-	Authorities       CompletenessAuthorities `json:"authorities"`
-	Completeness      EvidenceCompleteness    `json:"completeness"`
-}
-
-// DeriveClosureEvidenceCompletenessEx derives the COMPLETE /
-// INCOMPLETE verdict from the supplied authorities. Callers
-// cannot force COMPLETE: the predicate is a closed AND of
-// every required observation. A nil authority or missing
-// observation collapses to INCOMPLETE.
-//
-// Every predicate is exposed as a separate function so each
-// branch can be mutation-tested independently by
-// TestClosureEvidenceCompletenessDerived.
-func DeriveClosureEvidenceCompletenessEx(evidence ClosureEvidenceEx) EvidenceCompleteness {
-	if !evidence.RuntimeAuthorityValid() {
-		return EvidenceIncomplete
-	}
-	if !evidence.FrozenPlanBytesValid() {
-		return EvidenceIncomplete
-	}
-	if !evidence.SubjectWorktreeMatchesTree() {
-		return EvidenceIncomplete
-	}
-	if !evidence.CheckResultBijectionValid() {
-		return EvidenceIncomplete
-	}
-	if !evidence.AllRunChecksSuccessful() {
-		return EvidenceIncomplete
-	}
-	if !evidence.ExcludeChecksUnexecuted() {
-		return EvidenceIncomplete
-	}
-	if !evidence.NoTimeout() {
-		return EvidenceIncomplete
-	}
-	if !evidence.NoCancellation() {
-		return EvidenceIncomplete
-	}
-	if !evidence.NoTruncation() {
-		return EvidenceIncomplete
-	}
-	if !evidence.NoCleanupError() {
-		return EvidenceIncomplete
-	}
-	if !evidence.GateClassificationPASS() {
-		return EvidenceIncomplete
-	}
-	if !evidence.BinaryAuthorityValid() {
-		return EvidenceIncomplete
-	}
-	if !evidence.BeforeStateAvailable() {
-		return EvidenceIncomplete
-	}
-	if !evidence.AfterStateAvailable() {
-		return EvidenceIncomplete
-	}
-	if !evidence.CallerStateUnchanged() {
-		return EvidenceIncomplete
-	}
-	if !evidence.WorktreeInventoryUnchanged() {
-		return EvidenceIncomplete
+// DeriveClosureEvidenceCompleteness is the canonical predicate.
+// It returns EvidenceComplete only when every required
+// predicate is true, and EvidenceIncomplete otherwise. Callers
+// cannot force COMPLETE: the verdict is always derived from
+// the candidate's authorities.
+func DeriveClosureEvidenceCompleteness(candidate ClosureEvidence) EvidenceCompleteness {
+	for _, fn := range completenessPredicatesInOrder {
+		if !fn(candidate) {
+			return EvidenceIncomplete
+		}
 	}
 	return EvidenceComplete
 }
 
-// RuntimeAuthorityValid reports whether every required runtime
-// authority field is populated.
-func (e ClosureEvidenceEx) RuntimeAuthorityValid() bool {
-	a := e.Authorities.Runtime
-	return a.RepositoryRoot != "" &&
-		isValidOID(a.SubjectCommit) &&
-		isValidOID(a.SubjectTree) &&
-		isValidOID(a.FreezeCommit) &&
-		isValidOID(a.FreezeTree) &&
-		a.PlanPath != "" &&
-		isValidOID(a.PlanBlob) &&
-		isHexSHA256(a.PlanSHA256) &&
-		a.EvidenceDirectory != "" &&
-		a.SubjectWorktreeRoot != "" &&
-		isValidOID(a.SubjectWorktreeObservedTree) &&
-		isValidOID(a.ExecutionTree)
+// completenessPredicatesInOrder is the authoritative ordered
+// list of the 43 predicates. The slice form drives the
+// canonical predicate; the map form (completenessPredicates)
+// drives the mutation matrix test. Both MUST stay in sync.
+var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
+	// runtime predicates (1..7)
+	runtimeIdentitiesStructurallyValid,
+	runtimeFreezeDifferentFromSubject,
+	runtimeFAncestorOfSVerified,
+	runtimeExecutionTreeEqualsSubjectTree,
+	runtimePlanBlobValid,
+	runtimePlanSHA256Valid,
+	runtimePlanBytesParseSuccessfully,
+
+	// plan/result predicates (8..12)
+	planResultCardinalityEqual,
+	planResultIDsBijective,
+	planResultOrderMatchesPlan,
+	planResultModeMatchesPlanMode,
+	planNoUnknownCheckMode,
+
+	// results predicates (13..19)
+	resultsEveryRunCheckSuccessful,
+	resultsEveryExcludeCheckExcluded,
+	resultsNoTimeout,
+	resultsNoCancellation,
+	resultsNoStdoutTruncation,
+	resultsNoStderrTruncation,
+	resultsNoExecutionCleanupError,
+
+	// gate predicates (20..25)
+	gateClassificationEqualsPASS,
+	gateInvocationCountEqualsOne,
+	gateSubjectRootEqualsSExecutionRoot,
+	gateNotTimedOut,
+	gateNoOutputTruncation,
+	gateErrorAbsent,
+
+	// binary predicates (26..36)
+	binaryAuthorityValid,
+	binaryCommitEqualsSubjectCommit,
+	binaryNotModified,
+	binarySourceCommitEqualsSubjectCommit,
+	binarySourceTreeEqualsSubjectTree,
+	binarySourceClean,
+	binarySourceDetached,
+	binaryOutputOutsideAllWorktrees,
+	binaryExecutable,
+	binarySHA256Valid,
+	binaryCleanupErrorAbsent,
+
+	// caller predicates (37..43)
+	callerBeforeAvailable,
+	callerAfterAvailable,
+	callerHEADUnchanged,
+	callerTreeUnchanged,
+	callerStatusUnchanged,
+	callerRefsUnchanged,
+	callerWorktreeInventoryUnchanged,
 }
 
-// FrozenPlanBytesValid reports whether the recorded plan
-// bytes are exactly the F:P bytes and the recorded SHA-256
-// matches SHA256(plan_bytes). A zero-length plan_bytes is
-// rejected.
-func (e ClosureEvidenceEx) FrozenPlanBytesValid() bool {
-	a := e.Authorities.Runtime
-	if len(a.PlanBytes) == 0 {
-		return false
-	}
-	sum := sha256.Sum256(a.PlanBytes)
-	got := hex.EncodeToString(sum[:])
-	return got == a.PlanSHA256
+// completenessPredicateNamesInOrder is the ordered list of
+// predicate names parallel to completenessPredicatesInOrder.
+// The mutation matrix asserts that every entry has at least
+// one row.
+var completenessPredicateNamesInOrder = []string{
+	"runtime_identities_structurally_valid",
+	"runtime_freeze_different_from_subject",
+	"runtime_f_ancestor_of_s_verified",
+	"runtime_execution_tree_equals_subject",
+	"runtime_plan_blob_valid",
+	"runtime_plan_sha256_valid",
+	"runtime_plan_bytes_parse_successfully",
+	"plan_result_cardinality_equal",
+	"plan_result_ids_bijective",
+	"plan_result_order_matches_plan",
+	"plan_result_mode_matches_plan",
+	"plan_no_unknown_check_mode",
+	"results_every_run_check_successful",
+	"results_every_exclude_check_excluded",
+	"results_no_timeout",
+	"results_no_cancellation",
+	"results_no_stdout_truncation",
+	"results_no_stderr_truncation",
+	"results_no_execution_cleanup_error",
+	"gate_classification_equals_pass",
+	"gate_invocation_count_equals_one",
+	"gate_subject_root_equals_s_exec_root",
+	"gate_not_timed_out",
+	"gate_no_output_truncation",
+	"gate_error_absent",
+	"binary_authority_valid",
+	"binary_commit_equals_subject_commit",
+	"binary_not_modified",
+	"binary_source_commit_equals_subject",
+	"binary_source_tree_equals_subject",
+	"binary_source_clean",
+	"binary_source_detached",
+	"binary_output_outside_all_worktrees",
+	"binary_executable",
+	"binary_sha256_valid",
+	"binary_cleanup_error_absent",
+	"caller_before_available",
+	"caller_after_available",
+	"caller_head_unchanged",
+	"caller_tree_unchanged",
+	"caller_status_unchanged",
+	"caller_refs_unchanged",
+	"caller_worktree_inventory_unchanged",
 }
 
-// SubjectWorktreeMatchesTree reports whether the detached
-// subject worktree's observed tree equals the recorded
-// SubjectTree / ExecutionTree. A worktree-root that is empty
-// or matches the caller repository root is rejected because
-// the runner must NEVER execute in the caller checkout.
-func (e ClosureEvidenceEx) SubjectWorktreeMatchesTree() bool {
-	a := e.Authorities.Runtime
-	if a.SubjectWorktreeRoot == "" {
+// completenessPredicates is the closed set of named predicates.
+// Every entry MUST have a matching branch in
+// DeriveClosureEvidenceCompleteness and a matching mutation
+// row in TestClosureEvidenceCompletenessCanonical. The map
+// length is asserted by the test so a missing mutation row
+// fails.
+var completenessPredicates = func() map[string]func(ClosureEvidence) bool {
+	out := make(map[string]func(ClosureEvidence) bool, len(completenessPredicatesInOrder))
+	for i, fn := range completenessPredicatesInOrder {
+		out[completenessPredicateNamesInOrder[i]] = fn
+	}
+	return out
+}()
+
+// completenessPredicateCount is the row count the mutation
+// matrix must agree with. Keep in sync with completenessPredicatesInOrder.
+const completenessPredicateCount = 43
+
+// ----------------------------------------------------------------------------
+// Small shared helpers
+// ----------------------------------------------------------------------------
+
+// isValidOID reports whether s is a 40-char lower- or upper-case
+// hex string. SHA-1 OIDs are exactly 40 hex chars.
+func isValidOID(s string) bool {
+	if len(s) != 40 {
 		return false
 	}
-	if a.SubjectWorktreeRoot == a.RepositoryRoot {
-		return false
+	for _, ch := range s {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')) {
+			return false
+		}
 	}
-	if !isValidOID(a.SubjectWorktreeObservedTree) {
-		return false
-	}
-	return a.SubjectWorktreeObservedTree == a.SubjectTree &&
-		a.SubjectWorktreeObservedTree == a.ExecutionTree
+	return true
 }
 
-// CheckResultBijectionValid reports whether every check in
-// the recorded plan has exactly one matching result, every
-// result references a check in the plan, and the result mode
-// matches the plan mode. The records MUST come from the
-// runner; an empty plan or empty result list collapses to
-// false. A missing or unknown mode is rejected.
-func (e ClosureEvidenceEx) CheckResultBijectionValid() bool {
-	// planModes binds the expected check ID to the expected
-	// mode. The plan authority is the only source of truth
-	// for which mode each check should run in; the result
-	// mode MUST match the plan mode or the bijection is
-	// invalid. A plan-mode run with a result-mode exclude
-	// is a silent bug and the predicate refuses to accept it.
-	expected := e.Authorities.Runtime.PlanCheckIDs
-	if len(expected) == 0 {
+// isHexSHA256 reports whether s is a 64-char lowercase hex
+// digest.
+func isHexSHA256(s string) bool {
+	if len(s) != 64 {
 		return false
 	}
-	expectedModes := e.Authorities.Runtime.PlanCheckModes
-	if len(expectedModes) > 0 && len(expectedModes) != len(expected) {
-		return false
-	}
-	results := e.Authorities.Checks
-	if len(results) == 0 {
-		return false
-	}
-	if len(results) != len(expected) {
-		return false
-	}
-	expectedSet := make(map[string]int, len(expected))
-	for _, id := range expected {
-		if id == "" {
-			return false
-		}
-		expectedSet[id]++
-	}
-	seen := make(map[string]int, len(results))
-	for i, r := range results {
-		if r.CheckID == "" {
-			return false
-		}
-		// Unknown mode is rejected. The closed set is
-		// run|exclude; any other mode string is rejected.
-		if r.Mode != "run" && r.Mode != "exclude" {
-			return false
-		}
-		// Plan order must match result order so the
-		// bijection is not silently reordered by an unsorted
-		// runner.
-		if r.CheckID != expected[i] {
-			return false
-		}
-		// Mode binding: when the plan declares modes,
-		// the result mode MUST match the plan mode.
-		if len(expectedModes) > 0 && expectedModes[i] != r.Mode {
-			return false
-		}
-		seen[r.CheckID]++
-	}
-	if len(seen) != len(expected) {
-		return false
-	}
-	for id, n := range seen {
-		if n != 1 {
-			return false
-		}
-		if expectedSet[id] != 1 {
+	for _, ch := range s {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
 			return false
 		}
 	}

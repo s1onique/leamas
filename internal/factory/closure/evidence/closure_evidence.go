@@ -1,277 +1,264 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package evidence - closure_evidence.go implements the
-// canonical ClosureEvidence type and atomic publication
-// required by Phase 7 of the parent ACT and Phase 5 of
-// CORRECTION01-R1-R1 (derived completeness).
-
+// Package evidence - closure_evidence.go defines the canonical
+// closure evidence record for ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-
+// CONTEXT-AND-EXECUTE01-CORRECTION02-B2.
+//
+// The file is the single source of truth for the evidence shape.
+// There is exactly one canonical type (ClosureEvidence), one
+// canonical completeness predicate (DeriveClosureEvidenceCompleteness)
+// and one canonical validation entry point (ValidateClosureEvidence).
+// The parallel `Ex` model that previously co-existed with
+// ClosureEvidence has been removed: an authority cannot be carried
+// in a struct that is not the canonical evidence record.
+//
+// Completeness is never stored on the struct. The single
+// canonical predicate re-derives COMPLETE / INCOMPLETE from the
+// authorities every time. Callers cannot force COMPLETE by
+// assigning a field.
+//
+// Splitting the file at the type boundary keeps each file under
+// the LLM-friendly 400-line threshold while preserving the single
+// closure over the descriptor required by
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01.
 package evidence
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strings"
-	"time"
 )
 
-// ClosureEvidenceSchemaVersion is the schema identifier.
-const ClosureEvidenceSchemaVersion = 1
+// ClosureEvidenceSchemaVersion is the schema identifier. The
+// version is bumped when the canonical struct shape changes.
+const ClosureEvidenceSchemaVersion = 3
 
-// EvidenceCompleteness is the derived validity of a closure
-// evidence document.
+// ClosureProtocolVersion is the published protocol identifier
+// that pairs with the schema version. The string value is the
+// canonical JSON token, so machine handling never has to parse
+// the message text.
+const ClosureProtocolVersion = "v2"
+
+// EvidenceCompleteness is the derived verdict returned by the
+// canonical predicate. The string values are the only valid
+// tokens; the struct itself never carries a Completeness field.
 type EvidenceCompleteness string
 
 const (
+	// EvidenceIncomplete is the verdict when ANY predicate in
+	// the closed AND is false. The evidence MUST NOT cross the
+	// publication barrier.
 	EvidenceIncomplete EvidenceCompleteness = "INCOMPLETE"
-	EvidenceComplete   EvidenceCompleteness = "COMPLETE"
+	// EvidenceComplete is the verdict when every predicate in
+	// the closed AND is true. Only after the predicate returns
+	// EvidenceComplete may the barrier produce publication bytes.
+	EvidenceComplete EvidenceCompleteness = "COMPLETE"
 )
 
-// CheckEvidence records the typed result of one runtime check.
-type CheckEvidence struct {
-	CheckID     string `json:"check_id"`
-	SubjectTree string `json:"subject_tree"`
-	Status      string `json:"status"`
-	ExitCode    *int   `json:"exit_code,omitempty"`
-	Message     string `json:"message,omitempty"`
+// RuntimeAuthority captures the immutable execution identity.
+// Every field is a fact observed by the runner; an empty value
+// means the observation failed or was never performed.
+type RuntimeAuthority struct {
+	RepositoryRoot string `json:"repository_root"`
+	FreezeCommit   string `json:"freeze_commit"`
+	FreezeTree     string `json:"freeze_tree"`
+	SubjectCommit  string `json:"subject_commit"`
+	SubjectTree    string `json:"subject_tree"`
+	ExecutionTree  string `json:"execution_tree"`
+	PlanPath       string `json:"plan_path"`
+	PlanBlob       string `json:"plan_blob"`
+	PlanSHA256     string `json:"plan_sha256"`
+	PlanBytes      []byte `json:"plan_bytes,omitempty"`
+	// FAncestorOfSVerified records that the runner topology
+	// authority has proven freeze_commit is an ancestor of
+	// subject_commit. The runtime identity fields alone cannot
+	// prove ancestorship; the runner must observe it. The
+	// candidate builder is the only writer.
+	FAncestorOfSVerified bool `json:"f_ancestor_of_s_verified"`
 }
 
-// CallerState records the observable caller worktree state.
-type CallerState struct {
-	WorktreeClean bool   `json:"worktree_clean"`
-	HeadCommit    string `json:"head_commit,omitempty"`
-	HeadTree      string `json:"head_tree,omitempty"`
+// PlanAuthority captures the expected check set the frozen plan
+// declared. Each entry fixes the check ID and the mode the
+// runner MUST execute it in.
+type PlanAuthority struct {
+	ExpectedChecks []PlanCheckSpec `json:"expected_checks"`
 }
 
-// ClosureEvidence is the canonical publication document.
+// PlanCheckSpec is one immutable expected check.
+type PlanCheckSpec struct {
+	ID   string `json:"id"`
+	Mode string `json:"mode"`
+}
+
+// CheckResult captures the typed outcome of one executed check.
+// Mode is "run" or "exclude". Outcome is "pass", "fail",
+// "timeout", "canceled", or "excluded".
+type CheckResult struct {
+	CheckID         string `json:"check_id"`
+	Mode            string `json:"mode"`
+	Outcome         string `json:"outcome"`
+	ExitCode        int    `json:"exit_code"`
+	TimedOut        bool   `json:"timed_out"`
+	Canceled        bool   `json:"canceled"`
+	StdoutTruncated bool   `json:"stdout_truncated"`
+	StderrTruncated bool   `json:"stderr_truncated"`
+	CleanupError    string `json:"cleanup_error,omitempty"`
+}
+
+// GateAuthority captures the gate (GateCollector) authority. The
+// invocation_count is the collector's CallsCount; the predicate
+// accepts exactly one.
+type GateAuthority struct {
+	ObservedStatus  string `json:"observed_status"`
+	Classification  string `json:"classification"`
+	InvocationCount int    `json:"invocation_count"`
+	RepositoryRoot  string `json:"repository_root"`
+	SubjectRoot     string `json:"subject_root"`
+	TimedOut        bool   `json:"timed_out"`
+	StdoutTruncated bool   `json:"stdout_truncated"`
+	StderrTruncated bool   `json:"stderr_truncated"`
+	Error           string `json:"error,omitempty"`
+}
+
+// BinaryAuthority captures the exact-S binary authority. The
+// fields map 1:1 to the B2 specification. The runner is the
+// only writer; the candidate builder converts from the build
+// observability (VCSRevision / VCSModified) into the canonical
+// authority (BinaryCommit / BinaryModified).
+type BinaryAuthority struct {
+	BinaryPath                string `json:"binary_path"`
+	BinarySHA256              string `json:"binary_sha256"`
+	BinaryCommit              string `json:"binary_commit"`
+	BinaryModified            bool   `json:"binary_modified"`
+	SourceCommit              string `json:"source_commit"`
+	SourceTree                string `json:"source_tree"`
+	SourceClean               bool   `json:"source_clean"`
+	SourceDetached            bool   `json:"source_detached"`
+	OutputOutsideAllWorktrees bool   `json:"output_outside_all_worktrees"`
+	Executable                bool   `json:"executable"`
+}
+
+// CallerStateSnapshot captures one observable snapshot of the
+// caller worktree. The BEFORE / AFTER pair diffs across the
+// runner. Available distinguishes "the snapshot was taken"
+// from "the snapshot was empty".
+type CallerStateSnapshot struct {
+	Available             bool   `json:"available"`
+	Head                  string `json:"head,omitempty"`
+	Tree                  string `json:"tree,omitempty"`
+	StatusHash            string `json:"status_hash,omitempty"`
+	RefsHash              string `json:"refs_hash,omitempty"`
+	WorktreeInventoryHash string `json:"worktree_inventory_hash,omitempty"`
+}
+
+// CleanupAuthority captures the bounded-cleanup outcome for the
+// subject execution and the binary build. A non-empty field is
+// the typeless error string the runner observed.
+type CleanupAuthority struct {
+	SubjectCleanupError string `json:"subject_cleanup_error,omitempty"`
+	BinaryCleanupError  string `json:"binary_cleanup_error,omitempty"`
+}
+
+// ClosureEvidence is the canonical publication record. The
+// struct intentionally has NO Completeness field: the verdict
+// is always derived from the authorities, never stored. The
+// JSON serialization is deterministic by Go's struct field
+// declaration order.
 type ClosureEvidence struct {
-	SchemaVersion int `json:"schema_version"`
-
-	Runtime RuntimeContextSubset `json:"runtime"`
-	Gate    GateCapture          `json:"gate"`
-	Binary  BuiltBinaryEvidence  `json:"binary"`
-
-	Checks []CheckEvidence `json:"checks"`
-
-	CallerStateBefore CallerState `json:"caller_state_before"`
-	CallerStateAfter  CallerState `json:"caller_state_after"`
-
-	Completeness EvidenceCompleteness `json:"completeness"`
+	SchemaVersion int                 `json:"schema_version"`
+	Protocol      string              `json:"protocol"`
+	Runtime       RuntimeAuthority    `json:"runtime"`
+	Plan          PlanAuthority       `json:"plan"`
+	Results       []CheckResult       `json:"results"`
+	Gate          GateAuthority       `json:"gate"`
+	Binary        BinaryAuthority     `json:"binary"`
+	CallerBefore  CallerStateSnapshot `json:"caller_before"`
+	CallerAfter   CallerStateSnapshot `json:"caller_after"`
+	Cleanup       CleanupAuthority    `json:"cleanup"`
 }
 
-// RuntimeContextSubset is the projected runtime context.
-type RuntimeContextSubset struct {
-	ACTID             string `json:"act_id"`
-	RepositoryRoot    string `json:"repository_root"`
-	RunID             string `json:"run_id"`
-	FreezeCommit      string `json:"freeze_commit"`
-	FreezeTree        string `json:"freeze_tree"`
-	SubjectCommit     string `json:"subject_commit"`
-	SubjectTree       string `json:"subject_tree"`
-	PlanPath          string `json:"plan_path"`
-	PlanBlob          string `json:"plan_blob"`
-	PlanSHA256        string `json:"plan_sha256"`
-	EvidenceDirectory string `json:"evidence_directory"`
-	StartedAt         string `json:"started_at"`
-}
-
-// PublicationRequest parameterises PublishClosureEvidence.
-type PublicationRequest struct {
-	OutputPath  string
-	Evidence    ClosureEvidence
-	Now         func() time.Time
-	SidecarName string
-}
-
-// PublicationResult describes the outcome of PublishClosureEvidence.
-type PublicationResult struct {
-	DocumentPath  string `json:"document_path"`
-	SidecarPath   string `json:"sidecar_path"`
-	DocumentBytes []byte `json:"-"`
-	DocumentSHA   string `json:"document_sha256"`
-	SidecarSHA    string `json:"sidecar_sha256"`
-	DirectorySync bool   `json:"directory_sync_ok"`
-}
-
-// DeriveClosureEvidenceCompleteness derives the completeness
-// verdict from the authoritative observations recorded in the
-// document. For the present dry-run it ALWAYS returns
-// EvidenceIncomplete because no caller-state, subject-
-// execution, binary-authority, or check-result authority is
-// yet present; full authority lands in CORRECTION02.
-//
-// Callers MUST NOT assign EvidenceComplete directly. The
-// validator (see ValidateClosureEvidence) enforces this by
-// calling DeriveClosureEvidenceCompleteness and rejecting any
-// document whose derived verdict does not match its declared
-// Completeness field.
-func DeriveClosureEvidenceCompleteness(e ClosureEvidence) EvidenceCompleteness {
-	return EvidenceIncomplete
-}
-
-// PublishClosureEvidence atomically writes the supplied
-// evidence document after validating its declared Completeness
-// matches DeriveClosureEvidenceCompleteness.
-func PublishClosureEvidence(req PublicationRequest) (PublicationResult, error) {
-	if strings.TrimSpace(req.OutputPath) == "" {
-		return PublicationResult{}, errors.New("evidence: output path is required")
+// ValidateClosureEvidence is the structural validator. It
+// rejects documents whose schema is unsupported and whose
+// fields are not well-formed. The function does NOT derive
+// completeness; that is the responsibility of the canonical
+// predicate alone. The barrier calls both: validate first
+// (cheap), then derive.
+func ValidateClosureEvidence(candidate ClosureEvidence) error {
+	if candidate.SchemaVersion != ClosureEvidenceSchemaVersion {
+		return fmt.Errorf("evidence: schema_version %d is not supported (expected %d)",
+			candidate.SchemaVersion, ClosureEvidenceSchemaVersion)
 	}
-	if req.Now == nil {
-		req.Now = time.Now
+	if candidate.Protocol != ClosureProtocolVersion {
+		return fmt.Errorf("evidence: protocol %q is not supported (expected %q)",
+			candidate.Protocol, ClosureProtocolVersion)
 	}
-	derived := DeriveClosureEvidenceCompleteness(req.Evidence)
-	if req.Evidence.Completeness != derived {
-		return PublicationResult{}, fmt.Errorf("evidence: declared completeness %q does not match derived %q", req.Evidence.Completeness, derived)
+	if stringsOrEmpty(candidate.Runtime.RepositoryRoot) == "" {
+		return errors.New("evidence: runtime.repository_root is empty")
 	}
-	if req.Evidence.SchemaVersion != ClosureEvidenceSchemaVersion {
-		return PublicationResult{}, fmt.Errorf("evidence: unsupported schema version %d", req.Evidence.SchemaVersion)
-	}
-	if derived != EvidenceComplete {
-		return PublicationResult{}, errors.New("evidence: cannot publish incomplete closure evidence")
-	}
-	document, err := json.MarshalIndent(req.Evidence, "", "  ")
-	if err != nil {
-		return PublicationResult{}, fmt.Errorf("evidence: marshal: %w", err)
-	}
-	documentSHA := SHA256HexBytes(document)
-	dir := filepath.Dir(req.OutputPath)
-	if dir == "" {
-		dir = "."
-	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return PublicationResult{}, fmt.Errorf("evidence: mkdir: %w", err)
-	}
-	tmp, err := os.CreateTemp(dir, ".closure-evidence-*.json")
-	if err != nil {
-		return PublicationResult{}, fmt.Errorf("evidence: create temp: %w", err)
-	}
-	tmpPath := tmp.Name()
-	cleanup := func() { _ = os.Remove(tmpPath) }
-	if _, err := tmp.Write(document); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return PublicationResult{}, fmt.Errorf("evidence: write temp: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		cleanup()
-		return PublicationResult{}, fmt.Errorf("evidence: fsync temp: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		cleanup()
-		return PublicationResult{}, fmt.Errorf("evidence: close temp: %w", err)
-	}
-	if err := os.Rename(tmpPath, req.OutputPath); err != nil {
-		cleanup()
-		return PublicationResult{}, fmt.Errorf("evidence: rename temp: %w", err)
-	}
-	dirSync := syncDirBestEffort(dir)
-	sidecarName := req.SidecarName
-	if sidecarName == "" {
-		sidecarName = strings.TrimSuffix(filepath.Base(req.OutputPath), filepath.Ext(req.OutputPath)) + ".sha256"
-	}
-	sidecarPath := filepath.Join(dir, sidecarName)
-	sidecarBytes := []byte(documentSHA + "  " + filepath.Base(req.OutputPath) + "\n")
-	if err := os.WriteFile(sidecarPath, sidecarBytes, 0o600); err != nil {
-		return PublicationResult{}, fmt.Errorf("evidence: write sidecar: %w", err)
-	}
-	sidecarSHA := SHA256HexBytes(sidecarBytes)
-	return PublicationResult{
-		DocumentPath:  req.OutputPath,
-		SidecarPath:   sidecarPath,
-		DocumentBytes: document,
-		DocumentSHA:   documentSHA,
-		SidecarSHA:    sidecarSHA,
-		DirectorySync: dirSync == nil,
-	}, nil
-}
-
-// ValidateClosureEvidence asserts that every required field
-// is present and well-formed AND that the declared Completeness
-// matches DeriveClosureEvidenceCompleteness.
-func ValidateClosureEvidence(evidence ClosureEvidence) error {
-	if evidence.SchemaVersion != ClosureEvidenceSchemaVersion {
-		return fmt.Errorf("evidence: schema_version %d is not supported", evidence.SchemaVersion)
-	}
-	derived := DeriveClosureEvidenceCompleteness(evidence)
-	if evidence.Completeness != derived {
-		return fmt.Errorf("evidence: declared completeness %q does not match derived %q", evidence.Completeness, derived)
-	}
-	if evidence.Runtime.ACTID == "" {
-		return errors.New("evidence: runtime.act_id is empty")
-	}
-	if !isValidOID(evidence.Runtime.FreezeCommit) {
+	if !isValidOID(candidate.Runtime.FreezeCommit) {
 		return errors.New("evidence: runtime.freeze_commit is not a 40-char hex OID")
 	}
-	if !isValidOID(evidence.Runtime.SubjectCommit) {
+	if !isValidOID(candidate.Runtime.FreezeTree) {
+		return errors.New("evidence: runtime.freeze_tree is not a 40-char hex OID")
+	}
+	if !isValidOID(candidate.Runtime.SubjectCommit) {
 		return errors.New("evidence: runtime.subject_commit is not a 40-char hex OID")
 	}
-	if !isValidOID(evidence.Runtime.PlanBlob) {
+	if !isValidOID(candidate.Runtime.SubjectTree) {
+		return errors.New("evidence: runtime.subject_tree is not a 40-char hex OID")
+	}
+	if !isValidOID(candidate.Runtime.ExecutionTree) {
+		return errors.New("evidence: runtime.execution_tree is not a 40-char hex OID")
+	}
+	if candidate.Runtime.PlanPath == "" {
+		return errors.New("evidence: runtime.plan_path is empty")
+	}
+	if !isValidOID(candidate.Runtime.PlanBlob) {
 		return errors.New("evidence: runtime.plan_blob is not a 40-char hex OID")
 	}
-	if !isHexSHA256(evidence.Runtime.PlanSHA256) {
+	if !isHexSHA256(candidate.Runtime.PlanSHA256) {
 		return errors.New("evidence: runtime.plan_sha256 is not a 64-char hex digest")
 	}
-	if evidence.Binary.BinaryPath == "" {
+	if len(candidate.Plan.ExpectedChecks) == 0 {
+		return errors.New("evidence: plan.expected_checks is empty")
+	}
+	for i, c := range candidate.Plan.ExpectedChecks {
+		if c.ID == "" {
+			return fmt.Errorf("evidence: plan.expected_checks[%d].id is empty", i)
+		}
+		if c.Mode != "run" && c.Mode != "exclude" {
+			return fmt.Errorf("evidence: plan.expected_checks[%d].mode is %q (expected run|exclude)", i, c.Mode)
+		}
+	}
+	if candidate.Binary.BinaryPath == "" {
 		return errors.New("evidence: binary.binary_path is empty")
 	}
-	if !isHexSHA256(evidence.Binary.BinarySHA256) {
+	if !isHexSHA256(candidate.Binary.BinarySHA256) {
 		return errors.New("evidence: binary.binary_sha256 is not a 64-char hex digest")
 	}
-	if evidence.Gate.RawOutputPath == "" {
-		return errors.New("evidence: gate.raw_output_path is empty")
+	if !isValidOID(candidate.Binary.BinaryCommit) {
+		return errors.New("evidence: binary.binary_commit is not a 40-char hex OID")
+	}
+	if !isValidOID(candidate.Binary.SourceCommit) {
+		return errors.New("evidence: binary.source_commit is not a 40-char hex OID")
+	}
+	if !isValidOID(candidate.Binary.SourceTree) {
+		return errors.New("evidence: binary.source_tree is not a 40-char hex OID")
+	}
+	if candidate.Gate.RepositoryRoot == "" {
+		return errors.New("evidence: gate.repository_root is empty")
+	}
+	if candidate.Gate.SubjectRoot == "" {
+		return errors.New("evidence: gate.subject_root is empty")
+	}
+	if candidate.Gate.Classification == "" {
+		return errors.New("evidence: gate.classification is empty")
 	}
 	return nil
 }
 
-func syncDirBestEffort(dir string) error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	d, err := os.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	return d.Sync()
-}
-
-func isValidOID(value string) bool {
-	if len(value) != 40 {
-		return false
-	}
-	for _, ch := range value {
-		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')) {
-			return false
-		}
-	}
-	return true
-}
-
-func isHexSHA256(value string) bool {
-	if len(value) != 64 {
-		return false
-	}
-	for _, ch := range value {
-		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
-			return false
-		}
-	}
-	return true
-}
-
-// DocumentJSON is the small helper that marshals the supplied
-// evidence into the canonical byte form.
-func DocumentJSON(evidence ClosureEvidence) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := json.NewEncoder(&buf)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(evidence); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+// stringsOrEmpty is the small helper that returns the input
+// string verbatim. It exists so the file can be split later
+// without changing call sites.
+func stringsOrEmpty(s string) string {
+	return s
 }

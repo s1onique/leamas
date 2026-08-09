@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package evidence - evidence_test.go implements the matrix
-// tests required by CORRECTION01-R1-R1.
-
+// Package evidence - evidence_test.go provides the umbrella
+// tests for the B2 canonical evidence authority.
+//
+// The file retains the GateCollector classification tests
+// from earlier ACTs (those are not regressed by B2) and
+// replaces the obsolete PublishClosureEvidence /
+// DeriveClosureEvidenceCompleteness stubs with barrier-aware
+// tests that exercise the new canonical authority.
 package evidence
 
 import (
@@ -14,7 +19,9 @@ import (
 	"testing"
 )
 
-// fakeRunner is a deterministic CommandRunner.
+// fakeRunner is a deterministic CommandRunner used by the
+// GateCollector tests. It is the same shim the previous ACT
+// used; the B2 work does not change the collector surface.
 type fakeRunner struct {
 	calls int
 	out   string
@@ -165,35 +172,11 @@ func TestClosureACTOwnedGateClassification(t *testing.T) {
 	}
 }
 
-// TestClosureEvidenceAtomicPublication asserts that the
-// publication step rejects incomplete documents. The dry-run
-// cannot prove the four required authorities (caller state,
-// subject execution, binary authority, check results) and
-// must therefore leave the document INCOMPLETE; PublishClosureEvidence
-// rejects INCOMPLETE documents.
-func TestClosureEvidenceAtomicPublication(t *testing.T) {
-	tmp, err := os.MkdirTemp("", "evidence-pub-")
-	if err != nil {
-		t.Fatalf("tempdir: %v", err)
-	}
-	defer os.RemoveAll(tmp)
-	evidence := incompleteClosureEvidence()
-	outputPath := filepath.Join(tmp, "evidence.json")
-	pub, err := PublishClosureEvidence(PublicationRequest{
-		OutputPath: outputPath,
-		Evidence:   evidence,
-	})
-	if err == nil {
-		t.Fatalf("publish should reject incomplete evidence, got pub=%+v", pub)
-	}
-	if !strings.Contains(err.Error(), "incomplete") {
-		t.Errorf("expected incomplete rejection, got: %v", err)
-	}
-}
-
-// TestClosureEvidenceValidityPredicate asserts the predicate
-// rejects documents with contradictory or missing fields.
-func TestClosureEvidenceValidityPredicate(t *testing.T) {
+// TestClosureEvidenceValidationStructural exercises the shape
+// validator against the canonical evidence fields. The previous
+// ACT used ClosureEvidence fields that B2 has refactored; the
+// test is rebuilt to use the new canonical types.
+func TestClosureEvidenceValidationStructural(t *testing.T) {
 	cases := []struct {
 		name      string
 		mutate    func(*ClosureEvidence)
@@ -201,22 +184,19 @@ func TestClosureEvidenceValidityPredicate(t *testing.T) {
 	}{
 		{name: "valid", mutate: nil, expectErr: false},
 		{name: "schema_version", mutate: func(e *ClosureEvidence) { e.SchemaVersion = 99 }, expectErr: true},
-		{name: "wrong_completeness", mutate: func(e *ClosureEvidence) {
-			// Manually setting COMPLETE cannot bypass the
-			// derived INCOMPLETE verdict.
-			e.Completeness = EvidenceComplete
-		}, expectErr: true},
-		{name: "empty_act", mutate: func(e *ClosureEvidence) { e.Runtime.ACTID = "" }, expectErr: true},
+		{name: "protocol", mutate: func(e *ClosureEvidence) { e.Protocol = "wrong" }, expectErr: true},
+		{name: "empty_repository", mutate: func(e *ClosureEvidence) { e.Runtime.RepositoryRoot = "" }, expectErr: true},
 		{name: "bad_freeze", mutate: func(e *ClosureEvidence) { e.Runtime.FreezeCommit = "x" }, expectErr: true},
 		{name: "bad_subject", mutate: func(e *ClosureEvidence) { e.Runtime.SubjectCommit = "x" }, expectErr: true},
 		{name: "bad_plan_blob", mutate: func(e *ClosureEvidence) { e.Runtime.PlanBlob = "x" }, expectErr: true},
 		{name: "bad_plan_sha", mutate: func(e *ClosureEvidence) { e.Runtime.PlanSHA256 = "x" }, expectErr: true},
 		{name: "empty_binary", mutate: func(e *ClosureEvidence) { e.Binary.BinaryPath = "" }, expectErr: true},
-		{name: "empty_gate", mutate: func(e *ClosureEvidence) { e.Gate.RawOutputPath = "" }, expectErr: true},
+		{name: "empty_plan", mutate: func(e *ClosureEvidence) { e.Plan.ExpectedChecks = nil }, expectErr: true},
+		{name: "empty_gate_subject_root", mutate: func(e *ClosureEvidence) { e.Gate.SubjectRoot = "" }, expectErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			doc := incompleteClosureEvidence()
+			doc := validCandidate()
 			if tc.mutate != nil {
 				tc.mutate(&doc)
 			}
@@ -231,33 +211,34 @@ func TestClosureEvidenceValidityPredicate(t *testing.T) {
 	}
 }
 
-// incompleteClosureEvidence returns a syntactically valid
-// INCOMPLETE document.
-func incompleteClosureEvidence() ClosureEvidence {
-	return ClosureEvidence{
-		SchemaVersion: ClosureEvidenceSchemaVersion,
-		Runtime: RuntimeContextSubset{
-			ACTID:             "ACT-TEST",
-			FreezeCommit:      "1111111111111111111111111111111111111111",
-			SubjectCommit:     "3333333333333333333333333333333333333333",
-			PlanBlob:          "5555555555555555555555555555555555555555",
-			PlanSHA256:        strings.Repeat("a", 64),
-			EvidenceDirectory: "/tmp/evidence",
-			StartedAt:         "2026-08-06T00:00:00Z",
-		},
-		Gate: GateCapture{
-			RawOutputPath: "/tmp/raw",
-			RawSHA256:     strings.Repeat("b", 64),
-		},
-		Binary: BuiltBinaryEvidence{
-			BinaryPath:   "/tmp/bin/leamas",
-			BinarySHA256: strings.Repeat("c", 64),
-		},
-		Completeness: EvidenceIncomplete,
+// TestClosureEvidenceAtomicBarrierRejectsIncomplete proves the
+// publication barrier refuses to emit publication bytes for an
+// INCOMPLETE candidate. This replaces the previous
+// TestClosureEvidenceAtomicPublication that exercised
+// PublishClosureEvidence; B2 removed the filesystem writer.
+func TestClosureEvidenceAtomicBarrierRejectsIncomplete(t *testing.T) {
+	// Build a candidate that is structurally valid but
+	// completeness-INCOMPLETE by omitting the F-ancestor-of-S
+	// verification.
+	candidate := validCandidate()
+	candidate.Runtime.FAncestorOfSVerified = false
+	got, err := PrepareClosureEvidenceForPublication(candidate)
+	if err == nil {
+		t.Fatalf("barrier must reject incomplete candidate, got %+v", got)
+	}
+	if got.Bytes != nil {
+		t.Fatalf("barrier must not return bytes for incomplete candidate")
+	}
+	if got.SHA256 != "" {
+		t.Fatalf("barrier must not return SHA256 for incomplete candidate")
+	}
+	if !strings.Contains(err.Error(), "incomplete") {
+		t.Errorf("expected incomplete rejection, got: %v", err)
 	}
 }
 
-// versionRunner is a fake CommandRunner.
+// versionRunner is a fake CommandRunner used by the binary
+// builder tests.
 type versionRunner struct {
 	stdout string
 }
@@ -309,5 +290,25 @@ func TestClosureExactSubjectBinary(t *testing.T) {
 	}
 	if be.BinarySHA256 == "" {
 		t.Errorf("missing sha256")
+	}
+
+	// BinaryAuthorityFromBuild maps the build observability
+	// into the canonical authority. The mapping is pure; the
+	// test exercises it as a regression guard.
+	authority := BinaryAuthorityFromBuild(be, be.VCSRevision, be.SourceTree, true)
+	if authority.BinaryCommit != be.VCSRevision {
+		t.Errorf("BinaryCommit must equal VCSRevision, got %q", authority.BinaryCommit)
+	}
+	if authority.BinaryModified != be.VCSModified {
+		t.Errorf("BinaryModified must equal VCSModified, got %v", authority.BinaryModified)
+	}
+	if authority.BinaryPath != be.BinaryPath {
+		t.Errorf("BinaryPath mismatch")
+	}
+	if authority.BinarySHA256 != be.BinarySHA256 {
+		t.Errorf("BinarySHA256 mismatch")
+	}
+	if !authority.OutputOutsideAllWorktrees {
+		t.Errorf("OutputOutsideAllWorktrees must be true")
 	}
 }

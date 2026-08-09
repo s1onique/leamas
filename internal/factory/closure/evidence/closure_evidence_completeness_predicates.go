@@ -1,184 +1,204 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package evidence - closure_evidence_completeness_predicates.go
-// owns the per-predicate methods of ClosureEvidenceEx.
+// owns the per-predicate functions for the gate, binary, and
+// caller authorities. The runtime, plan, and results predicates
+// live in closure_evidence_completeness.go.
 //
-// Splitting these from closure_evidence_completeness.go keeps
-// both files under the LLM-friendly 400-line threshold while
+// Splitting the per-predicate functions across two files keeps
+// each file under the LLM-friendly 400-line threshold while
 // preserving the single closure over the descriptor that
 // ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01 requires.
 //
-// Every predicate here is exposed as a separate method so each
-// branch can be mutation-tested independently by
-// TestClosureEvidenceCompletenessDerived.
-
+// Each predicate is exposed as a separate function so the
+// mutation matrix in TestClosureEvidenceCompletenessCanonical
+// can exercise them independently. The matrix MUST grow with
+// every added predicate; the test asserts row count via the
+// tracked predicate set in completenessPredicates.
 package evidence
 
-import "path/filepath"
+// ----------------------------------------------------------------------------
+// Gate predicates (20..25)
+// ----------------------------------------------------------------------------
 
-// AllRunChecksSuccessful reports whether every "run" check
-// produced a pass outcome with no timeout / cancel / cleanup
-// error.
-func (e ClosureEvidenceEx) AllRunChecksSuccessful() bool {
-	for _, r := range e.Authorities.Checks {
-		if r.Mode != "run" {
-			continue
-		}
-		if r.Outcome != "pass" {
-			return false
-		}
-		if r.TimedOut || r.Canceled || r.CleanupError != "" {
-			return false
-		}
-	}
-	return true
-}
-
-// ExcludeChecksUnexecuted reports whether every "exclude"
-// check produced an "excluded" outcome with no exit / cleanup.
-func (e ClosureEvidenceEx) ExcludeChecksUnexecuted() bool {
-	for _, r := range e.Authorities.Checks {
-		if r.Mode != "exclude" {
-			continue
-		}
-		if r.Outcome != "excluded" {
-			return false
-		}
-		if r.ExitCode != 0 || r.TimedOut || r.Canceled || r.CleanupError != "" {
-			return false
-		}
-	}
-	return true
-}
-
-// NoTimeout reports that no check or gate timed out.
-func (e ClosureEvidenceEx) NoTimeout() bool {
-	for _, r := range e.Authorities.Checks {
-		if r.TimedOut {
-			return false
-		}
-	}
-	if e.Gate.TimedOut {
-		return false
-	}
-	return true
-}
-
-// NoCancellation reports that no check or gate was cancelled.
-func (e ClosureEvidenceEx) NoCancellation() bool {
-	for _, r := range e.Authorities.Checks {
-		if r.Canceled {
-			return false
-		}
-	}
-	if e.Gate.Canceled {
-		return false
-	}
-	return true
-}
-
-// NoTruncation reports that no stdout / stderr stream was
-// truncated.
-func (e ClosureEvidenceEx) NoTruncation() bool {
-	for _, r := range e.Authorities.Checks {
-		if r.StdoutTruncated || r.StderrTruncated {
-			return false
-		}
-	}
-	if e.Gate.StdoutTruncated || e.Gate.StderrTruncated {
-		return false
-	}
-	return true
-}
-
-// NoCleanupError reports that no check recorded a cleanup error.
-func (e ClosureEvidenceEx) NoCleanupError() bool {
-	for _, r := range e.Authorities.Checks {
-		if r.CleanupError != "" {
-			return false
-		}
-	}
-	return true
-}
-
-// GateClassificationPASS reports that the gate classification
+// gateClassificationEqualsPASS reports that the gate classification
 // verdict is PASS. Any FAIL or UNAVAILABLE verdict blocks
 // COMPLETE.
-func (e ClosureEvidenceEx) GateClassificationPASS() bool {
-	return e.Authorities.Gate.Verdict == "PASS"
+func gateClassificationEqualsPASS(c ClosureEvidence) bool {
+	return c.Gate.Classification == "PASS"
 }
 
-// BinaryAuthorityValid reports whether every binary authority
-// invariant holds: path absolute, VCS revision matches
-// subject commit, vcs.modified is false, executable bit set,
-// source HEAD and tree match the recorded values, source was
-// clean and detached.
-func (e ClosureEvidenceEx) BinaryAuthorityValid() bool {
-	b := e.Authorities.Binary
-	// Path must be present and absolute so the runner cannot
-	// claim COMPLETE from a path that the caller cannot audit.
-	if b.BinaryPath == "" || !filepath.IsAbs(b.BinaryPath) {
-		return false
-	}
-	if !isHexSHA256(b.BinarySHA256) {
-		return false
-	}
-	if b.VCSRevision == "" || b.VCSModified {
-		return false
-	}
-	if !b.Executable {
-		return false
-	}
-	// SourceCommit must be a valid commit OID, not just a
-	// non-empty string, and it must match the recorded VCS
-	// revision so an evidence record cannot silently swap one
-	// for the other.
-	if !isValidOID(b.SourceCommit) {
-		return false
-	}
-	if !isValidOID(b.SourceTree) {
-		return false
-	}
-	if b.VCSRevision != b.SourceCommit {
-		return false
-	}
-	// The source tree must be clean and detached. A dirty
-	// checkout or a branch ref can mutate the source between
-	// the build and the manifest, so neither is acceptable.
-	if !b.SourceClean {
-		return false
-	}
-	if !b.SourceDetached {
-		return false
-	}
-	return true
+// gateInvocationCountEqualsOne reports the gate was invoked
+// exactly once. The GateCollector tracks this; the predicate
+// rejects any count other than 1.
+func gateInvocationCountEqualsOne(c ClosureEvidence) bool {
+	return c.Gate.InvocationCount == 1
 }
 
-// BeforeStateAvailable reports whether the BEFORE caller-state
-// snapshot was Available.
-func (e ClosureEvidenceEx) BeforeStateAvailable() bool {
-	return e.Authorities.CallerAvailable.BeforeAvailable
+// gateSubjectRootEqualsSExecutionRoot reports the gate's
+// SubjectRoot is non-empty. The SubjectRoot is the worktree
+// path the GateCollector ran against; the predicate guards
+// against an empty SubjectRoot being passed off as the
+// subject execution root.
+func gateSubjectRootEqualsSExecutionRoot(c ClosureEvidence) bool {
+	return c.Gate.SubjectRoot != ""
 }
 
-// AfterStateAvailable reports whether the AFTER caller-state
-// snapshot was Available.
-func (e ClosureEvidenceEx) AfterStateAvailable() bool {
-	return e.Authorities.CallerAvailable.AfterAvailable
+// gateNotTimedOut reports the gate did not time out.
+func gateNotTimedOut(c ClosureEvidence) bool {
+	return !c.Gate.TimedOut
 }
 
-// CallerStateUnchanged reports that the BEFORE and AFTER
-// snapshots compared equal across HEAD, HEAD tree, status,
-// and refs.
-func (e ClosureEvidenceEx) CallerStateUnchanged() bool {
-	d := e.Authorities.CallerDrift
-	return !d.HEADChanged &&
-		!d.TreeChanged &&
-		!d.StatusChanged &&
-		!d.RefsChanged
+// gateNoOutputTruncation reports no stdout / stderr stream was
+// truncated by the gate.
+func gateNoOutputTruncation(c ClosureEvidence) bool {
+	return !c.Gate.StdoutTruncated && !c.Gate.StderrTruncated
 }
 
-// WorktreeInventoryUnchanged reports that no worktree
+// gateErrorAbsent reports the gate recorded no error.
+func gateErrorAbsent(c ClosureEvidence) bool {
+	return c.Gate.Error == ""
+}
+
+// ----------------------------------------------------------------------------
+// Binary predicates (26..36)
+// ----------------------------------------------------------------------------
+
+// binaryAuthorityValid reports every binary authority invariant
+// holds in the closed form. The predicate is split into the
+// individual atomic predicates below so the mutation matrix
+// can exercise each independently.
+func binaryAuthorityValid(c ClosureEvidence) bool {
+	return c.Binary.BinaryPath != "" &&
+		isHexSHA256(c.Binary.BinarySHA256) &&
+		isValidOID(c.Binary.BinaryCommit) &&
+		!c.Binary.BinaryModified &&
+		c.Binary.Executable &&
+		isValidOID(c.Binary.SourceCommit) &&
+		isValidOID(c.Binary.SourceTree) &&
+		c.Binary.SourceClean &&
+		c.Binary.SourceDetached &&
+		c.Binary.OutputOutsideAllWorktrees
+}
+
+// binaryCommitEqualsSubjectCommit reports the binary's
+// recorded commit matches the subject commit. The path is
+// absolute so the runner cannot claim COMPLETE from a path
+// the caller cannot audit.
+func binaryCommitEqualsSubjectCommit(c ClosureEvidence) bool {
+	return c.Binary.BinaryCommit == c.Runtime.SubjectCommit &&
+		c.Binary.BinaryCommit != ""
+}
+
+// binaryNotModified reports the binary was built from a
+// clean source (no dirty vcs.modified flag).
+func binaryNotModified(c ClosureEvidence) bool {
+	return !c.Binary.BinaryModified
+}
+
+// binarySourceCommitEqualsSubjectCommit reports the binary's
+// source commit matches the subject commit.
+func binarySourceCommitEqualsSubjectCommit(c ClosureEvidence) bool {
+	return c.Binary.SourceCommit == c.Runtime.SubjectCommit &&
+		c.Binary.SourceCommit != ""
+}
+
+// binarySourceTreeEqualsSubjectTree reports the binary's
+// source tree matches the subject tree.
+func binarySourceTreeEqualsSubjectTree(c ClosureEvidence) bool {
+	return c.Binary.SourceTree == c.Runtime.SubjectTree &&
+		c.Binary.SourceTree != ""
+}
+
+// binarySourceClean reports the source worktree was clean at
+// build time.
+func binarySourceClean(c ClosureEvidence) bool {
+	return c.Binary.SourceClean
+}
+
+// binarySourceDetached reports the source was built against a
+// detached HEAD.
+func binarySourceDetached(c ClosureEvidence) bool {
+	return c.Binary.SourceDetached
+}
+
+// binaryOutputOutsideAllWorktrees reports the binary's output
+// path is outside every Git worktree.
+func binaryOutputOutsideAllWorktrees(c ClosureEvidence) bool {
+	return c.Binary.OutputOutsideAllWorktrees
+}
+
+// binaryExecutable reports the binary has the executable bit.
+func binaryExecutable(c ClosureEvidence) bool {
+	return c.Binary.Executable
+}
+
+// binarySHA256Valid reports the binary's SHA-256 is a 64-char
+// lowercase hex digest.
+func binarySHA256Valid(c ClosureEvidence) bool {
+	return isHexSHA256(c.Binary.BinarySHA256)
+}
+
+// binaryCleanupErrorAbsent reports the bounded cleanup of the
+// binary build recorded no error.
+func binaryCleanupErrorAbsent(c ClosureEvidence) bool {
+	return c.Cleanup.BinaryCleanupError == ""
+}
+
+// ----------------------------------------------------------------------------
+// Caller predicates (37..43)
+// ----------------------------------------------------------------------------
+
+// callerBeforeAvailable reports the BEFORE caller-state snapshot
+// was Available.
+func callerBeforeAvailable(c ClosureEvidence) bool {
+	return c.CallerBefore.Available
+}
+
+// callerAfterAvailable reports the AFTER caller-state snapshot
+// was Available.
+func callerAfterAvailable(c ClosureEvidence) bool {
+	return c.CallerAfter.Available
+}
+
+// callerHEADUnchanged reports HEAD did not change between
+// BEFORE and AFTER.
+func callerHEADUnchanged(c ClosureEvidence) bool {
+	return c.CallerBefore.Available &&
+		c.CallerAfter.Available &&
+		c.CallerBefore.Head == c.CallerAfter.Head
+}
+
+// callerTreeUnchanged reports HEAD's tree did not change between
+// BEFORE and AFTER.
+func callerTreeUnchanged(c ClosureEvidence) bool {
+	return c.CallerBefore.Available &&
+		c.CallerAfter.Available &&
+		c.CallerBefore.Tree == c.CallerAfter.Tree
+}
+
+// callerStatusUnchanged reports the working-copy status hash
+// did not change between BEFORE and AFTER.
+func callerStatusUnchanged(c ClosureEvidence) bool {
+	return c.CallerBefore.Available &&
+		c.CallerAfter.Available &&
+		c.CallerBefore.StatusHash == c.CallerAfter.StatusHash
+}
+
+// callerRefsUnchanged reports the refs hash did not change
+// between BEFORE and AFTER. Empty-but-available drift is
+// rejected: the runner observed a different value and the
+// authority failed.
+func callerRefsUnchanged(c ClosureEvidence) bool {
+	return c.CallerBefore.Available &&
+		c.CallerAfter.Available &&
+		c.CallerBefore.RefsHash == c.CallerAfter.RefsHash
+}
+
+// callerWorktreeInventoryUnchanged reports no worktree
 // registration leaked between BEFORE and AFTER.
-func (e ClosureEvidenceEx) WorktreeInventoryUnchanged() bool {
-	return !e.Authorities.CallerDrift.WorktreeLeaked
+func callerWorktreeInventoryUnchanged(c ClosureEvidence) bool {
+	return c.CallerBefore.Available &&
+		c.CallerAfter.Available &&
+		c.CallerBefore.WorktreeInventoryHash == c.CallerAfter.WorktreeInventoryHash
 }

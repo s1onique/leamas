@@ -1,178 +1,328 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package evidence - closure_evidence_completeness_test.go
-// provides TestClosureEvidenceCompletenessDerived for
-// ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01-CORRECTION02.
+// provides TestClosureEvidenceCompletenessCanonical for
+// ACT-LEAMAS-FACTORY-CLOSURE-RUNTIME-CONTEXT-AND-EXECUTE01-
+// CORRECTION02-B2.
 //
-// The test is a table-driven mutation matrix: every row
-// mutates exactly one observation of the COMPLETE verdict and
-// asserts the predicate returns INCOMPLETE. The mutation matrix
-// also includes a single PASS row that exercises the closed
-// AND of every required observation.
-
+// The test is the single mutation matrix for the canonical
+// completeness predicate. It builds exactly one valid candidate,
+// asserts DeriveClosureEvidenceCompleteness returns EvidenceComplete,
+// then mutates every predicate independently and asserts the
+// predicate returns EvidenceIncomplete. Mutations are never
+// combined.
+//
+// The test also asserts the matrix row count matches the
+// declared predicate count so adding a predicate without
+// adding a mutation row fails the test.
 package evidence
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"strings"
 	"testing"
 )
 
-func makeValidAuthorities() CompletenessAuthorities {
-	planBytes := []byte("{\"contract_version\":1,\"checks\":[]}")
+// validCandidate returns a fully valid ClosureEvidence candidate.
+// Every field is populated so DeriveClosureEvidenceCompleteness
+// returns EvidenceComplete.
+func validCandidate() ClosureEvidence {
+	planBytes := []byte("{\"contract_version\":1,\"checks\":[{\"id\":\"c1\",\"mode\":\"run\"}]}")
 	sum := sha256.Sum256(planBytes)
 	planSHA := hex.EncodeToString(sum[:])
-	return CompletenessAuthorities{
-		Runtime: RuntimeAuthorityRecord{
-			RepositoryRoot:              "/repo",
-			SubjectCommit:               "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			SubjectTree:                 "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-			FreezeCommit:                "cccccccccccccccccccccccccccccccccccccccc",
-			FreezeTree:                  "dddddddddddddddddddddddddddddddddddddddd",
-			PlanPath:                    "docs/closure-plans/x.json",
-			PlanBlob:                    "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-			PlanSHA256:                  planSHA,
-			PlanBytes:                   planBytes,
-			EvidenceDirectory:           "/evidence",
-			SubjectWorktreeRoot:         "/subject-worktree",
-			SubjectWorktreeObservedTree: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-			ExecutionTree:               "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-			PlanCheckIDs:                []string{"c1"},
+	subjectCommit := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	subjectTree := "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	freezeCommit := "cccccccccccccccccccccccccccccccccccccccc"
+	freezeTree := "dddddddddddddddddddddddddddddddddddddddd"
+	executionTree := subjectTree
+	return ClosureEvidence{
+		SchemaVersion: ClosureEvidenceSchemaVersion,
+		Protocol:      ClosureProtocolVersion,
+		Runtime: RuntimeAuthority{
+			RepositoryRoot:       "/repo",
+			FreezeCommit:         freezeCommit,
+			FreezeTree:           freezeTree,
+			SubjectCommit:        subjectCommit,
+			SubjectTree:          subjectTree,
+			ExecutionTree:        executionTree,
+			PlanPath:             "docs/closure-plans/x.json",
+			PlanBlob:             "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+			PlanSHA256:           planSHA,
+			PlanBytes:            planBytes,
+			FAncestorOfSVerified: true,
 		},
-		Checks: []CheckResultRecord{
-			{CheckID: "c1", Mode: "run", Outcome: "pass"},
+		Plan: PlanAuthority{
+			ExpectedChecks: []PlanCheckSpec{
+				{ID: "c1", Mode: "run"},
+			},
 		},
-		Gate: GateClassificationRecord{
-			Verdict: "PASS",
+		Results: []CheckResult{
+			{
+				CheckID:  "c1",
+				Mode:     "run",
+				Outcome:  "pass",
+				ExitCode: 0,
+			},
 		},
-		Binary: BuiltBinaryEvidence{
-			BinaryPath:   "/tmp/leamas",
-			BinarySHA256: planSHA,
-			VCSRevision:  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			VCSModified:  false,
-			Executable:   true,
-			SourceCommit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			SourceTree:   "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-			SourceClean:  true,
-			SourceDetached: true,
+		Gate: GateAuthority{
+			ObservedStatus:  "OK",
+			Classification:  "PASS",
+			InvocationCount: 1,
+			RepositoryRoot:  "/repo",
+			SubjectRoot:     "/subject-worktree",
 		},
-		CallerAvailable: CallerStateAvailability{BeforeAvailable: true, AfterAvailable: true},
-		CallerDrift:     CallerStateDrift{},
+		Binary: BinaryAuthority{
+			BinaryPath:                "/tmp/leamas",
+			BinarySHA256:              planSHA,
+			BinaryCommit:              subjectCommit,
+			BinaryModified:            false,
+			SourceCommit:              subjectCommit,
+			SourceTree:                subjectTree,
+			SourceClean:               true,
+			SourceDetached:            true,
+			OutputOutsideAllWorktrees: true,
+			Executable:                true,
+		},
+		CallerBefore: CallerStateSnapshot{
+			Available:             true,
+			Head:                  subjectCommit,
+			Tree:                  subjectTree,
+			StatusHash:            "status-hash",
+			RefsHash:              "refs-hash",
+			WorktreeInventoryHash: "wt-hash",
+		},
+		CallerAfter: CallerStateSnapshot{
+			Available:             true,
+			Head:                  subjectCommit,
+			Tree:                  subjectTree,
+			StatusHash:            "status-hash",
+			RefsHash:              "refs-hash",
+			WorktreeInventoryHash: "wt-hash",
+		},
+		Cleanup: CleanupAuthority{},
 	}
 }
 
-// TestClosureEvidenceCompletenessDerived is the umbrella
-// mutation test required by Phase 8. Every row mutates exactly
-// one observation and asserts the predicate returns
-// INCOMPLETE. The final PASS row proves the closed AND.
-func TestClosureEvidenceCompletenessDerived(t *testing.T) {
+// TestClosureEvidenceCompletenessCanonical is the umbrella
+// mutation matrix required by Phase 3. The test proves:
+//   - exactly one valid candidate yields EvidenceComplete
+//   - every predicate mutation yields EvidenceIncomplete
+//   - the mutation matrix covers every predicate in completenessPredicates
+func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 	t.Parallel()
-	pass := makeValidAuthorities()
-	passEnv := ClosureEvidenceEx{
-		SchemaVersion: 2,
-		Authorities:   pass,
-		Completeness:  EvidenceComplete,
-	}
 
+	pass := validCandidate()
 	t.Run("PASS when every observation is valid", func(t *testing.T) {
 		t.Parallel()
-		if got := DeriveClosureEvidenceCompletenessEx(passEnv); got != EvidenceComplete {
+		if got := DeriveClosureEvidenceCompleteness(pass); got != EvidenceComplete {
 			t.Fatalf("expected COMPLETE, got %q", got)
 		}
 	})
 
-	cases := []struct {
+	// Mutation matrix: every entry mutates exactly one predicate
+	// and asserts the result is INCOMPLETE. Mutations are never
+	// combined.
+	type mutation struct {
 		name   string
-		mutate func(*CompletenessAuthorities)
-	}{
-		{"runtime authority empty repository", func(a *CompletenessAuthorities) { a.Runtime.RepositoryRoot = "" }},
-		{"runtime authority invalid subject commit", func(a *CompletenessAuthorities) { a.Runtime.SubjectCommit = "bad" }},
-		{"runtime authority invalid subject tree", func(a *CompletenessAuthorities) { a.Runtime.SubjectTree = "bad" }},
-		{"runtime authority invalid freeze commit", func(a *CompletenessAuthorities) { a.Runtime.FreezeCommit = "bad" }},
-		{"runtime authority invalid freeze tree", func(a *CompletenessAuthorities) { a.Runtime.FreezeTree = "bad" }},
-		{"runtime authority missing plan path", func(a *CompletenessAuthorities) { a.Runtime.PlanPath = "" }},
-		{"runtime authority invalid plan blob", func(a *CompletenessAuthorities) { a.Runtime.PlanBlob = "bad" }},
-		{"runtime authority invalid plan SHA-256", func(a *CompletenessAuthorities) { a.Runtime.PlanSHA256 = "bad" }},
-		{"runtime authority missing evidence dir", func(a *CompletenessAuthorities) { a.Runtime.EvidenceDirectory = "" }},
-		{"runtime authority missing subject worktree root", func(a *CompletenessAuthorities) { a.Runtime.SubjectWorktreeRoot = "" }},
-		{"runtime authority subject worktree equals repo", func(a *CompletenessAuthorities) {
-			a.Runtime.SubjectWorktreeRoot = a.Runtime.RepositoryRoot
+		mutate func(*ClosureEvidence)
+	}
+	mutations := []mutation{
+		// runtime predicates (1..7)
+		{"runtime_identities_structurally_valid: empty repo root", func(c *ClosureEvidence) { c.Runtime.RepositoryRoot = "" }},
+		{"runtime_identities_structurally_valid: invalid freeze OID", func(c *ClosureEvidence) { c.Runtime.FreezeCommit = "bad" }},
+		{"runtime_identities_structurally_valid: invalid freeze tree", func(c *ClosureEvidence) { c.Runtime.FreezeTree = "bad" }},
+		{"runtime_identities_structurally_valid: invalid subject OID", func(c *ClosureEvidence) { c.Runtime.SubjectCommit = "bad" }},
+		{"runtime_identities_structurally_valid: invalid subject tree", func(c *ClosureEvidence) { c.Runtime.SubjectTree = "bad" }},
+		{"runtime_identities_structurally_valid: invalid execution tree", func(c *ClosureEvidence) { c.Runtime.ExecutionTree = "bad" }},
+		{"runtime_identities_structurally_valid: empty plan path", func(c *ClosureEvidence) { c.Runtime.PlanPath = "" }},
+		{"runtime_identities_structurally_valid: invalid plan blob", func(c *ClosureEvidence) { c.Runtime.PlanBlob = "bad" }},
+		{"runtime_identities_structurally_valid: invalid plan SHA", func(c *ClosureEvidence) { c.Runtime.PlanSHA256 = "bad" }},
+		{"runtime_freeze_different_from_subject: F==S", func(c *ClosureEvidence) {
+			c.Runtime.FreezeCommit = c.Runtime.SubjectCommit
 		}},
-		{"runtime authority subject tree mismatch", func(a *CompletenessAuthorities) {
-			a.Runtime.SubjectWorktreeObservedTree = "ffffffffffffffffffffffffffffffffffffffff"
+		{"runtime_f_ancestor_of_s_verified: false", func(c *ClosureEvidence) {
+			c.Runtime.FAncestorOfSVerified = false
 		}},
-		{"runtime authority execution tree mismatch", func(a *CompletenessAuthorities) {
-			a.Runtime.ExecutionTree = "ffffffffffffffffffffffffffffffffffffffff"
+		{"runtime_execution_tree_equals_subject: mismatch", func(c *ClosureEvidence) {
+			c.Runtime.ExecutionTree = "ffffffffffffffffffffffffffffffffffffffff"
 		}},
-
-		{"frozen plan bytes length zero", func(a *CompletenessAuthorities) { a.Runtime.PlanBytes = nil }},
-		{"frozen plan bytes SHA mismatch", func(a *CompletenessAuthorities) {
+		{"runtime_plan_blob_valid: bad blob", func(c *ClosureEvidence) { c.Runtime.PlanBlob = "bad" }},
+		{"runtime_plan_sha256_valid: bad SHA", func(c *ClosureEvidence) { c.Runtime.PlanSHA256 = "bad" }},
+		{"runtime_plan_bytes_parse_successfully: nil bytes", func(c *ClosureEvidence) { c.Runtime.PlanBytes = nil }},
+		{"runtime_plan_bytes_parse_successfully: SHA mismatch", func(c *ClosureEvidence) {
 			other := []byte("different")
 			sum := sha256.Sum256(other)
-			a.Runtime.PlanSHA256 = hex.EncodeToString(sum[:])
+			c.Runtime.PlanSHA256 = hex.EncodeToString(sum[:])
 		}},
 
-		{"check result bijection duplicate id", func(a *CompletenessAuthorities) {
-			a.Checks = append(a.Checks, CheckResultRecord{CheckID: "c1", Mode: "run", Outcome: "pass"})
+		// plan/result predicates (8..12)
+		{"plan_result_cardinality_equal: missing expected checks", func(c *ClosureEvidence) { c.Plan.ExpectedChecks = nil }},
+		{"plan_result_cardinality_equal: extra result", func(c *ClosureEvidence) {
+			c.Results = append(c.Results, CheckResult{CheckID: "c2", Mode: "run", Outcome: "pass"})
 		}},
-		{"check result bijection empty", func(a *CompletenessAuthorities) { a.Checks = nil }},
-		{"check result bijection empty id", func(a *CompletenessAuthorities) {
-			a.Checks = []CheckResultRecord{{CheckID: "", Mode: "run", Outcome: "pass"}}
+		{"plan_result_ids_bijective: duplicate expected", func(c *ClosureEvidence) {
+			c.Plan.ExpectedChecks = append(c.Plan.ExpectedChecks, PlanCheckSpec{ID: "c1", Mode: "run"})
+		}},
+		{"plan_result_ids_bijective: duplicate result", func(c *ClosureEvidence) {
+			c.Results = append(c.Results, CheckResult{CheckID: "c1", Mode: "run", Outcome: "pass"})
+		}},
+		{"plan_result_ids_bijective: unknown result ID", func(c *ClosureEvidence) {
+			c.Results[0].CheckID = "ghost"
+		}},
+		{"plan_result_order_matches_plan: order mismatch", func(c *ClosureEvidence) {
+			c.Plan.ExpectedChecks = []PlanCheckSpec{
+				{ID: "c2", Mode: "run"},
+				{ID: "c1", Mode: "run"},
+			}
+		}},
+		{"plan_result_mode_matches_plan: mode mismatch", func(c *ClosureEvidence) {
+			c.Results[0].Mode = "exclude"
+		}},
+		{"plan_no_unknown_check_mode: unknown result mode", func(c *ClosureEvidence) {
+			c.Results[0].Mode = "unknown"
+		}},
+		{"plan_no_unknown_check_mode: unknown plan mode", func(c *ClosureEvidence) {
+			c.Plan.ExpectedChecks[0].Mode = "unknown"
+		}},
+		{"plan_result_ids_bijective: empty results", func(c *ClosureEvidence) { c.Results = nil }},
+
+		// results predicates (13..19)
+		{"results_every_run_check_successful: outcome fail", func(c *ClosureEvidence) { c.Results[0].Outcome = "fail" }},
+		{"results_every_run_check_successful: run timeout", func(c *ClosureEvidence) { c.Results[0].TimedOut = true }},
+		{"results_every_run_check_successful: run canceled", func(c *ClosureEvidence) { c.Results[0].Canceled = true }},
+		{"results_every_run_check_successful: run cleanup error", func(c *ClosureEvidence) { c.Results[0].CleanupError = "boom" }},
+		{"results_every_exclude_check_excluded: missing exclude", func(c *ClosureEvidence) {
+			c.Plan.ExpectedChecks = []PlanCheckSpec{
+				{ID: "c1", Mode: "run"},
+				{ID: "ex1", Mode: "exclude"},
+			}
+		}},
+		{"results_every_exclude_check_excluded: excluded reported successful", func(c *ClosureEvidence) {
+			c.Plan.ExpectedChecks = []PlanCheckSpec{{ID: "ex1", Mode: "exclude"}}
+			c.Results = []CheckResult{{CheckID: "ex1", Mode: "exclude", Outcome: "pass", ExitCode: 0}}
+		}},
+		{"results_every_exclude_check_excluded: run reported excluded", func(c *ClosureEvidence) {
+			c.Results[0].Outcome = "excluded"
+		}},
+		{"results_every_exclude_check_excluded: exit nonzero", func(c *ClosureEvidence) {
+			c.Plan.ExpectedChecks = []PlanCheckSpec{{ID: "ex1", Mode: "exclude"}}
+			c.Results = []CheckResult{{CheckID: "ex1", Mode: "exclude", Outcome: "excluded", ExitCode: 1}}
+		}},
+		{"results_no_timeout: timed out", func(c *ClosureEvidence) { c.Results[0].TimedOut = true }},
+		{"results_no_cancellation: canceled", func(c *ClosureEvidence) { c.Results[0].Canceled = true }},
+		{"results_no_stdout_truncation: stdout truncated", func(c *ClosureEvidence) { c.Results[0].StdoutTruncated = true }},
+		{"results_no_stderr_truncation: stderr truncated", func(c *ClosureEvidence) { c.Results[0].StderrTruncated = true }},
+		{"results_no_execution_cleanup_error: cleanup error", func(c *ClosureEvidence) {
+			c.Cleanup.SubjectCleanupError = "boom"
 		}},
 
-		{"run check failure", func(a *CompletenessAuthorities) {
-			a.Checks[0].Outcome = "fail"
+		// gate predicates (20..25)
+		{"gate_classification_equals_pass: FAIL", func(c *ClosureEvidence) { c.Gate.Classification = "FAIL" }},
+		{"gate_classification_equals_pass: UNAVAILABLE", func(c *ClosureEvidence) { c.Gate.Classification = "UNAVAILABLE" }},
+		{"gate_invocation_count_equals_one: count 0", func(c *ClosureEvidence) { c.Gate.InvocationCount = 0 }},
+		{"gate_invocation_count_equals_one: count 2", func(c *ClosureEvidence) { c.Gate.InvocationCount = 2 }},
+		{"gate_subject_root_equals_s_exec_root: empty subject root", func(c *ClosureEvidence) { c.Gate.SubjectRoot = "" }},
+		{"gate_not_timed_out: timed out", func(c *ClosureEvidence) { c.Gate.TimedOut = true }},
+		{"gate_no_output_truncation: stdout truncated", func(c *ClosureEvidence) { c.Gate.StdoutTruncated = true }},
+		{"gate_no_output_truncation: stderr truncated", func(c *ClosureEvidence) { c.Gate.StderrTruncated = true }},
+		{"gate_error_absent: error present", func(c *ClosureEvidence) { c.Gate.Error = "boom" }},
+
+		// binary predicates (26..36)
+		{"binary_authority_valid: empty path", func(c *ClosureEvidence) { c.Binary.BinaryPath = "" }},
+		{"binary_authority_valid: invalid SHA", func(c *ClosureEvidence) { c.Binary.BinarySHA256 = "bad" }},
+		{"binary_commit_equals_subject_commit: mismatch", func(c *ClosureEvidence) {
+			c.Binary.BinaryCommit = "ffffffffffffffffffffffffffffffffffffffff"
 		}},
-		{"run check timeout", func(a *CompletenessAuthorities) {
-			a.Checks[0].TimedOut = true
+		{"binary_not_modified: modified=true", func(c *ClosureEvidence) { c.Binary.BinaryModified = true }},
+		{"binary_source_commit_equals_subject_commit: mismatch", func(c *ClosureEvidence) {
+			c.Binary.SourceCommit = "ffffffffffffffffffffffffffffffffffffffff"
 		}},
-		{"run check canceled", func(a *CompletenessAuthorities) {
-			a.Checks[0].Canceled = true
+		{"binary_source_tree_equals_subject_tree: mismatch", func(c *ClosureEvidence) {
+			c.Binary.SourceTree = "ffffffffffffffffffffffffffffffffffffffff"
 		}},
-		{"run check cleanup error", func(a *CompletenessAuthorities) {
-			a.Checks[0].CleanupError = "boom"
-		}},
-		{"exclude check executed", func(a *CompletenessAuthorities) {
-			a.Checks = append(a.Checks, CheckResultRecord{CheckID: "ex1", Mode: "exclude", Outcome: "pass"})
+		{"binary_source_clean: false", func(c *ClosureEvidence) { c.Binary.SourceClean = false }},
+		{"binary_source_detached: false", func(c *ClosureEvidence) { c.Binary.SourceDetached = false }},
+		{"binary_output_outside_all_worktrees: false", func(c *ClosureEvidence) { c.Binary.OutputOutsideAllWorktrees = false }},
+		{"binary_executable: false", func(c *ClosureEvidence) { c.Binary.Executable = false }},
+		{"binary_sha256_valid: invalid", func(c *ClosureEvidence) { c.Binary.BinarySHA256 = "bad" }},
+		{"binary_cleanup_error_absent: error", func(c *ClosureEvidence) {
+			c.Cleanup.BinaryCleanupError = "boom"
 		}},
 
-		{"gate timeout", func(a *CompletenessAuthorities) { a.Gate.Verdict = "FAIL" }},
-		{"gate verdict fail", func(a *CompletenessAuthorities) { a.Gate.Verdict = "FAIL" }},
-
-		{"binary path empty", func(a *CompletenessAuthorities) { a.Binary.BinaryPath = "" }},
-		{"binary SHA-256 invalid", func(a *CompletenessAuthorities) {
-			a.Binary.BinarySHA256 = "bad"
+		// caller predicates (37..43)
+		{"caller_before_available: unavailable", func(c *ClosureEvidence) { c.CallerBefore.Available = false }},
+		{"caller_after_available: unavailable", func(c *ClosureEvidence) { c.CallerAfter.Available = false }},
+		{"caller_head_unchanged: changed", func(c *ClosureEvidence) {
+			c.CallerAfter.Head = "1111111111111111111111111111111111111111"
 		}},
-		{"binary VCS modified", func(a *CompletenessAuthorities) { a.Binary.VCSModified = true }},
-		{"binary not executable", func(a *CompletenessAuthorities) { a.Binary.Executable = false }},
-		{"binary VCS revision mismatch", func(a *CompletenessAuthorities) {
-			a.Binary.VCSRevision = "ffffffffffffffffffffffffffffffffffffffff"
+		{"caller_tree_unchanged: changed", func(c *ClosureEvidence) {
+			c.CallerAfter.Tree = "2222222222222222222222222222222222222222"
 		}},
-
-		{"before state unavailable", func(a *CompletenessAuthorities) { a.CallerAvailable.BeforeAvailable = false }},
-		{"after state unavailable", func(a *CompletenessAuthorities) { a.CallerAvailable.AfterAvailable = false }},
-		{"caller HEAD changed", func(a *CompletenessAuthorities) { a.CallerDrift.HEADChanged = true }},
-		{"caller tree changed", func(a *CompletenessAuthorities) { a.CallerDrift.TreeChanged = true }},
-		{"caller status changed", func(a *CompletenessAuthorities) { a.CallerDrift.StatusChanged = true }},
-		{"caller refs changed", func(a *CompletenessAuthorities) { a.CallerDrift.RefsChanged = true }},
-		{"worktree leaked", func(a *CompletenessAuthorities) { a.CallerDrift.WorktreeLeaked = true }},
+		{"caller_status_unchanged: changed", func(c *ClosureEvidence) { c.CallerAfter.StatusHash = "different" }},
+		{"caller_refs_unchanged: changed", func(c *ClosureEvidence) { c.CallerAfter.RefsHash = "different" }},
+		{"caller_worktree_inventory_unchanged: changed", func(c *ClosureEvidence) { c.CallerAfter.WorktreeInventoryHash = "different" }},
+		{"caller_refs_unchanged: empty-but-available then changed", func(c *ClosureEvidence) {
+			// Simulate the empty-but-available state: caller
+			// recorded an empty refs hash but the runner saw
+			// a different one. The drift is rejected.
+			c.CallerBefore.RefsHash = ""
+			c.CallerAfter.RefsHash = "different"
+		}},
 	}
 
-	for _, c := range cases {
-		c := c
-		t.Run(c.name, func(t *testing.T) {
+	for _, m := range mutations {
+		m := m
+		t.Run(m.name, func(t *testing.T) {
 			t.Parallel()
-			mut := makeValidAuthorities()
-			c.mutate(&mut)
-			env := ClosureEvidenceEx{
-				SchemaVersion: 2,
-				Authorities:   mut,
-				Completeness:  EvidenceComplete,
-			}
-			got := DeriveClosureEvidenceCompletenessEx(env)
+			mut := validCandidate()
+			m.mutate(&mut)
+			got := DeriveClosureEvidenceCompleteness(mut)
 			if got != EvidenceIncomplete {
-				t.Fatalf("expected INCOMPLETE for %s, got %q", c.name, got)
+				t.Fatalf("expected INCOMPLETE for %s, got %q", m.name, got)
 			}
 		})
+	}
+
+	// Row-count guard: every entry in completenessPredicates MUST
+	// have at least one mutation row above. The guard catches a
+	// developer who adds a new predicate but forgets to add a
+	// mutation row, which would otherwise leave the predicate
+	// untested.
+	t.Run("mutation matrix covers every predicate", func(t *testing.T) {
+		t.Parallel()
+		covered := make(map[string]bool)
+		for _, m := range mutations {
+			// Trim trailing ":<description>" so the prefix matches
+			// the predicate map key.
+			name := m.name
+			if idx := strings.Index(name, ":"); idx > 0 {
+				name = name[:idx]
+			}
+			covered[name] = true
+		}
+		if len(covered) != len(completenessPredicates) {
+			missing := []string{}
+			extra := []string{}
+			for k := range completenessPredicates {
+				if !covered[k] {
+					missing = append(missing, k)
+				}
+			}
+			for k := range covered {
+				if _, ok := completenessPredicates[k]; !ok {
+					extra = append(extra, k)
+				}
+			}
+			t.Fatalf("mutation matrix mismatch: covered=%d predicates=%d missing=%v extra=%v",
+				len(covered), len(completenessPredicates), missing, extra)
+		}
+	})
+
+	// Predicate count guard: the matrix must have the expected
+	// number of predicates. The constant is the only allowed
+	// source of truth.
+	if got := len(completenessPredicates); got != completenessPredicateCount {
+		t.Fatalf("predicate count drift: declared=%d actual=%d", completenessPredicateCount, got)
 	}
 }
