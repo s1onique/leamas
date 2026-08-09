@@ -69,16 +69,59 @@ func runtimePlanSHA256Valid(c ClosureEvidence) bool {
 	return isHexSHA256(c.Runtime.PlanSHA256)
 }
 
-// runtimePlanBytesParseSuccessfully reports the plan bytes are
-// present and their SHA-256 matches the recorded SHA-256. A
-// zero-length plan is rejected.
+// runtimePlanBytesParseSuccessfully runs the production Plan
+// Contract v1 decoder on c.Runtime.PlanBytes. The previous
+// B2 implementation only compared bytes to the recorded
+// SHA-256; arbitrary bytes with a matching SHA-256 could
+// satisfy that predicate. The B2-R1 production decoder
+// (parseBoundedClosurePlanDocument, mirrored in the
+// evidence package's productionParseClosurePlanDocument
+// to avoid a test-only import cycle) enforces the
+// MaxPlanBytes cap, rejects malformed JSON, and refuses
+// trailing values so the bytes MUST be a real Plan
+// Contract document.
+//
+// The predicate also verifies the SHA-256 still matches the
+// recorded PlanSHA256 because the runtime identity is
+// authoritative, and rejects any well-formed Plan whose
+// declared SHA-256 differs from the recorded one.
 func runtimePlanBytesParseSuccessfully(c ClosureEvidence) bool {
 	if len(c.Runtime.PlanBytes) == 0 {
 		return false
 	}
 	sum := sha256.Sum256(c.Runtime.PlanBytes)
-	got := hex.EncodeToString(sum[:])
-	return got == c.Runtime.PlanSHA256
+	if hex.EncodeToString(sum[:]) != c.Runtime.PlanSHA256 {
+		return false
+	}
+	_, err := productionDecodeClosurePlan(c.Runtime.PlanBytes)
+	return err == nil
+}
+
+// runtimeExpectedChecksDerivedFromPlanBytes reports that the
+// candidate's Plan.ExpectedChecks agree with the production
+// Plan Contract decoder applied to Runtime.PlanBytes. The
+// previous B2 implementation accepted the supplied
+// ExpectedChecks independently; the B2-R1 contract derives
+// the expected set from the production decode so the candidate
+// cannot smuggle in an alternative check set.
+func runtimeExpectedChecksDerivedFromPlanBytes(c ClosureEvidence) bool {
+	if len(c.Runtime.PlanBytes) == 0 {
+		return false
+	}
+	derived, err := productionDecodeClosurePlan(c.Runtime.PlanBytes)
+	if err != nil {
+		return false
+	}
+	if len(derived) != len(c.Plan.ExpectedChecks) {
+		return false
+	}
+	for i, want := range derived {
+		got := c.Plan.ExpectedChecks[i]
+		if got.ID != want.ID || got.Mode != want.Mode {
+			return false
+		}
+	}
+	return true
 }
 
 // ----------------------------------------------------------------------------

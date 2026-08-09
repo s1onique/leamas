@@ -227,13 +227,26 @@ func TestClosureSubjectWorktreeAuthority(t *testing.T) {
 	}
 }
 
+// validBijectionPlanBytes is the canonical Plan Contract v1
+// document the umbrella bijection tests use. B2-R1 binds the
+// candidate's expected checks to the production decoder
+// applied to Runtime.PlanBytes, so the bytes must declare
+// exactly the checks the candidate claims.
+func validBijectionPlanBytes() []byte {
+	return []byte(`{"contract_version":1,"checks":[` +
+		`{"id":"c1","mode":"run"},` +
+		`{"id":"c2","mode":"run"},` +
+		`{"id":"c3","mode":"exclude"}` +
+		`]}`)
+}
+
 func TestClosureCheckResultBijection(t *testing.T) {
 	t.Parallel()
 	// Build a fully valid candidate so DeriveClosureEvidenceCompleteness
 	// returns EvidenceComplete. The B2 canonical predicate is a closed
-	// AND of all 43 authorities; the test mutates only the plan/result
+	// AND of all 47 authorities; the test mutates only the plan/result
 	// bijection invariants.
-	planBytes := []byte("{\"contract_version\":1,\"checks\":[]}")
+	planBytes := validBijectionPlanBytes()
 	planSum := sha256.Sum256(planBytes)
 	planSHA := hex.EncodeToString(planSum[:])
 	subjectCommit := "3333333333333333333333333333333333333333"
@@ -243,16 +256,16 @@ func TestClosureCheckResultBijection(t *testing.T) {
 			SchemaVersion: evidence.ClosureEvidenceSchemaVersion,
 			Protocol:      evidence.ClosureProtocolVersion,
 			Runtime: evidence.RuntimeAuthority{
-				RepositoryRoot:      "/repo",
-				FreezeCommit:        "1111111111111111111111111111111111111111",
-				FreezeTree:          "2222222222222222222222222222222222222222",
-				SubjectCommit:       subjectCommit,
-				SubjectTree:         subjectTree,
-				ExecutionTree:       subjectTree,
-				PlanPath:            "plan",
-				PlanBlob:            "5555555555555555555555555555555555555555",
-				PlanSHA256:          planSHA,
-				PlanBytes:           planBytes,
+				RepositoryRoot:       "/repo",
+				FreezeCommit:         "1111111111111111111111111111111111111111",
+				FreezeTree:           "2222222222222222222222222222222222222222",
+				SubjectCommit:        subjectCommit,
+				SubjectTree:          subjectTree,
+				ExecutionTree:        subjectTree,
+				PlanPath:             "plan",
+				PlanBlob:             "5555555555555555555555555555555555555555",
+				PlanSHA256:           planSHA,
+				PlanBytes:            planBytes,
 				FAncestorOfSVerified: true,
 			},
 			Plan: evidence.PlanAuthority{
@@ -264,11 +277,12 @@ func TestClosureCheckResultBijection(t *testing.T) {
 			},
 			Results: results,
 			Gate: evidence.GateAuthority{
-				ObservedStatus:  "OK",
-				Classification:  "PASS",
-				InvocationCount: 1,
-				RepositoryRoot:  "/repo",
-				SubjectRoot:     "/subject",
+				ObservedStatus:       "OK",
+				Classification:       "PASS",
+				InvocationCount:      1,
+				RepositoryRoot:       "/repo",
+				SubjectRoot:          subjectTree,
+				SubjectExecutionRoot: subjectTree,
 			},
 			Binary: evidence.BinaryAuthority{
 				BinaryPath:                "/tmp/leamas",

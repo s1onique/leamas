@@ -30,7 +30,10 @@ import (
 
 // ClosureEvidenceSchemaVersion is the schema identifier. The
 // version is bumped when the canonical struct shape changes.
-const ClosureEvidenceSchemaVersion = 3
+// B2-R1 bumped the version from 3 to 4: GateAuthority gained
+// the SubjectExecutionRoot field, and the strict evidence
+// decoder rejects unknown fields.
+const ClosureEvidenceSchemaVersion = 4
 
 // ClosureProtocolVersion is the published protocol identifier
 // that pairs with the schema version. The string value is the
@@ -107,16 +110,25 @@ type CheckResult struct {
 // GateAuthority captures the gate (GateCollector) authority. The
 // invocation_count is the collector's CallsCount; the predicate
 // accepts exactly one.
+//
+// SubjectRoot is the worktree path the gate ran against. The
+// B2-R1 matrix binds the gate to the actual subject execution
+// root by recording that root in SubjectExecutionRoot and
+// requiring the two are equal. Without
+// SubjectExecutionRoot, a caller could populate SubjectRoot
+// with any path and the predicate would accept it.
+// GateAuthority fields are aligned for the widest tag.
 type GateAuthority struct {
-	ObservedStatus  string `json:"observed_status"`
-	Classification  string `json:"classification"`
-	InvocationCount int    `json:"invocation_count"`
-	RepositoryRoot  string `json:"repository_root"`
-	SubjectRoot     string `json:"subject_root"`
-	TimedOut        bool   `json:"timed_out"`
-	StdoutTruncated bool   `json:"stdout_truncated"`
-	StderrTruncated bool   `json:"stderr_truncated"`
-	Error           string `json:"error,omitempty"`
+	ObservedStatus       string `json:"observed_status"`
+	Classification       string `json:"classification"`
+	InvocationCount      int    `json:"invocation_count"`
+	RepositoryRoot       string `json:"repository_root"`
+	SubjectRoot          string `json:"subject_root"`
+	SubjectExecutionRoot string `json:"subject_execution_root"`
+	TimedOut             bool   `json:"timed_out"`
+	StdoutTruncated      bool   `json:"stdout_truncated"`
+	StderrTruncated      bool   `json:"stderr_truncated"`
+	Error                string `json:"error,omitempty"`
 }
 
 // BinaryAuthority captures the exact-S binary authority. The
@@ -249,6 +261,9 @@ func ValidateClosureEvidence(candidate ClosureEvidence) error {
 	}
 	if candidate.Gate.SubjectRoot == "" {
 		return errors.New("evidence: gate.subject_root is empty")
+	}
+	if candidate.Gate.SubjectExecutionRoot == "" {
+		return errors.New("evidence: gate.subject_execution_root is empty")
 	}
 	if candidate.Gate.Classification == "" {
 		return errors.New("evidence: gate.classification is empty")

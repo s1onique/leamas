@@ -10,7 +10,7 @@
 // and the predicate rejects the empty presence of an authority
 // field as INCOMPLETE.
 //
-// The 43 predicates are encoded in declaration order. Each
+// The 47 predicates are encoded in declaration order. Each
 // predicate is a separate function so the mutation matrix in
 // TestClosureEvidenceCompletenessCanonical can exercise them
 // independently. The matrix MUST grow with every added
@@ -39,11 +39,26 @@ func DeriveClosureEvidenceCompleteness(candidate ClosureEvidence) EvidenceComple
 }
 
 // completenessPredicatesInOrder is the authoritative ordered
-// list of the 43 predicates. The slice form drives the
+// list of the 47 predicates. The slice form drives the
 // canonical predicate; the map form (completenessPredicates)
 // drives the mutation matrix test. Both MUST stay in sync.
+//
+// B2-R1 changes vs the prior 43-predicate matrix:
+//   - added runtimeExpectedChecksDerivedFromPlanBytes (binds
+//     Plan.ExpectedChecks to the production-decoded Plan
+//     Contract)
+//   - added gateSubjectExecutionRootMatchesTree (companion
+//     gate binding to SubjectTree)
+//   - added binaryPathNonEmpty (replaces the BinaryPath slot
+//     of the removed binaryAuthorityValid composite)
+//   - added callerBeforeSnapshotComplete and
+//     callerAfterSnapshotComplete (Available implies all
+//     observable fields are non-empty)
+//   - removed binaryAuthorityValid (composite of atomic
+//     predicates; one mutation could fail multiple predicates
+//     at once)
 var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
-	// runtime predicates (1..7)
+	// runtime predicates (1..8)
 	runtimeIdentitiesStructurallyValid,
 	runtimeFreezeDifferentFromSubject,
 	runtimeFAncestorOfSVerified,
@@ -51,15 +66,16 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	runtimePlanBlobValid,
 	runtimePlanSHA256Valid,
 	runtimePlanBytesParseSuccessfully,
+	runtimeExpectedChecksDerivedFromPlanBytes,
 
-	// plan/result predicates (8..12)
+	// plan/result predicates (9..13)
 	planResultCardinalityEqual,
 	planResultIDsBijective,
 	planResultOrderMatchesPlan,
 	planResultModeMatchesPlanMode,
 	planNoUnknownCheckMode,
 
-	// results predicates (13..19)
+	// results predicates (14..20)
 	resultsEveryRunCheckSuccessful,
 	resultsEveryExcludeCheckExcluded,
 	resultsNoTimeout,
@@ -68,16 +84,17 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	resultsNoStderrTruncation,
 	resultsNoExecutionCleanupError,
 
-	// gate predicates (20..25)
+	// gate predicates (21..27)
 	gateClassificationEqualsPASS,
 	gateInvocationCountEqualsOne,
 	gateSubjectRootEqualsSExecutionRoot,
+	gateSubjectExecutionRootMatchesTree,
 	gateNotTimedOut,
 	gateNoOutputTruncation,
 	gateErrorAbsent,
 
-	// binary predicates (26..36)
-	binaryAuthorityValid,
+	// binary predicates (28..38)
+	binaryPathNonEmpty,
 	binaryCommitEqualsSubjectCommit,
 	binaryNotModified,
 	binarySourceCommitEqualsSubjectCommit,
@@ -89,9 +106,11 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	binarySHA256Valid,
 	binaryCleanupErrorAbsent,
 
-	// caller predicates (37..43)
+	// caller predicates (39..47)
 	callerBeforeAvailable,
 	callerAfterAvailable,
+	callerBeforeSnapshotComplete,
+	callerAfterSnapshotComplete,
 	callerHEADUnchanged,
 	callerTreeUnchanged,
 	callerStatusUnchanged,
@@ -102,7 +121,12 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 // completenessPredicateNamesInOrder is the ordered list of
 // predicate names parallel to completenessPredicatesInOrder.
 // The mutation matrix asserts that every entry has at least
-// one row.
+// one row. B2-R1 rearranged the slots:
+//   - added runtimeExpectedChecksDerivedFromPlanBytes
+//   - added gateSubjectExecutionRootMatchesTree
+//   - replaced binaryAuthorityValid with binaryPathNonEmpty
+//   - added callerBeforeSnapshotComplete and
+//     callerAfterSnapshotComplete
 var completenessPredicateNamesInOrder = []string{
 	"runtime_identities_structurally_valid",
 	"runtime_freeze_different_from_subject",
@@ -111,6 +135,7 @@ var completenessPredicateNamesInOrder = []string{
 	"runtime_plan_blob_valid",
 	"runtime_plan_sha256_valid",
 	"runtime_plan_bytes_parse_successfully",
+	"runtime_expected_checks_derived_from_plan_bytes",
 	"plan_result_cardinality_equal",
 	"plan_result_ids_bijective",
 	"plan_result_order_matches_plan",
@@ -126,14 +151,15 @@ var completenessPredicateNamesInOrder = []string{
 	"gate_classification_equals_pass",
 	"gate_invocation_count_equals_one",
 	"gate_subject_root_equals_s_exec_root",
+	"gate_subject_execution_root_matches_tree",
 	"gate_not_timed_out",
 	"gate_no_output_truncation",
 	"gate_error_absent",
-	"binary_authority_valid",
+	"binary_path_non_empty",
 	"binary_commit_equals_subject_commit",
 	"binary_not_modified",
-	"binary_source_commit_equals_subject",
-	"binary_source_tree_equals_subject",
+	"binary_source_commit_equals_subject_commit",
+	"binary_source_tree_equals_subject_tree",
 	"binary_source_clean",
 	"binary_source_detached",
 	"binary_output_outside_all_worktrees",
@@ -142,6 +168,8 @@ var completenessPredicateNamesInOrder = []string{
 	"binary_cleanup_error_absent",
 	"caller_before_available",
 	"caller_after_available",
+	"caller_before_snapshot_complete",
+	"caller_after_snapshot_complete",
 	"caller_head_unchanged",
 	"caller_tree_unchanged",
 	"caller_status_unchanged",
@@ -165,7 +193,10 @@ var completenessPredicates = func() map[string]func(ClosureEvidence) bool {
 
 // completenessPredicateCount is the row count the mutation
 // matrix must agree with. Keep in sync with completenessPredicatesInOrder.
-const completenessPredicateCount = 43
+// B2-R1 increased the count from 43 to 47: removed
+// binaryAuthorityValid composite (-1), added five new
+// atomic predicates (+5).
+const completenessPredicateCount = 47
 
 // ----------------------------------------------------------------------------
 // Small shared helpers

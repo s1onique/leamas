@@ -17,6 +17,7 @@
 package evidence
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -79,6 +80,31 @@ func PrepareClosureEvidenceForPublication(candidate ClosureEvidence) (Publicatio
 // TestClosureEvidenceCanonicalSerialization asserts this.
 func MarshalEvidence(candidate ClosureEvidence) ([]byte, error) {
 	return json.Marshal(candidate)
+}
+
+// UnmarshalClosureEvidence is the strict single-document
+// decoder for the canonical evidence record. B2-R1 added the
+// entry point because the previous B2 implementation decoded
+// the evidence document with json.Unmarshal, which silently
+// discards unknown object keys. For an authority document a
+// caller that injects "completeness":"COMPLETE" or other
+// authority-looking fields must be rejected, not absorbed.
+//
+// The decoder uses json.Decoder with DisallowUnknownFields,
+// requires exactly one JSON document, and rejects trailing
+// values. Any unknown field, multiple objects, trailing
+// content, or genuine syntax error returns a non-nil error.
+func UnmarshalClosureEvidence(data []byte) (ClosureEvidence, error) {
+	var out ClosureEvidence
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&out); err != nil {
+		return ClosureEvidence{}, fmt.Errorf("evidence: strict decode failed: %w", err)
+	}
+	if dec.More() {
+		return ClosureEvidence{}, fmt.Errorf("evidence: strict decode rejected trailing JSON values")
+	}
+	return out, nil
 }
 
 // ComputeEvidenceSHA256 is the external-metadata helper. The

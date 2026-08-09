@@ -237,9 +237,10 @@ func TestClosureEvidenceCompletenessCannotBeForced(t *testing.T) {
 	t.Run("serialized_completeness_in_JSON_is_ignored", func(t *testing.T) {
 		t.Parallel()
 		// A caller writes a JSON document that claims
-		// `completeness: "COMPLETE"`. The decoder MUST drop
-		// the field (the canonical struct has no Completeness
-		// field), and the barrier MUST re-derive and reject.
+		// `completeness: "COMPLETE"`. The strict decoder
+		// (UnmarshalClosureEvidence) MUST reject the
+		// unknown field, and the barrier MUST re-derive
+		// and reject the incomplete candidate.
 		candidate := validCandidate()
 		// Mutate the candidate so it is NOT complete.
 		candidate.Results[0].Outcome = "fail"
@@ -247,25 +248,39 @@ func TestClosureEvidenceCompletenessCannotBeForced(t *testing.T) {
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
 		}
-		// Inject a parallel completeness field.
-		// The canonical struct has no such field, so the
-		// "completeness" key in the JSON is dropped on decode.
-		// We re-marshal the injected JSON and then decode into
-		// the canonical struct to prove the field is dropped.
+		// Inject a parallel completeness field. The
+		// canonical struct has no Completeness field and
+		// the strict decoder rejects unknown keys.
 		injected := []byte(`{"completeness":"COMPLETE",`)
 		injected = append(injected, bytes[1:]...) // strip the leading '{'
-		var decoded ClosureEvidence
-		if err := json.Unmarshal(injected, &decoded); err != nil {
-			t.Fatalf("unmarshal: %v", err)
+		if _, err := UnmarshalClosureEvidence(injected); err == nil {
+			t.Fatalf("strict decoder must reject injected completeness field")
 		}
-		// The decoded candidate must still be INCOMPLETE.
+		// The strict decoder must also reject unknown
+		// authority-looking fields such as
+		// "classification" at the document root.
+		for _, field := range []string{"classification", "verdict", "pass"} {
+			injected := []byte(`{"` + field + `":"COMPLETE",`)
+			injected = append(injected, bytes[1:]...)
+			if _, err := UnmarshalClosureEvidence(injected); err == nil {
+				t.Fatalf("strict decoder must reject unknown field %q", field)
+			}
+		}
+		// For comparison: the canonical struct decoded
+		// with the strict decoder from the unmodified
+		// marshaled bytes must succeed and the resulting
+		// candidate must be derivable (still incomplete).
+		decoded, err := UnmarshalClosureEvidence(bytes)
+		if err != nil {
+			t.Fatalf("strict decoder must accept unmodified bytes: %v", err)
+		}
 		if got := DeriveClosureEvidenceCompleteness(decoded); got == EvidenceComplete {
-			t.Fatalf("injected completeness=COMPLETE must NOT pass, got %q", got)
+			t.Fatalf("incomplete candidate must NOT pass derived, got %q", got)
 		}
 		// The barrier must reject the decoded candidate.
 		got, err := PrepareClosureEvidenceForPublication(decoded)
 		if err == nil {
-			t.Fatalf("barrier must reject injected completeness, got %+v", got)
+			t.Fatalf("barrier must reject decoded incomplete candidate, got %+v", got)
 		}
 	})
 

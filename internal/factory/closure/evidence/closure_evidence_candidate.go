@@ -50,18 +50,26 @@ type CandidateInputs struct {
 
 // BuildClosureEvidenceCandidate is the pure construction
 // function. It copies the inputs into the canonical struct
-// shape and stamps the schema and protocol identifiers. The
-// function performs no I/O and never reads from the runner's
-// state directly: every value is already authoritative.
+// shape, stamps the schema and protocol identifiers, and
+// derives the expected check set from Runtime.PlanBytes via
+// the production Plan Contract v1 decoder.
+//
+// B2-R1 derivation: the candidate builder no longer trusts
+// the caller-supplied ExpectedChecks. The F:P bytes are the
+// only source of truth; the decoder routes through
+// parseBoundedClosurePlanDocument (re-exported via
+// productionDecodeClosurePlan) so the derived list cannot
+// diverge from the bytes the runner observed. The caller
+// cannot smuggle in an alternative check set.
 func BuildClosureEvidenceCandidate(in CandidateInputs) ClosureEvidence {
-	plan := append([]PlanCheckSpec(nil), in.Plan.ExpectedChecks...)
+	derived := deriveExpectedChecksFromPlanBytes(in.Runtime.PlanBytes)
 	results := append([]CheckResult(nil), in.Results...)
 	return ClosureEvidence{
 		SchemaVersion: ClosureEvidenceSchemaVersion,
 		Protocol:      ClosureProtocolVersion,
 		Runtime:       in.Runtime,
 		Plan: PlanAuthority{
-			ExpectedChecks: plan,
+			ExpectedChecks: derived,
 		},
 		Results:      results,
 		Gate:         in.Gate,
@@ -71,6 +79,10 @@ func BuildClosureEvidenceCandidate(in CandidateInputs) ClosureEvidence {
 		Cleanup:      in.Cleanup,
 	}
 }
+
+// deriveExpectedChecksFromPlanBytes lives in plan_decode.go.
+// The candidate builder calls it directly so the F:P bytes
+// are the only source of truth for the expected check set.
 
 // BuildEmptyEvidence returns a zero-value evidence candidate
 // stamped with the schema and protocol identifiers. Tests use

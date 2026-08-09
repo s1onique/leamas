@@ -36,12 +36,29 @@ func gateInvocationCountEqualsOne(c ClosureEvidence) bool {
 }
 
 // gateSubjectRootEqualsSExecutionRoot reports the gate's
-// SubjectRoot is non-empty. The SubjectRoot is the worktree
-// path the GateCollector ran against; the predicate guards
-// against an empty SubjectRoot being passed off as the
-// subject execution root.
+// SubjectRoot is non-empty AND equals the runtime
+// SubjectTree OID. The SubjectTree is the actual detached
+// subject execution root the runner observed; the previous
+// B2 implementation only checked non-empty, so an arbitrary
+// non-empty path could satisfy the predicate. The B2-R1
+// predicate binds the gate root to the recorded execution
+// root so the gate cannot be falsely claimed to have run
+// at a different path.
 func gateSubjectRootEqualsSExecutionRoot(c ClosureEvidence) bool {
-	return c.Gate.SubjectRoot != ""
+	return c.Gate.SubjectRoot != "" &&
+		c.Gate.SubjectRoot == c.Runtime.SubjectTree
+}
+
+// gateSubjectExecutionRootMatchesTree reports the gate's
+// SubjectExecutionRoot field (the actual S^{tree} execution
+// root recorded by the gate collector) is non-empty AND
+// equals the runtime SubjectTree OID. The predicate is the
+// companion to gateSubjectRootEqualsSExecutionRoot and
+// closes the B2-R1 requirement that both gate roots are
+// bound to the detached subject execution root.
+func gateSubjectExecutionRootMatchesTree(c ClosureEvidence) bool {
+	return c.Gate.SubjectExecutionRoot != "" &&
+		c.Gate.SubjectExecutionRoot == c.Runtime.SubjectTree
 }
 
 // gateNotTimedOut reports the gate did not time out.
@@ -63,22 +80,20 @@ func gateErrorAbsent(c ClosureEvidence) bool {
 // ----------------------------------------------------------------------------
 // Binary predicates (26..36)
 // ----------------------------------------------------------------------------
+//
+// B2-R1 removed the composite binaryAuthorityValid predicate.
+// The composite bundled several atomic predicates and one
+// mutation could fail multiple predicates at once, which made
+// the "43 independent predicates" claim inaccurate. The
+// individual atomic predicates below remain and the matrix
+// exercises each independently.
 
-// binaryAuthorityValid reports every binary authority invariant
-// holds in the closed form. The predicate is split into the
-// individual atomic predicates below so the mutation matrix
-// can exercise each independently.
-func binaryAuthorityValid(c ClosureEvidence) bool {
-	return c.Binary.BinaryPath != "" &&
-		isHexSHA256(c.Binary.BinarySHA256) &&
-		isValidOID(c.Binary.BinaryCommit) &&
-		!c.Binary.BinaryModified &&
-		c.Binary.Executable &&
-		isValidOID(c.Binary.SourceCommit) &&
-		isValidOID(c.Binary.SourceTree) &&
-		c.Binary.SourceClean &&
-		c.Binary.SourceDetached &&
-		c.Binary.OutputOutsideAllWorktrees
+// binaryPathNonEmpty reports the binary's absolute path is a
+// non-empty string. The pre-R1 composite predicate covered
+// this; after the composite removal the predicate stands on
+// its own so the matrix can exercise it independently.
+func binaryPathNonEmpty(c ClosureEvidence) bool {
+	return c.Binary.BinaryPath != ""
 }
 
 // binaryCommitEqualsSubjectCommit reports the binary's
@@ -146,7 +161,7 @@ func binaryCleanupErrorAbsent(c ClosureEvidence) bool {
 }
 
 // ----------------------------------------------------------------------------
-// Caller predicates (37..43)
+// Caller predicates (37..46)
 // ----------------------------------------------------------------------------
 
 // callerBeforeAvailable reports the BEFORE caller-state snapshot
@@ -159,6 +174,40 @@ func callerBeforeAvailable(c ClosureEvidence) bool {
 // was Available.
 func callerAfterAvailable(c ClosureEvidence) bool {
 	return c.CallerAfter.Available
+}
+
+// callerBeforeSnapshotComplete reports the BEFORE snapshot, if
+// Available, has every observable field non-empty. The
+// previous B2 implementation accepted an Available-but-empty
+// snapshot as long as BEFORE and AFTER were equal; the B2-R1
+// predicate rejects that drift because the runner observed
+// but failed to record the values.
+func callerBeforeSnapshotComplete(c ClosureEvidence) bool {
+	s := c.CallerBefore
+	if !s.Available {
+		return true
+	}
+	return s.Head != "" &&
+		s.Tree != "" &&
+		s.StatusHash != "" &&
+		s.RefsHash != "" &&
+		s.WorktreeInventoryHash != ""
+}
+
+// callerAfterSnapshotComplete reports the AFTER snapshot, if
+// Available, has every observable field non-empty. Pairs with
+// callerBeforeSnapshotComplete to fail-closed when the runner
+// observed a drifted value but failed to record it.
+func callerAfterSnapshotComplete(c ClosureEvidence) bool {
+	s := c.CallerAfter
+	if !s.Available {
+		return true
+	}
+	return s.Head != "" &&
+		s.Tree != "" &&
+		s.StatusHash != "" &&
+		s.RefsHash != "" &&
+		s.WorktreeInventoryHash != ""
 }
 
 // callerHEADUnchanged reports HEAD did not change between
