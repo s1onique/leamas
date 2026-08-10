@@ -46,6 +46,15 @@ func decodeStrict(data []byte, version Version) (strictDecodeResult, error) {
 			return strictDecodeResult{}, fmt.Errorf("strict v2 decode: %w", err)
 		}
 		return strictDecodeResult{doc: newDocumentV2(s)}, nil
+	case Version3:
+		var s V3Summary
+		if err := dec.Decode(&s); err != nil {
+			return strictDecodeResult{}, fmt.Errorf("strict v3 decode: %w", err)
+		}
+		if err := requireEOF(dec); err != nil {
+			return strictDecodeResult{}, fmt.Errorf("strict v3 decode: %w", err)
+		}
+		return strictDecodeResult{doc: newDocumentV3(s)}, nil
 	default:
 		return strictDecodeResult{}, fmt.Errorf("internal: unsupported version %d", version)
 	}

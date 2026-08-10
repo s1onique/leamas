@@ -31,8 +31,14 @@ func DescriptorFor(v Version) (Descriptor, error) {
 	case VersionV2:
 		return Descriptor{
 			Version:  VersionV2,
-			Status:   StatusCurrent,
+			Status:   StatusSupported,
 			SchemaID: SchemaIDV2,
+		}, nil
+	case VersionV3:
+		return Descriptor{
+			Version:  VersionV3,
+			Status:   StatusCurrent,
+			SchemaID: SchemaIDV3,
 		}, nil
 	}
 	return Descriptor{}, &UnknownVersionError{Version: v}
@@ -43,7 +49,7 @@ func DescriptorFor(v Version) (Descriptor, error) {
 // and may be mutated freely; the underlying schema bytes are not
 // exposed through this slice.
 func List() []Descriptor {
-	versions := []Version{VersionV1, VersionV2}
+	versions := []Version{VersionV1, VersionV2, VersionV3}
 	sort.Slice(versions, func(i, j int) bool { return versions[i] < versions[j] })
 	out := make([]Descriptor, 0, len(versions))
 	for _, v := range versions {

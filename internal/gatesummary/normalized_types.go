@@ -23,7 +23,7 @@ const (
 )
 
 // normalizeLifecycle converts uppercase wire form to normalized lowercase.
-// Returns zero value for unexpected input (should not occur for valid decoded v2).
+// Returns zero value for unexpected input (should not occur for valid decoded v2/v3).
 func normalizeLifecycle(wire string) LifecycleStatus {
 	switch wire {
 	case "OPEN":
@@ -52,14 +52,14 @@ func wireToGateStatus(wire string) GateStatus {
 	return ""
 }
 
-// Scope represents the bounded child scope in v2.
+// Scope represents the bounded child scope in v2/v3.
 type Scope struct {
 	ID          string
 	Status      LifecycleStatus
 	Disposition string
 }
 
-// Parent represents the parent ACT in v2.
+// Parent represents the parent ACT in v2/v3.
 type Parent struct {
 	Act         string
 	Status      LifecycleStatus
@@ -86,12 +86,50 @@ type WorktreeState struct {
 	CleanAfter  bool
 }
 
+// EvidenceHashes binds a v3 summary to the exact evidence files used to
+// generate it: the registry, the JSONL event stream, and the raw
+// transcript. Empty values mean the producer did not bind a particular
+// stream (typically because it never produced one); v3 consumers can
+// fall back to other verification paths when a hash is empty.
+type EvidenceHashes struct {
+	RegistrySHA256   string
+	EventsSHA256     string
+	TranscriptSHA256 string
+}
+
+// Counts is the aggregate verdict set carried by every v3 document at
+// the top level. The counts are authoritative; the v3 semantic
+// validator re-derives them from Checks and rejects any mismatch.
+type Counts struct {
+	Total       int
+	Pass        int
+	Fail        int
+	Timeout     int
+	Skip        int
+	Unavailable int
+}
+
 // CheckExecution represents per-check process execution evidence.
+//
+// V2 wire forms populate Argv/ExitCode/StdoutSHA256/StderrSHA256. V3
+// additionally carries byte-exact stdout/stderr metrics and truncation
+// flags (StdoutBytes/StderrBytes/StdoutTruncated/StderrTruncated),
+// the runner-classified deadline-exceeded flag, the runner's raw
+// process exit code, the captured termination signal, and the canonical
+// argv sha256 implementation binding.
 type CheckExecution struct {
-	Argv         []string
-	ExitCode     *Integer
-	StdoutSHA256 string
-	StderrSHA256 string
+	Argv              []string
+	ExitCode          *Integer
+	RawExitCode       *Integer
+	StdoutSHA256      string
+	StderrSHA256      string
+	StdoutBytes       int64
+	StderrBytes       int64
+	StdoutTruncated   bool
+	StderrTruncated   bool
+	DeadlineExceeded  bool
+	TerminationSignal *string
+	Implementation    string
 }
 
 // TestTotals represents optional per-check test arithmetic.
@@ -104,34 +142,47 @@ type TestTotals struct {
 }
 
 // Check represents a normalized check entry.
+//
+// V3 wires additionally carry ID/Order/ExecutionClass on the check;
+// v1/v2 wires leave these nil.
 type Check struct {
-	Name       string
-	Scope      *string
-	Status     GateStatus
-	Evidence   *string
-	Detail     *string
-	DurationMs *Integer
-	Execution  *CheckExecution
-	Totals     *TestTotals
+	ID             *string
+	Name           string
+	Scope          *string
+	Order          *Integer
+	ExecutionClass *string
+	Status         GateStatus
+	Evidence       *string
+	Detail         *string
+	DurationMs     *Integer
+	Execution      *CheckExecution
+	Totals         *TestTotals
 }
 
-// Summary is the common normalized domain model for both v1 and v2.
+// Summary is the common normalized domain model for v1, v2, and v3.
 // All slices and pointers are newly owned; no aliasing with decoder state.
+//
+// Counts, EvidenceHashes, and the per-check ID/Order/ExecutionClass
+// fields are only populated for v3 documents.
 type Summary struct {
 	SchemaVersion Version
 	GeneratedAt   string
 
-	Tool      *string
-	Scope     *Scope
-	Parent    *Parent
-	Overall   Overall
-	Execution *ExecutionBinding
-	Worktree  *WorktreeState
+	Tool           *string
+	Scope          *Scope
+	Parent         *Parent
+	Overall        Overall
+	Execution      *ExecutionBinding
+	Worktree       *WorktreeState
+	EvidenceHashes *EvidenceHashes
+	Counts         Counts
 
 	Checks []Check
 }
 
 // Valid reports whether the summary has a known schema version.
 func (s Summary) Valid() bool {
-	return s.SchemaVersion == Version1 || s.SchemaVersion == Version2
+	return s.SchemaVersion == Version1 ||
+		s.SchemaVersion == Version2 ||
+		s.SchemaVersion == Version3
 }

@@ -25,8 +25,20 @@ func TestClassifyVersionV2(t *testing.T) {
 	}
 }
 
+func TestClassifyVersionV3(t *testing.T) {
+	// V3 is the InDeep Factory Gate Summary v3 wire format. It is a
+	// supported version and dispatches to the v3 schema.
+	dec := classifyVersion(json.Number("3"))
+	if dec.code != "" {
+		t.Fatalf("expected success, got %s", dec.code)
+	}
+	if dec.version != Version3 {
+		t.Fatalf("expected Version3, got %d", dec.version)
+	}
+}
+
 func TestClassifyVersionUnsupported(t *testing.T) {
-	for _, raw := range []string{"0", "-1", "-2", "3", "4", "99999999999999999999"} {
+	for _, raw := range []string{"0", "-1", "-2", "4", "99999999999999999999"} {
 		dec := classifyVersion(json.Number(raw))
 		if dec.code != CodeUnsupportedVersion {
 			t.Errorf("raw=%s: expected %s, got %s", raw, CodeUnsupportedVersion, dec.code)

@@ -69,6 +69,8 @@ func buildGateSummarySectionFromPath(sourcePath string) string {
 		return renderGateSummaryV1(sourcePath, summary)
 	case gatesummary.Version2:
 		return renderGateSummaryV2(sourcePath, summary)
+	case gatesummary.Version3:
+		return renderGateSummaryV3(sourcePath, summary)
 	default:
 		// Should not happen - normalization should reject invalid versions
 		return renderGateSummaryInvalidRead(sourcePath)

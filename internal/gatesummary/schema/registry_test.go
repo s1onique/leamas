@@ -15,8 +15,8 @@ import (
 // Version lexicographically and is returned as a fresh slice.
 func TestRegistryListReturnsExpectedVersions(t *testing.T) {
 	descriptors := List()
-	if len(descriptors) != 2 {
-		t.Fatalf("List() returned %d descriptors, want 2", len(descriptors))
+	if len(descriptors) != 3 {
+		t.Fatalf("List() returned %d descriptors, want 3", len(descriptors))
 	}
 	if descriptors[0].Version != VersionV1 {
 		t.Errorf("descriptors[0].Version = %q, want %q", descriptors[0].Version, VersionV1)
@@ -24,17 +24,26 @@ func TestRegistryListReturnsExpectedVersions(t *testing.T) {
 	if descriptors[1].Version != VersionV2 {
 		t.Errorf("descriptors[1].Version = %q, want %q", descriptors[1].Version, VersionV2)
 	}
+	if descriptors[2].Version != VersionV3 {
+		t.Errorf("descriptors[2].Version = %q, want %q", descriptors[2].Version, VersionV3)
+	}
 	if descriptors[0].Status != StatusSupported {
 		t.Errorf("descriptors[0].Status = %q, want %q", descriptors[0].Status, StatusSupported)
 	}
-	if descriptors[1].Status != StatusCurrent {
-		t.Errorf("descriptors[1].Status = %q, want %q", descriptors[1].Status, StatusCurrent)
+	if descriptors[1].Status != StatusSupported {
+		t.Errorf("descriptors[1].Status = %q, want %q", descriptors[1].Status, StatusSupported)
+	}
+	if descriptors[2].Status != StatusCurrent {
+		t.Errorf("descriptors[2].Status = %q, want %q", descriptors[2].Status, StatusCurrent)
 	}
 	if descriptors[0].SchemaID != SchemaIDV1 {
 		t.Errorf("descriptors[0].SchemaID = %q, want %q", descriptors[0].SchemaID, SchemaIDV1)
 	}
 	if descriptors[1].SchemaID != SchemaIDV2 {
 		t.Errorf("descriptors[1].SchemaID = %q, want %q", descriptors[1].SchemaID, SchemaIDV2)
+	}
+	if descriptors[2].SchemaID != SchemaIDV3 {
+		t.Errorf("descriptors[2].SchemaID = %q, want %q", descriptors[2].SchemaID, SchemaIDV3)
 	}
 }
 
@@ -109,7 +118,7 @@ func TestRegistryBytesMatchesCanonicalFile(t *testing.T) {
 // TestRegistryBytesRejectsUnknownVersion asserts that requesting an
 // unknown version returns a typed *UnknownVersionError.
 func TestRegistryBytesRejectsUnknownVersion(t *testing.T) {
-	bogus := Version("v3")
+	bogus := Version("v99")
 	_, err := Bytes(bogus)
 	if err == nil {
 		t.Fatalf("Bytes(%q) must reject unknown version", bogus)

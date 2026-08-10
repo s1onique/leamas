@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:indeep:factory:gate-summary:v3",
+  "title": "InDeep Factory Gate Summary v3",
+  "description": "Canonical wire schema for the InDeep quality-gate summary emitted by the Go runner under ACT-INDEEP-FACTORY-QUALITY-GATE-GO-RUNNER01-CORRECTION02 Revision 2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "scope_id",
+    "scope_status",
+    "scope_disposition",
+    "parent_act",
+    "parent_status",
+    "parent_disposition",
+    "overall_status",
+    "overall_disposition",
+    "execution_head_oid",
+    "execution_tree_oid",
+    "subject_tree_oid",
+    "worktree_clean_before",
+    "worktree_clean_after",
+    "registry_sha256",
+    "events_sha256",
+    "transcript_sha256",
+    "counts",
+    "failed_names",
+    "timeout_names",
+    "skipped_names",
+    "unavailable_names",
+    "checks"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Integer discriminator for the canonical schema version.",
+      "type": "integer",
+      "const": 3
+    },
+    "generated_at": {
+      "description": "RFC3339 or RFC3339Nano timestamp when the summary was generated.",
+      "type": "string",
+      "minLength": 1
+    },
+    "scope_id": {
+      "description": "Bounded verification scope identifier (non-empty).",
+      "type": "string",
+      "minLength": 1
+    },
+    "scope_status": {
+      "description": "Lifecycle status of the bounded scope.",
+      "type": "string",
+      "enum": ["OPEN", "PARTIAL", "CLOSED"]
+    },
+    "scope_disposition": {
+      "description": "Free-form disposition of the scope.",
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_act": {
+      "description": "Parent ACT identifier (non-empty).",
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_status": {
+      "description": "Lifecycle status of the parent ACT.",
+      "type": "string",
+      "enum": ["OPEN", "PARTIAL", "CLOSED"]
+    },
+    "parent_disposition": {
+      "description": "Free-form disposition of the parent ACT.",
+      "type": "string",
+      "minLength": 1
+    },
+    "overall_status": {
+      "description": "Overall gate verdict.",
+      "type": "string",
+      "enum": ["pass", "fail", "unavailable"]
+    },
+    "overall_disposition": {
+      "description": "Free-form overall disposition string.",
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_head_oid": {
+      "description": "40-char lowercase hex Git commit SHA bound to the executed content.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "execution_tree_oid": {
+      "description": "40-char lowercase hex Git tree SHA of the executed commit.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "subject_tree_oid": {
+      "description": "40-char lowercase hex Git tree SHA of the canonical subject.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "worktree_clean_before": {
+      "description": "Whether the worktree was clean before the canonical run.",
+      "type": "boolean"
+    },
+    "worktree_clean_after": {
+      "description": "Whether the worktree was clean after the canonical run.",
+      "type": "boolean"
+    },
+    "registry_sha256": {
+      "description": "64-char lowercase hex SHA-256 of the canonical registry file at run time.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "events_sha256": {
+      "description": "64-char lowercase hex SHA-256 of the JSONL events sidecar at run time.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "transcript_sha256": {
+      "description": "64-char lowercase hex SHA-256 of the raw transcript at run time.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "counts": {
+      "description": "Aggregate counts of per-check statuses.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "pass", "fail", "timeout", "skip", "unavailable"],
+      "properties": {
+        "total":       { "type": "integer", "minimum": 0 },
+        "pass":        { "type": "integer", "minimum": 0 },
+        "fail":        { "type": "integer", "minimum": 0 },
+        "timeout":     { "type": "integer", "minimum": 0 },
+        "skip":        { "type": "integer", "minimum": 0 },
+        "unavailable": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "failed_names": {
+      "description": "Sorted display names of checks whose status is fail.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "timeout_names": {
+      "description": "Sorted display names of checks whose status is timeout.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "skipped_names": {
+      "description": "Sorted display names of checks whose status is skip.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "unavailable_names": {
+      "description": "Sorted display names of checks whose status is unavailable.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "checks": {
+      "description": "Per-check results in registry order.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/check_entry" }
+    }
+  },
+  "$defs": {
+    "check_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "scope",
+        "order",
+        "execution_class",
+        "status",
+        "detail",
+        "argv",
+        "implementation",
+        "duration_ms",
+        "deadline_exceeded",
+        "canonical_exit_code",
+        "raw_process_exit_code",
+        "termination_signal",
+        "stdout_sha256",
+        "stderr_sha256",
+        "stdout_bytes",
+        "stderr_bytes",
+        "stdout_truncated",
+        "stderr_truncated"
+      ],
+      "properties": {
+        "id": {
+          "description": "Stable registry ID.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "name": {
+          "description": "Display name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "scope": {
+          "description": "Execution scope.",
+          "type": "string",
+          "enum": ["ROOT"]
+        },
+        "order": {
+          "description": "Positive integer execution order (registry order).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "execution_class": {
+          "description": "Execution class of this check.",
+          "type": "string",
+          "enum": ["required", "advisory", "availability"]
+        },
+        "status": {
+          "description": "Per-check terminal status.",
+          "type": "string",
+          "enum": ["pass", "fail", "timeout", "skip", "unavailable"]
+        },
+        "detail": {
+          "description": "Status-specific explanation (non-empty).",
+          "type": "string",
+          "minLength": 1
+        },
+        "argv": {
+          "description": "Canonical argv list used to invoke this check.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "implementation": {
+          "description": "64-char lowercase hex canonical argv sha256 bound to this check.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "duration_ms": {
+          "description": "Wall-clock duration in integer milliseconds (0 <= x < 86400000).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86399999
+        },
+        "deadline_exceeded": {
+          "description": "True iff the runner's deadline authority actually expired.",
+          "type": "boolean"
+        },
+        "canonical_exit_code": {
+          "description": "Runner-classified exit code (0, nonzero, 124, -1, or null for skip).",
+          "oneOf": [
+            { "type": "integer" },
+            { "type": "null" }
+          ]
+        },
+        "raw_process_exit_code": {
+          "description": "Raw observed process exit code, or null when no process was spawned.",
+          "oneOf": [
+            { "type": "integer" },
+            { "type": "null" }
+          ]
+        },
+        "termination_signal": {
+          "description": "Signal name that killed the process, or null when no signal.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "stdout_sha256": {
+          "description": "64-char lowercase hex SHA-256 of the captured stdout bytes.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stderr_sha256": {
+          "description": "64-char lowercase hex SHA-256 of the captured stderr bytes.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stdout_bytes": {
+          "description": "Exact byte count of captured stdout (truncated bytes count).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "stderr_bytes": {
+          "description": "Exact byte count of captured stderr (truncated bytes count).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "stdout_truncated": {
+          "description": "True iff stdout capture was truncated by the bounded writer.",
+          "type": "boolean"
+        },
+        "stderr_truncated": {
+          "description": "True iff stderr capture was truncated by the bounded writer.",
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

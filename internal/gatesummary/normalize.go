@@ -9,17 +9,22 @@ import (
 var errInvalidSealedDocument = errors.New("gatesummary: invalid sealed document")
 
 // validateSealed checks that exactly one version pointer is populated.
+// Exactly one of v1, v2, v3 must be non-nil; the other two must be nil.
 func (d Document) validateSealed() error {
-	switch {
-	case d.v1 != nil && d.v2 == nil:
-		return nil
-	case d.v1 == nil && d.v2 != nil:
-		return nil
-	case d.v1 == nil && d.v2 == nil:
-		return fmt.Errorf("gatesummary: normalize: %w", errInvalidSealedDocument)
-	default:
+	populated := 0
+	if d.v1 != nil {
+		populated++
+	}
+	if d.v2 != nil {
+		populated++
+	}
+	if d.v3 != nil {
+		populated++
+	}
+	if populated != 1 {
 		return fmt.Errorf("gatesummary: normalize: %w", errInvalidSealedDocument)
 	}
+	return nil
 }
 
 // Normalize runs the semantic normalization pipeline on a sealed Document.
@@ -50,6 +55,15 @@ func Normalize(doc Document) NormalizationResult {
 		v2, _ := doc.V2()
 		var err error
 		candidate, err = projectV2(v2)
+		if err != nil {
+			return NormalizationResult{
+				Err: fmt.Errorf("gatesummary: normalize: %w", err),
+			}
+		}
+	case Version3:
+		v3, _ := doc.V3()
+		var err error
+		candidate, err = projectV3(v3)
 		if err != nil {
 			return NormalizationResult{
 				Err: fmt.Errorf("gatesummary: normalize: %w", err),
