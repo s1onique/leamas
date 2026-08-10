@@ -14,7 +14,6 @@
 //     matches a Plan field against a closure regex helper.
 package closure
 
-
 import (
 	"go/ast"
 	"strings"
@@ -200,24 +199,57 @@ func selectorName(e *ast.SelectorExpr) string {
 	return e.Sel.Name
 }
 
-// selectorNameFromExpr returns the dotted selector name
-// (e.g. `plan.X`) when the expression is a selector chain,
-// or the empty string otherwise. Used to detect Plan-field
-// references inside expressions.
+// selectorNameFromExpr returns the dotted selector chain
+// (e.g. `plan.Baseline.CommitOID`) by walking any depth
+// of nested SelectorExpr nodes. Returns the empty string
+// for non-selector expressions. The walker follows every
+// selector chain depth so the guard can detect nested-field
+// references like `plan.Baseline.CommitOID == ...` that
+// a single-level selector walk would miss.
+//
+// HEURISTIC qualifier: a selector chain whose root is not
+// an Ident (e.g. `f().X`) is not resolvable by static AST
+// inspection; the guard accepts that gap and matches
+// only selector chains that terminate at a named root.
 func selectorNameFromExpr(e ast.Expr) string {
-	switch v := e.(type) {
-	case *ast.SelectorExpr:
-		return selectorName(v)
-	case *ast.Ident:
-		return v.Name
+	var parts []string
+	cur := e
+	for {
+		sel, ok := cur.(*ast.SelectorExpr)
+		if !ok {
+			break
+		}
+		parts = append([]string{sel.Sel.Name}, parts...)
+		cur = sel.X
 	}
-	return ""
+	if len(parts) == 0 {
+		if id, ok := e.(*ast.Ident); ok {
+			return id.Name
+		}
+		return ""
+	}
+	if id, ok := cur.(*ast.Ident); ok {
+		parts = append([]string{id.Name}, parts...)
+	}
+	out := ""
+	for i, p := range parts {
+		if i == 0 {
+			out = p
+		} else {
+			out += "." + p
+		}
+	}
+	return out
 }
 
 // fieldReferencesPlan reports whether expr contains a
-// reference to a Plan struct field. The check is
-// pattern-based: it matches Plan.X style selectors where X
-// is a known Plan field.
+// reference to any known Plan struct field. The check
+// walks every part of the dotted chain so nested fields
+// like `plan.Baseline.CommitOID` are detected via the
+// `Baseline` part even if `CommitOID` is not in the
+// watch list. The watch list deliberately covers the
+// top-level Plan fields; a future expansion can add
+// sub-field names without changing the guard.
 func fieldReferencesPlan(expr string) bool {
 	if expr == "" {
 		return false
@@ -226,10 +258,11 @@ func fieldReferencesPlan(expr string) bool {
 	if len(parts) < 2 {
 		return false
 	}
-	last := parts[len(parts)-1]
-	for _, field := range planFieldNames {
-		if last == field {
-			return true
+	for _, p := range parts {
+		for _, field := range planFieldNames {
+			if p == field {
+				return true
+			}
 		}
 	}
 	return false
@@ -258,4 +291,47 @@ func globMatch(pattern, name string) (bool, error) {
 		idx += found + len(p)
 	}
 	return true, nil
+}
+
+// TestSelectorNameFromExprFollowsNestedSelectors is the
+// B2-R7-R2 unit test for the nested-selector walker. The
+// walker must surface the full chain for any depth of
+// SelectorExpr nodes so the guard can detect
+// plan.Baseline.CommitOID-shaped references.
+func TestSelectorNameFromExprFollowsNestedSelectors(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"plan", "plan"},
+		{"plan.X", "plan.X"},
+		{"plan.Baseline.CommitOID", "plan.Baseline.CommitOID"},
+		{"plan.Execution.Mode", "plan.Execution.Mode"},
+		{"x.y.z.w", "x.y.z.w"},
+	}
+	for _, c := range cases {
+		got := resolveSelectorChainForTest(c.in)
+		if got != c.want {
+			t.Fatalf("resolveSelectorChainForTest(%q) = %q, want %q",
+				c.in, got, c.want)
+		}
+	}
+}
+
+// resolveSelectorChainForTest is a thin wrapper that
+// reconstructs the AST node from a dotted name and runs
+// the production walker. Used only by the unit test so
+// the walker has a deterministic round-trip check.
+func resolveSelectorChainForTest(name string) string {
+	parts := strings.Split(name, ".")
+	if len(parts) == 0 {
+		return ""
+	}
+	var expr ast.Expr = ast.NewIdent(parts[0])
+	for _, p := range parts[1:] {
+		expr = &ast.SelectorExpr{X: expr, Sel: ast.NewIdent(p)}
+	}
+	return selectorNameFromExpr(expr)
 }

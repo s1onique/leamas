@@ -65,7 +65,15 @@ var (
 // Placeholder detection
 // ----------------------------------------------------------------------------
 
-var ExactClosurePlaceholders = map[string]struct{}{
+// exactClosurePlaceholders is the canonical immutable
+// closure-placeholder set. It is unexported so external
+// packages cannot mutate the canonical validation
+// authority.
+//
+// PLACEHOLDER_AUTHORITY_NOT_EXTERNALLY_MUTABLE: the set
+// is private; callers read it via ExactClosurePlaceholdersCopy
+// or call ContainsClosurePlaceholder.
+var exactClosurePlaceholders = map[string]struct{}{
 	"TBD":            {},
 	"TODO":           {},
 	"UNKNOWN":        {},
@@ -73,7 +81,11 @@ var ExactClosurePlaceholders = map[string]struct{}{
 	"TO BE RECORDED": {},
 }
 
-var EmbeddedClosurePlaceholders = []string{
+// embeddedClosurePlaceholders is the canonical
+// immutable embedded-placeholder marker list. It is
+// unexported so external packages cannot mutate the
+// canonical validation authority.
+var embeddedClosurePlaceholders = []string{
 	"(SEE GIT REV-PARSE)",
 	"<COMMIT>",
 	"<TREE>",
@@ -86,10 +98,10 @@ var EmbeddedClosurePlaceholders = []string{
 // insensitive and whitespace-trimmed.
 func containsClosurePlaceholder(value string) bool {
 	normalized := strings.ToUpper(strings.TrimSpace(value))
-	if _, found := ExactClosurePlaceholders[normalized]; found {
+	if _, found := exactClosurePlaceholders[normalized]; found {
 		return true
 	}
-	for _, marker := range EmbeddedClosurePlaceholders {
+	for _, marker := range embeddedClosurePlaceholders {
 		if strings.Contains(normalized, marker) {
 			return true
 		}
@@ -104,6 +116,35 @@ func containsClosurePlaceholder(value string) bool {
 // without leading/trailing whitespace.
 func trimSpaceLower(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
+}
+
+// ExactClosurePlaceholdersCopy returns a fresh copy of
+// the canonical exact-placeholder set so callers can probe
+// the set without being able to mutate the canonical
+// validation authority. Each call returns a new map
+// instance; mutations to the returned map do not affect
+// future probes or the wire-contract validators.
+//
+// PLACEHOLDER_AUTHORITY_NOT_EXTERNALLY_MUTABLE: true.
+// External packages can only READ the canonical set via
+// this copy function or via ContainsClosurePlaceholder;
+// the underlying map is unexported.
+func ExactClosurePlaceholdersCopy() map[string]struct{} {
+	out := make(map[string]struct{}, len(exactClosurePlaceholders))
+	for k := range exactClosurePlaceholders {
+		out[k] = struct{}{}
+	}
+	return out
+}
+
+// EmbeddedClosurePlaceholdersCopy returns a fresh copy of
+// the canonical embedded-placeholder marker list so callers
+// can probe the list without being able to mutate the
+// canonical validation authority.
+func EmbeddedClosurePlaceholdersCopy() []string {
+	out := make([]string, len(embeddedClosurePlaceholders))
+	copy(out, embeddedClosurePlaceholders)
+	return out
 }
 
 // ContainsClosurePlaceholder is the canonical placeholder

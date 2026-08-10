@@ -9,8 +9,6 @@
 // documentation.
 package closure
 
-
-
 // Package closure - plan_contract_single_authority_test.go
 // is the B2-R7-R1 AST/source-inspection guard for the
 // closure package's Plan Contract semantic authority.

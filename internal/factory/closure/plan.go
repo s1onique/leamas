@@ -128,25 +128,36 @@ func LoadPlan(path string) (Plan, []byte, error) {
 }
 
 // LoadPlanFromBytes parses plan bytes without reading from
-// the filesystem. It enforces the size bound and strict
-// JSON syntax only; callers that need an executable plan
-// must subsequently invoke ValidatePlan explicitly.
+// the filesystem. It enforces the canonical Plan Contract
+// v1 semantic authority via plancontract.DecodeAndValidateFull,
+// returns the typed Plan the closure runner code paths
+// need, and returns the original bytes so the runner can
+// re-validate later if required.
 //
-// B2-R2: the bounded syntactic decoder is the canonical
-// plancontract.DecodeBytes. The closure runner and the
-// evidence package both consume the same parser pass so
-// the production decoder and the evidence decoder cannot
-// diverge.
+// B2-R7-R2 wiring: the production execution path now
+// consumes the canonical ValidatedPlan projection produced
+// by the plancontract leaf. The typed Plan is derived from
+// the SAME bytes the leaf validated, so the two
+// representations cannot disagree on what is valid.
 //
-// B2-R7-R1 execution/evidence model: the typed Plan that
-// LoadPlanFromBytes returns is a structural mirror of the
-// canonical ValidatedPlan the closure runner validates via
-// ValidatePlan. The semantic decision is centralised in
-// the plancontract leaf; this loader preserves the typed
-// representation the runner code paths downstream need.
-// New code that wants the canonical projection directly
-// should call LoadPlanFromBytesValidated.
+// CANONICAL_VALIDATED_PLAN_EXECUTION_MODEL: true.
+// Execution consumes the canonical model via
+// plancontract.DecodeAndValidateFull. The legacy
+// typed-decoder path is retained only as a structural
+// mirror for runner code paths that require the typed
+// Plan; semantic authority lives exclusively in the
+// plancontract leaf.
 func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
+	// Canonical semantic pass. A rejection here means
+	// the bytes are not a valid Plan Contract v1
+	// document; the typed Plan is irrelevant.
+	if _, err := plancontract.DecodeAndValidateFull(data); err != nil {
+		return Plan{}, nil, fmt.Errorf("plan rejected by canonical validator: %s", convertPlanContractError(err))
+	}
+	// Structural decode for the typed Plan only. The
+	// typed Plan is a mirror of the canonical model the
+	// runner code paths need; semantic authority lives
+	// in the leaf.
 	root, err := plancontract.DecodeBytes(data)
 	if err != nil {
 		return Plan{}, nil, fmt.Errorf("plan rejected by structural validation: %s", convertPlanContractError(err))
@@ -158,26 +169,33 @@ func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
 	return plan, data, nil
 }
 
-// LoadPlanFromBytesValidated is the B2-R7-R1 canonical
-// execution loader. It returns the canonical ValidatedPlan
-// projection produced by plancontract.DecodeAndValidateFull
-// and the original bytes. Callers that want the canonical
-// model directly should prefer this entry point over
-// LoadPlanFromBytes.
+// LoadPlanFromBytesWithValidated is the B2-R7-R2 canonical
+// execution loader. It returns BOTH the typed Plan and the
+// canonical ValidatedPlan so the runner code paths can
+// consume the canonical projection directly.
 //
-// CANONICAL_VALIDATED_PLAN_EXECUTION_MODEL: true. The
-// closure runner's execution path consumes the canonical
-// ValidatedPlan produced by the plancontract leaf, not a
-// parallel typed validator. The typed Plan remains the
-// internal in-memory representation the runner code paths
-// need; the ValidatedPlan is the source of truth for the
-// semantic decision (accept/reject).
-func LoadPlanFromBytesValidated(data []byte) (plancontract.ValidatedPlan, []byte, error) {
+// CANONICAL_VALIDATED_PLAN_EXECUTION_MODEL: true.
+// Callers that want to inspect the canonical projection
+// (for example, to assert that the typed Plan and the
+// ValidatedPlan agree on what is valid) should prefer this
+// entry point over LoadPlanFromBytes.
+func LoadPlanFromBytesWithValidated(data []byte) (Plan, plancontract.ValidatedPlan, []byte, error) {
 	validated, err := plancontract.DecodeAndValidateFull(data)
 	if err != nil {
-		return plancontract.ValidatedPlan{}, nil, fmt.Errorf("plan rejected by canonical validator: %s", convertPlanContractError(err))
+		return Plan{}, plancontract.ValidatedPlan{}, nil,
+			fmt.Errorf("plan rejected by canonical validator: %s", convertPlanContractError(err))
 	}
-	return validated, data, nil
+	root, err := plancontract.DecodeBytes(data)
+	if err != nil {
+		return Plan{}, plancontract.ValidatedPlan{}, nil,
+			fmt.Errorf("plan rejected by structural validation: %s", convertPlanContractError(err))
+	}
+	plan, err := decodeTypedPlan(root)
+	if err != nil {
+		return Plan{}, plancontract.ValidatedPlan{}, nil,
+			fmt.Errorf("decode closure plan: %w", err)
+	}
+	return plan, validated, data, nil
 }
 
 // convertPlanContractError adapts the plancontract leaf's
@@ -256,15 +274,15 @@ func readBoundedFile(path string, limit int) ([]byte, error) {
 // the canonical semantic authority lives in plancontract.
 const planExecutionModePath = "/execution/mode"
 
-// exactClosurePlaceholders is the closure-package alias
-// for the canonical plancontract.ExactClosurePlaceholders
-// map. The alias exists so existing test files that probe
-// the set directly (for example, render tests) keep
-// working without reaching into the plancontract package's
-// unexported implementation.
+// exactClosurePlaceholders is the closure-package snapshot
+// of the canonical plancontract placeholder set. It is
+// produced via ExactClosurePlaceholdersCopy so external
+// packages cannot mutate the canonical validation
+// authority. The closure package's existing test surface
+// (for example, render tests) continues to probe this
+// snapshot directly.
 //
-// B2-R7-R1 single-source rule: this is a typed alias of
-// plancontract.ExactClosurePlaceholders; no closure file
-// may carry a duplicate literal. The plancontract leaf
-// owns the canonical set.
-var exactClosurePlaceholders = plancontract.ExactClosurePlaceholders
+// B2-R7-R2 single-source rule: the underlying map lives
+// only in the plancontract leaf; this snapshot is a
+// read-only copy taken once at package init time.
+var exactClosurePlaceholders = plancontract.ExactClosurePlaceholdersCopy()
