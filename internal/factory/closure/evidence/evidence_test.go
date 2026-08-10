@@ -82,8 +82,8 @@ func TestClosureSingleGateCapture(t *testing.T) {
 	}
 }
 
-// TestClosureGateCaptureRunScoped proves concurrent collectors
-// never share data.
+// TestClosureGateCaptureRunScoped proves concurrent calls for one run share
+// the same request identity and cached result.
 func TestClosureGateCaptureRunScoped(t *testing.T) {
 	tmp, err := os.MkdirTemp("", "evidence-concurrent-")
 	if err != nil {
@@ -91,16 +91,17 @@ func TestClosureGateCaptureRunScoped(t *testing.T) {
 	}
 	defer os.RemoveAll(tmp)
 	collector := NewGateCollector(&fakeRunner{out: "EXEC_GATE_OBSERVED_STATUS:OK\n", code: 0})
+	req := GateCaptureRequest{
+		SubjectRoot: tmp,
+		EvidenceDir: filepath.Join(tmp, "run"),
+		RunID:       "run-concurrent",
+	}
 	var wg sync.WaitGroup
 	wg.Add(8)
 	for i := 0; i < 8; i++ {
 		go func(i int) {
 			defer wg.Done()
-			_, err := collector.Capture(context.Background(), GateCaptureRequest{
-				SubjectRoot: tmp,
-				EvidenceDir: filepath.Join(tmp, "run-"+string(rune('a'+i))),
-				RunID:       "run-concurrent",
-			})
+			_, err := collector.Capture(context.Background(), req)
 			if err != nil {
 				t.Errorf("capture %d: %v", i, err)
 			}

@@ -6,10 +6,10 @@
 //
 // GateCollector owns the capture state for exactly one closure
 // run. The first Capture call executes the gate via the runner;
-// every subsequent call returns the same immutable GateCapture
-// and error without invoking the runner again. Concurrent
-// callers are serialised through a sync.Mutex that protects
-// the runner call, the cached capture, and the cached error.
+// every subsequent equivalent call returns the same immutable
+// GateCapture and error without invoking the runner again. A
+// mutex protects request identity and state; sync.Once owns the
+// runner invocation and publishes the cached result.
 
 package evidence
 
@@ -197,13 +197,10 @@ func (b *truncatedBuffer) bytes() []byte {
 }
 
 // GateCollector owns exactly one closure run. The first Capture
-// call invokes the runner; every subsequent call returns the
-// cached result. Two collectors never share state.
-// sameGateRequest compares two GateCaptureRequest values.
-// SubjectRoot and EvidenceDir are the identity-bearing fields.
-// sameGateRequest compares two GateCaptureRequest values.
-// All identity-bearing fields are compared; MakeExecutable is
-// compared element-by-element in declaration order.
+// call invokes the runner; every subsequent equivalent call
+// returns the cached result. Two collectors never share state.
+// sameGateRequest compares every identity-bearing field;
+// MakeExecutable is compared element-by-element in order.
 func sameGateRequest(a, b GateCaptureRequest) bool {
 	if a.RepositoryRoot != b.RepositoryRoot ||
 		a.SubjectRoot != b.SubjectRoot ||
@@ -236,6 +233,7 @@ type GateCollector struct {
 	once                 sync.Once
 	runner               CommandRunner
 	done                 bool
+	identityBound        bool
 	firstReq             GateCaptureRequest
 	capture              GateCapture
 	captureErr           error
@@ -278,8 +276,30 @@ func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (Ga
 	if strings.TrimSpace(req.EvidenceDir) == "" {
 		return GateCapture{}, errors.New("evidence: evidence directory is required")
 	}
+
+	// Bind a defensive copy of the first valid request before entering
+	// sync.Once. sync.Once protects execution count only; it does not
+	// distinguish an equivalent cached request from a different request.
+	boundReq := req
+	boundReq.MakeExecutable = append([]string(nil), req.MakeExecutable...)
+	c.mu.Lock()
+	if c.identityBound {
+		if !sameGateRequest(c.firstReq, boundReq) {
+			if c.collectorMismatchErr == nil {
+				c.collectorMismatchErr = ErrCollectorRequestMismatch
+			}
+			err := c.collectorMismatchErr
+			c.mu.Unlock()
+			return GateCapture{}, err
+		}
+	} else {
+		c.firstReq = boundReq
+		c.identityBound = true
+	}
+	c.mu.Unlock()
+
 	c.once.Do(func() {
-		c.capture, c.captureErr = c.runCapture(ctx, req)
+		c.capture, c.captureErr = c.runCapture(ctx, boundReq)
 	})
 	c.mu.Lock()
 	defer c.mu.Unlock()
