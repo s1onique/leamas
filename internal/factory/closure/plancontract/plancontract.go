@@ -70,16 +70,28 @@ type DecodeResult struct {
 	Checks          []PlanCheck
 }
 
-// DecodeError is the typed decoder error. The Message is the
-// human-readable description; the Code is the canonical
-// failure token callers can switch on.
+// DecodeError is the typed decoder error. B2-R5 extended
+// the error to carry InstancePath and Field so callers
+// (closure, evidence, CLI) can adapt the leaf diagnostic to
+// their own typed-error formats without re-implementing
+// the semantic rules.
+//
+//	Code         canonical failure token (e.g. "invalid_baseline_oid")
+//	Field        canonical field name (e.g. "baseline.commit_oid")
+//	InstancePath JSON pointer (e.g. "/baseline/commit_oid")
+//	Message      human-readable description
 type DecodeError struct {
-	Code    string
-	Message string
+	Code         string
+	Field        string
+	InstancePath string
+	Message      string
 }
 
 func (e *DecodeError) Error() string {
-	return fmt.Sprintf("plancontract: %s: %s", e.Code, e.Message)
+	if e.Field == "" {
+		return fmt.Sprintf("plancontract: %s: %s", e.Code, e.Message)
+	}
+	return fmt.Sprintf("plancontract: %s at %s: %s", e.Code, e.Field, e.Message)
 }
 
 // DecodeBytes is the syntactic entry point. It returns the
