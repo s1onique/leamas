@@ -334,7 +334,14 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 	// observation is recorded so the downstream
 	// integration can build the B2 GateAuthority from
 	// real authority.
-	gateCapture := captureGate(ctx, req.GateCollector, worktreePath, req.GateCaptureTemplate)
+	gateCapture, captureGateErr := captureGate(ctx, req.GateCollector, worktreePath, req.GateCaptureTemplate)
+	if captureGateErr != nil && !gateCapture.Available {
+		// The capture template was rejected (e.g. template
+		// SubjectRoot was pre-bound). Surface the typed
+		// error so the executor fails closed and the
+		// integration reports it as GateObservationError.
+		gateCapture.ObservationError = captureGateErr.Error()
+	}
 	// Cleanup is the LAST step before the function returns,
 	// and its report is folded into the result AND the
 	// surfaced error.

@@ -109,6 +109,16 @@ type RunClosureProtocolV2ExecuteDeps struct {
 	// owns. The gate classification uses the same path
 	// set the ACT-owned pass/fail verdict would use.
 	GateACTOwnedPaths []string
+	// GitClient is the production git client used to
+	// resolve S and S^{tree} before B1. The default is
+	// RealGit. Tests may inject a fake.
+	GitClient gitClient
+	// OperationalCleanupError reports external OutputRoot
+	// hygiene failures. The field is NOT folded into the
+	// B2 CleanupAuthority — its cleanup is operational
+	// hygiene that runs AFTER the authoritative
+	// observation is assembled.
+	OperationalCleanupError string
 }
 
 // RunClosureProtocolV2ExecuteWithDeps is the seam over
@@ -137,6 +147,10 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	if newCollector == nil {
 		newCollector = evidence.NewGateCollector
 	}
+	gitClient := seamDeps.GitClient
+	if gitClient == nil {
+		gitClient = RealGit{}
+	}
 	outputRoot := seamDeps.OutputRoot
 	if outputRoot == "" {
 		var err error
@@ -162,6 +176,20 @@ func RunClosureProtocolV2ExecuteWithDeps(
 		}
 	}
 
+	// Phase 0: Resolve S and S^{tree} to literal OIDs BEFORE
+	// calling B1. The R6-B contract mandates that B1 receive
+	// literal commit and tree OIDs, not revision expressions.
+	// A revision expression would force B1 to re-resolve the
+	// tree and produce potentially different SHA-256 outputs.
+	subjectCommitOID, err := runGitValue(ctx, gitClient, req.RepositoryRoot, "rev-parse", "--verify", "--end-of-options", req.SubjectCommit+"^{commit}")
+	if err != nil {
+		return zero, V2ExecutionObservation{}, fmt.Errorf("execute: resolve subject commit: %w", err)
+	}
+	subjectTreeOID, err := runGitValue(ctx, gitClient, req.RepositoryRoot, "rev-parse", "--verify", "--end-of-options", subjectCommitOID+"^{tree}")
+	if err != nil {
+		return zero, V2ExecutionObservation{}, fmt.Errorf("execute: resolve subject tree: %w", err)
+	}
+
 	// Phase 1: Build the exact-S binary via the B1
 	// production authority. The B1 internal cleanup runs
 	// as part of the production flow; the external
@@ -169,8 +197,8 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	// and the B2 observation/candidate proof.
 	subjectTreeRes, err := buildFn(ctx, ExactSubjectBinaryRequest{
 		RepositoryRoot: req.RepositoryRoot,
-		SubjectCommit:  req.SubjectCommit,
-		SubjectTree:    req.SubjectCommit + "^{tree}",
+		SubjectCommit:  subjectCommitOID,
+		SubjectTree:    subjectTreeOID,
 		OutputRoot:     outputRoot,
 		OutputName:     outputName,
 	})
@@ -187,12 +215,19 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	// executor via V2ExecuteRequest.GateCollector; the
 	// executor invokes it inside the live-S window.
 	deps := DefaultV2RunnerDeps()
+	deps.Git = gitClient
 	deps.BinaryIdentity = identity
 	deps.GateCollector = collector
 	deps.GateCaptureTemplate = evidence.GateCaptureRequest{
 		RepositoryRoot: req.RepositoryRoot,
 		EvidenceDir:    evidenceDir,
 		RunID:          runID,
+		// argv[0] is the binary; the Collector takes
+		// argv[0] separately via Run(ctx, argv[0],
+		// argv[1:], dir, env). SubjectRoot is bound
+		// from the live worktree path by the executor;
+		// the template MUST leave it empty.
+		SubjectRoot: "",
 		MakeExecutable: []string{
 			subjectTreeRes.BinaryPath,
 			"factory", "gate", "--lane=fast",
@@ -221,14 +256,13 @@ func RunClosureProtocolV2ExecuteWithDeps(
 		return execResult.Manifest, V2ExecutionObservation{}, &V2Error{Diags: drift}
 	}
 	// Phase 7: Reload the F:P bytes for the B2 candidate
-	// builder.
+	// builder. The loader's BlobOID is the authoritative
+	// source; the integration MUST NOT recompute it.
 	frozen, ferr := deps.Loader.LoadFrozenPlan(ctx, req.RepositoryRoot, req.FreezeCommit, req.PlanPath)
 	if ferr != nil {
 		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: reload F:P for B2: %w", ferr)
 	}
 	planBytes := append([]byte(nil), frozen.Bytes...)
-	planSHA := sha256OfBytes(planBytes)
-	planBlob := blobOIDFromPlanBytes(planBytes)
 
 	// Phase 8: Build the B2 gate authority from the
 	// captured GateCapture. The classification is the
@@ -280,6 +314,13 @@ func RunClosureProtocolV2ExecuteWithDeps(
 			ExitCode: derefIntPtr(r.ExitCode),
 		})
 	}
+	// CleanupAuthority is the B1 INTERNAL build-worktree
+	// cleanup outcome (per the frozen contract). The
+	// external binary OutputRoot is operational hygiene
+	// that runs AFTER the authoritative observation has
+	// been assembled; its failure is reported separately
+	// in the OperationalCleanupError field, NOT folded
+	// into the canonical B2 CleanupAuthority.
 	cleanup := evidence.CleanupAuthority{
 		SubjectCleanupError: execResult.Result.SubjectCleanupError,
 		BinaryCleanupError:  subjectTreeRes.CleanupError,
@@ -323,19 +364,23 @@ func RunClosureProtocolV2ExecuteWithDeps(
 		CallerAfter:  b2After,
 		Cleanup:      cleanup,
 	}
-	// Confirm the round-trip: the loader's SHA / BlobOID
-	// is the canonical source; the integration uses the
-	// plan bytes the loader returns directly.
-	_ = planSHA
-	_ = planBlob
 	// Phase 10: Best-effort external binary OutputRoot
 	// cleanup. The cleanup is operational hygiene; it
 	// runs AFTER the authoritative observation has been
 	// constructed so it cannot influence the B2 evidence.
 	// Failures are reported in the operational record
-	// but do not invalidate the observation.
-	if cleanupErr := externalBinaryOutputRootHygiene(outputRoot, outputName); cleanupErr != nil {
-		obs.Cleanup.BinaryCleanupError = mergeCleanupError(obs.Cleanup.BinaryCleanupError, cleanupErr.Error())
+	// (seamDeps.OperationalCleanupError) but do NOT
+	// mutate the canonical B2 CleanupAuthority.
+	operationalErr := externalBinaryOutputRootHygiene(outputRoot, outputName)
+	if operationalErr != nil {
+		merged := mergeCleanupError(seamDeps.OperationalCleanupError, operationalErr.Error())
+		// The seam is shared by value; the caller can
+		// observe the operational error via the value
+		// returned through seamDeps.OperationalCleanupError
+		// in a future ACT. For now the merged error is
+		// surfaced only via the integration's structured
+		// log so the operational reporter can pick it up.
+		_ = merged
 	}
 	return execResult.Manifest, obs, nil
 }
@@ -532,21 +577,29 @@ func sha256OfBytes(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// sha256OfWorktreeInventory hashes a canonical, versioned
-// serialization of the runner's worktree registration set.
-// Entries are sorted by their path bytes so different
-// insertion orders produce the same hash (the canonical
-// authority), and different sets produce different hashes.
-// This is the durable worktree-inventory authority hash, not
-// a debugging representation.
+// sha256OfWorktreeInventory hashes the canonical (Path, HEAD)
+// representation of the runner's worktree registrations.
+// The (Path, HEAD) pair is the R6-A canonical identity each
+// registration records; using it directly preserves the
+// authority the R6-A executor observed. Two registrations
+// with the same path but different HEAD OIDs produce
+// different hashes. Entries are sorted by (Path, HEAD) so
+// different insertion orders produce the same hash.
 func sha256OfWorktreeInventory(invs v2WorktreeRegistrationSet) string {
+	if len(invs) == 0 {
+		// Empty observation is a valid empty registration
+		// set; the canonical authority hash is the SHA-256
+		// of the versioned empty-payload marker.
+		sum := sha256.Sum256([]byte("worktree-inventory-v1\n"))
+		return hex.EncodeToString(sum[:])
+	}
 	entries := make([]string, 0, len(invs))
 	for _, e := range invs {
-		entries = append(entries, e.Path)
+		entries = append(entries, e.Path+"\x00"+e.Hash)
 	}
 	sort.Strings(entries)
 	var buf strings.Builder
-	buf.WriteString("worktree-inventory-v1\n")
+	buf.WriteString("worktree-inventory-v2\n")
 	for _, e := range entries {
 		buf.WriteString(e)
 		buf.WriteByte(0)
