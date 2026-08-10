@@ -109,6 +109,20 @@ type RunClosureProtocolV2ExecuteDeps struct {
 	// owns. The gate classification uses the same path
 	// set the ACT-owned pass/fail verdict would use.
 	GateACTOwnedPaths []string
+	// GateBaselineFindings is the typed bundle of
+	// pre-existing findings the classifier uses to
+	// distinguish unchanged baseline findings from new
+	// findings. The integration threads this through
+	// without alteration; the rig did not invent a new
+	// baseline authority.
+	GateBaselineFindings []evidence.GateFinding
+	// ClassifierCalls is a typed counter the failure
+	// matrix uses to verify the classifier was reached
+	// exactly once. The integration increments it
+	// around the ClassifyACTOwnedGate call; tests
+	// assert the count for PASS / FAIL / UNAVAILABLE
+	// rows.
+	ClassifierCalls *int
 	// GitClient is the production git client used to
 	// resolve S and S^{tree} before B1. The default is
 	// RealGit. Tests may inject a fake.
@@ -281,30 +295,26 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	if collector.Calls() != 1 {
 		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate invocation count %d != 1", collector.Calls())
 	}
-	// R6-B-CORRECTION03: the gate failure modes report
-	// through the classifier. The integration records
-	// the observed GateCapture (with the authoritative
-	// truncation flags) and lets ClassifyACTOwnedGate
-	// produce the FAIL / UNAVAILABLE verdict. The B2
-	// predicate then sees the classified gate authority.
+	// R6-B-CORRECTION04: the classifier is the SINGLE
+	// authority for the gate verdict. The integration
+	// constructs ClassificationInputs from the actual
+	// GateCapture and lets ClassifyACTOwnedGate produce
+	// PASS / FAIL / UNAVAILABLE. The early transport-
+	// rejection returns are removed so the classifier
+	// is reached for every row.
 	gate := execResult.Result.GateCapture
-	if gate.TimedOut {
-		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate timeout reached classifier; classification UNAVAILABLE")
+	_ = gate
+	// R6-B-CORRECTION04: wire the actual baseline-findings
+	// authority and increment the classifier-call counter
+	// so the failure matrix can prove the classifier was
+	// reached exactly once.
+	if seamDeps.ClassifierCalls != nil {
+		*seamDeps.ClassifierCalls++
 	}
-	if gate.StdoutTruncated || gate.StderrTruncated {
-		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate output truncated reached classifier; classification FAIL")
-	}
-	if gate.ExitCode != 0 {
-		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate nonzero exit (%d) reached classifier; classification FAIL", gate.ExitCode)
-	}
-	// The lane-results check has been removed: the canonical
-	// GateCollector records whatever the parser extracts
-	// from the raw output. The B2 predicates assess the
-	// captured status / findings / lane flags separately.
 	classification := evidence.ClassifyACTOwnedGate(evidence.ClassificationInputs{
 		ObservedStatus:   execResult.Result.GateCapture.ExecGateObservedStatus,
 		ObservedFindings: execResult.Result.GateCapture.PreExistingFindings,
-		BaselineFindings: nil,
+		BaselineFindings: seamDeps.GateBaselineFindings,
 		ACTOwnedPaths:    seamDeps.GateACTOwnedPaths,
 		LaneMissing:      execResult.Result.GateCapture.ExecGateObservedStatus == "",
 		LaneTimedOut:     execResult.Result.GateCapture.TimedOut,
