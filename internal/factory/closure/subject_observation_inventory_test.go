@@ -161,33 +161,53 @@ func TestSubjectWorktreeInventoryParserRejectsMatrix(t *testing.T) {
 }
 
 // TestSubjectWorktreeInventoryParserPreservesPathBytes
-// proves R6-A-CORRECTION01: the parser preserves embedded
-// whitespace and newline bytes inside the worktree path.
-// The previous implementation trimmed whitespace, silently
-// corrupting legitimate paths; the -z form exists
-// specifically so field bytes round-trip without lossy
-// normalization.
+// proves R6-A-CORRECTION01/CORRECTION02: the parser
+// preserves embedded whitespace and newline bytes inside
+// the worktree path. Git documents that `--porcelain -z`
+// changes line terminators to NUL specifically so field
+// bytes (paths) can round-trip without lossy line
+// normalisation; the previous implementation trimmed
+// whitespace and silently corrupted legitimate paths.
+//
+// The matrix covers newline, leading-space, and
+// trailing-space boundary cases that the R6-A-CORRECTION01
+// ACT explicitly required.
 func TestSubjectWorktreeInventoryParserPreservesPathBytes(t *testing.T) {
 	const validHead = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	// Path with a trailing space; previous behaviour would
-	// have trimmed it and emitted a wrong Path.
-	trailingSpacePath := "/tmp/wt trailing-space "
-	raw := []byte("worktree " + trailingSpacePath + "\x00HEAD " + validHead + "\x00")
-	regs, diags := parseSubjectWorktreeInventoryPorcelainZ(raw)
-	if len(diags) > 0 {
-		t.Fatalf("trailing-space path must round-trip losslessly: %+v", diags)
+	rows := []struct {
+		name string
+		path string
+	}{
+		{name: "trailing-space", path: "/tmp/wt trailing-space "},
+		{name: "leading-space", path: "/tmp/ leading-space"},
+		{name: "embedded-newline", path: "/tmp/wt\nwith-newline"},
 	}
-	if len(regs) != 1 {
-		t.Fatalf("expected one registration, got %d", len(regs))
-	}
-	// filepath.Clean strips the trailing space because the
-	// trailing space is not meaningful to the OS file
-	// system; the canonical (Path, Head) identity compares
-	// post-Clean paths. The test therefore asserts the
-	// path bytes survive Clean rather than survive Trim.
-	cleaned := filepath.Clean(trailingSpacePath)
-	if regs[0].Path != cleaned {
-		t.Fatalf("trailing-space path lost whitespace: got %q want %q", regs[0].Path, cleaned)
+	for _, row := range rows {
+		row := row
+		t.Run(row.name, func(t *testing.T) {
+			raw := []byte("worktree " + row.path + "\x00HEAD " + validHead + "\x00")
+			regs, diags := parseSubjectWorktreeInventoryPorcelainZ(raw)
+			if len(diags) > 0 {
+				t.Fatalf("row %q must not produce diagnostics, got %+v", row.name, diags)
+			}
+			if len(regs) != 1 {
+				t.Fatalf("row %q expected one registration, got %d", row.name, len(regs))
+			}
+			// filepath.Clean strips leading and trailing
+			// whitespace because they are not meaningful
+			// to the OS file system; the canonical
+			// (Path, Head) identity compares post-Clean
+			// paths. The test therefore asserts the path
+			// bytes survive Clean (which preserves the
+			// embedded-newline case and trims the
+			// whitespace cases) rather than survive the
+			// old TrimSpace.
+			cleaned := filepath.Clean(row.path)
+			if regs[0].Path != cleaned {
+				t.Fatalf("row %q path lost whitespace: got %q want %q",
+					row.name, regs[0].Path, cleaned)
+			}
+		})
 	}
 }
 

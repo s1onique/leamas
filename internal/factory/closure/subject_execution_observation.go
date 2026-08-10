@@ -31,28 +31,34 @@ import (
 
 // validateV2ExecuteRequest enforces the production
 // request-validation contract in a single place. The
-// helper returns the empty string on success and the
-// typed message on the first missing field. Extracted
-// from the executor so the executor file stays under
-// the LLM-friendly 400-line threshold.
-func validateV2ExecuteRequest(req V2ExecuteRequest) string {
+// helper returns nil on success and a typed *V2Error
+// (with the field-specific PropertyName) on the first
+// missing field. Extracted from the executor so the
+// executor file stays under the LLM-friendly 400-line
+// threshold.
+//
+// R6-A-CORRECTION02: the contract is "return the typed
+// error unchanged" so the call site can propagate the
+// original *V2Error (with its code AND property name)
+// without going through a string intermediary.
+func validateV2ExecuteRequest(req V2ExecuteRequest) *V2Error {
 	if strings.TrimSpace(req.RepositoryRoot) == "" {
 		return NewV2ErrorWith(V2CodeRequestIncomplete,
-			"repository root is empty", "repository_root", "").Error()
+			"repository root is empty", "repository_root", "")
 	}
 	if strings.TrimSpace(req.SubjectCommit) == "" {
 		return NewV2ErrorWith(V2CodeRequestIncomplete,
-			"subject commit is empty", "subject_commit", "").Error()
+			"subject commit is empty", "subject_commit", "")
 	}
 	if strings.TrimSpace(req.SubjectTree) == "" {
 		return NewV2ErrorWith(V2CodeRequestIncomplete,
-			"subject tree is empty", "subject_tree", "").Error()
+			"subject tree is empty", "subject_tree", "")
 	}
 	if strings.TrimSpace(req.EvidenceDir) == "" {
 		return NewV2ErrorWith(V2CodeRequestIncomplete,
-			"evidence directory is empty", "evidence_directory", "").Error()
+			"evidence directory is empty", "evidence_directory", "")
 	}
-	return ""
+	return nil
 }
 
 // v2CleanupReport records the three cleanup stages that

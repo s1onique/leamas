@@ -78,8 +78,16 @@ func NewGitV2SubjectExecutor(g gitClient) *GitV2SubjectExecutor {
 // interface. The production flow lives here so the helpers
 // can stay narrow and the flow can be audited linearly.
 func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2ExecuteRequest) (V2ExecuteResult, error) {
-	if errMsg := validateV2ExecuteRequest(req); errMsg != "" {
-		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeRequestIncomplete, errMsg, "request", "")
+	if v2err := validateV2ExecuteRequest(req); v2err != nil {
+		// R6-A-CORRECTION02: propagate the original typed
+		// *V2Error unchanged so the field-specific
+		// PropertyName (repository_root, subject_commit,
+		// subject_tree, evidence_directory) survives the
+		// extraction. The earlier string-routing
+		// implementation collapsed every case into
+		// PropertyName="request" which silently changed an
+		// observable contract.
+		return V2ExecuteResult{}, v2err
 	}
 	// Phase 5 (CORRECTION02): cleanup runs in a fresh bounded
 	// context that is detached from the caller's cancellation.

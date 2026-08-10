@@ -310,9 +310,17 @@ func isValidSubjectHeadObjectFormat(s string) bool {
 // R6-A-CORRECTION01 tolerates these because they are
 // non-structural and do not change the canonical
 // (Path, HEAD) identity the executor relies on. The
-// annotation set is intentionally narrow: any other token
-// is rejected so a future Git protocol addition cannot
-// silently introduce a structural field.
+// annotation set is intentionally narrow.
+//
+// R6-A-CORRECTION02: the parser explicitly does NOT
+// tolerate `bare` (the marker emitted for bare worktrees).
+// Bare worktrees do not have the (Path, HEAD) identity
+// shape the authority assumes, and Closure Protocol V2
+// operates on a real working repository, not on a bare
+// checkout. A bare record is rejected as a malformed
+// structural token so the executor fails closed rather
+// than silently misinterpreting a bare repository as a
+// regular worktree.
 func isKnownPorcelainAnnotation(token string) bool {
 	switch {
 	case strings.HasPrefix(token, "branch "):
@@ -328,6 +336,13 @@ func isKnownPorcelainAnnotation(token string) bool {
 		return true
 	case token == "pruned":
 		return true
+	case token == "bare":
+		// The parser intentionally rejects bare. A
+		// future R6-X can extend the authority to bare
+		// by relaxing this branch; today bare is an
+		// observable structural field rather than a
+		// non-structural annotation.
+		return false
 	}
 	return false
 }
