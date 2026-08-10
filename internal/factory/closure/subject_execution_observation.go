@@ -298,6 +298,12 @@ type successV2ResultInputs struct {
 	WorktreeInventoryAfter     SubjectWorktreeInventory
 	SubjectRegistration        SubjectWorktreeRegistration
 	TopologyFacts              V2TopologyFacts
+	// GateCapture is the R6-B gate observation the
+	// executor captured inside the live-S window. A
+	// zero-valued V2GateCapture means the executor did
+	// not run a gate (no collector supplied); the
+	// availability flag is the explicit AVL signal.
+	GateCapture V2GateCapture
 }
 
 // newSuccessV2Result constructs the canonical V2ExecuteResult
@@ -305,7 +311,7 @@ type successV2ResultInputs struct {
 // observation helper so the executor stays linear and under
 // the LLM-friendly line threshold.
 func newSuccessV2Result(in successV2ResultInputs) V2ExecuteResult {
-	return V2ExecuteResult{
+	result := V2ExecuteResult{
 		ObservedTree:                 in.ObservedTree,
 		CheckResults:                 in.CheckResults,
 		Evidence:                     in.Evidence,
@@ -325,4 +331,11 @@ func newSuccessV2Result(in successV2ResultInputs) V2ExecuteResult {
 		SubjectCleanupObserved:       true,
 		SubjectCleanupError:          in.CleanupSummary,
 	}
+	if in.GateCapture.Available {
+		result.GateObservationAvailable = true
+		result.GateCapture = in.GateCapture.Capture
+	} else if in.GateCapture.ObservationError != "" {
+		result.GateObservationError = in.GateCapture.ObservationError
+	}
+	return result
 }

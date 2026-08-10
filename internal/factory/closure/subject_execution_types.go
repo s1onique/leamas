@@ -21,7 +21,11 @@ package closure
 // while preserving the single closure over the descriptor
 // that ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-01 requires.
 
-import "time"
+import (
+	"time"
+
+	"github.com/s1onique/leamas/internal/factory/closure/evidence"
+)
 
 // V2ExecuteRequest captures the inputs the executor needs to
 // run checks against S^{tree}.
@@ -33,6 +37,11 @@ import "time"
 // the field the executor returns a zero-valued
 // V2TopologyFacts and the result still transports the
 // zero value.
+//
+// R6-B adds GateCollector and GateCaptureTemplate. The
+// executor invokes the (optional) collector inside the
+// live-S window and records the captured GateCapture via
+// the V2ExecuteResult.GateObservationAvailable flag.
 type V2ExecuteRequest struct {
 	RepositoryRoot  string
 	SubjectCommit   string
@@ -48,6 +57,23 @@ type V2ExecuteRequest struct {
 	// already established. R6-A MUST NOT change topology
 	// semantics.
 	TopologyFacts V2TopologyFacts
+	// GateCollector is the optional exactly-once gate
+	// authority. Production passes the canonical
+	// GateCollector; the executor invokes it inside the
+	// live-S window (after the live identity / status /
+	// refs / inventory observations, before the subject
+	// worktree is removed) and transports the captured
+	// GateCapture into V2ExecuteResult via the
+	// GateObservationAvailable flag. A nil GateCollector
+	// means the executor did not run a gate; the result
+	// fields remain zero-valued.
+	GateCollector *evidence.GateCollector
+	// GateCaptureTemplate is the per-run request the
+	// executor uses to invoke the collector. The executor
+	// fills SubjectRoot from the live subject worktree
+	// path before delegating to Capture so the runtime
+	// surface of the gate matches the live-S worktree.
+	GateCaptureTemplate evidence.GateCaptureRequest
 }
 
 // V2ExecuteResult captures the deterministic outputs of the
@@ -58,6 +84,11 @@ type V2ExecuteRequest struct {
 // ObservedTree/CheckResults/Evidence/CleanupError fields are
 // preserved unchanged; new fields are additive so existing
 // callers keep their wire contract.
+//
+// R6-B adds the gate capture fields. GateObservationAvailable
+// is the explicit avail signal: a zero-valued GateCapture
+// NEVER means the gate was observed; a successful capture
+// reports Available=true with the populated GateCapture.
 type V2ExecuteResult struct {
 	// Legacy fields (unchanged).
 	ObservedTree string
@@ -137,4 +168,17 @@ type V2ExecuteResult struct {
 	// captures every typed observation failure so downstream
 	// consumers can audit the live-S window.
 	SubjectObservationDiagnostics V2Diagnostics
+
+	// R6-B: gate authority capture. The executor invokes
+	// GateCollector (when supplied) inside the live-S
+	// window and records the captured GateCapture here.
+	// GateObservationAvailable is the explicit avail signal:
+	// a zero-valued GateCapture NEVER means the gate was
+	// observed; a successful capture reports Available=true
+	// with the populated GateCapture. GateObservationError
+	// captures the collector's error string when the gate
+	// observation failed.
+	GateObservationAvailable bool
+	GateCapture              evidence.GateCapture
+	GateObservationError     string
 }

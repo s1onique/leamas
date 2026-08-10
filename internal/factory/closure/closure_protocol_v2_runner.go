@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"time"
+
+	"github.com/s1onique/leamas/internal/factory/closure/evidence"
 )
 
 // V2RunnerDeps captures the dependencies the runner needs.
@@ -21,6 +23,16 @@ type V2RunnerDeps struct {
 	BinaryIdentity    V2BinaryIdentity
 	SnapshotFn        V2RunnerSnapshotFunc
 	CandidateObserver V2CandidateObserver
+	// GateCollector is the optional R6-B gate authority
+	// the executor invokes inside the live-S window.
+	// A nil collector means the executor did not run a
+	// gate; the result fields stay zero-valued.
+	GateCollector *evidence.GateCollector
+	// GateCaptureTemplate is the per-run request the
+	// executor uses to invoke the collector. The executor
+	// fills SubjectRoot from the live subject worktree
+	// path before delegating to Capture.
+	GateCaptureTemplate evidence.GateCaptureRequest
 	// Topology is the internal execution-topology selector.
 	// The two public entry points lock this in; the field
 	// is part of the unexported deps so external Go callers

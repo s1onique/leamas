@@ -29,6 +29,16 @@ package closure
 // topology guesses, hard-coded booleans, post-cleanup
 // filesystem inspection, or synthetic hashes.
 //
+// R6-B adds the optional gate capture invocation. The
+// executor invokes the (nil-safe) GateCollector AFTER the
+// live identity / status / refs / inventory observations
+// and AFTER the checks have run, but BEFORE the worktree
+// is removed. The captured GateCapture is recorded in
+// V2ExecuteResult.GateCapture (with the explicit
+// GateObservationAvailable flag) so the surrounding
+// integration can build the B2 GateAuthority from real
+// authority rather than synthesising it.
+//
 // V2ExecuteRequest and V2ExecuteResult live in
 // subject_execution_types.go so this file can focus on the
 // production flow and stay under the LLM-friendly
@@ -315,6 +325,16 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 			fmt.Sprintf("execute checks: %s", err.Error()),
 			"checks", err.Error())
 	}
+	// R6-B: gate capture inside the live-S window. The
+	// capture runs AFTER the checks and the live
+	// identity / status / refs / inventory observations
+	// and BEFORE the worktree is removed. The capture is
+	// nil-safe: a nil collector produces a zero-valued
+	// V2GateCapture (Available=false, Capture zero). The
+	// observation is recorded so the downstream
+	// integration can build the B2 GateAuthority from
+	// real authority.
+	gateCapture := captureGate(ctx, req.GateCollector, worktreePath, req.GateCaptureTemplate)
 	// Cleanup is the LAST step before the function returns,
 	// and its report is folded into the result AND the
 	// surfaced error.
@@ -358,6 +378,7 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		WorktreeInventoryAfter:     after,
 		SubjectRegistration:        reg,
 		TopologyFacts:              req.TopologyFacts,
+		GateCapture:                gateCapture,
 	})
 	if report.HasError() && err == nil {
 		err = NewV2ErrorWith(V2CodeCleanupFailed,

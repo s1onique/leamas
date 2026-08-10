@@ -89,16 +89,16 @@ func (o *EvidencePublicationOrchestrator) PublishEvidence(ctx context.Context, r
 	candidate := evidence.BuildClosureEvidenceCandidate(inputs)
 	prepared, err := evidence.PrepareClosureEvidenceForPublication(candidate)
 	if err != nil {
-		return obs.V2Manifest, EvidencePublicationResult{State: EvidencePublicationNotPublished}, fmt.Errorf("B2 publication barrier refused candidate: %w", err)
+		return obs.Manifest, EvidencePublicationResult{State: EvidencePublicationNotPublished}, fmt.Errorf("B2 publication barrier refused candidate: %w", err)
 	}
 	auth, err := PrepareEvidencePublication(o.RepositoryRoot, o.EvidenceDestination, o.Worktrees)
 	if err != nil {
-		return obs.V2Manifest, EvidencePublicationResult{State: EvidencePublicationNotPublished}, err
+		return obs.Manifest, EvidencePublicationResult{State: EvidencePublicationNotPublished}, err
 	}
 	defer auth.Close()
 	result := auth.Publish(prepared)
 	if result.Err != nil {
-		return obs.V2Manifest, result, result.Err
+		return obs.Manifest, result, result.Err
 	}
-	return obs.V2Manifest, result, nil
+	return obs.Manifest, result, nil
 }
