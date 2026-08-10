@@ -37,14 +37,14 @@ import (
 // derived from sources the V2 runner already consults; no
 // field is synthesised.
 type V2ExecutionObservation struct {
-	Manifest      V2Manifest
-	Runtime       evidence.RuntimeAuthority
-	Results       []evidence.CheckResult
-	Gate          evidence.GateAuthority
-	Binary        evidence.BinaryAuthority
-	CallerBefore  evidence.CallerStateSnapshot
-	CallerAfter   evidence.CallerStateSnapshot
-	Cleanup       evidence.CleanupAuthority
+	Manifest     V2Manifest
+	Runtime      evidence.RuntimeAuthority
+	Results      []evidence.CheckResult
+	Gate         evidence.GateAuthority
+	Binary       evidence.BinaryAuthority
+	CallerBefore evidence.CallerStateSnapshot
+	CallerAfter  evidence.CallerStateSnapshot
+	Cleanup      evidence.CleanupAuthority
 }
 
 // mergePublicationErrorDiags enriches an inner-runner error
@@ -226,6 +226,18 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	if err != nil {
 		return zero, V2ExecutionObservation{}, fmt.Errorf("execute: build exact subject binary: %w", err)
 	}
+	// CORRECTION06 fail-closed check: the B1 result must
+	// correspond to the resolved literal S / S^{tree}
+	// authority. A returned result that disagrees with the
+	// request (wrong BinaryCommit, empty source identity,
+	// wrong source tree, modified binary, non-detached
+	// source, etc.) is an owning R6-B binary-authority
+	// failure family.
+	if vErr := validateExactSubjectBinaryResult(
+		subjectCommitOID, subjectTreeOID, subjectTreeRes,
+	); vErr != nil {
+		return zero, V2ExecutionObservation{}, vErr
+	}
 	binaryAuthority := binaryAuthorityFromBuild(subjectTreeRes)
 
 	// Phase 2: Construct the production GateCollector.
@@ -290,7 +302,24 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	// ACT-owned verdict built from the actual observed
 	// status / findings / lane flags.
 	if !execResult.Result.GateObservationAvailable {
-		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate observation unavailable: %s", execResult.Result.GateObservationError)
+		// CORRECTION06: gate observation failure is its own
+		// failure family. A spawn/start failure or any
+		// other capture-time error must NOT be folded into
+		// generic B2 incompleteness; it must surface as
+		// the typed gate-observation failure so the R6-B
+		// failure matrix can own the row. The original
+		// typed error (e.g. evidence.ErrCollectorRequestMismatch)
+		// is preserved as the wrapped cause so downstream
+		// errors.Is checks still work.
+		return execResult.Manifest, V2ExecutionObservation{}, &V2Error{
+			Diags: V2Diagnostics{{
+				Code:         V2CodeR6BGateObservationFailed,
+				Message:      "gate capture did not produce a valid observation: " + execResult.Result.GateObservationError,
+				PropertyName: "gate_observation",
+				Detail:       execResult.Result.GateObservationError,
+			}},
+			Cause: execResult.Result.GateObservationCause,
+		}
 	}
 	if collector.Calls() != 1 {
 		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate invocation count %d != 1", collector.Calls())
@@ -311,15 +340,27 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	if seamDeps.ClassifierCalls != nil {
 		*seamDeps.ClassifierCalls++
 	}
-	classification := evidence.ClassifyACTOwnedGate(evidence.ClassificationInputs{
-		ObservedStatus:   execResult.Result.GateCapture.ExecGateObservedStatus,
-		ObservedFindings: execResult.Result.GateCapture.PreExistingFindings,
-		BaselineFindings: seamDeps.GateBaselineFindings,
-		ACTOwnedPaths:    seamDeps.GateACTOwnedPaths,
-		LaneMissing:      execResult.Result.GateCapture.ExecGateObservedStatus == "",
-		LaneTimedOut:     execResult.Result.GateCapture.TimedOut,
-		LaneTruncated:    execResult.Result.GateCapture.StdoutTruncated || execResult.Result.GateCapture.StderrTruncated,
-	})
+	classification, _ := classifyCapturedGate(
+		execResult.Result.GateCapture,
+		seamDeps.GateACTOwnedPaths,
+		seamDeps.GateBaselineFindings,
+		nil,
+	)
+	// CORRECTION06: surface classifier FAIL and
+	// UNAVAILABLE as the owning typed R6-B integration
+	// failure family. The authoritative capture is still
+	// in obs.Gate so the B2 barrier can see the
+	// classification the integration would have published.
+	if classification == evidence.ACTOwnedFail {
+		return execResult.Manifest, V2ExecutionObservation{}, NewV2ErrorWith(V2CodeR6BGateClassificationFailed,
+			"gate classifier returned FAIL; ACT-owned finding intersected or new finding introduced",
+			"gate_classification", string(classification))
+	}
+	if classification == evidence.ACTOwnedUnavailable {
+		return execResult.Manifest, V2ExecutionObservation{}, NewV2ErrorWith(V2CodeR6BGateClassificationUnavailable,
+			"gate classifier returned UNAVAILABLE; lane is missing, timed out, or truncated",
+			"gate_classification", string(classification))
+	}
 	gateAuthority := evidence.GateAuthority{
 		ObservedStatus:       execResult.Result.GateCapture.ExecGateObservedStatus,
 		Classification:       string(classification),
@@ -361,6 +402,14 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	cleanup := evidence.CleanupAuthority{
 		SubjectCleanupError: execResult.Result.SubjectCleanupError,
 		BinaryCleanupError:  subjectTreeRes.CleanupError,
+	}
+	// CORRECTION06: the subject-cleanup authority lives in
+	// the R6-A executor result. A failure there is the
+	// owning subject-cleanup failure family. The check
+	// runs AFTER the gate has executed and the B2 candidate
+	// would otherwise be published.
+	if vErr := validateSubjectCleanupOutcome(execResult.Result); vErr != nil {
+		return execResult.Manifest, V2ExecutionObservation{}, vErr
 	}
 	b2Before := evidence.CallerStateSnapshot{
 		Available:             true,

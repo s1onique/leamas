@@ -120,10 +120,10 @@ func r6BStubBuildFn(t *testing.T) func(context.Context, ExactSubjectBinaryReques
 		return ExactSubjectBinaryResult{
 			BinaryPath:                binaryPath,
 			BinarySHA256:              hex.EncodeToString(sum[:]),
-			BinaryCommit:              strings.Repeat("a", 40),
+			BinaryCommit:              req.SubjectCommit,
 			BinaryModified:            false,
-			SourceCommit:              strings.Repeat("a", 40),
-			SourceTree:                strings.Repeat("b", 40),
+			SourceCommit:              req.SubjectCommit,
+			SourceTree:                req.SubjectTree,
 			SourceClean:               true,
 			SourceDetached:            true,
 			OutputOutsideAllWorktrees: true,
@@ -176,7 +176,10 @@ func makeFakeBinaryBuilderWithUnsafeOutput() func(context.Context, ExactSubjectB
 // the GateCollector.CommandRunner. The runner records every
 // invocation (argv[0] + cwd) and lets the test inject
 // failure modes (spawn, timeout, nonzero, stdout/stderr
-// truncation).
+// truncation). stdoutField / stderrField let focused
+// production tests override the precise bytes returned so
+// the writer flag and the bytes both reach the gate
+// capture for the AUTHENTIC truncation propagation.
 type r6BRecordingRunner struct {
 	argv        []string
 	cwd         string
@@ -185,6 +188,8 @@ type r6BRecordingRunner struct {
 	nonZero     bool
 	stdoutTrunc bool
 	stderrTrunc bool
+	stdoutField []byte
+	stderrField []byte
 }
 
 func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string, dir string, env []string) evidence.CommandResult {
@@ -204,18 +209,24 @@ func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string
 			Stderr:   []byte("timeout"),
 		}
 	}
-	stdout := []byte("OK\n")
+	stdout := []byte("EXEC_GATE_OBSERVED_STATUS:OK\n")
 	stderr := []byte{}
+	if r.stdoutField != nil {
+		stdout = r.stdoutField
+	}
+	if r.stderrField != nil {
+		stderr = r.stderrField
+	}
 	if r.stdoutTrunc {
-		stdout = []byte("OK")
+		stdout = []byte("EXEC_GATE_OBSERVED_STATUS:OK")
 	}
 	if r.stderrTrunc {
-		stderr = []byte("warning")
+		stderr = []byte("EXEC_GATE_OBSERVED_STATUS:OK")
 	}
 	if r.nonZero {
 		return evidence.CommandResult{
 			ExitCode: 1,
-			Stdout:   []byte("FAILED\n"),
+			Stdout:   stdout,
 			Stderr:   stderr,
 		}
 	}

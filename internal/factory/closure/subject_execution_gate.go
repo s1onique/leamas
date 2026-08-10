@@ -28,11 +28,15 @@ import (
 // NEVER means the gate was observed; a successful capture
 // reports Available=true with the populated GateCapture.
 // GateObservationError captures the collector's error string
-// when the gate observation failed.
+// when the gate observation failed; GateObservationCause is
+// the original typed error the collector returned (e.g.
+// evidence.ErrCollectorRequestMismatch), preserved so
+// downstream errors.Is checks survive the string conversion.
 type V2GateCapture struct {
 	Available        bool
 	Capture          evidence.GateCapture
 	ObservationError string
+	ObservationCause error
 }
 
 // ErrGateSubjectRootAlreadyBound is the typed error the
@@ -90,6 +94,7 @@ func captureGate(
 	if err != nil {
 		return V2GateCapture{
 			ObservationError: fmt.Sprintf("evidence: gate capture: %s", err.Error()),
+			ObservationCause: err,
 		}, nil
 	}
 	return V2GateCapture{

@@ -103,6 +103,17 @@ const (
 	// with this code so downstream code cannot silently accept a
 	// mismatched registration.
 	V2CodeSubjectRegistrationMismatch V2DiagnosticCode = "subject_registration_mismatch"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-BINARY-GATE-INTEGRATION01-CORRECTION06
+	// adds the R6-B fail-closed surface codes. Each code names
+	// a single authority the integration owns; downstream code
+	// (CLI, B2 barrier, R6-C) routes remediation through the
+	// exact code so the proof can fail-closed at the right layer.
+	V2CodeR6BBinaryAuthorityInvalid        V2DiagnosticCode = "r6b_binary_authority_invalid"
+	V2CodeR6BGateObservationFailed         V2DiagnosticCode = "r6b_gate_observation_failed"
+	V2CodeR6BGateClassificationFailed      V2DiagnosticCode = "r6b_gate_classification_failed"
+	V2CodeR6BGateClassificationUnavailable V2DiagnosticCode = "r6b_gate_classification_unavailable"
+	V2CodeR6BSubjectCleanupFailed          V2DiagnosticCode = "r6b_subject_cleanup_failed"
+	V2CodeR6BSubjectCleanupUnavailable     V2DiagnosticCode = "r6b_subject_cleanup_unavailable"
 )
 
 // V2Diagnostic is the structured diagnostic record emitted by

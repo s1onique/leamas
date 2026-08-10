@@ -336,6 +336,7 @@ func newSuccessV2Result(in successV2ResultInputs) V2ExecuteResult {
 		result.GateCapture = in.GateCapture.Capture
 	} else if in.GateCapture.ObservationError != "" {
 		result.GateObservationError = in.GateCapture.ObservationError
+		result.GateObservationCause = in.GateCapture.ObservationCause
 	}
 	return result
 }

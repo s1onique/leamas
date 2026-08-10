@@ -177,8 +177,12 @@ type V2ExecuteResult struct {
 	// observed; a successful capture reports Available=true
 	// with the populated GateCapture. GateObservationError
 	// captures the collector's error string when the gate
-	// observation failed.
+	// observation failed; GateObservationCause carries the
+	// original typed error so downstream errors.Is checks
+	// survive the string conversion (e.g.
+	// evidence.ErrCollectorRequestMismatch).
 	GateObservationAvailable bool
 	GateCapture              evidence.GateCapture
 	GateObservationError     string
+	GateObservationCause     error
 }
