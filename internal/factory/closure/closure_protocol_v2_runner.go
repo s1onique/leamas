@@ -4,21 +4,23 @@ package closure
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"path/filepath"
 	"time"
 )
+
 // V2RunnerDeps captures the dependencies the runner needs.
 // The defaults match the production wiring.
 type V2RunnerDeps struct {
-	Git            gitClient
-	Topology       V2TopologyResolver
-	Loader         V2FrozenPlanLoader
-	Executor       V2SubjectExecutor
-	Commands       commandExecutor
-	Now            func() time.Time
-	BinaryIdentity V2BinaryIdentity
-	SnapshotFn     V2RunnerSnapshotFunc
+	Git               gitClient
+	Topology          V2TopologyResolver
+	Loader            V2FrozenPlanLoader
+	Executor          V2SubjectExecutor
+	Commands          commandExecutor
+	Now               func() time.Time
+	BinaryIdentity    V2BinaryIdentity
+	SnapshotFn        V2RunnerSnapshotFunc
 	CandidateObserver V2CandidateObserver
 	// Topology is the internal execution-topology selector.
 	// The two public entry points lock this in; the field
@@ -136,7 +138,7 @@ func runClosureProtocolV2WithDepsAndTopology(ctx context.Context, req V2Request,
 	if !callerBefore.Available {
 		return V2Manifest{}, &V2Error{Diags: callerBefore.Diagnostics}
 	}
-		candidate, err := runClosureProtocolV2Inner(ctx, req, deps, callerBefore.State, topology)
+	candidate, err := runClosureProtocolV2Inner(ctx, req, deps, callerBefore.State, topology)
 	if err != nil {
 		callerAfter := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
 		post := mergeAfterWithBeforeDiagnostics(callerBefore, callerAfter)
@@ -161,8 +163,18 @@ func runClosureProtocolV2WithDepsAndTopology(ctx context.Context, req V2Request,
 	if post := callerBefore.State.Diff(callerAfter.State); len(post) > 0 {
 		return V2Manifest{}, &V2Error{Diags: post}
 	}
-	if err := AtomicWriteV2Manifest(req.ManifestOutput, candidate.ManifestBytes); err != nil {
+	inventory, err := InventoryRepositoryWorktrees(ctx, req.RepositoryRoot, nil)
+	if err != nil {
 		return V2Manifest{}, err
+	}
+	publication, err := PrepareEvidencePublication(req.RepositoryRoot, req.ManifestOutput, inventory.RootsAsCanonicalWorktrees())
+	if err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeManifestWriteFailed, err.Error(), "manifest_output", req.ManifestOutput)
+	}
+	defer publication.Close()
+	digest := sha256.Sum256(candidate.ManifestBytes)
+	if err := publication.Publish(PublicationCandidate{Evidence: candidate.Manifest, Bytes: candidate.ManifestBytes, SHA256: digest}); err != nil {
+		return V2Manifest{}, NewV2ErrorWith(V2CodeManifestWriteFailed, err.Error(), "manifest_output", req.ManifestOutput)
 	}
 	return candidate.Manifest, nil
 }
