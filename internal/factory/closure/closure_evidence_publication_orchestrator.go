@@ -6,8 +6,8 @@
 //
 // The orchestrator is the single entry point that:
 //
-//  1. runs the V2 runner and obtains the typed V2ExecutionObservation
-//     (the runner's authoritative execution record);
+//  1. runs the V2 runner through a non-publishing entry point
+//     that returns the authoritative V2ExecutionObservation;
 //  2. derives the B2 CandidateInputs from the observation alone
 //     (no caller-supplied evidence bundle);
 //  3. runs the B2 publication barrier
@@ -19,15 +19,10 @@
 //     authority (no V2 manifest shortcut, no caller-supplied
 //     arbitrary bytes).
 //
-// On any inner / barrier / publication failure, the function
-// returns a typed error and the partial state reported by the
-// authority. The orchestrator never returns a V2Manifest with
-// side effects on disk that the caller cannot observe.
-//
-// R2 invariant: the orchestrator does not accept a
-// `CandidateInputs` bundle from the caller. The bundle is
-// derived from the V2ExecutionObservation so a caller cannot
-// smuggle a fabricated COMPLETE input past the B2 barrier.
+// The orchestrator does NOT accept a CandidateInputs bundle
+// from the caller. The bundle is derived from the
+// V2ExecutionObservation so a caller cannot smuggle a
+// fabricated COMPLETE input past the B2 barrier.
 package closure
 
 import (
@@ -37,41 +32,17 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure/evidence"
 )
 
-// V2ExecutionObservation is the authoritative execution record
-// the V2 runner produces. Every field the orchestrator needs
-// to build the B2 CandidateInputs MUST come from this struct;
-// the orchestrator MUST NOT accept a complete CandidateInputs
-// bundle from the caller.
-type V2ExecutionObservation struct {
-	// V2Manifest is the runner's own typed result.
-	V2Manifest V2Manifest
-	// Runtime, Results, Gate, Binary, CallerBefore, CallerAfter,
-	// Cleanup are the authoritative observations.
-	Runtime       evidence.RuntimeAuthority
-	Results       []evidence.CheckResult
-	Gate          evidence.GateAuthority
-	Binary        evidence.BinaryAuthority
-	CallerBefore  evidence.CallerStateSnapshot
-	CallerAfter   evidence.CallerStateSnapshot
-	Cleanup       evidence.CleanupAuthority
-}
+// V2ExecuteFunc is the non-publishing runner entry point. The
+// orchestrator calls Run(ctx, req, identity) to obtain the
+// runner's authoritative V2ExecutionObservation.
+type V2ExecuteFunc func(ctx context.Context, req V2Request, identity V2BinaryIdentity) (V2Manifest, V2ExecutionObservation, error)
 
 // EvidencePublicationOrchestrator is the B2+B3 wiring.
 type EvidencePublicationOrchestrator struct {
-	Runner              *V2OrchestratorHandle
+	Runner              V2ExecuteFunc
 	RepositoryRoot      string
 	EvidenceDestination string
 	Worktrees           []CanonicalWorktree
-}
-
-// V2OrchestratorHandle is the small surface the orchestrator
-// needs from the V2 runner. The default wiring uses
-// `RunClosureProtocolV2WithBinary`.
-type V2OrchestratorHandle struct {
-	// Run returns a V2ExecutionObservation. Production
-	// wiring delegates to a runner that converts its
-	// internal state into the typed observation.
-	Run func(ctx context.Context, req V2Request, identity V2BinaryIdentity) (V2ExecutionObservation, error)
 }
 
 // deriveInputsFromObservation builds the B2 CandidateInputs
@@ -93,15 +64,15 @@ func deriveInputsFromObservation(obs V2ExecutionObservation) evidence.CandidateI
 	}
 }
 
-// PublishEvidence runs the V2 runner, derives the B2 candidate
-// from the runner's authoritative observation, crosses the B2
-// barrier, and publishes the durable pair.
+// PublishEvidence runs the non-publishing runner, derives the
+// B2 candidate from the runner's authoritative observation,
+// crosses the B2 barrier, and publishes the durable pair.
 //
 // The function is total: every error path returns a typed
 // error. The B3 publication authority reports the partial
 // state to the caller via `result` even on failure.
 func (o *EvidencePublicationOrchestrator) PublishEvidence(ctx context.Context, req V2Request, identity V2BinaryIdentity) (V2Manifest, EvidencePublicationResult, error) {
-	if o == nil || o.Runner == nil || o.Runner.Run == nil {
+	if o == nil || o.Runner == nil {
 		return V2Manifest{}, EvidencePublicationResult{State: EvidencePublicationNotPublished}, fmt.Errorf("orchestrator: missing runner")
 	}
 	if o.RepositoryRoot == "" {
@@ -110,14 +81,10 @@ func (o *EvidencePublicationOrchestrator) PublishEvidence(ctx context.Context, r
 	if o.EvidenceDestination == "" {
 		return V2Manifest{}, EvidencePublicationResult{State: EvidencePublicationNotPublished}, fmt.Errorf("orchestrator: evidence destination is required")
 	}
-	obs, err := o.Runner.Run(ctx, req, identity)
+	_, obs, err := o.Runner(ctx, req, identity)
 	if err != nil {
 		return V2Manifest{}, EvidencePublicationResult{State: EvidencePublicationNotPublished}, err
 	}
-	// The B2 candidate inputs are derived from the runner's
-	// authoritative observation. The caller cannot supply a
-	// complete bundle; the orchestrator's B2 inputs come from
-	// the runner's result alone.
 	inputs := deriveInputsFromObservation(obs)
 	candidate := evidence.BuildClosureEvidenceCandidate(inputs)
 	prepared, err := evidence.PrepareClosureEvidenceForPublication(candidate)

@@ -131,10 +131,8 @@ func TestOrchestratorPublishEvidenceSmoke(t *testing.T) {
 	outside := t.TempDir()
 	dest := outside + "/evidence.json"
 	o := &EvidencePublicationOrchestrator{
-		Runner: &V2OrchestratorHandle{
-			Run: func(ctx context.Context, req V2Request, id V2BinaryIdentity) (V2ExecutionObservation, error) {
-				return obs, nil
-			},
+		Runner: func(ctx context.Context, req V2Request, id V2BinaryIdentity) (V2Manifest, V2ExecutionObservation, error) {
+			return V2Manifest{}, obs, nil
 		},
 		RepositoryRoot:      wt,
 		EvidenceDestination: dest,

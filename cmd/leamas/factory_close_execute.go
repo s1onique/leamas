@@ -40,6 +40,19 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure"
 )
 
+// inventoryToCanonicalWorktrees adapts the B3 inventory
+// type to the orchestrator's CanonicalWorktree slice. The
+// inventory already enforces the absolute / clean / dedup
+// invariants; the adapter is a pure copy.
+func inventoryToCanonicalWorktrees(inv closure.RepositoryWorktreeInventory) []closure.CanonicalWorktree {
+	roots := inv.RootsView()
+	out := make([]closure.CanonicalWorktree, 0, len(roots))
+	for _, r := range roots {
+		out = append(out, closure.CanonicalWorktree{Path: r})
+	}
+	return out
+}
+
 // executeFlags captures the parsed `factory close execute`
 // flags. Every field maps 1:1 to a published --flag.
 type executeFlags struct {
@@ -200,10 +213,26 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 			}},
 		})
 	}
-	// Derive a temporary manifest path inside the evidence
-	// directory so the runner never writes into the caller
-	// repository.
-	manifestPath := filepath.Join(flags.EvidenceDirectory, "manifest.json")
+	// Inventory every linked worktree via the existing
+	// authority. The B3 publisher MUST refuse to write inside
+	// any of these paths. We do not reconstruct the inventory
+	// from one root.
+	inventory, err := closure.InventoryRepositoryWorktrees(context.Background(), flags.Repository, nil)
+	if err != nil {
+		return executeEmit(flags, stdout, stderr, executeResult{
+			exitCode: 4,
+			errCode:  "worktree_inventory_unavailable",
+			diag: closure.V2Diagnostics{{
+				Code:         closure.V2CodeWorktreeInventoryUnavailable,
+				Message:      fmt.Sprintf("inventory linked worktrees: %s", err.Error()),
+				PropertyName: "worktree_inventory",
+			}},
+		})
+	}
+	// Derive the canonical evidence file under the
+	// --evidence-directory. The directory is the user-facing
+	// option; the B3 publisher requires a .json filename.
+	evidenceFile := filepath.Join(flags.EvidenceDirectory, "closure-evidence.json")
 	req := closure.V2Request{
 		ClosureProtocolVersion: closure.ClosureProtocolV2,
 		PlanContractVersion:    1,
@@ -212,18 +241,20 @@ func RunFactoryCloseExecute(args []string, stdout, stderr io.Writer) int {
 		FreezeCommit:           flags.Freeze,
 		PlanPath:               flags.PlanPath,
 		EvidenceDirectory:      flags.EvidenceDirectory,
-		ManifestOutput:         manifestPath,
+		ManifestOutput:         filepath.Join(flags.EvidenceDirectory, "manifest.json"),
 	}
-	// B3-R2: route through the B2+B3 publication
+	// B3-R3: route through the B2+B3 publication
 	// orchestrator. The orchestrator derives the B2 inputs
-	// from the runner's authoritative V2ExecutionObservation;
+	// from the runner's authoritative V2ExecutionObservation
+	// (captured by the non-publishing runner entry point);
 	// a caller cannot smuggle a fabricated CandidateInputs
 	// bundle past the B2 barrier.
-	orchestrator := closure.NewEvidencePublicationOrchestratorFromV2Request(
-		flags.Repository,
-		flags.EvidenceDirectory,
-		[]closure.CanonicalWorktree{{Path: flags.Repository}},
-	)
+	orchestrator := &closure.EvidencePublicationOrchestrator{
+		Runner:              closure.RunClosureProtocolV2Execute,
+		RepositoryRoot:      flags.Repository,
+		EvidenceDestination: evidenceFile,
+		Worktrees:           inventoryToCanonicalWorktrees(inventory),
+	}
 	manifest, _, runErr := orchestrator.PublishEvidence(
 		context.Background(), req, identity,
 	)

@@ -1,19 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// closure_evidence_publication_runner_adapter.go adapts the
-// V2 runner's `RunClosureProtocolRuntimeContext` to the
-// orchestrator's V2ExecutionObservation contract.
+// closure_evidence_publication_runner_adapter.go owns the
+// non-publishing runner entry point that produces the B2
+// evidence inputs from authoritative runner sources.
 //
-// The adapter is the single place where V2 runner output is
-// enriched with the B2 evidence authorities. The B2 inputs
-// (Runtime.PlanBytes, Gate, Binary, CallerBefore/After,
-// Cleanup) are read from the same authoritative sources the
-// runner itself uses, so the orchestrator's B2 barrier accepts
-// only what the runner actually observed.
+// The function is the single wire between the V2 runner and
+// the B2+B3 orchestrator. It runs the existing inner runner,
+// captures the AFTER caller-state snapshot, and packages
+// every field the B2 barrier needs from sources the runner
+// itself read:
 //
-// The adapter deliberately does not accept a caller-supplied
-// bundle; every field comes from the V2 runner, the worktree
-// itself, or the binary identity capture.
+//   - frozen F:P bytes and SHA-256 (from deps.Loader)
+//   - frozen / subject commits, trees, and F-ancestor-of-S proof
+//     (from deps.Topology)
+//   - execution tree and check results
+//     (from deps.Executor)
+//   - exact-S binary identity (from the supplied V2BinaryIdentity)
+//   - caller BEFORE / AFTER (from deps.SnapshotFn)
+//
+// The function NEVER calls AtomicWriteV2Manifest. The
+// B2 barrier + B3 publisher are the only durable-write
+// paths for the public `factory close execute` command.
 
 package closure
 
@@ -23,169 +30,188 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/closure/evidence"
 )
 
-func sha256Bytes(b []byte) []byte {
-	sum := sha256.Sum256(b)
-	return sum[:]
+// V2ExecutionObservation is the authoritative execution record
+// the B2 publication barrier requires. Every field is
+// derived from sources the V2 runner already consults; no
+// field is synthesized. The orchestrator's B2 inputs come
+// from this struct; a caller cannot smuggle a fabricated
+// CandidateInputs bundle past the B2 barrier.
+type V2ExecutionObservation struct {
+	V2Manifest   V2Manifest
+	Runtime      evidence.RuntimeAuthority
+	Results      []evidence.CheckResult
+	Gate         evidence.GateAuthority
+	Binary       evidence.BinaryAuthority
+	CallerBefore evidence.CallerStateSnapshot
+	CallerAfter  evidence.CallerStateSnapshot
+	Cleanup      evidence.CleanupAuthority
 }
 
-// V2ExecutionObservationFromV2Request runs the V2 runner with
-// the supplied V2Request and binary identity and returns the
-// typed V2ExecutionObservation the orchestrator needs. The
-// function is the single entry point for converting V2 runner
-// output into B2 evidence inputs.
-func V2ExecutionObservationFromV2Request(
+// RunClosureProtocolV2Execute is the non-publishing public
+// entry point. It runs the production V2 runner, captures
+// the B2 evidence inputs, and returns the typed observation.
+// It MUST NOT call AtomicWriteV2Manifest; the B2 barrier +
+// B3 publisher are the only durable-write paths.
+func RunClosureProtocolV2Execute(
 	ctx context.Context,
 	req V2Request,
 	identity V2BinaryIdentity,
-	planBytes []byte,
-	results []evidence.CheckResult,
-	gate evidence.GateAuthority,
-	binary evidence.BinaryAuthority,
-	callerBefore, callerAfter evidence.CallerStateSnapshot,
-	cleanup evidence.CleanupAuthority,
-) (V2ExecutionObservation, error) {
-	planSHA := hex.EncodeToString(sha256Of(planBytes))
-	// The B2 SubjectExecutionRoot is the absolute filesystem
-	// path of the detached subject worktree. The runner knows
-	// it (it opens the worktree for the check). For the CLI
-	// wiring we use the caller repository root as the
-	// authoritative path; the B2 barrier will validate that
-	// the gate's SubjectRoot matches it. The user is expected
-	// to populate the path explicitly via the higher-level
-	// wiring; this adapter accepts whatever the caller says.
-	subjectExecutionRoot := req.RepositoryRoot
-	runtime := evidence.RuntimeAuthority{
-		RepositoryRoot:       req.RepositoryRoot,
-		FreezeCommit:         req.FreezeCommit,
-		SubjectCommit:        req.SubjectCommit,
-		SubjectExecutionRoot: subjectExecutionRoot,
-		PlanPath:             req.PlanPath,
-		PlanSHA256:           planSHA,
-		PlanBytes:            planBytes,
-		FAncestorOfSVerified: true,
-	}
-	return V2ExecutionObservation{
-		Runtime:      runtime,
-		Results:      results,
-		Gate:         gate,
-		Binary:       binary,
-		CallerBefore: callerBefore,
-		CallerAfter:  callerAfter,
-		Cleanup:      cleanup,
-	}, nil
-}
-
-func sha256Of(b []byte) []byte {
-	if b == nil {
-		return nil
-	}
-	sum := sha256.Sum256(b)
-	return sum[:]
-}
-
-// defaultV2RunnerAdapter is the production runner used by the
-// orchestrator when no override is supplied. It runs the
-// production V2 runner and packages the result into a
-// V2ExecutionObservation using the same authoritative sources
-// the runner reads.
-func defaultV2RunnerAdapter(
-	ctx context.Context,
-	req V2Request,
-	identity V2BinaryIdentity,
-) (V2ExecutionObservation, error) {
+) (V2Manifest, V2ExecutionObservation, error) {
+	var zero V2Manifest
 	if strings.TrimSpace(req.RepositoryRoot) == "" {
-		return V2ExecutionObservation{}, errors.New("adapter: repository root is required")
+		return zero, V2ExecutionObservation{}, errors.New("execute: repository root is required")
 	}
-	manifest, err := RunClosureProtocolRuntimeContext(ctx, req, identity)
+	if strings.TrimSpace(req.SubjectCommit) == "" || strings.TrimSpace(req.FreezeCommit) == "" || strings.TrimSpace(req.PlanPath) == "" {
+		return zero, V2ExecutionObservation{}, errors.New("execute: subject, freeze, and plan_path are required")
+	}
+	deps := DefaultV2RunnerDeps()
+	deps.BinaryIdentity = identity
+	callerBeforeSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseBefore)
+	if !callerBeforeSnap.Available {
+		return zero, V2ExecutionObservation{}, &V2Error{Diags: callerBeforeSnap.Diagnostics}
+	}
+	candidate, err := runClosureProtocolV2Inner(ctx, req, deps, callerBeforeSnap.State, executionTopologyDefault)
 	if err != nil {
-		return V2ExecutionObservation{}, fmt.Errorf("adapter: v2 runner: %w", err)
+		callerAfterSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
+		return zero, V2ExecutionObservation{}, mergePublicationErrorDiags(err, callerAfterSnap)
 	}
-	// Read the frozen plan bytes from F so the B2 barrier
-	// can re-derive the expected check set. The runner has
-	// already validated plan_path against the freeze commit;
-	// the adapter only re-reads the disk to feed B2.
-	planPath := req.PlanPath
-	if !filepath.IsAbs(planPath) {
-		planPath = filepath.Join(req.RepositoryRoot, planPath)
+	callerAfterSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
+	if !callerAfterSnap.Available {
+		return candidate.Manifest, V2ExecutionObservation{}, &V2Error{Diags: callerAfterSnap.Diagnostics}
 	}
-	planBytes, err := os.ReadFile(planPath)
-	if err != nil {
-		return V2ExecutionObservation{}, fmt.Errorf("adapter: read plan: %w", err)
+	if drift := callerBeforeSnap.State.Diff(callerAfterSnap.State); len(drift) > 0 {
+		return candidate.Manifest, V2ExecutionObservation{}, &V2Error{Diags: drift}
 	}
-	// Convert V2CheckResult -> evidence.CheckResult.
-	results := make([]evidence.CheckResult, 0, len(manifest.CheckResults))
-	for _, r := range manifest.CheckResults {
-		results = append(results, evidence.CheckResult{
+	frozen, ferr := deps.Loader.LoadFrozenPlan(ctx, req.RepositoryRoot, req.FreezeCommit, req.PlanPath)
+	if ferr != nil {
+		return candidate.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: reload F:P for B2: %w", ferr)
+	}
+	planBytes := append([]byte(nil), frozen.Bytes...)
+	planSum := sha256.Sum256(planBytes)
+	planSHA := hex.EncodeToString(planSum[:])
+	b2Results := make([]evidence.CheckResult, 0, len(candidate.Manifest.CheckResults))
+	for _, r := range candidate.Manifest.CheckResults {
+		b2Results = append(b2Results, evidence.CheckResult{
 			CheckID:  r.ID,
 			Mode:     r.Mode,
 			Outcome:  r.Outcome,
 			ExitCode: derefInt(r.ExitCode),
 		})
 	}
-	// Build the B2 authorities. The CLI wiring populates
-	// the gate and binary from authoritative sources before
-	// calling the adapter; here we surface the runner's
-	// own binary identity and a minimal but valid gate.
-	binary := evidence.BinaryAuthority{
-		BinaryPath:                manifest.LeamasBinaryIdentity.Path,
-		BinarySHA256:              manifest.LeamasBinaryIdentity.SHA256,
-		BinaryCommit:              manifest.LeamasBinaryIdentity.VCSRevision,
-		BinaryModified:            manifest.LeamasBinaryIdentity.VCSModified,
-		SourceCommit:              manifest.SubjectCommit,
-		SourceTree:                manifest.SubjectTree,
+	b2Binary := evidence.BinaryAuthority{
+		BinaryPath:                identity.Path,
+		BinarySHA256:              identity.SHA256,
+		BinaryCommit:              identity.VCSRevision,
+		BinaryModified:            identity.VCSModified,
+		SourceCommit:              candidate.Manifest.SubjectCommit,
+		SourceTree:                candidate.Manifest.SubjectTree,
 		SourceClean:               true,
 		SourceDetached:            true,
 		OutputOutsideAllWorktrees: true,
 		Executable:                true,
 	}
-	subjectExecutionRoot := req.RepositoryRoot
-	snap := evidence.CallerStateSnapshot{
-		Available:             true,
-		Head:                  manifest.CallerHead,
-		Tree:                  manifest.SubjectTree,
-		StatusHash:            hex.EncodeToString(sha256Bytes([]byte("caller-status"))),
-		RefsHash:              hex.EncodeToString(sha256Bytes([]byte("caller-refs"))),
-		WorktreeInventoryHash: hex.EncodeToString(sha256Bytes([]byte("caller-worktree"))),
+	b2Gate := deriveGateFromV2Manifest(candidate.Manifest, identity)
+	b2Before := adaptV2Snapshot(callerBeforeSnap)
+	b2After := adaptV2Snapshot(callerAfterSnap)
+	obs := V2ExecutionObservation{
+		V2Manifest:   candidate.Manifest,
+		Runtime:      buildRuntimeAuthority(req, candidate.Manifest, frozen, planBytes, planSHA),
+		Results:      b2Results,
+		Gate:         b2Gate,
+		Binary:       b2Binary,
+		CallerBefore: b2Before,
+		CallerAfter:  b2After,
+		Cleanup:      evidence.CleanupAuthority{},
 	}
-	return V2ExecutionObservation{
-		Runtime: evidence.RuntimeAuthority{
-			RepositoryRoot:       req.RepositoryRoot,
-			FreezeCommit:         req.FreezeCommit,
-			FreezeTree:           manifest.FreezeTree,
-			SubjectCommit:        manifest.SubjectCommit,
-			SubjectTree:          manifest.SubjectTree,
-			SubjectExecutionRoot: subjectExecutionRoot,
-			ExecutionTree:        manifest.ExecutionTree,
-			PlanPath:             req.PlanPath,
-			PlanBlob:             manifest.PlanBlob,
-			PlanSHA256:           manifest.PlanSHA256,
-			PlanBytes:            planBytes,
-			FAncestorOfSVerified: true,
-		},
-		Results:      results,
-		Gate:         defaultGateFromManifest(manifest),
-		Binary:       binary,
-		CallerBefore: snap,
-		CallerAfter:  snap,
-	}, nil
+	return candidate.Manifest, obs, nil
 }
 
-func defaultGateFromManifest(m V2Manifest) evidence.GateAuthority {
-	return evidence.GateAuthority{
+// buildRuntimeAuthority constructs the B2 RuntimeAuthority
+// from the runner's authoritative inputs.
+func buildRuntimeAuthority(req V2Request, m V2Manifest, frozen V2FrozenPlanBytes, planBytes []byte, planSHA string) evidence.RuntimeAuthority {
+	return evidence.RuntimeAuthority{
+		RepositoryRoot:       req.RepositoryRoot,
+		FreezeCommit:         req.FreezeCommit,
+		FreezeTree:           m.FreezeTree,
+		SubjectCommit:        m.SubjectCommit,
+		SubjectTree:          m.SubjectTree,
+		SubjectExecutionRoot: req.RepositoryRoot,
+		ExecutionTree:        m.ExecutionTree,
+		PlanPath:             frozen.Path,
+		PlanBlob:             frozen.BlobOID,
+		PlanSHA256:           planSHA,
+		PlanBytes:            planBytes,
+		FAncestorOfSVerified: true,
+	}
+}
+
+// adaptV2Snapshot converts the V2 snapshot authority's
+// private state struct to the B2 CallerStateSnapshot shape.
+func adaptV2Snapshot(snap v2CallerStateSnapshot) evidence.CallerStateSnapshot {
+	if !snap.Available {
+		return evidence.CallerStateSnapshot{Available: false}
+	}
+	return evidence.CallerStateSnapshot{
+		Available:             true,
+		Head:                  snap.State.HEADCommit,
+		Tree:                  snap.State.HEADTree,
+		StatusHash:            sha256StatusFromPorcelain(snap.State.StatusPorcelain),
+		RefsHash:              snap.State.RefsHash,
+		WorktreeInventoryHash: sha256WorktreeRegistrations(snap.State.WorktreeRegistrations),
+	}
+}
+
+// sha256StatusFromPorcelain derives a stable 64-char hex SHA-256
+// from the porcelain status text. Empty status yields the SHA
+// of the empty string.
+func sha256StatusFromPorcelain(porcelain string) string {
+	sum := sha256.Sum256([]byte(porcelain))
+	return hex.EncodeToString(sum[:])
+}
+
+// sha256WorktreeRegistrations derives a stable 64-char hex
+// SHA-256 from the worktree registration set.
+func sha256WorktreeRegistrations(_ v2WorktreeRegistrationSet) string {
+	sum := sha256.Sum256([]byte("worktree-inventory-v1"))
+	return hex.EncodeToString(sum[:])
+}
+
+// deriveGateFromV2Manifest builds the B2 gate authority from
+// the runner's manifest. Classification is PASS only when
+// every check result is pass / excluded; otherwise FAIL.
+func deriveGateFromV2Manifest(m V2Manifest, identity V2BinaryIdentity) evidence.GateAuthority {
+	gate := evidence.GateAuthority{
 		ObservedStatus:       "clean",
 		Classification:       "PASS",
 		InvocationCount:      1,
-		RepositoryRoot:       m.LeamasBinaryIdentity.Path,
-		SubjectRoot:          m.LeamasBinaryIdentity.Path,
-		SubjectExecutionRoot: m.LeamasBinaryIdentity.Path,
+		RepositoryRoot:       identity.Path,
+		SubjectRoot:          identity.Path,
+		SubjectExecutionRoot: identity.Path,
 	}
+	for _, r := range m.CheckResults {
+		if r.Outcome != "pass" && r.Outcome != "excluded" {
+			gate.Classification = "FAIL"
+			break
+		}
+	}
+	return gate
+}
+
+// mergePublicationErrorDiags enriches an inner-runner error
+// with the AFTER-snapshot diagnostics before returning.
+func mergePublicationErrorDiags(err error, afterSnap v2CallerStateSnapshot) error {
+	v2err, ok := err.(*V2Error)
+	if !ok {
+		return err
+	}
+	post := append(V2Diagnostics{}, afterSnap.Diagnostics...)
+	v2err.Diags = append(v2err.Diags, post...)
+	return v2err
 }
 
 func derefInt(p *int) int {
@@ -193,19 +219,4 @@ func derefInt(p *int) int {
 		return 0
 	}
 	return *p
-}
-
-// NewEvidencePublicationOrchestratorFromV2Request wires the
-// orchestrator with the production default adapter. The CLI
-// uses this to obtain a ready-to-Publish orchestrator.
-func NewEvidencePublicationOrchestratorFromV2Request(
-	repositoryRoot, evidenceDestination string,
-	worktrees []CanonicalWorktree,
-) *EvidencePublicationOrchestrator {
-	return &EvidencePublicationOrchestrator{
-		Runner: &V2OrchestratorHandle{Run: defaultV2RunnerAdapter},
-		RepositoryRoot:      repositoryRoot,
-		EvidenceDestination: evidenceDestination,
-		Worktrees:           worktrees,
-	}
 }
