@@ -10,6 +10,12 @@ const (
 	GateFail        GateStatus = "fail"
 	GateSkip        GateStatus = "skip"
 	GateUnavailable GateStatus = "unavailable"
+	// GateTimeout signals a runner-imposed deadline expiry.
+	// Distinct from GateFail because the underlying process
+	// status may have been a voluntary exit. v3 introduces
+	// timeout as a first-class per-check status; v1 and v2
+	// do not use it.
+	GateTimeout GateStatus = "timeout"
 )
 
 // LifecycleStatus is the normalized scope/parent lifecycle status.
@@ -44,6 +50,8 @@ func wireToGateStatus(wire string) GateStatus {
 		return GatePass
 	case "fail":
 		return GateFail
+	case "timeout":
+		return GateTimeout
 	case "skip":
 		return GateSkip
 	case "unavailable":
@@ -162,20 +170,27 @@ type Check struct {
 // Summary is the common normalized domain model for v1, v2, and v3.
 // All slices and pointers are newly owned; no aliasing with decoder state.
 //
-// Counts, EvidenceHashes, and the per-check ID/Order/ExecutionClass
-// fields are only populated for v3 documents.
+// Counts, EvidenceHashes, the per-check ID/Order/ExecutionClass
+// fields, and the four parallel name arrays are only populated for
+// v3 documents. The semantic validator (`validateV3NameLists`)
+// cross-checks the name arrays against the actual per-check
+// statuses.
 type Summary struct {
-	SchemaVersion Version
-	GeneratedAt   string
+	SchemaVersion   Version
+	GeneratedAt     string
 
-	Tool           *string
-	Scope          *Scope
-	Parent         *Parent
-	Overall        Overall
-	Execution      *ExecutionBinding
-	Worktree       *WorktreeState
-	EvidenceHashes *EvidenceHashes
-	Counts         Counts
+	Tool            *string
+	Scope           *Scope
+	Parent          *Parent
+	Overall         Overall
+	Execution       *ExecutionBinding
+	Worktree        *WorktreeState
+	EvidenceHashes  *EvidenceHashes
+	Counts          Counts
+	FailedNames     []string
+	TimeoutNames    []string
+	SkippedNames    []string
+	UnavailableNames []string
 
 	Checks []Check
 }

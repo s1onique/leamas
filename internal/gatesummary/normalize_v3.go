@@ -58,6 +58,10 @@ func projectV3(wire V3Summary) (Summary, error) {
 			Skip:        wire.Counts.Skip,
 			Unavailable: wire.Counts.Unavailable,
 		},
+		FailedNames:      append([]string(nil), wire.FailedNames...),
+		TimeoutNames:     append([]string(nil), wire.TimeoutNames...),
+		SkippedNames:     append([]string(nil), wire.SkippedNames...),
+		UnavailableNames: append([]string(nil), wire.UnavailableNames...),
 		Checks: make([]Check, len(wire.Checks)),
 	}
 

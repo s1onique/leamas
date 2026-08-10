@@ -77,9 +77,13 @@ func Normalize(doc Document) NormalizationResult {
 	}
 
 	// Stage 5: Run version-specific semantic validators
-	if doc.Version() == Version2 {
+	switch doc.Version() {
+	case Version1:
+		// v1 has no application-level semantic invariants beyond
+		// the JSON-Schema-level structural ones already enforced by
+		// the decoder.
+	case Version2:
 		var ds diagnosticSet
-
 		// Duplicate check names
 		for _, d := range validateCheckNames(candidate.Checks) {
 			ds.add(d)
@@ -107,10 +111,42 @@ func Normalize(doc Document) NormalizationResult {
 			}
 		}
 
-		// Stage 7: Collect and deterministically order diagnostics
 		diagnostics := ds.emit()
+		if len(diagnostics) > 0 {
+			return NormalizationResult{
+				Diagnostics: diagnostics,
+			}
+		}
+	case Version3:
+		var ds diagnosticSet
+		// Top-level `counts` arithmetic vs len(checks) and sum of
+		// per-status counts.
+		for _, d := range validateV3Counts(candidate) {
+			ds.add(d)
+		}
+		// Four parallel name arrays must agree with per-check
+		// statuses and must be unique.
+		for _, d := range validateV3NameLists(candidate) {
+			ds.add(d)
+		}
+		// Per-check overall status derivation (same predicate as
+		// v2, but exercised on the v3 wire's per-check statuses).
+		for _, d := range validateOverallStatus(candidate.Checks, candidate.Overall.Status) {
+			ds.add(d)
+		}
+		// Cleanliness validation is identical to v2 (same wire
+		// fields and same enum).
+		if candidate.Scope != nil {
+			for _, d := range validateCleanliness(
+				candidate.Scope.Status,
+				candidate.Worktree.CleanBefore,
+				candidate.Worktree.CleanAfter,
+			) {
+				ds.add(d)
+			}
+		}
 
-		// Stage 8: Publish Summary only when diagnostics are empty
+		diagnostics := ds.emit()
 		if len(diagnostics) > 0 {
 			return NormalizationResult{
 				Diagnostics: diagnostics,
