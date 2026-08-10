@@ -88,7 +88,7 @@ func validateCheckMap(index int, raw any, seenIDs map[string]struct{}) error {
 			Message:      fmt.Sprintf("checks[%d].id is required", index),
 		}
 	}
-	if !itemIDPattern.MatchString(id) || containsClosurePlaceholder(id) {
+	if !ItemIDPattern.MatchString(id) || containsClosurePlaceholder(id) {
 		return &DecodeError{
 			Code:         "invalid_check_id",
 			Field:        fmt.Sprintf("checks[%d].id", index),
@@ -263,7 +263,7 @@ func validateRunnableCheckMap(index int, check map[string]any) error {
 		}
 	}
 	for name, rawValue := range env {
-		if !environmentNamePattern.MatchString(name) {
+		if !EnvironmentNamePattern.MatchString(name) {
 			return &DecodeError{
 				Code:         "invalid_env_name",
 				Field:        fmt.Sprintf("checks[%d].environment.%s", index, name),

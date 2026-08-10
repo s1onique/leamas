@@ -1,12 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package closure - plan_contract_single_authority_test.go
-// is the B2-R7 AST/source-inspection guard for the
+// is the B2-R7-R1 AST/source-inspection guard for the
 // closure package's Plan Contract semantic authority.
 //
-// B2-R7 single-authority rule: every wire-contract rule
-// for the Plan Contract v1 lives in the plancontract
-// leaf. The closure package's legacy typed validators
+// See plan_contract_single_authority_helpers_test.go for
+// the supporting helper functions and the guard
+// documentation.
+package closure
+
+
+
+// Package closure - plan_contract_single_authority_test.go
+// is the B2-R7-R1 AST/source-inspection guard for the
+// closure package's Plan Contract semantic authority.
+//
+// B2-R7-R1 single-authority rule: every wire-contract rule
+// for the Plan Contract v1 lives in the plancontract leaf.
+// The closure package's legacy typed validators
 // (validatePlanTyped, ValidateRunnerAuthority, etc.) are
 // adapters; their bodies MUST contain only:
 //
@@ -15,16 +26,24 @@
 //   - representation conversion (typed Plan <-> wire bytes).
 //
 // This test inspects the closure package's source files
-// for the legacy semantic-validator symbols and asserts
-// each body contains only the canonical-call /
-// adaptation / conversion primitives. If a future
-// refactor restores a real semantic rule inside the
-// closure package, the guard fires and the test fails.
+// for:
 //
-// The test uses go/parser rather than reflection so the
-// guard is deterministic across Go versions and does
-// not depend on private runtime state.
-package closure
+//   - legacy typed-validator symbols that contain
+//     non-canonical calls,
+//   - newly introduced validate*Plan / *Authority
+//     production functions that do not delegate to
+//     plancontract,
+//   - semantic comparisons against Plan fields
+//     (e.g. `if plan.X != Y`) that indicate an
+//     independent semantic rule,
+//   - direct regexp matching against Plan fields
+//     (e.g. `oidPattern.MatchString(plan.X)`) that
+//     indicate an independent shape rule.
+//
+// Drift in any of these categories is a contract bug; the
+// guard fails. The guard uses go/parser so it is
+// deterministic across Go versions and does not depend on
+// private runtime state.
 
 import (
 	"go/ast"
@@ -35,21 +54,39 @@ import (
 	"testing"
 )
 
-// semanticAuthoritySymbols is the closed list of legacy
-// typed-validator symbols the guard inspects. Adding a
-// new validator requires adding it here so the guard
-// stays complete.
-var semanticAuthoritySymbols = []string{
+// legacyValidatorSymbols is the closed list of legacy
+// typed-validator symbols the guard inspects. The named
+// functions MUST contain only canonical calls (or stdlib
+// calls); any other call fails the guard.
+var legacyValidatorSymbols = []string{
 	"ValidatePlan",
 	"ValidateRunnerAuthority",
 	"validatePlanTyped",
 }
 
-// allowedCallPrefixes is the closed list of call
-// prefixes that count as "canonical call /
-// adaptation / conversion" primitives. Any other call
-// inside a legacy validator body fails the guard.
-var allowedCallPrefixes = []string{
+// newValidatorRegex matches newly introduced production
+// functions whose names suggest a Plan Contract semantic
+// authority. Adding a function with such a name without
+// delegating to plancontract triggers the guard.
+//
+// The patterns are deliberately precise so the guard does
+// not fire on unrelated validators (e.g.
+// `validateV2EvidenceAuthority` is for the v2 evidence
+// domain, not the Plan Contract v1 wire format).
+var newValidatorRegex = []string{
+	"validatePlan",
+	"validatePlan[A-Z][a-zA-Z]*",
+	"validateAuthority",
+	"validateAuthority[A-Z][a-zA-Z]*",
+	"validate[A-Z][a-zA-Z]*Authority",
+}
+
+// adapterCallAllowedPrefixes is the closed list of call
+// prefixes that count as "canonical call / adaptation /
+// conversion" primitives for legacy validators. Stdlib
+// helpers (json, fmt, errors, strings) are allowed because
+// the adapter needs them to marshal / format errors.
+var adapterCallAllowedPrefixes = []string{
 	"plancontract.",
 	"adaptPlanContractError",
 	"adaptRunnerAuthorityError",
@@ -67,24 +104,73 @@ var allowedCallPrefixes = []string{
 	"decodeTypedPlan",
 	"loadPlan",
 	"err.Error",
-	"len(",
-	"nil",
 	"newSemanticError",
+	"isPolicyMissingField",
+	"errorsAsDecodeError",
+	"missingPolicyFields",
+}
+
+// planFieldNames is the closed list of Plan field names
+// the guard watches for semantic-comparison drift. A
+// production function that compares a Plan field to a
+// literal or constant is a candidate for an independent
+// semantic rule that the closure package must not own.
+var planFieldNames = []string{
+	"ContractVersion",
+	"ActID",
+	"Mode",
+	"Execution",
+	"Policy",
+	"RunnerAuthority",
+	"Baseline",
+	"Checks",
+	"Artifacts",
+}
+
+// planRegexHelpers is the closed list of regex variables
+// in the closure package whose MatchString against a Plan
+// field indicates an independent shape rule.
+var planRegexHelpers = []string{
+	"oidPattern",
+	"actIDPattern",
+	"itemIDPattern",
+	"environmentNamePattern",
+}
+
+// nonPlanValidatorAllowlist is the closed set of
+// pre-existing production validators that operate on a
+// non-Plan-contract domain (e.g. v2 evidence authority).
+// The guard skips these because their semantic authority
+// lives outside the Plan Contract v1 wire format.
+var nonPlanValidatorAllowlist = map[string]bool{
+	"validateV2EvidenceAuthority": true,
+}
+
+// isNonPlanValidator reports whether name belongs to the
+// allowlist of validators that operate on a non-Plan-contract
+// domain. The guard skips these so unrelated domain validators
+// do not trip the single-authority rule.
+func isNonPlanValidator(name string) bool {
+	return nonPlanValidatorAllowlist[name]
 }
 
 // TestPlanContractSingleSemanticAuthority is the
-// B2-R7 AST/source guard. It parses every closure-package
-// source file that contains a legacy semantic-validator
-// symbol and asserts the body contains only canonical
-// call / adaptation / conversion primitives. Drift here
-// is a contract bug; the test is the gate.
+// B2-R7-R1 AST/source guard. It walks every closure-package
+// production source file and asserts:
+//
+//   - every legacy validator body contains only canonical
+//     calls,
+//   - every newly introduced validate*Plan* / *Authority*
+//     production function delegates to plancontract,
+//   - no production function compares Plan fields to
+//     literals,
+//   - no production function matches Plan fields against
+//     the closure regex helpers.
 func TestPlanContractSingleSemanticAuthority(t *testing.T) {
 	t.Parallel()
 
 	fset := token.NewFileSet()
 	pkgs, err := parser.ParseDir(fset, ".", func(info os.FileInfo) bool {
-		// Skip generated and test files; the guard
-		// targets production authority surfaces.
 		name := info.Name()
 		if strings.HasSuffix(name, "_test.go") {
 			return false
@@ -94,6 +180,7 @@ func TestPlanContractSingleSemanticAuthority(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
+
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Files {
 			for _, decl := range file.Decls {
@@ -101,75 +188,31 @@ func TestPlanContractSingleSemanticAuthority(t *testing.T) {
 				if !ok || fn.Body == nil {
 					continue
 				}
-				if !semanticAuthoritySymbol(fn.Name.Name) {
-					continue
+				// Legacy validator symbol: only allow
+				// canonical calls in the body.
+				if legacySymbol(fn.Name.Name) {
+					assertOnlyAllowedCalls(t, fn)
 				}
-				assertOnlyAllowedCalls(t, fn)
+				// Newly introduced validator symbol:
+				// MUST delegate to plancontract (unless it
+				// is a pre-existing non-Plan validator in
+				// the explicit allowlist).
+				if isNewValidatorSymbol(fn.Name.Name) && !isNonPlanValidator(fn.Name.Name) {
+					assertDelegatesToPlanContract(t, fn)
+				}
+				// Semantic comparisons against Plan fields
+				// and direct regexp matching are only
+				// checked for functions whose name suggests
+				// they own a Plan Contract semantic rule.
+				// Other production functions (fixture
+				// builders, helpers) are not authority
+				// surfaces and may legitimately compare
+				// Plan fields.
+				if looksLikePlanContractAuthority(fn.Name.Name) {
+					assertNoPlanFieldSemanticComparisons(t, fn)
+					assertNoPlanFieldRegexMatching(t, fn)
+				}
 			}
 		}
 	}
-}
-
-func semanticAuthoritySymbol(name string) bool {
-	for _, sym := range semanticAuthoritySymbols {
-		if name == sym {
-			return true
-		}
-	}
-	return false
-}
-
-// assertOnlyAllowedCalls walks the function body and
-// fails the test if any call expression has a callee
-// that is NOT one of the allowed call prefixes. The
-// check is name-based; package-qualified names like
-// plancontract.DecodeAndValidateFull match the
-// "plancontract." prefix.
-func assertOnlyAllowedCalls(t *testing.T, fn *ast.FuncDecl) {
-	t.Helper()
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		switch e := call.Fun.(type) {
-		case *ast.SelectorExpr:
-			if !selectorAllowed(e) {
-				t.Fatalf("legacy validator %q contains non-canonical call %q; B2-R7 single-authority rule violated",
-					fn.Name.Name, selectorName(e))
-			}
-		case *ast.Ident:
-			if !identAllowed(e.Name) {
-				t.Fatalf("legacy validator %q contains non-canonical call %q; B2-R7 single-authority rule violated",
-					fn.Name.Name, e.Name)
-			}
-		}
-		return true
-	})
-}
-
-func selectorAllowed(e *ast.SelectorExpr) bool {
-	name := selectorName(e)
-	for _, prefix := range allowedCallPrefixes {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func identAllowed(name string) bool {
-	for _, prefix := range allowedCallPrefixes {
-		if strings.HasPrefix(name, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func selectorName(e *ast.SelectorExpr) string {
-	if id, ok := e.X.(*ast.Ident); ok {
-		return id.Name + "." + e.Sel.Name
-	}
-	return e.Sel.Name
 }

@@ -54,7 +54,7 @@ func validateArtifactsOptional(obj map[string]any) error {
 }
 
 // validateArtifactMap enforces the per-artifact rules:
-//   - id is present, matches itemIDPattern, and has no placeholder.
+//   - id is present, matches ItemIDPattern, and has no placeholder.
 //   - id is unique within the artifacts array.
 //   - path is a repository-relative path.
 //   - required is present (boolean).
@@ -79,7 +79,7 @@ func validateArtifactMap(index int, raw any, seenIDs map[string]struct{}) error 
 			Message:      fmt.Sprintf("artifacts[%d].id is required", index),
 		}
 	}
-	if !itemIDPattern.MatchString(id) || containsClosurePlaceholder(id) {
+	if !ItemIDPattern.MatchString(id) || containsClosurePlaceholder(id) {
 		return &DecodeError{
 			Code:         "invalid_artifact_id",
 			Field:        fmt.Sprintf("artifacts[%d].id", index),

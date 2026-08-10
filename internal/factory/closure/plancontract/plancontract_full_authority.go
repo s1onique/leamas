@@ -119,7 +119,7 @@ func validateToolBlock(tool map[string]any) error {
 			Message:      "runner_authority.tool.revision is required",
 		}
 	}
-	if !oidPattern.MatchString(revision) || containsClosurePlaceholder(revision) {
+	if !OIDPattern.MatchString(revision) || containsClosurePlaceholder(revision) {
 		return &DecodeError{
 			Code:         "invalid_tool_revision",
 			Field:        "runner_authority.tool.revision",
@@ -152,7 +152,7 @@ func validateToolBlock(tool map[string]any) error {
 	// lowercase hex. The OID pattern matches both lengths.
 	if v, ok := tool["tree_oid"]; ok {
 		s, isStr := v.(string)
-		if !isStr || (s != "" && !oidPattern.MatchString(s)) {
+		if !isStr || (s != "" && !OIDPattern.MatchString(s)) {
 			return &DecodeError{
 				Code:         "invalid_tool_tree_oid",
 				Field:        "runner_authority.tool.tree_oid",
@@ -164,7 +164,7 @@ func validateToolBlock(tool map[string]any) error {
 	// Optional tag_object_oid: same rule as tree_oid.
 	if v, ok := tool["tag_object_oid"]; ok {
 		s, isStr := v.(string)
-		if !isStr || (s != "" && !oidPattern.MatchString(s)) {
+		if !isStr || (s != "" && !OIDPattern.MatchString(s)) {
 			return &DecodeError{
 				Code:         "invalid_tool_tag_object_oid",
 				Field:        "runner_authority.tool.tag_object_oid",
@@ -177,6 +177,36 @@ func validateToolBlock(tool map[string]any) error {
 	// present; an empty string is the producer's "absent"
 	// signal and the canonical ValidatedPlan records it as
 	// empty so callers see exactly what the wire declared.
+	//
+	// B2-R7-R1 type parity: when present in the wire bytes,
+	// version and tag_name MUST be JSON strings. Wrong-type
+	// values (numbers, booleans, arrays, objects) MUST be
+	// rejected so the leaf agrees with the typed-Plan
+	// decoder about what shape is acceptable. Without this
+	// check the leaf silently coerces wrong-type wire
+	// values to "" while the typed decoder rejects them,
+	// creating a parity hole between execution and
+	// evidence.
+	if v, ok := tool["version"]; ok {
+		if _, isStr := v.(string); !isStr {
+			return &DecodeError{
+				Code:         "invalid_tool_version_type",
+				Field:        "runner_authority.tool.version",
+				InstancePath: "/runner_authority/tool/version",
+				Message:      "runner_authority.tool.version must be a JSON string",
+			}
+		}
+	}
+	if v, ok := tool["tag_name"]; ok {
+		if _, isStr := v.(string); !isStr {
+			return &DecodeError{
+				Code:         "invalid_tool_tag_name_type",
+				Field:        "runner_authority.tool.tag_name",
+				InstancePath: "/runner_authority/tool/tag_name",
+				Message:      "runner_authority.tool.tag_name must be a JSON string",
+			}
+		}
+	}
 	return nil
 }
 

@@ -61,7 +61,7 @@ func validateContractVersion(obj map[string]any) error {
 
 // validateActIDMap enforces:
 //   - act_id MUST be present.
-//   - act_id MUST match actIDPattern.
+//   - act_id MUST match ActIDPattern.
 //   - act_id MUST NOT contain any closure placeholder.
 func validateActIDMap(obj map[string]any) error {
 	actID, ok := obj["act_id"].(string)
@@ -73,7 +73,7 @@ func validateActIDMap(obj map[string]any) error {
 			Message:      "act_id is required",
 		}
 	}
-	if !actIDPattern.MatchString(actID) || containsClosurePlaceholder(actID) {
+	if !ActIDPattern.MatchString(actID) || containsClosurePlaceholder(actID) {
 		return &DecodeError{
 			Code:         "invalid_act_id",
 			Field:        "act_id",
@@ -130,7 +130,7 @@ func validateBaselineMap(baseline map[string]any) error {
 				Message:      fmt.Sprintf("baseline.%s %q contains a closure placeholder", field, v),
 			}
 		}
-		if !oidPattern.MatchString(v) {
+		if !OIDPattern.MatchString(v) {
 			return &DecodeError{
 				Code:         "invalid_baseline_oid",
 				Field:        "baseline." + field,

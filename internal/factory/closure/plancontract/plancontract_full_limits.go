@@ -9,8 +9,8 @@
 // file is the single source of truth for limits, patterns,
 // and placeholder sets; the closure package references
 // these via the public Max* / ContractVersionV1 exports
-// (see plancontract.go) and the canonical actIDPattern /
-// itemIDPattern / oidPattern / environmentNamePattern.
+// (see plancontract.go) and the canonical ActIDPattern /
+// ItemIDPattern / OIDPattern / EnvironmentNamePattern.
 //
 // ANY drift between this file and the closure package's
 // mirror constants is a contract bug; the execution/
@@ -54,18 +54,18 @@ const (
 // ----------------------------------------------------------------------------
 
 var (
-	actIDPattern           = regexp.MustCompile(`^ACT-[A-Z0-9][A-Z0-9-]{2,199}$`)
-	itemIDPattern          = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
-	oidPattern             = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+	ActIDPattern           = regexp.MustCompile(`^ACT-[A-Z0-9][A-Z0-9-]{2,199}$`)
+	ItemIDPattern          = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
+	OIDPattern             = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 	lowercaseHex64Pattern  = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+	EnvironmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
 // ----------------------------------------------------------------------------
 // Placeholder detection
 // ----------------------------------------------------------------------------
 
-var exactClosurePlaceholders = map[string]struct{}{
+var ExactClosurePlaceholders = map[string]struct{}{
 	"TBD":            {},
 	"TODO":           {},
 	"UNKNOWN":        {},
@@ -73,7 +73,7 @@ var exactClosurePlaceholders = map[string]struct{}{
 	"TO BE RECORDED": {},
 }
 
-var embeddedClosurePlaceholders = []string{
+var EmbeddedClosurePlaceholders = []string{
 	"(SEE GIT REV-PARSE)",
 	"<COMMIT>",
 	"<TREE>",
@@ -86,10 +86,10 @@ var embeddedClosurePlaceholders = []string{
 // insensitive and whitespace-trimmed.
 func containsClosurePlaceholder(value string) bool {
 	normalized := strings.ToUpper(strings.TrimSpace(value))
-	if _, found := exactClosurePlaceholders[normalized]; found {
+	if _, found := ExactClosurePlaceholders[normalized]; found {
 		return true
 	}
-	for _, marker := range embeddedClosurePlaceholders {
+	for _, marker := range EmbeddedClosurePlaceholders {
 		if strings.Contains(normalized, marker) {
 			return true
 		}
@@ -104,4 +104,18 @@ func containsClosurePlaceholder(value string) bool {
 // without leading/trailing whitespace.
 func trimSpaceLower(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
+}
+
+// ContainsClosurePlaceholder is the canonical placeholder
+// detector. The closure package aliases this function so
+// callers do not duplicate the placeholder rule. A true
+// return means the value carries a closure placeholder and
+// the leaf MUST reject it on the wire-contract path.
+//
+// B2-R7 single-source rule: this is the only public entry
+// point for the placeholder detector. The unexported
+// containsClosurePlaceholder exists as the canonical
+// implementation that the wire-contract validators use.
+func ContainsClosurePlaceholder(value string) bool {
+	return containsClosurePlaceholder(value)
 }

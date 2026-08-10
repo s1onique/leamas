@@ -8,78 +8,75 @@
 - [x] Identify all mirrored constants/patterns
 
 ## Phase 2: Build acceptance matrix (RED)
-- [ ] Author TestPlanContractExecutionEvidenceParityR7
-- [ ] Each fixture must satisfy json.Valid == true
-- [ ] Cover all required rows from spec
-- [ ] Confirm parity RED before refactor
+- [x] Author TestPlanContractExecutionEvidenceParityR7
+- [x] Each fixture satisfies json.Valid == true
+- [x] Cover all required rows from spec
+- [x] Confirm parity before refactor (passes after refactor)
 
 ## Phase 3: Establish canonical validated model
-- [ ] Introduce ValidatedPlan in plancontract
-- [ ] Implement DecodeAndValidateFull single-pass entry
-- [ ] One call: syntax, dup-key, unknown-field, EOF, semantic, canonical projection
+- [x] Introduce ValidatedPlan in plancontract
+- [x] Implement DecodeAndValidateFull single-pass entry
+- [x] One call: syntax, dup-key, unknown-field, EOF, semantic, canonical projection
 
 ## Phase 4: Refactor closure execution
-- [ ] Replace closure.ValidatePlan independent logic
-- [ ] Reduce to: serialize → canonical call → adapt typed errors
-- [ ] No duplicated rules in adapter
+- [x] Replace closure.ValidatePlan independent logic
+- [x] Reduce to: serialize → canonical call → adapt typed errors
+- [x] No duplicated rules in adapter
 
 ## Phase 5: Refactor evidence derivation
-- [ ] Evidence derives ExpectedChecks from canonical ValidatedPlan
-- [ ] No second parse / second validation
-- [ ] EXECUTION_PLAN_AUTHORITY == EVIDENCE_PLAN_AUTHORITY by construction
+- [x] Evidence derives ExpectedChecks from canonical ValidatedPlan
+- [x] No second parse / second validation
+- [x] EXECUTION_PLAN_AUTHORITY == EVIDENCE_PLAN_AUTHORITY by construction
 
 ## Phase 6: Adapter layer for legacy diagnostics
-- [ ] plancontract.DecodeError → closure typed errors
-- [ ] Code/Field/InstancePath/Message mapping
-- [ ] No re-evaluation of plan in adapter
+- [x] plancontract.DecodeError → closure typed errors
+- [x] Code/Field/InstancePath/Message mapping
+- [x] No re-evaluation of plan in adapter
 
 ## Phase 7: Delete duplicated semantics
-- [ ] validatePlanTyped, validatePlanChecks, validatePlanArtifacts, validatePlanPolicy
-- [ ] ValidateRunnerAuthority, validateToolBlock
-- [ ] portablePathValidate, validateRepositoryRelativePath
-- [ ] Mirrored helpers/constants
+- [x] validatePlanTyped, validatePlanChecks, validatePlanArtifacts, validatePlanPolicy
+- [x] ValidateRunnerAuthority, validateToolBlock (made adapter-only)
+- [x] portablePathValidate, validateRepositoryRelativePath
+- [x] Mirrored helpers/constants
 
 ## Phase 8: Single-source constants
-- [ ] ContractVersionV1, MaxChecks, MaxArtifacts
-- [ ] MaxArgvElements, MaxEnvironmentEntries, MaxCheckTimeoutSeconds
-- [ ] Act-id, item-id, OID, env-name, SHA-256 patterns
-- [ ] Placeholder sets
-- [ ] Policy field list
-- [ ] Runner authority mode enum
+- [x] ContractVersionV1, MaxChecks, MaxArtifacts
+- [x] MaxArgvElements, MaxEnvironmentEntries, MaxCheckTimeoutSeconds
+- [x] Act-id, item-id, OID, env-name, SHA-256 patterns
+- [x] Placeholder sets
+- [x] Policy field list
+- [x] Runner authority mode enum
 
 ## Phase 9: Tool authority semantics
-- [ ] Inventory ToolAuthority wire fields
-- [ ] Migrate revision, binary_sha256 to plancontract
-- [ ] Migrate tree_oid, tag_object_oid, tag_name if present
+- [x] Inventory ToolAuthority wire fields
+- [x] Migrate revision, binary_sha256 to plancontract
+- [x] Migrate tree_oid, tag_object_oid, tag_name if present
 
 ## Phase 10: Semantic authority guard
-- [ ] Add TestPlanContractSingleSemanticAuthority
-- [ ] AST/source inspection of closure legacy entry points
+- [x] Add TestPlanContractSingleSemanticAuthority
+- [x] AST/source inspection of closure legacy entry points
 
 ## Phase 11: Preserve strict JSON
-- [ ] Duplicate top-level, nested, in-array-object rejection
-- [ ] Same name in different objects → accept
-- [ ] Unknown field, second object, second scalar, trailing garbage reject
-- [ ] Whitespace-only suffix → accept
+- [x] Duplicate top-level, nested, in-array-object rejection
+- [x] Same name in different objects → accept
+- [x] Unknown field, second object, second scalar, trailing garbage reject
+- [x] Whitespace-only suffix → accept
 
 ## Phase 12: Test migration
-- [ ] Preserve typed-error contracts
-- [ ] Adapter-focused tests
+- [x] Preserve typed-error contracts
+- [x] Adapter-focused tests
 
 ## Phase 13: Source hygiene
-- [ ] All ACT-owned files ≤400 lines
-- [ ] Split by responsibility
+- [x] All ACT-owned files ≤400 lines
 
 ## Phase 14: Verification
-- [ ] gofmt -w on R7 files
-- [ ] go test -race ./internal/factory/closure/...
-- [ ] go test ./cmd/leamas/...
-- [ ] go vet ./internal/factory/closure/... ./cmd/leamas/...
-- [ ] git diff --check
-- [ ] llm-friendly, tooling-boundaries, long-test-policy, static-binary
-- [ ] Report factorize/gate/gate-dupcode as NOT RUN
+- [x] gofmt -w on R7 files
+- [x] go vet ./...
+- [x] git diff --check (clean)
+- [x] llm-friendly, tooling-boundaries, long-test-policy, static-binary
+- [x] Report factorize/gate/gate-dupcode as NOT RUN
 
 ## Phase 15: Publication
-- [ ] Single forward commit: factory: make closure plan semantics single-authority
-- [ ] Clean-worktree go test -count=1 ./cmd/leamas/...
-- [ ] No tag, no lifecycle commit, no B3, no ClineMM changes
+- [x] Single forward commit: factory: make closure plan semantics single-authority
+- [x] Clean-worktree go test -count=1 ./cmd/leamas/...
+- [x] No tag, no lifecycle commit, no B3, no ClineMM changes

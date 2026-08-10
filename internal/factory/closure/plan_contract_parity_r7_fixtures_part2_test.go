@@ -358,5 +358,42 @@ func r7ParityRowsPart2(t *testing.T, rows []r7Fixture) []r7Fixture {
 		})
 	}
 
+	// version number (raw JSON). Use raw-bytes fixture to
+	// exercise the wire-shape path because the typed
+	// PlanCheck.Version field is a string. We hand-craft
+	// the tool block with version:123 to bypass the
+	// omitempty default.
+	rows = append(rows, r7Fixture{
+		name:    "tool version number",
+		bytes:   []byte(`{"contract_version":1,"act_id":"ACT-R7-PARITY-01","baseline":{"commit_oid":"a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","tree_oid":"b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"},"execution":{"mode":"serial_fail_fast"},"checks":[{"id":"c1","mode":"run","argv":["go","test"],"working_directory":".","timeout_seconds":60,"environment":{"K":"V"}}],"artifacts":[{"id":"a1","path":"docs/a1.md","required":true,"max_bytes":1024,"media_type":"text/plain"}],"policy":{"require_clean_before":true,"require_clean_after":true,"forbid_tracked_full_digests":true,"require_diff_check":true},"runner_authority":{"mode":"tool_release_exact","tool":{"revision":"a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","binary_sha256":"c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3","version":123}}}`),
+		plan:    Plan{},
+		wantErr: true,
+	})
+
+	// tag_name number (raw JSON).
+	rows = append(rows, r7Fixture{
+		name:    "tool tag_name number",
+		bytes:   []byte(`{"contract_version":1,"act_id":"ACT-R7-PARITY-01","baseline":{"commit_oid":"a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","tree_oid":"b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2"},"execution":{"mode":"serial_fail_fast"},"checks":[{"id":"c1","mode":"run","argv":["go","test"],"working_directory":".","timeout_seconds":60,"environment":{"K":"V"}}],"artifacts":[{"id":"a1","path":"docs/a1.md","required":true,"max_bytes":1024,"media_type":"text/plain"}],"policy":{"require_clean_before":true,"require_clean_after":true,"forbid_tracked_full_digests":true,"require_diff_check":true},"runner_authority":{"mode":"tool_release_exact","tool":{"revision":"a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","binary_sha256":"c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3","tag_name":456}}}`),
+		plan:    Plan{},
+		wantErr: true,
+	})
+
+	// version + tag_name as strings (accepted).
+	{
+		b := newR7Builder()
+		b.plan.RunnerAuthority = &RunnerAuthority{
+			Mode: RunnerAuthorityToolReleaseExact,
+			Tool: &ToolAuthority{
+				Revision:     "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+				BinarySHA256: "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+				Version:      "v1.2.3",
+				TagName:      "leamas-v1.2.3",
+			},
+		}
+		rows = append(rows, r7Fixture{
+			name: "tool version+tag_name strings", bytes: b.bytes(t), plan: b.plan, wantErr: false,
+		})
+	}
+
 	return rows
 }
