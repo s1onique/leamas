@@ -113,12 +113,19 @@ type RunClosureProtocolV2ExecuteDeps struct {
 	// resolve S and S^{tree} before B1. The default is
 	// RealGit. Tests may inject a fake.
 	GitClient gitClient
-	// OperationalCleanupError reports external OutputRoot
-	// hygiene failures. The field is NOT folded into the
-	// B2 CleanupAuthority — its cleanup is operational
-	// hygiene that runs AFTER the authoritative
-	// observation is assembled.
-	OperationalCleanupError string
+	// (OPERATIONAL CLEANUP NOTE: the external binary
+	// OutputRoot is NOT cleaned up by this non-publishing
+	// adapter. The R6-B frozen lifetime is:
+	//
+	//   B1 binary
+	//   -> GateCollector
+	//   -> B2 observation/candidate proof
+	//   -> ONLY THEN external OutputRoot cleanup
+	//
+	// The cleanup is operational hygiene that belongs to
+	// the caller / orchestrator (R6-C). Operators can read
+	// obs.Binary.BinaryPath and remove the external binary
+	// after the B2 candidate has been verified.)
 }
 
 // RunClosureProtocolV2ExecuteWithDeps is the seam over
@@ -274,6 +281,25 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	if collector.Calls() != 1 {
 		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate invocation count %d != 1", collector.Calls())
 	}
+	// R6-B-CORRECTION02: the gate failure modes must fail
+	// the integration closed. The collector records the
+	// observed failure; the integration MUST surface it
+	// as a typed error so the B2 predicate never sees a
+	// truncated, timed-out, or nonzero-exit gate.
+	gate := execResult.Result.GateCapture
+	if gate.TimedOut {
+		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate timeout")
+	}
+	if gate.StdoutTruncated || gate.StderrTruncated {
+		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate output truncated")
+	}
+	if gate.ExitCode != 0 {
+		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate nonzero exit (%d)", gate.ExitCode)
+	}
+	// The lane-results check has been removed: the canonical
+	// GateCollector records whatever the parser extracts
+	// from the raw output. The B2 predicates assess the
+	// captured status / findings / lane flags separately.
 	classification := evidence.ClassifyACTOwnedGate(evidence.ClassificationInputs{
 		ObservedStatus:   execResult.Result.GateCapture.ExecGateObservedStatus,
 		ObservedFindings: execResult.Result.GateCapture.PreExistingFindings,
@@ -364,24 +390,23 @@ func RunClosureProtocolV2ExecuteWithDeps(
 		CallerAfter:  b2After,
 		Cleanup:      cleanup,
 	}
-	// Phase 10: Best-effort external binary OutputRoot
-	// cleanup. The cleanup is operational hygiene; it
-	// runs AFTER the authoritative observation has been
-	// constructed so it cannot influence the B2 evidence.
-	// Failures are reported in the operational record
-	// (seamDeps.OperationalCleanupError) but do NOT
-	// mutate the canonical B2 CleanupAuthority.
-	operationalErr := externalBinaryOutputRootHygiene(outputRoot, outputName)
-	if operationalErr != nil {
-		merged := mergeCleanupError(seamDeps.OperationalCleanupError, operationalErr.Error())
-		// The seam is shared by value; the caller can
-		// observe the operational error via the value
-		// returned through seamDeps.OperationalCleanupError
-		// in a future ACT. For now the merged error is
-		// surfaced only via the integration's structured
-		// log so the operational reporter can pick it up.
-		_ = merged
-	}
+	// R6-B-CORRECTION02: the external binary OutputRoot
+	// is intentionally NOT cleaned up by this non-publishing
+	// adapter. The R6-B frozen lifetime is:
+	//
+	//   B1 binary
+	//   -> GateCollector
+	//   -> B2 observation/candidate proof
+	//   -> ONLY THEN external OutputRoot cleanup
+	//
+	// Cleaning up inside the adapter would delete the
+	// exact binary referenced by obs.Binary.BinaryPath
+	// before the caller has verified the B2 candidate,
+	// breaking the B2 correlation. The cleanup is
+	// operational hygiene that belongs to the caller /
+	// orchestrator (R6-C). The BinaryPath handed back
+	// points to the live binary file until the cleanup
+	// owner removes it.
 	return execResult.Manifest, obs, nil
 }
 

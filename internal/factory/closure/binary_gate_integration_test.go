@@ -313,10 +313,58 @@ func TestClosureBinaryGateFailureMatrix(t *testing.T) {
 			wantSub: "build failed",
 		},
 		{
+			name:    "wrong B1 identity (BinaryCommit != SubjectCommit)",
+			buildFn: makeFakeBinaryBuilderWithCommit(binaryPath, strings.Repeat("0", 40)),
+			runner:  &r6BRecordingRunner{},
+			wantSub: "binary_commit",
+		},
+		{
 			name:    "unsafe OutputRoot",
 			buildFn: makeFakeBinaryBuilderWithUnsafeOutput(),
 			runner:  &r6BRecordingRunner{},
 			wantSub: "permission",
+		},
+		{
+			name:    "gate spawn failure",
+			buildFn: r6BStubBuildFn(t),
+			runner:  &r6BRecordingRunner{spawnFail: true},
+			wantSub: "gate",
+		},
+		{
+			name:    "gate timeout",
+			buildFn: r6BStubBuildFn(t),
+			runner:  &r6BRecordingRunner{timeOut: true},
+			wantSub: "gate timeout",
+		},
+		{
+			name:    "gate stdout truncation",
+			buildFn: r6BStubBuildFn(t),
+			runner:  &r6BRecordingRunner{stdoutTrunc: true},
+			wantSub: "truncated",
+		},
+		{
+			name:    "gate stderr truncation",
+			buildFn: r6BStubBuildFn(t),
+			runner:  &r6BRecordingRunner{stderrTrunc: true},
+			wantSub: "truncated",
+		},
+		{
+			name:    "gate nonzero exit",
+			buildFn: r6BStubBuildFn(t),
+			runner:  &r6BRecordingRunner{nonZero: true},
+			wantSub: "nonzero exit",
+		},
+		{
+			name:    "classification FAIL",
+			buildFn: r6BStubBuildFn(t),
+			runner:  &r6BRecordingRunner{nonZero: true},
+			wantSub: "nonzero exit",
+		},
+		{
+			name:    "classification UNAVAILABLE",
+			buildFn: r6BStubBuildFn(t),
+			runner:  &r6BRecordingRunner{timeOut: true},
+			wantSub: "timeout",
 		},
 	}
 	for _, c := range cases {
@@ -431,14 +479,12 @@ func TestClosureBinaryGateRealHappyPathProduction(t *testing.T) {
 			RunID:          "r6b-real-happy",
 			EvidenceDir:    r6BEvidenceDir(t),
 		})
-	// Happy-path: the real B1 must produce a valid binary
-	// whose identity the B2 barrier accepts.
+	// R6-B-CORRECTION02: the real path MUST fail this test
+	// on failure. The log-and-pass behaviour previously
+	// hidden behind t.Logf is removed. The test asserts the
+	// binary is alive BEFORE the B2 candidate is built.
 	if err != nil {
-		// The real B1 may fail in a constrained test
-		// environment (no Go toolchain, no full source
-		// tree, etc.). Fall back to the seam to prove
-		// the B2 plumbing still derives COMPLETE.
-		t.Logf("real B1 path unavailable in this environment: %v; falling back to seam", err)
+		t.Fatalf("real B1 path failed: %v", err)
 	} else {
 		if obs.Binary.BinaryPath == "" {
 			t.Fatalf("real B1 produced empty BinaryPath")
@@ -451,6 +497,29 @@ func TestClosureBinaryGateRealHappyPathProduction(t *testing.T) {
 		}
 		if obs.Gate.InvocationCount != 1 {
 			t.Fatalf("gate invocation count = %d, want 1", obs.Gate.InvocationCount)
+		}
+		// Lifetime: the binary referenced by obs.Binary.BinaryPath
+		// MUST still exist at the moment the B2 candidate is
+		// built. The non-publishing adapter does not clean
+		// the external OutputRoot; the caller does.
+		if _, err := os.Stat(obs.Binary.BinaryPath); err != nil {
+			t.Fatalf("binary %s should still exist after B1: %v", obs.Binary.BinaryPath, err)
+		}
+		// B2 barrier must accept the observation.
+		prepared, err := evidence.PrepareClosureEvidenceForPublication(evidence.BuildClosureEvidenceCandidate(evidence.CandidateInputs{
+			Runtime:      obs.Runtime,
+			Results:      obs.Results,
+			Gate:         obs.Gate,
+			Binary:       obs.Binary,
+			CallerBefore: obs.CallerBefore,
+			CallerAfter:  obs.CallerAfter,
+			Cleanup:      obs.Cleanup,
+		}))
+		if err != nil {
+			t.Fatalf("B2 barrier refused real-path candidate: %v", err)
+		}
+		if got := evidence.DeriveClosureEvidenceCompleteness(prepared.Document()); got != evidence.EvidenceComplete {
+			t.Fatalf("B2 candidate verdict = %s, want COMPLETE", got)
 		}
 	}
 }

@@ -137,9 +137,11 @@ func r6BStubBuildFn(t *testing.T) func(context.Context, ExactSubjectBinaryReques
 // this to construct a B1 result whose BinaryCommit is
 // explicitly different from the subject commit so the
 // "wrong B1 identity" failure row can assert the run fails
-// closed.
+// closed. The SourceCommit and SourceTree are intentionally
+// pinned to the request so the B2 predicates can match
+// (or not match) on the wrong-binary failure row.
 func makeFakeBinaryBuilderWithCommit(binaryPath, binaryCommit string) func(context.Context, ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
-	return func(_ context.Context, _ ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
+	return func(_ context.Context, req ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
 		data, err := os.ReadFile(binaryPath)
 		if err != nil {
 			return ExactSubjectBinaryResult{}, err
@@ -150,8 +152,8 @@ func makeFakeBinaryBuilderWithCommit(binaryPath, binaryCommit string) func(conte
 			BinarySHA256:              hex.EncodeToString(sum[:]),
 			BinaryCommit:              binaryCommit,
 			BinaryModified:            false,
-			SourceCommit:              strings.Repeat("a", 40),
-			SourceTree:                strings.Repeat("b", 40),
+			SourceCommit:              req.SubjectCommit,
+			SourceTree:                req.SubjectTree,
 			SourceClean:               true,
 			SourceDetached:            true,
 			OutputOutsideAllWorktrees: true,
