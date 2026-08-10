@@ -18,12 +18,26 @@ package closure
 //   - linked worktree registration is removed via
 //     `git worktree remove --force` + `git worktree prune`
 //     before filesystem removal (Phase 6)
+//
+// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-SUBJECT-OBSERVATION-
+// AUTHORITY01 (R6-A) extends the executor result so the
+// detached subject worktree's lifetime is captured in
+// typed observation fields. The executor is the single
+// authority for every fact that can only be observed while
+// the live S worktree exists; downstream code MUST NOT
+// reconstruct that authority from caller roots, manifests,
+// topology guesses, hard-coded booleans, post-cleanup
+// filesystem inspection, or synthetic hashes.
+//
+// V2ExecuteRequest and V2ExecuteResult live in
+// subject_execution_types.go so this file can focus on the
+// production flow and stay under the LLM-friendly
+// 400-line threshold.
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -43,28 +57,6 @@ type V2SubjectExecutor interface {
 	ExecuteSubjectChecks(ctx context.Context, req V2ExecuteRequest) (V2ExecuteResult, error)
 }
 
-// V2ExecuteRequest captures the inputs the executor needs to
-// run checks against S^{tree}.
-type V2ExecuteRequest struct {
-	RepositoryRoot  string
-	SubjectCommit   string
-	SubjectTree     string
-	EvidenceDir     string
-	Checks          []PlanCheck
-	CommandExecutor commandExecutor
-	Now             func() time.Time
-}
-
-// V2ExecuteResult captures the deterministic outputs of the
-// subject-tree execution. CheckResults mirrors the v1 schema
-// so the manifest can reuse the existing parser.
-type V2ExecuteResult struct {
-	ObservedTree string
-	CheckResults []CheckResult
-	Evidence     []EvidenceRecord
-	CleanupError string
-}
-
 // GitV2SubjectExecutor creates a detached worktree and runs
 // checks via the supplied command executor. The executor is
 // safe to call with a nil command executor (defaults to
@@ -82,43 +74,18 @@ func NewGitV2SubjectExecutor(g gitClient) *GitV2SubjectExecutor {
 	return &GitV2SubjectExecutor{Git: g}
 }
 
-// v2CleanupReport records the three cleanup stages that
-// Git's linked-worktree machinery requires. HasError reports
-// whether any stage failed; Summary produces a single-line
-// human-readable digest for V2ExecuteResult.CleanupError.
-type v2CleanupReport struct {
-	WorktreeRemoveError   error
-	PruneError            error
-	FilesystemRemoveError error
-}
-
-func (r v2CleanupReport) HasError() bool {
-	return r.WorktreeRemoveError != nil || r.PruneError != nil || r.FilesystemRemoveError != nil
-}
-
-func (r v2CleanupReport) Summary() string {
-	var parts []string
-	if r.WorktreeRemoveError != nil {
-		parts = append(parts, r.WorktreeRemoveError.Error())
-	}
-	if r.PruneError != nil {
-		parts = append(parts, r.PruneError.Error())
-	}
-	if r.FilesystemRemoveError != nil {
-		parts = append(parts, r.FilesystemRemoveError.Error())
-	}
-	return strings.Join(parts, "; ")
-}
-
 // ExecuteSubjectChecks creates a temporary detached worktree
 // at the supplied subject commit, verifies the observed tree,
-// runs the supplied checks, and cleans up. The function never
-// touches the caller checkout.
+// captures every R6-A subject observation while the worktree
+// is alive, runs the supplied checks, and cleans up. The
+// function never touches the caller checkout.
 //
 // Failure modes propagate as V2Error:
 //   - subject commit / tree mismatch
 //   - worktree creation failure
 //   - observed tree OID != subject tree OID
+//   - subject identity / status / refs / inventory
+//     observation failure (R6-A)
 //   - check execution failure
 //   - cleanup failure (Phase 4: prevents clean success)
 func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2ExecuteRequest) (V2ExecuteResult, error) {
@@ -146,14 +113,22 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		context.Background(), defaultV2CleanupTimeout,
 	)
 	defer cancelCleanup()
-	cleanupGit := func(args ...string) gitCommandResult {
-		return e.Git.Run(cleanupContext, req.RepositoryRoot, args...)
-	}
 	worktreePath, err := os.MkdirTemp("", "leamas-v2-worktree-*")
 	if err != nil {
 		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("create temp dir: %s", err.Error()),
 			"execution_tree", err.Error())
+	}
+	// R6-A Phase 7: capture the Before inventory (porcelain -z).
+	// This snapshot is the no-leak baseline for the After
+	// comparison. A failure here fails closed immediately.
+	beforeInv := observeSubjectWorktreeInventory(cleanupContext, e.Git, req.RepositoryRoot)
+	if !beforeInv.Available {
+		_ = os.RemoveAll(worktreePath)
+		return V2ExecuteResult{
+			SubjectWorktreePath:           worktreePath,
+			SubjectObservationDiagnostics: beforeInv.Diagnostics,
+		}, &V2Error{Diags: beforeInv.Diagnostics}
 	}
 	// Phase 3 (LIFECYCLE-INVARIANTS01): capture the
 	// worktree registrations BEFORE we add ours so the
@@ -166,50 +141,133 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 	// diagnostic and the executor refuses to proceed.
 	beforeRegSnap := snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
 	if !beforeRegSnap.Available {
-		return V2ExecuteResult{}, &V2Error{Diags: beforeRegSnap.Diagnostics}
+		_ = os.RemoveAll(worktreePath)
+		return V2ExecuteResult{
+			SubjectWorktreePath:           worktreePath,
+			WorktreeInventoryBefore:       beforeInv,
+			SubjectObservationDiagnostics: beforeRegSnap.Diagnostics,
+		}, &V2Error{Diags: beforeRegSnap.Diagnostics}
 	}
 	// Cleanup runs in-scope so the result captures its
 	// outcome. The previous deferred-local-variable pattern
 	// leaked the report; this model folds the report into the
-	// final return BEFORE propagating.
-	cleanup := func() v2LifecycleCleanupReport {
-		report := v2LifecycleCleanupReport{Before: beforeRegSnap.Registrations}
-		rmResult := cleanupGit("worktree", "remove", "--force", worktreePath)
-		if rmResult.Err != nil || rmResult.ExitCode != 0 {
-			report.Stages.WorktreeRemoveError = fmt.Errorf("git worktree remove --force %s: %s",
-				worktreePath, strings.TrimSpace(string(rmResult.Stderr)))
-		}
-		pruneResult := cleanupGit("worktree", "prune")
-		if pruneResult.Err != nil || pruneResult.ExitCode != 0 {
-			report.Stages.PruneError = fmt.Errorf("git worktree prune: %s",
-				strings.TrimSpace(string(pruneResult.Stderr)))
-		}
-		if err := os.RemoveAll(worktreePath); err != nil {
-			report.Stages.FilesystemRemoveError = err
-		}
-		afterRegSnap := snapshotWorktreeRegistrations(cleanupContext, e.Git, req.RepositoryRoot)
-		if afterRegSnap.Available {
-			report.After = afterRegSnap.Registrations
-		} else {
-			// The after snapshot is fail-closed: a missing
-			// inventory after cleanup is recorded as a
-			// stage error so the lifecycle report can
-			// surface it via HasError().
-			report.Stages.WorktreeRemoveError = fmt.Errorf(
-				"worktree inventory observation failed after cleanup: %s",
-				diagMessage(afterRegSnap.Diagnostics))
-		}
-		return report
-	}
+	// final return BEFORE propagating. The implementation
+	// lives in subject_execution_observation.go so the
+	// executor flow stays linear.
+	cleanup, captureAfterInventory := newSubjectWorktreeLifecycle(
+		cleanupContext, e.Git, req.RepositoryRoot, worktreePath, beforeRegSnap,
+	)
+	// The afterFailure helper folds every post-worktree-add
+	// failure path into a canonical V2ExecuteResult; the
+	// implementation lives in subject_execution_observation.go
+	// so the executor flow stays linear and under the
+	// LLM-friendly line threshold.
+	afterFailure := newSubjectAfterFailure(cleanup, captureAfterInventory, req.TopologyFacts)
 
 	addResult := e.Git.Run(ctx, req.RepositoryRoot, "worktree", "add", "--detach", worktreePath, req.SubjectCommit)
 	if addResult.Err != nil || addResult.ExitCode != 0 {
-		_ = cleanup()
-		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+		err := NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("git worktree add --detach %s %s failed: %s",
 				worktreePath, req.SubjectCommit,
 				strings.TrimSpace(string(addResult.Stderr))),
 			"execution_tree", "")
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			originalErr:  err,
+		})
+	}
+	// R6-A Phase 4: capture live S identity. The result
+	// becomes the canonical subject identity used by every
+	// downstream consumer.
+	identity := observeLiveSubjectIdentity(ctx, e.Git, worktreePath, req.SubjectCommit)
+	if !identity.Available {
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			subjectDiags: identity.Diagnostics,
+			originalErr:  &V2Error{Diags: identity.Diagnostics},
+		})
+	}
+	// R6-A Phase 5: status authority. Empty bytes are
+	// legitimate; the typed observation is the only
+	// available/empty distinguisher.
+	statusObs := observeSubjectStatus(ctx, e.Git, worktreePath)
+	if !statusObs.Available {
+		diag := V2Diagnostics{{
+			Code:         V2CodeSubjectObservationUnavailable,
+			Message:      statusObs.Error,
+			PropertyName: "subject_status",
+		}}
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			subjectDiags: diag,
+			originalErr:  &V2Error{Diags: diag},
+		})
+	}
+	// R6-A Phase 6: refs authority. The act forbids a
+	// second refs representation; we reuse the canonical
+	// snapshotCallerRefs.
+	refsObs := observeSubjectRefs(ctx, e.Git, worktreePath)
+	if !refsObs.Available {
+		diag := V2Diagnostics{{
+			Code:         V2CodeSubjectObservationUnavailable,
+			Message:      refsObs.Error,
+			PropertyName: "subject_refs",
+		}}
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			subjectDiags: diag,
+			originalErr:  &V2Error{Diags: diag},
+		})
+	}
+	// R6-A Phase 7: AtSubject inventory.
+	atSubjInv := observeSubjectWorktreeInventory(ctx, e.Git, req.RepositoryRoot)
+	if !atSubjInv.Available {
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			subjectDiags: atSubjInv.Diagnostics,
+			originalErr:  &V2Error{Diags: atSubjInv.Diagnostics},
+		})
+	}
+	// R6-A Phase 8: bind the (SubjectWorktreePath, S)
+	// registration.
+	reg, hasReg := atSubjInv.FindByPath(worktreePath)
+	if !hasReg {
+		diag := subjectRegistrationMissingDiag(worktreePath)
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			subjectDiags: diag,
+			originalErr:  &V2Error{Diags: diag},
+		})
+	}
+	if reg.Head != req.SubjectCommit {
+		diag := subjectRegistrationMismatchDiag(worktreePath, reg.Head, req.SubjectCommit)
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			subjectDiags: diag,
+			originalErr:  &V2Error{Diags: diag},
+		})
 	}
 	// Build the success path step by step. Each step can
 	// short-circuit with an error, but cleanup ALWAYS runs
@@ -221,32 +279,41 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 	)
 	observedTree, err = runGitValue(ctx, e.Git, worktreePath, "rev-parse", "HEAD^{tree}")
 	if err != nil {
-		report := cleanup()
-		result := V2ExecuteResult{CleanupError: report.Summary()}
-		return result, wrapWithCleanup(err, report)
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			originalErr:  err,
+		})
 	}
 	if observedTree != req.SubjectTree {
 		err = NewV2ErrorWith(V2CodeExecutionTreeMismatch,
 			fmt.Sprintf("observed tree %s does not match subject tree %s",
 				observedTree, req.SubjectTree),
 			"execution_tree", observedTree)
-		report := cleanup()
-		result := V2ExecuteResult{
-			ObservedTree: observedTree,
-			CleanupError: report.Summary(),
-		}
-		return result, wrapWithCleanup(err, report)
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			originalErr:  err,
+		})
 	}
 	if err = os.MkdirAll(req.EvidenceDir, 0o700); err != nil {
 		err = NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("create evidence dir: %s", err.Error()),
 			"evidence_directory", err.Error())
-		report := cleanup()
-		result := V2ExecuteResult{
-			ObservedTree: observedTree,
-			CleanupError: report.Summary(),
-		}
-		return result, wrapWithCleanup(err, report)
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			originalErr:  err,
+		})
 	}
 	executor := req.CommandExecutor
 	if executor == nil {
@@ -268,11 +335,26 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 	// and its report is folded into the result AND the
 	// surfaced error.
 	report := cleanup()
+	after := captureAfterInventory()
 	result := V2ExecuteResult{
-		ObservedTree: observedTree,
-		CheckResults: checks,
-		Evidence:     evidence,
-		CleanupError: report.Summary(),
+		ObservedTree:                 observedTree,
+		CheckResults:                 checks,
+		Evidence:                     evidence,
+		CleanupError:                 report.Summary(),
+		SubjectWorktreePath:          worktreePath,
+		SubjectHead:                  identity.Head,
+		SubjectTree:                  identity.Tree,
+		SubjectDetached:              identity.Detached,
+		StatusObservation:            statusObs,
+		RefsObservation:              refsObs,
+		WorktreeInventoryBefore:      beforeInv,
+		WorktreeInventoryAtSubject:   atSubjInv,
+		WorktreeInventoryAfter:       after,
+		SubjectRegistration:          reg,
+		SubjectRegistrationAvailable: true,
+		TopologyFacts:                req.TopologyFacts,
+		SubjectCleanupObserved:       true,
+		SubjectCleanupError:          report.Summary(),
 	}
 	if report.HasError() && err == nil {
 		err = NewV2ErrorWith(V2CodeCleanupFailed,
@@ -285,44 +367,10 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 	return result, nil
 }
 
-// wrapWithCleanup annotates an existing V2Error with the
-// cleanup report so the CLI can render both the original
-// failure cause and the cleanup outcome. When the supplied
-// error is not already a V2Error, a new V2Error is built.
-func wrapWithCleanup(original error, report v2LifecycleCleanupReport) error {
-	if !report.HasError() {
-		return original
-	}
-	if original == nil {
-		return NewV2ErrorWith(V2CodeCleanupFailed,
-			report.Summary(), "cleanup", report.Summary())
-	}
-	if v2err, ok := original.(*V2Error); ok {
-		v2err.Diags = append(v2err.Diags, V2Diagnostic{
-			Code:         V2CodeCleanupFailed,
-			Message:      report.Summary(),
-			PropertyName: "cleanup",
-			Detail:       report.Summary(),
-		})
-		return v2err
-	}
-	return NewV2ErrorWith(V2CodeCleanupFailed,
-		fmt.Sprintf("%s; cleanup: %s", original.Error(), report.Summary()),
-		"cleanup", report.Summary())
-}
-
 // EnsureV2ExecutionBudget is a small helper that returns the
 // production execution budget the executor should use. It is
 // retained so tests and the production runner agree on the
 // same budget shape.
 func EnsureV2ExecutionBudget() *execution.Budget {
 	return execution.DefaultBudget()
-}
-
-// worktreeRelativePath joins a repository-relative path onto
-// a worktree root using the platform path separator. The
-// helper exists so tests can avoid pulling in path/filepath
-// directly.
-func worktreeRelativePath(root, rel string) string {
-	return filepath.Join(root, filepath.FromSlash(rel))
 }

@@ -88,6 +88,21 @@ const (
 	// same as an unsupported repository state.
 	V2CodeObjectFormatUnavailable V2DiagnosticCode = "object_format_unavailable"
 	V2CodeUnsupportedObjectFormat V2DiagnosticCode = "unsupported_object_format"
+	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-SUBJECT-OBSERVATION-AUTHORITY01
+	// (R6-A) adds the subject-observation authority code. Every
+	// observation that can only be made while the live detached
+	// subject worktree exists (HEAD, HEAD^{tree}, show-toplevel,
+	// detached, status, refs, worktree inventory) routes through
+	// this code on failure so the CLI can render the exact field
+	// that could not be observed.
+	V2CodeSubjectObservationUnavailable V2DiagnosticCode = "subject_observation_unavailable"
+	// R6-A adds a registration-mismatch code for Phase 8: when
+	// the live AtSubject inventory contains a row for the
+	// captured worktree path but the row's HEAD does not match
+	// the requested subject commit, the executor fails closed
+	// with this code so downstream code cannot silently accept a
+	// mismatched registration.
+	V2CodeSubjectRegistrationMismatch V2DiagnosticCode = "subject_registration_mismatch"
 )
 
 // V2Diagnostic is the structured diagnostic record emitted by

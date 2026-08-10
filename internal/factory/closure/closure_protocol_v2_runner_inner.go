@@ -159,6 +159,11 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 		Checks:          plan.Checks,
 		CommandExecutor: deps.Commands,
 		Now:             deps.Now,
+		// R6-A: transport the existing typed topology
+		// authority that the runner already established
+		// into the executor result so downstream code can
+		// read the same facts without recomputing them.
+		TopologyFacts: facts,
 	})
 	if err != nil {
 		return v2RunCandidate{}, err
