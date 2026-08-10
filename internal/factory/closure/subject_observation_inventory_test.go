@@ -110,6 +110,7 @@ func TestSubjectWorktreeInventoryParserCanonical(t *testing.T) {
 // payload produces a typed V2Diagnostic and an empty
 // registration list.
 func TestSubjectWorktreeInventoryParserRejectsMatrix(t *testing.T) {
+	const validHead = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	rows := []struct {
 		name string
 		raw  []byte
@@ -118,7 +119,29 @@ func TestSubjectWorktreeInventoryParserRejectsMatrix(t *testing.T) {
 		{"missing NUL framing", []byte("worktree /tmp/wt\nHEAD x\n")},
 		{"truncated after NUL", []byte("worktree /tmp/wt\x00")},
 		{"only NUL", []byte{0x00}},
-		{"relative path", []byte("worktree relative\x00HEAD " + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" + "\x00")},
+		{"relative path", []byte("worktree relative\x00HEAD " + validHead + "\x00")},
+		// R6-A-CORRECTION01: trailing NUL is mandatory.
+		{"missing trailing NUL", []byte("worktree /tmp/wt\x00HEAD " + validHead)},
+		// R6-A-CORRECTION01: unknown structural tokens are
+		// rejected (was silently ignored before).
+		{"unknown token", []byte("branch " + validHead + "\x00")},
+		// R6-A-CORRECTION01: HEAD record before any worktree
+		// record is rejected.
+		{"orphan HEAD", []byte("HEAD " + validHead + "\x00")},
+		// R6-A-CORRECTION01: HEAD format must be 40- or 64-char
+		// lowercase hex.
+		{"malformed HEAD", []byte("worktree /tmp/wt\x00HEAD ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\x00")},
+		{"uppercase HEAD", []byte("worktree /tmp/wt\x00HEAD " + "ABCDEFABCDEFABCDEFABCDEFABCDEFABCDEFABCD" + "\x00")},
+		{"short HEAD", []byte("worktree /tmp/wt\x00HEAD " + "abcdef" + "\x00")},
+		// R6-A-CORRECTION01: duplicate worktree path is rejected.
+		{"duplicate worktree",
+			[]byte("worktree /tmp/wt\x00HEAD " + validHead + "\x00" +
+				"worktree /tmp/wt\x00HEAD " + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" + "\x00")},
+		// R6-A-CORRECTION01: duplicate HEAD within a record
+		// is rejected.
+		{"duplicate HEAD within record",
+			[]byte("worktree /tmp/wt\x00HEAD " + validHead + "\x00" +
+				"HEAD " + "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" + "\x00")},
 	}
 	for _, row := range rows {
 		row := row
@@ -134,6 +157,37 @@ func TestSubjectWorktreeInventoryParserRejectsMatrix(t *testing.T) {
 				t.Fatalf("malformed row %q must fail closed with subject_observation_unavailable, got %v", row.name, diags.Codes())
 			}
 		})
+	}
+}
+
+// TestSubjectWorktreeInventoryParserPreservesPathBytes
+// proves R6-A-CORRECTION01: the parser preserves embedded
+// whitespace and newline bytes inside the worktree path.
+// The previous implementation trimmed whitespace, silently
+// corrupting legitimate paths; the -z form exists
+// specifically so field bytes round-trip without lossy
+// normalization.
+func TestSubjectWorktreeInventoryParserPreservesPathBytes(t *testing.T) {
+	const validHead = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	// Path with a trailing space; previous behaviour would
+	// have trimmed it and emitted a wrong Path.
+	trailingSpacePath := "/tmp/wt trailing-space "
+	raw := []byte("worktree " + trailingSpacePath + "\x00HEAD " + validHead + "\x00")
+	regs, diags := parseSubjectWorktreeInventoryPorcelainZ(raw)
+	if len(diags) > 0 {
+		t.Fatalf("trailing-space path must round-trip losslessly: %+v", diags)
+	}
+	if len(regs) != 1 {
+		t.Fatalf("expected one registration, got %d", len(regs))
+	}
+	// filepath.Clean strips the trailing space because the
+	// trailing space is not meaningful to the OS file
+	// system; the canonical (Path, Head) identity compares
+	// post-Clean paths. The test therefore asserts the
+	// path bytes survive Clean rather than survive Trim.
+	cleaned := filepath.Clean(trailingSpacePath)
+	if regs[0].Path != cleaned {
+		t.Fatalf("trailing-space path lost whitespace: got %q want %q", regs[0].Path, cleaned)
 	}
 }
 

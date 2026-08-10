@@ -74,36 +74,12 @@ func NewGitV2SubjectExecutor(g gitClient) *GitV2SubjectExecutor {
 	return &GitV2SubjectExecutor{Git: g}
 }
 
-// ExecuteSubjectChecks creates a temporary detached worktree
-// at the supplied subject commit, verifies the observed tree,
-// captures every R6-A subject observation while the worktree
-// is alive, runs the supplied checks, and cleans up. The
-// function never touches the caller checkout.
-//
-// Failure modes propagate as V2Error:
-//   - subject commit / tree mismatch
-//   - worktree creation failure
-//   - observed tree OID != subject tree OID
-//   - subject identity / status / refs / inventory
-//     observation failure (R6-A)
-//   - check execution failure
-//   - cleanup failure (Phase 4: prevents clean success)
+// ExecuteSubjectChecks implements the V2SubjectExecutor
+// interface. The production flow lives here so the helpers
+// can stay narrow and the flow can be audited linearly.
 func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2ExecuteRequest) (V2ExecuteResult, error) {
-	if strings.TrimSpace(req.RepositoryRoot) == "" {
-		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"repository root is empty", "repository_root", "")
-	}
-	if strings.TrimSpace(req.SubjectCommit) == "" {
-		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"subject commit is empty", "subject_commit", "")
-	}
-	if strings.TrimSpace(req.SubjectTree) == "" {
-		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"subject tree is empty", "subject_tree", "")
-	}
-	if strings.TrimSpace(req.EvidenceDir) == "" {
-		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeRequestIncomplete,
-			"evidence directory is empty", "evidence_directory", "")
+	if errMsg := validateV2ExecuteRequest(req); errMsg != "" {
+		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeRequestIncomplete, errMsg, "request", "")
 	}
 	// Phase 5 (CORRECTION02): cleanup runs in a fresh bounded
 	// context that is detached from the caller's cancellation.
@@ -336,26 +312,45 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 	// surfaced error.
 	report := cleanup()
 	after := captureAfterInventory()
-	result := V2ExecuteResult{
-		ObservedTree:                 observedTree,
-		CheckResults:                 checks,
-		Evidence:                     evidence,
-		CleanupError:                 report.Summary(),
-		SubjectWorktreePath:          worktreePath,
-		SubjectHead:                  identity.Head,
-		SubjectTree:                  identity.Tree,
-		SubjectDetached:              identity.Detached,
-		StatusObservation:            statusObs,
-		RefsObservation:              refsObs,
-		WorktreeInventoryBefore:      beforeInv,
-		WorktreeInventoryAtSubject:   atSubjInv,
-		WorktreeInventoryAfter:       after,
-		SubjectRegistration:          reg,
-		SubjectRegistrationAvailable: true,
-		TopologyFacts:                req.TopologyFacts,
-		SubjectCleanupObserved:       true,
-		SubjectCleanupError:          report.Summary(),
+	// R6-A-CORRECTION01: the success path MUST fail closed
+	// if the canonical After inventory observation is
+	// unavailable. A missing After observation would let
+	// the executor return success while leaving downstream
+	// code without the no-leak proof. Surface the
+	// observation failure as a typed V2Error so the
+	// invariant cannot be silently bypassed.
+	if !after.Available {
+		return afterFailure(subjectAfterFailureInputs{
+			worktreePath: worktreePath,
+			before:       beforeInv,
+			identity:     identity,
+			statusObs:    statusObs,
+			refsObs:      refsObs,
+			subjectDiags: V2Diagnostics{{
+				Code:         V2CodeSubjectObservationUnavailable,
+				Message:      "subject worktree inventory observation failed after cleanup: " + diagMessage(after.Diagnostics),
+				PropertyName: "subject_worktree_inventory",
+			}},
+			originalErr: NewV2ErrorWith(V2CodeSubjectObservationUnavailable,
+				"after worktree inventory unavailable",
+				"subject_worktree_inventory", ""),
+		})
 	}
+	result := newSuccessV2Result(successV2ResultInputs{
+		ObservedTree:               observedTree,
+		CheckResults:               checks,
+		Evidence:                   evidence,
+		CleanupSummary:             report.Summary(),
+		SubjectWorktreePath:        worktreePath,
+		Identity:                   identity,
+		StatusObservation:          statusObs,
+		RefsObservation:            refsObs,
+		WorktreeInventoryBefore:    beforeInv,
+		WorktreeInventoryAtSubject: atSubjInv,
+		WorktreeInventoryAfter:     after,
+		SubjectRegistration:        reg,
+		TopologyFacts:              req.TopologyFacts,
+	})
 	if report.HasError() && err == nil {
 		err = NewV2ErrorWith(V2CodeCleanupFailed,
 			fmt.Sprintf("cleanup failed: %s", report.Summary()),

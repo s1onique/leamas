@@ -38,30 +38,36 @@ import (
 // well-known command and delegates everything else to a
 // delegate. The fake exists so the matrix does not need to
 // depend on real environmental failures.
+//
+// Field semantics: the *Err fields make the fake return a
+// specific gitCommandResult for the corresponding
+// observation command. registrationOverride emits a
+// registration whose HEAD does not match the requested
+// subject commit so the Phase 8 (Path, Head) binding
+// fires. cleanupFail makes the bounded cleanup
+// (worktree remove) fail. capturedWorktreePath records
+// the actual worktree path from `worktree add --detach`.
+// zCalls counts the -z invocations so the fake can dispatch
+// per-stage BEFORE/AT_SUBJECT/AFTER failures. registrationMissing
+// suppresses the registration override so the AtSubject
+// inventory never contains a record for the captured
+// worktree path.
 type subjectMatrixGitClient struct {
-	delegate    gitClient
-	headErr     *gitCommandResult
-	treeErr     *gitCommandResult
-	toplevelErr *gitCommandResult
-	symRefErr   *gitCommandResult
-	statusErr   *gitCommandResult
-	refsErr     *gitCommandResult
-	beforeErr   *gitCommandResult
-	atSubjErr   *gitCommandResult
-	afterErr    *gitCommandResult
-	// subjectTreeErr forces the worktree add path to
-	// produce a different tree so registration HEAD != S
-	// fires.
+	delegate             gitClient
+	headErr              *gitCommandResult
+	treeErr              *gitCommandResult
+	toplevelErr          *gitCommandResult
+	symRefErr            *gitCommandResult
+	statusErr            *gitCommandResult
+	refsErr              *gitCommandResult
+	beforeErr            *gitCommandResult
+	atSubjErr            *gitCommandResult
+	afterErr             *gitCommandResult
 	registrationOverride string
-	// cleanupFail forces the bounded cleanup to fail at the
-	// worktree-remove stage. The fake still attempts the
-	// remove so the cleanup report is populated.
-	cleanupFail bool
-	// capturedWorktreePath records the actual worktree
-	// path from `git worktree add --detach` so the
-	// override response can target the same path the
-	// executor created.
+	cleanupFail          bool
 	capturedWorktreePath string
+	zCalls               int
+	registrationMissing  bool
 }
 
 func (m *subjectMatrixGitClient) Run(ctx context.Context, directory string, args ...string) gitCommandResult {
@@ -93,18 +99,59 @@ func (m *subjectMatrixGitClient) Run(ctx context.Context, directory string, args
 		if m.refsErr != nil {
 			return *m.refsErr
 		}
+	case len(args) >= 4 && args[0] == "worktree" && args[1] == "remove":
+		// cleanup-failure row: the bounded cleanup
+		// must observe a typed Stage.WorktreeRemoveError
+		// so report.HasError() returns true.
+		if m.cleanupFail {
+			return gitCommandResult{ExitCode: 1, Stderr: []byte("fatal: cleanup failure during worktree remove")}
+		}
 	case len(args) >= 4 && args[0] == "worktree" && args[1] == "list" && args[2] == "--porcelain" && args[3] == "-z":
 		// The worktree list --porcelain -z helper is the
 		// canonical subject inventory snapshot. The fake
-		// returns a registration whose HEAD does not match
-		// the requested subject commit so the executor's
-		// Phase 8 (Path, Head) registration binding fires.
+		// dispatches on the configured stage failure:
+		//   - registrationOverride:  emit a record whose HEAD
+		//     does not match the requested subject commit so
+		//     the executor's Phase 8 binding fires.
+		//   - beforeErr/atSubjErr/afterErr:  return a failure
+		//     for that stage's snapshot. The fake records the
+		//     captured worktree path so the registration
+		//     override can target it.
+		// Stage dispatch is by z-call count, mirroring the
+		// production sequence BEFORE -> AT_SUBJECT -> AFTER.
+		if m.zCalls == 0 && m.beforeErr != nil {
+			m.zCalls++
+			return *m.beforeErr
+		}
+		if m.zCalls == 1 && m.atSubjErr != nil {
+			m.zCalls++
+			return *m.atSubjErr
+		}
+		if m.zCalls >= 2 && m.afterErr != nil {
+			m.zCalls++
+			return *m.afterErr
+		}
+		m.zCalls++
 		if m.registrationOverride != "" && m.capturedWorktreePath != "" {
 			return gitCommandResult{
 				Stdout: []byte("worktree " + m.capturedWorktreePath + "\x00" +
 					"HEAD " + m.registrationOverride + "\x00"),
 				ExitCode: 0,
 			}
+		}
+		if m.registrationMissing {
+			// Return an inventory whose only entry is
+			// the unrelated main worktree so the
+			// captured subject worktree path is not
+			// present (Phase 8 missing-registration).
+			return gitCommandResult{
+				Stdout: []byte("worktree " + directory + "\x00" +
+					"HEAD " + fxHeadForUnrelatedRegistration() + "\x00"),
+				ExitCode: 0,
+			}
+		}
+		if m.cleanupFail && m.zCalls >= 3 {
+			return gitCommandResult{ExitCode: 128, Stderr: []byte("fatal: cleanup failure")}
 		}
 	case len(args) >= 5 && args[0] == "worktree" && args[1] == "add" && args[2] == "--detach":
 		// Capture the worktree path so the override above
@@ -147,6 +194,16 @@ func subjectMatrixFixture(t *testing.T) subjectExecutorTestFixture {
 	return newSubjectExecutorTestFixture(t)
 }
 
+// fxHeadForUnrelatedRegistration returns a 40-character
+// lowercase hex OID that does NOT match the hermetic
+// fixture's subject commit. The "registration-missing" row
+// uses it to build an AtSubject inventory whose only entry
+// is an unrelated worktree, ensuring the captured subject
+// worktree path is absent (Phase 8 missing-registration).
+func fxHeadForUnrelatedRegistration() string {
+	return "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+}
+
 // subjectMatrixFailureOf returns the typed V2Error code and
 // a human-readable label for a given row name. The matrix
 // uses the labels to bind the row to its expected failure
@@ -166,26 +223,33 @@ func subjectMatrixFailureOf(row string) (V2DiagnosticCode, string) {
 		return V2CodeSubjectObservationUnavailable, "subject_status"
 	case "refs-observation-failure":
 		return V2CodeSubjectObservationUnavailable, "subject_refs"
+	case "before-inventory-failure":
+		return V2CodeSubjectObservationUnavailable, "subject_worktree_inventory"
+	case "at-subject-inventory-failure":
+		return V2CodeSubjectObservationUnavailable, "subject_worktree_inventory"
+	case "after-inventory-failure":
+		return V2CodeSubjectObservationUnavailable, "subject_worktree_inventory"
 	case "registration-HEAD-mismatch":
 		return V2CodeSubjectRegistrationMismatch, "subject_registration"
 	case "registration-missing":
 		return V2CodeSubjectObservationUnavailable, "subject_registration"
+	case "cleanup-failure":
+		return V2CodeCleanupFailed, "cleanup"
 	default:
 		return "", ""
 	}
 }
 
-// TestClosureSubjectObservationFailureMatrix exercises every
-// documented Phase 15 failure row. Each row produces a
-// typed *V2Error carrying the expected diagnostic code
-// family (subject_observation_unavailable or
-// subject_registration_mismatch) and a non-nil
-// V2ExecuteResult whose SubjectWorktreePath and
-// WorktreeInventoryBefore fields remain populated so the
-// audit fields are preserved.
-func TestClosureSubjectObservationFailureMatrix(t *testing.T) {
-	const validSubjectTree = "0123456789abcdef0123456789abcdef01234567"
-	rows := []struct {
+// subjectMatrixFailureRows is the canonical adversarial
+// matrix table. Splitting the table out of the test body
+// keeps the test file under the LLM-friendly 400-line
+// threshold while preserving the row-by-row
+// authority/code bindings.
+func subjectMatrixFailureRows() []struct {
+	name   string
+	matrix func() *subjectMatrixGitClient
+} {
+	return []struct {
 		name   string
 		matrix func() *subjectMatrixGitClient
 	}{
@@ -245,7 +309,59 @@ func TestClosureSubjectObservationFailureMatrix(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "registration-missing",
+			matrix: func() *subjectMatrixGitClient {
+				return &subjectMatrixGitClient{
+					registrationMissing: true,
+				}
+			},
+		},
+		{
+			name: "before-inventory-failure",
+			matrix: func() *subjectMatrixGitClient {
+				return &subjectMatrixGitClient{
+					beforeErr: &gitCommandResult{ExitCode: 128, Stderr: []byte("fatal: before inventory unavailable")},
+				}
+			},
+		},
+		{
+			name: "at-subject-inventory-failure",
+			matrix: func() *subjectMatrixGitClient {
+				return &subjectMatrixGitClient{
+					atSubjErr: &gitCommandResult{ExitCode: 128, Stderr: []byte("fatal: at-subject inventory unavailable")},
+				}
+			},
+		},
+		{
+			name: "after-inventory-failure",
+			matrix: func() *subjectMatrixGitClient {
+				return &subjectMatrixGitClient{
+					afterErr: &gitCommandResult{ExitCode: 128, Stderr: []byte("fatal: after inventory unavailable")},
+				}
+			},
+		},
+		{
+			name: "cleanup-failure",
+			matrix: func() *subjectMatrixGitClient {
+				return &subjectMatrixGitClient{
+					cleanupFail: true,
+				}
+			},
+		},
 	}
+}
+
+// TestClosureSubjectObservationFailureMatrix exercises every
+// documented Phase 15 failure row. Each row produces a
+// typed *V2Error carrying the expected diagnostic code
+// family (subject_observation_unavailable or
+// subject_registration_mismatch) and a non-nil
+// V2ExecuteResult whose SubjectWorktreePath and
+// WorktreeInventoryBefore fields remain populated so the
+// audit fields are preserved.
+func TestClosureSubjectObservationFailureMatrix(t *testing.T) {
+	rows := subjectMatrixFailureRows()
 	for _, row := range rows {
 		row := row
 		t.Run(row.name, func(t *testing.T) {
@@ -294,6 +410,5 @@ func TestClosureSubjectObservationFailureMatrix(t *testing.T) {
 			}
 		})
 	}
-	_ = validSubjectTree
 	_ = fmt.Sprintf
 }

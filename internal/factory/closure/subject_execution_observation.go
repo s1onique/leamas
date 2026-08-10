@@ -29,6 +29,32 @@ import (
 	"strings"
 )
 
+// validateV2ExecuteRequest enforces the production
+// request-validation contract in a single place. The
+// helper returns the empty string on success and the
+// typed message on the first missing field. Extracted
+// from the executor so the executor file stays under
+// the LLM-friendly 400-line threshold.
+func validateV2ExecuteRequest(req V2ExecuteRequest) string {
+	if strings.TrimSpace(req.RepositoryRoot) == "" {
+		return NewV2ErrorWith(V2CodeRequestIncomplete,
+			"repository root is empty", "repository_root", "").Error()
+	}
+	if strings.TrimSpace(req.SubjectCommit) == "" {
+		return NewV2ErrorWith(V2CodeRequestIncomplete,
+			"subject commit is empty", "subject_commit", "").Error()
+	}
+	if strings.TrimSpace(req.SubjectTree) == "" {
+		return NewV2ErrorWith(V2CodeRequestIncomplete,
+			"subject tree is empty", "subject_tree", "").Error()
+	}
+	if strings.TrimSpace(req.EvidenceDir) == "" {
+		return NewV2ErrorWith(V2CodeRequestIncomplete,
+			"evidence directory is empty", "evidence_directory", "").Error()
+	}
+	return ""
+}
+
 // v2CleanupReport records the three cleanup stages that
 // Git's linked-worktree machinery requires. HasError reports
 // whether any stage failed; Summary produces a single-line
@@ -242,4 +268,55 @@ func newSubjectWorktreeLifecycle(
 		return observeSubjectWorktreeInventory(cleanupContext, git, repoRoot)
 	}
 	return cleanup, captureAfterInventory
+}
+
+// successV2ResultInputs is the input bundle for the canonical
+// success-path V2ExecuteResult construction. The bundle
+// keeps the executor's call site linear while sharing the
+// construction across every successful execution.
+//
+// Splitting the construction into a separate helper keeps
+// closure_protocol_v2_executor.go under the LLM-friendly
+// 400-line threshold.
+type successV2ResultInputs struct {
+	ObservedTree               string
+	CheckResults               []CheckResult
+	Evidence                   []EvidenceRecord
+	CleanupSummary             string
+	SubjectWorktreePath        string
+	Identity                   SubjectLiveIdentity
+	StatusObservation          SubjectByteObservation
+	RefsObservation            SubjectByteObservation
+	WorktreeInventoryBefore    SubjectWorktreeInventory
+	WorktreeInventoryAtSubject SubjectWorktreeInventory
+	WorktreeInventoryAfter     SubjectWorktreeInventory
+	SubjectRegistration        SubjectWorktreeRegistration
+	TopologyFacts              V2TopologyFacts
+}
+
+// newSuccessV2Result constructs the canonical V2ExecuteResult
+// for the success path. The construction lives in the
+// observation helper so the executor stays linear and under
+// the LLM-friendly line threshold.
+func newSuccessV2Result(in successV2ResultInputs) V2ExecuteResult {
+	return V2ExecuteResult{
+		ObservedTree:                 in.ObservedTree,
+		CheckResults:                 in.CheckResults,
+		Evidence:                     in.Evidence,
+		CleanupError:                 in.CleanupSummary,
+		SubjectWorktreePath:          in.SubjectWorktreePath,
+		SubjectHead:                  in.Identity.Head,
+		SubjectTree:                  in.Identity.Tree,
+		SubjectDetached:              in.Identity.Detached,
+		StatusObservation:            in.StatusObservation,
+		RefsObservation:              in.RefsObservation,
+		WorktreeInventoryBefore:      in.WorktreeInventoryBefore,
+		WorktreeInventoryAtSubject:   in.WorktreeInventoryAtSubject,
+		WorktreeInventoryAfter:       in.WorktreeInventoryAfter,
+		SubjectRegistration:          in.SubjectRegistration,
+		SubjectRegistrationAvailable: true,
+		TopologyFacts:                in.TopologyFacts,
+		SubjectCleanupObserved:       true,
+		SubjectCleanupError:          in.CleanupSummary,
+	}
 }

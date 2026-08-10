@@ -36,13 +36,23 @@ import (
 //	git -C <worktree> symbolic-ref -q HEAD
 //
 // The detached state is established by the canonical exit
-// code of `symbolic-ref -q HEAD`: exit 0 means the HEAD is a
-// symbolic ref (NOT detached); non-zero exit means the HEAD
-// is detached. A non-zero exit is the authoritative detached
-// signal and is NOT collapsed into a generic "git error".
-// An `Err` is only treated as a detached-state observation
-// failure when neither the canonical exit code nor the
-// captured stderr is consistent with the detached contract.
+// contract of `git symbolic-ref -q HEAD` documented in
+// git-symbolic-ref(1):
+//
+//	0   the symbolic ref was printed on stdout; the HEAD
+//	    is a symbolic ref (NOT detached).
+//	1   the requested name is not a symbolic ref; the HEAD
+//	    is detached. This is the authoritative detached
+//	    signal.
+//	other (typically 128)  operational Git failure; the
+//	    detached state cannot be observed and the result is
+//	    unavailable. The implementation MUST NOT collapse
+//	    arbitrary exit statuses into "detached".
+//
+// The implementation treats the exit-1 case as the canonical
+// detached signal and reports every other non-zero exit as
+// a typed observation failure so an arbitrary Git error
+// cannot be silently encoded as "detached".
 //
 // The function is total: every failure path leaves Available
 // false and appends a typed diagnostic.

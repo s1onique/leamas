@@ -98,18 +98,37 @@ func observeSubjectWorktreeInventory(ctx context.Context, git gitClient, repoRoo
 //	"HEAD " <oid> \x00
 //	[<other fields> \x00]*
 //
+// R6-A-CORRECTION01 enforces strict framing: the entire
+// payload MUST end in a NUL terminator (the -z flag is
+// mandatory and a truncated final record is rejected).
+// The parser also enforces one worktree + one HEAD per
+// record, rejects duplicate paths, and validates the HEAD
+// token against the repository object format. The
+// bounded NUL framing is what makes lossless path
+// preservation possible; the previous prose omitted
+// these guards.
+//
 // The parser is fail-closed: every framing violation
 // produces a typed V2Diagnostic. The parser enforces:
 //
-//   - non-empty input contains at least one NUL terminator
-//     (the -z flag is mandatory)
-//   - each "worktree " record is immediately followed by a
-//     non-empty HEAD record (the canonical identity Phase 16
-//     requires)
-//   - path is a non-empty, cleaned, absolute path
-//   - HEAD is a non-empty token (OID validation is the caller's
-//     responsibility: the verifier authority also leaves OID
-//     shape checks to the consumer)
+//   - non-empty input MUST contain at least one NUL
+//     terminator (the -z flag is mandatory)
+//   - the final byte MUST be NUL (truncated records are
+//     rejected; the canonical exit-0 wire is NUL-LF when
+//     line-oriented, but the -z variant terminates every
+//     record with NUL)
+//   - each record contains exactly one "worktree " line
+//     and exactly one "HEAD " line
+//   - path bytes are preserved verbatim (no TrimSpace;
+//     the -z form exists specifically so paths
+//     containing whitespace or newline characters
+//     round-trip without lossy normalization)
+//   - path is a non-empty, absolute, cleaned path
+//   - HEAD is a non-empty 40- or 64-character lowercase
+//     hex object identifier
+//   - duplicate worktree paths across records are
+//     rejected so the canonical (Path, HEAD) pair
+//     identity is unambiguous
 //
 // Registrations preserve the canonical order returned by
 // the parser. Equal/FindByPath on SubjectWorktreeInventory
@@ -132,52 +151,119 @@ func parseSubjectWorktreeInventoryPorcelainZ(raw []byte) ([]SubjectWorktreeRegis
 			PropertyName: "subject_worktree_inventory",
 		}}
 	}
-	records := bytes.Split(raw, []byte{0x00})
-	var (
-		out      []SubjectWorktreeRegistration
-		path     string
-		head     string
-		flushReg = func() error {
-			if path == "" {
-				return nil
-			}
-			cleaned := filepath.Clean(path)
-			if !filepath.IsAbs(cleaned) {
-				return fmt.Errorf("relative worktree path %q in porcelain", path)
-			}
-			if head == "" {
-				return fmt.Errorf("worktree path %q in porcelain missing HEAD record", path)
-			}
-			out = append(out, SubjectWorktreeRegistration{Path: cleaned, Head: head})
-			path = ""
-			head = ""
-			return nil
+	if raw[len(raw)-1] != 0x00 {
+		return nil, V2Diagnostics{{
+			Code:         V2CodeSubjectObservationUnavailable,
+			Message:      "subject worktree inventory observation failed: porcelain output missing terminal NUL",
+			PropertyName: "subject_worktree_inventory",
+		}}
+	}
+	// Split on NUL so the trailing NUL produces an empty
+	// trailing segment that the parser records as "record
+	// end" without emitting a structural field.
+	segments := bytes.Split(raw, []byte{0x00})
+	// The trailing NUL is mandatory; bytes.Split produces
+	// one fewer segment than NUL count, so the last segment
+	// is "" only when the final NUL was present. Any other
+	// value here would mean the wire was malformed.
+	if len(segments) == 0 || string(segments[len(segments)-1]) != "" {
+		return nil, V2Diagnostics{{
+			Code:         V2CodeSubjectObservationUnavailable,
+			Message:      "subject worktree inventory observation failed: porcelain output missing terminal NUL",
+			PropertyName: "subject_worktree_inventory",
+		}}
+	}
+	seen := make(map[string]struct{}, 0)
+	var out []SubjectWorktreeRegistration
+	for _, seg := range segments {
+		token := string(seg)
+		if token == "" {
+			continue
 		}
-	)
-	for _, rec := range records {
-		token := string(bytes.TrimRight(rec, "\r"))
 		switch {
 		case strings.HasPrefix(token, subjectWorktreeInventoryPorcelainV2ZField):
-			if err := flushReg(); err != nil {
+			path := strings.TrimPrefix(token, subjectWorktreeInventoryPorcelainV2ZField)
+			// Do NOT TrimSpace the path: the -z form
+			// exists specifically to preserve field
+			// bytes including embedded newlines and
+			// trailing whitespace.
+			if path == "" {
 				return nil, V2Diagnostics{{
 					Code:         V2CodeSubjectObservationUnavailable,
-					Message:      fmt.Sprintf("subject worktree inventory observation failed: %s", err.Error()),
+					Message:      "subject worktree inventory observation failed: empty worktree path in porcelain",
 					PropertyName: "subject_worktree_inventory",
 				}}
 			}
-			path = strings.TrimSpace(strings.TrimPrefix(token, subjectWorktreeInventoryPorcelainV2ZField))
+			cleaned := filepath.Clean(path)
+			if !filepath.IsAbs(cleaned) {
+				return nil, V2Diagnostics{{
+					Code:         V2CodeSubjectObservationUnavailable,
+					Message:      fmt.Sprintf("subject worktree inventory observation failed: relative worktree path %q in porcelain", path),
+					PropertyName: "subject_worktree_inventory",
+				}}
+			}
+			if _, dup := seen[cleaned]; dup {
+				return nil, V2Diagnostics{{
+					Code:         V2CodeSubjectObservationUnavailable,
+					Message:      fmt.Sprintf("subject worktree inventory observation failed: duplicate worktree path %q in porcelain", cleaned),
+					PropertyName: "subject_worktree_inventory",
+				}}
+			}
+			seen[cleaned] = struct{}{}
+			out = append(out, SubjectWorktreeRegistration{Path: cleaned})
 		case strings.HasPrefix(token, "HEAD "):
-			head = strings.TrimSpace(strings.TrimPrefix(token, "HEAD "))
-		case token == "":
-			// Separator or trailing empty record: ignore.
+			head := strings.TrimPrefix(token, "HEAD ")
+			if !isValidSubjectHeadObjectFormat(head) {
+				return nil, V2Diagnostics{{
+					Code:         V2CodeSubjectObservationUnavailable,
+					Message:      fmt.Sprintf("subject worktree inventory observation failed: HEAD %q is not a 40- or 64-character lowercase hex OID", head),
+					PropertyName: "subject_worktree_inventory",
+				}}
+			}
+			if len(out) == 0 {
+				return nil, V2Diagnostics{{
+					Code:         V2CodeSubjectObservationUnavailable,
+					Message:      "subject worktree inventory observation failed: HEAD record before any worktree record",
+					PropertyName: "subject_worktree_inventory",
+				}}
+			}
+			if out[len(out)-1].Head != "" {
+				return nil, V2Diagnostics{{
+					Code:         V2CodeSubjectObservationUnavailable,
+					Message:      fmt.Sprintf("subject worktree inventory observation failed: duplicate HEAD record for path %q", out[len(out)-1].Path),
+					PropertyName: "subject_worktree_inventory",
+				}}
+			}
+			out[len(out)-1].Head = head
+		default:
+			// R6-A-CORRECTION01: a canonical "worktree"
+			// record can carry known Git fields
+			// (branch, detached, locked, prunable) which
+			// the parser tolerates by ignoring. Any other
+			// token is rejected so upstream protocol
+			// additions cannot silently change the
+			// canonical (Path, HEAD) identity.
+			if isKnownPorcelainAnnotation(token) {
+				continue
+			}
+			return nil, V2Diagnostics{{
+				Code:         V2CodeSubjectObservationUnavailable,
+				Message:      fmt.Sprintf("subject worktree inventory observation failed: unknown structural token %q in porcelain", token),
+				PropertyName: "subject_worktree_inventory",
+			}}
 		}
 	}
-	if err := flushReg(); err != nil {
-		return nil, V2Diagnostics{{
-			Code:         V2CodeSubjectObservationUnavailable,
-			Message:      fmt.Sprintf("subject worktree inventory observation failed: %s", err.Error()),
-			PropertyName: "subject_worktree_inventory",
-		}}
+	// Every emitted registration MUST carry a HEAD; an
+	// in-flight worktree without a HEAD record is a wire
+	// violation.
+	for _, reg := range out {
+		if reg.Head == "" {
+			return nil, V2Diagnostics{{
+				Code:         V2CodeSubjectObservationUnavailable,
+				Message:      fmt.Sprintf("subject worktree inventory observation failed: worktree path %q missing HEAD record", reg.Path),
+				PropertyName: "subject_worktree_inventory",
+			}}
+		}
 	}
 	if len(out) == 0 {
 		return nil, V2Diagnostics{{
@@ -187,4 +273,61 @@ func parseSubjectWorktreeInventoryPorcelainZ(raw []byte) ([]SubjectWorktreeRegis
 		}}
 	}
 	return out, nil
+}
+
+// isValidSubjectHeadObjectFormat reports whether s is a
+// 40- or 64-character lowercase hex string. The R6-A
+// authority accepts both SHA-1 and SHA-256 object formats
+// because the repository object-format authority is the
+// canonical source of truth; the parser enforces shape
+// only so unknown future formats cannot leak through.
+func isValidSubjectHeadObjectFormat(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for _, ch := range s {
+		switch {
+		case ch >= '0' && ch <= '9':
+		case ch >= 'a' && ch <= 'f':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// isKnownPorcelainAnnotation reports whether the supplied
+// token is a recognised Git worktree-list annotation that
+// the parser tolerates by ignoring. The canonical
+// "worktree" record can carry:
+//
+//	branch <refname>     : the current branch of the worktree
+//	detached <oid>       : a detached HEAD
+//	locked <reason>      : the worktree is administratively locked
+//	prunable <reason>    : the worktree is administratively prunable
+//	pruned               : the worktree has been pruned
+//
+// R6-A-CORRECTION01 tolerates these because they are
+// non-structural and do not change the canonical
+// (Path, HEAD) identity the executor relies on. The
+// annotation set is intentionally narrow: any other token
+// is rejected so a future Git protocol addition cannot
+// silently introduce a structural field.
+func isKnownPorcelainAnnotation(token string) bool {
+	switch {
+	case strings.HasPrefix(token, "branch "):
+		return true
+	case strings.HasPrefix(token, "detached"):
+		// `detached` may appear as either the prefix
+		// `detached <oid>` or the bare token `detached`
+		// depending on the Git version.
+		return true
+	case strings.HasPrefix(token, "locked"):
+		return true
+	case strings.HasPrefix(token, "prunable"):
+		return true
+	case token == "pruned":
+		return true
+	}
+	return false
 }
