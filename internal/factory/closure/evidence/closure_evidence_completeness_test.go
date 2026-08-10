@@ -27,6 +27,12 @@ import (
 // validCandidate returns a fully valid ClosureEvidence candidate.
 // Every field is populated so DeriveClosureEvidenceCompleteness
 // returns EvidenceComplete.
+//
+// B2-R2: the paths use realistic worktree paths (not Git
+// OIDs). The previous B2-R1 fixture reused the SubjectTree
+// OID in the SubjectRoot and SubjectExecutionRoot fields,
+// which hid the B2-R1 type error of comparing a path to an
+// OID. The candidate builder now rejects that construction.
 func validCandidate() ClosureEvidence {
 	planBytes := []byte("{\"contract_version\":1,\"checks\":[{\"id\":\"c1\",\"mode\":\"run\"}]}")
 	sum := sha256.Sum256(planBytes)
@@ -36,6 +42,10 @@ func validCandidate() ClosureEvidence {
 	freezeCommit := "cccccccccccccccccccccccccccccccccccccccc"
 	freezeTree := "dddddddddddddddddddddddddddddddddddddddd"
 	executionTree := subjectTree
+	subjectExecutionRoot := "/tmp/leamas-subject-1234"
+	statusHash := "1111111111111111111111111111111111111111111111111111111111111111"
+	refsHash := "2222222222222222222222222222222222222222222222222222222222222222"
+	worktreeHash := "3333333333333333333333333333333333333333333333333333333333333333"
 	return ClosureEvidence{
 		SchemaVersion: ClosureEvidenceSchemaVersion,
 		Protocol:      ClosureProtocolVersion,
@@ -45,6 +55,7 @@ func validCandidate() ClosureEvidence {
 			FreezeTree:           freezeTree,
 			SubjectCommit:        subjectCommit,
 			SubjectTree:          subjectTree,
+			SubjectExecutionRoot: subjectExecutionRoot,
 			ExecutionTree:        executionTree,
 			PlanPath:             "docs/closure-plans/x.json",
 			PlanBlob:             "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
@@ -70,8 +81,8 @@ func validCandidate() ClosureEvidence {
 			Classification:       "PASS",
 			InvocationCount:      1,
 			RepositoryRoot:       "/repo",
-			SubjectRoot:          subjectTree,
-			SubjectExecutionRoot: subjectTree,
+			SubjectRoot:          subjectExecutionRoot,
+			SubjectExecutionRoot: subjectExecutionRoot,
 		},
 		Binary: BinaryAuthority{
 			BinaryPath:                "/tmp/leamas",
@@ -89,17 +100,17 @@ func validCandidate() ClosureEvidence {
 			Available:             true,
 			Head:                  subjectCommit,
 			Tree:                  subjectTree,
-			StatusHash:            "status-hash",
-			RefsHash:              "refs-hash",
-			WorktreeInventoryHash: "wt-hash",
+			StatusHash:            statusHash,
+			RefsHash:              refsHash,
+			WorktreeInventoryHash: worktreeHash,
 		},
 		CallerAfter: CallerStateSnapshot{
 			Available:             true,
 			Head:                  subjectCommit,
 			Tree:                  subjectTree,
-			StatusHash:            "status-hash",
-			RefsHash:              "refs-hash",
-			WorktreeInventoryHash: "wt-hash",
+			StatusHash:            statusHash,
+			RefsHash:              refsHash,
+			WorktreeInventoryHash: worktreeHash,
 		},
 		Cleanup: CleanupAuthority{},
 	}
@@ -129,7 +140,7 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 		mutate func(*ClosureEvidence)
 	}
 	mutations := []mutation{
-		// runtime predicates (1..7)
+		// runtime predicates (1..8)
 		{"runtime_identities_structurally_valid: empty repo root", func(c *ClosureEvidence) { c.Runtime.RepositoryRoot = "" }},
 		{"runtime_identities_structurally_valid: invalid freeze OID", func(c *ClosureEvidence) { c.Runtime.FreezeCommit = "bad" }},
 		{"runtime_identities_structurally_valid: invalid freeze tree", func(c *ClosureEvidence) { c.Runtime.FreezeTree = "bad" }},
@@ -159,31 +170,24 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 		{"runtime_plan_bytes_parse_successfully: arbitrary bytes matching SHA", func(c *ClosureEvidence) {
 			// Garbage bytes whose SHA-256 matches the
 			// recorded PlanSHA256. The previous B2
-			// predicate accepted this; the B2-R1
-			// production decoder rejects it.
+			// predicate accepted this; the production
+			// decoder rejects it.
 			other := []byte("not a plan contract\n")
 			sum := sha256.Sum256(other)
 			c.Runtime.PlanBytes = other
 			c.Runtime.PlanSHA256 = hex.EncodeToString(sum[:])
 		}},
 		{"runtime_expected_checks_derived_from_plan_bytes: drop the check", func(c *ClosureEvidence) {
-			// Replace the candidate's expected checks with
-			// an empty list. The predicate that binds
-			// ExpectedChecks to the production-decoded
-			// Plan must reject the candidate.
 			c.Plan.ExpectedChecks = c.Plan.ExpectedChecks[:0]
 		}},
 		{"runtime_expected_checks_derived_from_plan_bytes: substitute plan", func(c *ClosureEvidence) {
-			// Replace the bytes with a different but
-			// still-parseable plan whose declared check
-			// differs from the candidate's expected list.
 			other := []byte(`{"contract_version":1,"checks":[{"id":"ghost","mode":"run"}]}`)
 			sum := sha256.Sum256(other)
 			c.Runtime.PlanBytes = other
 			c.Runtime.PlanSHA256 = hex.EncodeToString(sum[:])
 		}},
 
-		// plan/result predicates (8..12)
+		// plan/result predicates (9..13)
 		{"plan_result_cardinality_equal: missing expected checks", func(c *ClosureEvidence) { c.Plan.ExpectedChecks = nil }},
 		{"plan_result_cardinality_equal: extra result", func(c *ClosureEvidence) {
 			c.Results = append(c.Results, CheckResult{CheckID: "c2", Mode: "run", Outcome: "pass"})
@@ -214,7 +218,7 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 		}},
 		{"plan_result_ids_bijective: empty results", func(c *ClosureEvidence) { c.Results = nil }},
 
-		// results predicates (13..19)
+		// results predicates (14..20)
 		{"results_every_run_check_successful: outcome fail", func(c *ClosureEvidence) { c.Results[0].Outcome = "fail" }},
 		{"results_every_run_check_successful: run timeout", func(c *ClosureEvidence) { c.Results[0].TimedOut = true }},
 		{"results_every_run_check_successful: run canceled", func(c *ClosureEvidence) { c.Results[0].Canceled = true }},
@@ -244,28 +248,43 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 			c.Cleanup.SubjectCleanupError = "boom"
 		}},
 
-		// gate predicates (20..25)
+		// gate predicates (21..28)
 		{"gate_classification_equals_pass: FAIL", func(c *ClosureEvidence) { c.Gate.Classification = "FAIL" }},
 		{"gate_classification_equals_pass: UNAVAILABLE", func(c *ClosureEvidence) { c.Gate.Classification = "UNAVAILABLE" }},
 		{"gate_invocation_count_equals_one: count 0", func(c *ClosureEvidence) { c.Gate.InvocationCount = 0 }},
 		{"gate_invocation_count_equals_one: count 2", func(c *ClosureEvidence) { c.Gate.InvocationCount = 2 }},
-		{"gate_subject_root_equals_s_exec_root: empty subject root", func(c *ClosureEvidence) { c.Gate.SubjectRoot = "" }},
+		{"runtime_execution_root_established: empty", func(c *ClosureEvidence) {
+			c.Runtime.SubjectExecutionRoot = ""
+		}},
+		{"gate_subject_root_equals_s_exec_root: empty subject root", func(c *ClosureEvidence) {
+			c.Gate.SubjectRoot = ""
+		}},
 		{"gate_subject_root_equals_s_exec_root: mismatched root", func(c *ClosureEvidence) {
 			// SubjectRoot must equal the runtime
-			// SubjectTree. The previous B2
+			// SubjectExecutionRoot. The previous B2
 			// implementation only checked non-empty.
-			c.Gate.SubjectRoot = "ffffffffffffffffffffffffffffffffffffffff"
+			c.Gate.SubjectRoot = "/tmp/wrong-path"
 		}},
-		{"gate_subject_execution_root_matches_tree: empty", func(c *ClosureEvidence) { c.Gate.SubjectExecutionRoot = "" }},
-		{"gate_subject_execution_root_matches_tree: mismatch", func(c *ClosureEvidence) {
-			c.Gate.SubjectExecutionRoot = "ffffffffffffffffffffffffffffffffffffffff"
+		{"gate_subject_execution_root_matches_execution_root: empty", func(c *ClosureEvidence) {
+			c.Gate.SubjectExecutionRoot = ""
+		}},
+		{"gate_subject_execution_root_matches_execution_root: mismatch", func(c *ClosureEvidence) {
+			c.Gate.SubjectExecutionRoot = "/tmp/wrong-path"
+		}},
+		// Production-shaped failing test: try to use the SubjectTree
+		// OID as a path. The previous B2-R1 implementation only
+		// checked non-empty, so this would have passed. B2-R2
+		// rejects the type error.
+		{"gate_subject_root_equals_s_exec_root: path-is-oid fails", func(c *ClosureEvidence) {
+			c.Gate.SubjectRoot = c.Runtime.SubjectTree
+			c.Gate.SubjectExecutionRoot = c.Runtime.SubjectExecutionRoot
 		}},
 		{"gate_not_timed_out: timed out", func(c *ClosureEvidence) { c.Gate.TimedOut = true }},
 		{"gate_no_output_truncation: stdout truncated", func(c *ClosureEvidence) { c.Gate.StdoutTruncated = true }},
 		{"gate_no_output_truncation: stderr truncated", func(c *ClosureEvidence) { c.Gate.StderrTruncated = true }},
 		{"gate_error_absent: error present", func(c *ClosureEvidence) { c.Gate.Error = "boom" }},
 
-		// binary predicates (28..38)
+		// binary predicates (29..39)
 		{"binary_path_non_empty: empty path", func(c *ClosureEvidence) { c.Binary.BinaryPath = "" }},
 		{"binary_sha256_valid: invalid", func(c *ClosureEvidence) { c.Binary.BinarySHA256 = "bad" }},
 		{"binary_commit_equals_subject_commit: mismatch", func(c *ClosureEvidence) {
@@ -286,41 +305,42 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 			c.Cleanup.BinaryCleanupError = "boom"
 		}},
 
-		// caller predicates (39..47)
+		// caller predicates (40..47)
 		{"caller_before_available: unavailable", func(c *ClosureEvidence) { c.CallerBefore.Available = false }},
 		{"caller_after_available: unavailable", func(c *ClosureEvidence) { c.CallerAfter.Available = false }},
-		{"caller_before_snapshot_complete: empty head", func(c *ClosureEvidence) {
-			// Available=true but the BEFORE observer
-			// failed to record any of the required fields.
-			// The previous B2 implementation accepted this.
-			c.CallerBefore.Head = ""
+		// B2-R2 structural validity: each field must satisfy
+		// its expected format. The matrix is per-field, BEFORE
+		// and AFTER, so the test proves the predicate fails
+		// even when only one field is malformed.
+		{"caller_before_snapshot_complete: head not OID", func(c *ClosureEvidence) {
+			c.CallerBefore.Head = "x"
 		}},
-		{"caller_before_snapshot_complete: empty tree", func(c *ClosureEvidence) {
-			c.CallerBefore.Tree = ""
+		{"caller_before_snapshot_complete: tree not OID", func(c *ClosureEvidence) {
+			c.CallerBefore.Tree = "banana"
 		}},
-		{"caller_before_snapshot_complete: empty status", func(c *ClosureEvidence) {
-			c.CallerBefore.StatusHash = ""
+		{"caller_before_snapshot_complete: status not SHA-256", func(c *ClosureEvidence) {
+			c.CallerBefore.StatusHash = "1"
 		}},
-		{"caller_before_snapshot_complete: empty refs", func(c *ClosureEvidence) {
-			c.CallerBefore.RefsHash = ""
+		{"caller_before_snapshot_complete: refs not SHA-256", func(c *ClosureEvidence) {
+			c.CallerBefore.RefsHash = "wat"
 		}},
-		{"caller_before_snapshot_complete: empty inventory", func(c *ClosureEvidence) {
-			c.CallerBefore.WorktreeInventoryHash = ""
+		{"caller_before_snapshot_complete: inventory not SHA-256", func(c *ClosureEvidence) {
+			c.CallerBefore.WorktreeInventoryHash = "?"
 		}},
-		{"caller_after_snapshot_complete: empty head", func(c *ClosureEvidence) {
-			c.CallerAfter.Head = ""
+		{"caller_after_snapshot_complete: head not OID", func(c *ClosureEvidence) {
+			c.CallerAfter.Head = "x"
 		}},
-		{"caller_after_snapshot_complete: empty tree", func(c *ClosureEvidence) {
-			c.CallerAfter.Tree = ""
+		{"caller_after_snapshot_complete: tree not OID", func(c *ClosureEvidence) {
+			c.CallerAfter.Tree = "banana"
 		}},
-		{"caller_after_snapshot_complete: empty status", func(c *ClosureEvidence) {
-			c.CallerAfter.StatusHash = ""
+		{"caller_after_snapshot_complete: status not SHA-256", func(c *ClosureEvidence) {
+			c.CallerAfter.StatusHash = "1"
 		}},
-		{"caller_after_snapshot_complete: empty refs", func(c *ClosureEvidence) {
-			c.CallerAfter.RefsHash = ""
+		{"caller_after_snapshot_complete: refs not SHA-256", func(c *ClosureEvidence) {
+			c.CallerAfter.RefsHash = "wat"
 		}},
-		{"caller_after_snapshot_complete: empty inventory", func(c *ClosureEvidence) {
-			c.CallerAfter.WorktreeInventoryHash = ""
+		{"caller_after_snapshot_complete: inventory not SHA-256", func(c *ClosureEvidence) {
+			c.CallerAfter.WorktreeInventoryHash = "?"
 		}},
 		{"caller_head_unchanged: changed", func(c *ClosureEvidence) {
 			c.CallerAfter.Head = "1111111111111111111111111111111111111111"
@@ -328,15 +348,18 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 		{"caller_tree_unchanged: changed", func(c *ClosureEvidence) {
 			c.CallerAfter.Tree = "2222222222222222222222222222222222222222"
 		}},
-		{"caller_status_unchanged: changed", func(c *ClosureEvidence) { c.CallerAfter.StatusHash = "different" }},
-		{"caller_refs_unchanged: changed", func(c *ClosureEvidence) { c.CallerAfter.RefsHash = "different" }},
-		{"caller_worktree_inventory_unchanged: changed", func(c *ClosureEvidence) { c.CallerAfter.WorktreeInventoryHash = "different" }},
+		{"caller_status_unchanged: changed", func(c *ClosureEvidence) {
+			c.CallerAfter.StatusHash = "6666666666666666666666666666666666666666666666666666666666666666"
+		}},
+		{"caller_refs_unchanged: changed", func(c *ClosureEvidence) {
+			c.CallerAfter.RefsHash = "7777777777777777777777777777777777777777777777777777777777777777"
+		}},
+		{"caller_worktree_inventory_unchanged: changed", func(c *ClosureEvidence) {
+			c.CallerAfter.WorktreeInventoryHash = "8888888888888888888888888888888888888888888888888888888888888888"
+		}},
 		{"caller_refs_unchanged: empty-but-available then changed", func(c *ClosureEvidence) {
-			// Simulate the empty-but-available state: caller
-			// recorded an empty refs hash but the runner saw
-			// a different one. The drift is rejected.
 			c.CallerBefore.RefsHash = ""
-			c.CallerAfter.RefsHash = "different"
+			c.CallerAfter.RefsHash = "9999999999999999999999999999999999999999999999999999999999999999"
 		}},
 	}
 
@@ -362,8 +385,6 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 		t.Parallel()
 		covered := make(map[string]bool)
 		for _, m := range mutations {
-			// Trim trailing ":<description>" so the prefix matches
-			// the predicate map key.
 			name := m.name
 			if idx := strings.Index(name, ":"); idx > 0 {
 				name = name[:idx]

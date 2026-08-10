@@ -60,17 +60,32 @@ const (
 // RuntimeAuthority captures the immutable execution identity.
 // Every field is a fact observed by the runner; an empty value
 // means the observation failed or was never performed.
+//
+// Path vs OID: SubjectExecutionRoot is the absolute filesystem
+// path of the detached subject worktree (where the gate ran
+// and the checks executed). SubjectTree is the Git tree OID of
+// the same worktree (what immutable content was in scope).
+// ExecutionTree is the runner's observed tree OID (which must
+// equal SubjectTree). The namespaces are deliberately
+// separate: a path is "where" and an OID is "what".
 type RuntimeAuthority struct {
 	RepositoryRoot string `json:"repository_root"`
 	FreezeCommit   string `json:"freeze_commit"`
 	FreezeTree     string `json:"freeze_tree"`
 	SubjectCommit  string `json:"subject_commit"`
 	SubjectTree    string `json:"subject_tree"`
-	ExecutionTree  string `json:"execution_tree"`
-	PlanPath       string `json:"plan_path"`
-	PlanBlob       string `json:"plan_blob"`
-	PlanSHA256     string `json:"plan_sha256"`
-	PlanBytes      []byte `json:"plan_bytes,omitempty"`
+	// SubjectExecutionRoot is the absolute filesystem path of
+	// the detached subject worktree. The GateAuthority compares
+	// its SubjectRoot and SubjectExecutionRoot fields to this
+	// path; comparing a path to a Git OID is a type error that
+	// B2-R1 hid with a test fixture that used the OID in both
+	// fields. B2-R2 separates the two namespaces.
+	SubjectExecutionRoot string `json:"subject_execution_root"`
+	ExecutionTree        string `json:"execution_tree"`
+	PlanPath             string `json:"plan_path"`
+	PlanBlob             string `json:"plan_blob"`
+	PlanSHA256           string `json:"plan_sha256"`
+	PlanBytes            []byte `json:"plan_bytes,omitempty"`
 	// FAncestorOfSVerified records that the runner topology
 	// authority has proven freeze_commit is an ancestor of
 	// subject_commit. The runtime identity fields alone cannot

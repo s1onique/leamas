@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/s1onique/leamas/internal/factory/closure/plancontract"
 )
 
 var (
@@ -102,16 +104,31 @@ func LoadPlan(path string) (Plan, []byte, error) {
 // LoadPlanFromBytes parses plan bytes without reading from the filesystem.
 // It enforces the size bound and strict JSON syntax only; callers that need
 // an executable plan must subsequently invoke ValidatePlan explicitly.
+//
+// B2-R2: the bounded syntactic decoder is the canonical
+// plancontract.DecodeBytes. The closure runner and the
+// evidence package both consume the same parser pass so the
+// production decoder and the evidence decoder cannot diverge.
 func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
-	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
-	if len(parseDiagnostics) > 0 {
-		return Plan{}, nil, errorFromDiagnostics(parseDiagnostics)
+	root, err := plancontract.DecodeBytes(data)
+	if err != nil {
+		return Plan{}, nil, fmt.Errorf("plan rejected by structural validation: %s", convertPlanContractError(err))
 	}
 	plan, err := decodeTypedPlan(root)
 	if err != nil {
 		return Plan{}, nil, fmt.Errorf("decode closure plan: %w", err)
 	}
 	return plan, data, nil
+}
+
+// convertPlanContractError adapts the plancontract leaf's
+// typed errors to a single human-readable string that the
+// closure package's legacy errorFromDiagnostics contract
+// preserves. The function is a thin wrapper around the
+// typed error so callers that want the type can switch on
+// it; legacy callers just see the message.
+func convertPlanContractError(err error) string {
+	return err.Error()
 }
 
 func ValidatePlan(plan Plan) error {

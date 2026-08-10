@@ -1,0 +1,28 @@
+# B2-R2 Micro-Correction Task List
+
+- [ ] Step 1: Separate execution path from tree identity
+  - Add Runtime.SubjectExecutionRoot (path) field
+  - Bind Gate.SubjectRoot == Runtime.SubjectExecutionRoot
+  - Bind Gate.SubjectExecutionRoot == Runtime.SubjectExecutionRoot
+  - Keep Runtime.ExecutionTree == Runtime.SubjectTree (OID == OID)
+- [ ] Step 2: Eliminate copied Plan decoder
+  - Create internal/factory/closure/plancontract package
+  - Move canonical Plan Contract decoder there
+  - Have closure runner use plancontract
+  - Have evidence package use plancontract
+  - Delete evidence/plan_decode.go mirror
+- [ ] Step 3: Fix strict single-document decoding
+  - Keep DisallowUnknownFields()
+  - Use second Decode to verify EOF
+  - Add matrix rows for: valid, unknown field, second object, second scalar, trailing garbage, truncated
+- [ ] Step 4: Structural validation of caller snapshots
+  - Head: valid OID
+  - Tree: valid OID
+  - StatusHash/RefsHash/WorktreeInventoryHash: valid SHA-256
+  - Add malformed-value rows for each field
+- [ ] Step 5: Update tests
+  - Update mutation matrix
+  - Update validCandidate
+  - Add production-shaped test for path vs OID
+- [ ] Step 6: Verify with go test
+- [ ] Step 7: Single commit and fresh digest

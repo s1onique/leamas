@@ -240,6 +240,18 @@ func validBijectionPlanBytes() []byte {
 		`]}`)
 }
 
+// validBijectionStatusHash / validBijectionRefsHash /
+// validBijectionInventoryHash are the structurally valid
+// 64-char lowercase SHA-256 fixtures the B2-R2 caller
+// snapshot predicates require. B2-R1 used short
+// placeholder strings ("status", "refs", "wt") that the
+// B2-R2 structural validity check rejects.
+const (
+	validBijectionStatusHash    = "1111111111111111111111111111111111111111111111111111111111111111"
+	validBijectionRefsHash      = "2222222222222222222222222222222222222222222222222222222222222222"
+	validBijectionInventoryHash = "3333333333333333333333333333333333333333333333333333333333333333"
+)
+
 func TestClosureCheckResultBijection(t *testing.T) {
 	t.Parallel()
 	// Build a fully valid candidate so DeriveClosureEvidenceCompleteness
@@ -249,8 +261,10 @@ func TestClosureCheckResultBijection(t *testing.T) {
 	planBytes := validBijectionPlanBytes()
 	planSum := sha256.Sum256(planBytes)
 	planSHA := hex.EncodeToString(planSum[:])
+
 	subjectCommit := "3333333333333333333333333333333333333333"
 	subjectTree := "4444444444444444444444444444444444444444"
+	subjectExecutionRoot := "/tmp/leamas-umbrella-subject"
 	build := func(results []evidence.CheckResult) evidence.ClosureEvidence {
 		return evidence.ClosureEvidence{
 			SchemaVersion: evidence.ClosureEvidenceSchemaVersion,
@@ -261,6 +275,7 @@ func TestClosureCheckResultBijection(t *testing.T) {
 				FreezeTree:           "2222222222222222222222222222222222222222",
 				SubjectCommit:        subjectCommit,
 				SubjectTree:          subjectTree,
+				SubjectExecutionRoot: subjectExecutionRoot,
 				ExecutionTree:        subjectTree,
 				PlanPath:             "plan",
 				PlanBlob:             "5555555555555555555555555555555555555555",
@@ -281,8 +296,8 @@ func TestClosureCheckResultBijection(t *testing.T) {
 				Classification:       "PASS",
 				InvocationCount:      1,
 				RepositoryRoot:       "/repo",
-				SubjectRoot:          subjectTree,
-				SubjectExecutionRoot: subjectTree,
+				SubjectRoot:          subjectExecutionRoot,
+				SubjectExecutionRoot: subjectExecutionRoot,
 			},
 			Binary: evidence.BinaryAuthority{
 				BinaryPath:                "/tmp/leamas",
@@ -300,17 +315,17 @@ func TestClosureCheckResultBijection(t *testing.T) {
 				Available:             true,
 				Head:                  subjectCommit,
 				Tree:                  subjectTree,
-				StatusHash:            "status",
-				RefsHash:              "refs",
-				WorktreeInventoryHash: "wt",
+				StatusHash:            validBijectionStatusHash,
+				RefsHash:              validBijectionRefsHash,
+				WorktreeInventoryHash: validBijectionInventoryHash,
 			},
 			CallerAfter: evidence.CallerStateSnapshot{
 				Available:             true,
 				Head:                  subjectCommit,
 				Tree:                  subjectTree,
-				StatusHash:            "status",
-				RefsHash:              "refs",
-				WorktreeInventoryHash: "wt",
+				StatusHash:            validBijectionStatusHash,
+				RefsHash:              validBijectionRefsHash,
+				WorktreeInventoryHash: validBijectionInventoryHash,
 			},
 		}
 	}

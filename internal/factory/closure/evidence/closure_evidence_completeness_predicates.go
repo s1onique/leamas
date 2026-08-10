@@ -37,28 +37,38 @@ func gateInvocationCountEqualsOne(c ClosureEvidence) bool {
 
 // gateSubjectRootEqualsSExecutionRoot reports the gate's
 // SubjectRoot is non-empty AND equals the runtime
-// SubjectTree OID. The SubjectTree is the actual detached
-// subject execution root the runner observed; the previous
-// B2 implementation only checked non-empty, so an arbitrary
-// non-empty path could satisfy the predicate. The B2-R1
-// predicate binds the gate root to the recorded execution
-// root so the gate cannot be falsely claimed to have run
-// at a different path.
+// SubjectExecutionRoot path. B2-R1 compared the path to
+// the runtime SubjectTree OID, which is a type error: a
+// filesystem path and a Git tree OID live in different
+// namespaces. B2-R2 separates the two: SubjectRoot is the
+// path the gate ran at, SubjectExecutionRoot is also a
+// path on the runner, and the equality check is a path
+// comparison. The test fixture that hid the B2-R1 bug used
+// the OID in both fields; the B2-R2 fixture uses a real
+// path.
 func gateSubjectRootEqualsSExecutionRoot(c ClosureEvidence) bool {
 	return c.Gate.SubjectRoot != "" &&
-		c.Gate.SubjectRoot == c.Runtime.SubjectTree
+		c.Gate.SubjectRoot == c.Runtime.SubjectExecutionRoot
 }
 
-// gateSubjectExecutionRootMatchesTree reports the gate's
-// SubjectExecutionRoot field (the actual S^{tree} execution
-// root recorded by the gate collector) is non-empty AND
-// equals the runtime SubjectTree OID. The predicate is the
-// companion to gateSubjectRootEqualsSExecutionRoot and
-// closes the B2-R1 requirement that both gate roots are
-// bound to the detached subject execution root.
-func gateSubjectExecutionRootMatchesTree(c ClosureEvidence) bool {
+// gateSubjectExecutionRootMatchesExecutionRoot reports the
+// gate's SubjectExecutionRoot field (the path the gate
+// collector recorded for the detached worktree) is non-empty
+// AND equals the runtime SubjectExecutionRoot path. Together
+// with gateSubjectRootEqualsSExecutionRoot the two fields
+// prove the gate ran at the same path the runner claims to
+// have executed. Neither field is allowed to equal an OID.
+func gateSubjectExecutionRootMatchesExecutionRoot(c ClosureEvidence) bool {
 	return c.Gate.SubjectExecutionRoot != "" &&
-		c.Gate.SubjectExecutionRoot == c.Runtime.SubjectTree
+		c.Gate.SubjectExecutionRoot == c.Runtime.SubjectExecutionRoot
+}
+
+// runtimeExecutionRootEstablished reports the runner
+// supplied a non-empty SubjectExecutionRoot path. The
+// guard is its own predicate so the matrix can fail it
+// independently of the gate-bind checks.
+func runtimeExecutionRootEstablished(c ClosureEvidence) bool {
+	return c.Runtime.SubjectExecutionRoot != ""
 }
 
 // gateNotTimedOut reports the gate did not time out.
@@ -177,37 +187,47 @@ func callerAfterAvailable(c ClosureEvidence) bool {
 }
 
 // callerBeforeSnapshotComplete reports the BEFORE snapshot, if
-// Available, has every observable field non-empty. The
-// previous B2 implementation accepted an Available-but-empty
-// snapshot as long as BEFORE and AFTER were equal; the B2-R1
-// predicate rejects that drift because the runner observed
-// but failed to record the values.
+// Available, has every observable field non-empty AND every
+// field satisfies its structural format. The B2-R1 predicate
+// rejected empty fields; B2-R2 adds the structural validity
+// check because B3 will persist these fields as durable
+// evidence and an Available-but-malformed snapshot is just
+// as undurable as an Available-but-empty one.
+//
+// The format contract:
+//
+//	Head                  -> 40-char hex OID
+//	Tree                  -> 40-char hex OID
+//	StatusHash            -> 64-char lowercase hex SHA-256
+//	RefsHash              -> 64-char lowercase hex SHA-256
+//	WorktreeInventoryHash -> 64-char lowercase hex SHA-256
 func callerBeforeSnapshotComplete(c ClosureEvidence) bool {
 	s := c.CallerBefore
 	if !s.Available {
 		return true
 	}
-	return s.Head != "" &&
-		s.Tree != "" &&
-		s.StatusHash != "" &&
-		s.RefsHash != "" &&
-		s.WorktreeInventoryHash != ""
+	return isValidOID(s.Head) &&
+		isValidOID(s.Tree) &&
+		isHexSHA256(s.StatusHash) &&
+		isHexSHA256(s.RefsHash) &&
+		isHexSHA256(s.WorktreeInventoryHash)
 }
 
 // callerAfterSnapshotComplete reports the AFTER snapshot, if
-// Available, has every observable field non-empty. Pairs with
-// callerBeforeSnapshotComplete to fail-closed when the runner
-// observed a drifted value but failed to record it.
+// Available, has every observable field structurally valid.
+// Pairs with callerBeforeSnapshotComplete to fail-closed when
+// the runner observed a drifted value but failed to record it
+// in the durable format B3 consumes.
 func callerAfterSnapshotComplete(c ClosureEvidence) bool {
 	s := c.CallerAfter
 	if !s.Available {
 		return true
 	}
-	return s.Head != "" &&
-		s.Tree != "" &&
-		s.StatusHash != "" &&
-		s.RefsHash != "" &&
-		s.WorktreeInventoryHash != ""
+	return isValidOID(s.Head) &&
+		isValidOID(s.Tree) &&
+		isHexSHA256(s.StatusHash) &&
+		isHexSHA256(s.RefsHash) &&
+		isHexSHA256(s.WorktreeInventoryHash)
 }
 
 // callerHEADUnchanged reports HEAD did not change between

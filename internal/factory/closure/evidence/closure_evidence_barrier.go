@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 )
 
 // PublicationCandidate is the typed output of the publication
@@ -90,10 +91,22 @@ func MarshalEvidence(candidate ClosureEvidence) ([]byte, error) {
 // caller that injects "completeness":"COMPLETE" or other
 // authority-looking fields must be rejected, not absorbed.
 //
-// The decoder uses json.Decoder with DisallowUnknownFields,
-// requires exactly one JSON document, and rejects trailing
-// values. Any unknown field, multiple objects, trailing
-// content, or genuine syntax error returns a non-nil error.
+// B2-R2 fix: the previous B2-R1 implementation used
+// Decoder.More() to verify EOF, but More() is the wrong
+// primitive. The Go docs define More() as "reporting whether
+// there is another element in the current array or object";
+// EOF after a top-level document is verified by a second
+// Decode call that MUST return io.EOF. Any other return
+// value (a second object, a trailing scalar, malformed
+// trailing garbage) is a strict failure.
+//
+// The decoder in this order:
+//
+//  1. DisallowUnknownFields() rejects unknown object keys
+//     (the "STRICT_UNKNOWN_FIELDS=true" arm).
+//  2. First Decode consumes the single document.
+//  3. Second Decode MUST return io.EOF; any other return
+//     rejects ("STRICT_SINGLE_DOCUMENT=true" arm).
 func UnmarshalClosureEvidence(data []byte) (ClosureEvidence, error) {
 	var out ClosureEvidence
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -101,10 +114,13 @@ func UnmarshalClosureEvidence(data []byte) (ClosureEvidence, error) {
 	if err := dec.Decode(&out); err != nil {
 		return ClosureEvidence{}, fmt.Errorf("evidence: strict decode failed: %w", err)
 	}
-	if dec.More() {
-		return ClosureEvidence{}, fmt.Errorf("evidence: strict decode rejected trailing JSON values")
+	var extra any
+	if err := dec.Decode(&extra); err == io.EOF {
+		return out, nil
+	} else if err != nil {
+		return ClosureEvidence{}, fmt.Errorf("evidence: strict decode failed: %w", err)
 	}
-	return out, nil
+	return ClosureEvidence{}, fmt.Errorf("evidence: strict decode rejected trailing JSON value")
 }
 
 // ComputeEvidenceSHA256 is the external-metadata helper. The

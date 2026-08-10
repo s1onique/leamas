@@ -10,7 +10,7 @@
 // and the predicate rejects the empty presence of an authority
 // field as INCOMPLETE.
 //
-// The 47 predicates are encoded in declaration order. Each
+// The 48 predicates are encoded in declaration order. Each
 // predicate is a separate function so the mutation matrix in
 // TestClosureEvidenceCompletenessCanonical can exercise them
 // independently. The matrix MUST grow with every added
@@ -39,24 +39,22 @@ func DeriveClosureEvidenceCompleteness(candidate ClosureEvidence) EvidenceComple
 }
 
 // completenessPredicatesInOrder is the authoritative ordered
-// list of the 47 predicates. The slice form drives the
+// list of the 48 predicates. The slice form drives the
 // canonical predicate; the map form (completenessPredicates)
 // drives the mutation matrix test. Both MUST stay in sync.
 //
-// B2-R1 changes vs the prior 43-predicate matrix:
-//   - added runtimeExpectedChecksDerivedFromPlanBytes (binds
-//     Plan.ExpectedChecks to the production-decoded Plan
-//     Contract)
-//   - added gateSubjectExecutionRootMatchesTree (companion
-//     gate binding to SubjectTree)
-//   - added binaryPathNonEmpty (replaces the BinaryPath slot
-//     of the removed binaryAuthorityValid composite)
-//   - added callerBeforeSnapshotComplete and
-//     callerAfterSnapshotComplete (Available implies all
-//     observable fields are non-empty)
-//   - removed binaryAuthorityValid (composite of atomic
-//     predicates; one mutation could fail multiple predicates
-//     at once)
+// B2-R2 changes vs the prior 47-predicate matrix:
+//   - renamed gateSubjectExecutionRootMatchesTree to
+//     gateSubjectExecutionRootMatchesExecutionRoot because
+//     the predicate compares a path to a path, not a path to
+//     an OID
+//   - added runtimeExecutionRootEstablished (non-empty
+//     SubjectExecutionRoot path is the source of truth for
+//     the gate-bind predicates)
+//   - structural validity now required for caller snapshots
+//     (Head/Tree OID, StatusHash/RefsHash/WorktreeInventoryHash
+//     SHA-256) so an Available-but-malformed snapshot is
+//     rejected just like an Available-but-empty one
 var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	// runtime predicates (1..8)
 	runtimeIdentitiesStructurallyValid,
@@ -84,16 +82,17 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	resultsNoStderrTruncation,
 	resultsNoExecutionCleanupError,
 
-	// gate predicates (21..27)
+	// gate predicates (21..28)
 	gateClassificationEqualsPASS,
 	gateInvocationCountEqualsOne,
 	gateSubjectRootEqualsSExecutionRoot,
-	gateSubjectExecutionRootMatchesTree,
+	gateSubjectExecutionRootMatchesExecutionRoot,
+	runtimeExecutionRootEstablished,
 	gateNotTimedOut,
 	gateNoOutputTruncation,
 	gateErrorAbsent,
 
-	// binary predicates (28..38)
+	// binary predicates (29..39)
 	binaryPathNonEmpty,
 	binaryCommitEqualsSubjectCommit,
 	binaryNotModified,
@@ -151,7 +150,8 @@ var completenessPredicateNamesInOrder = []string{
 	"gate_classification_equals_pass",
 	"gate_invocation_count_equals_one",
 	"gate_subject_root_equals_s_exec_root",
-	"gate_subject_execution_root_matches_tree",
+	"gate_subject_execution_root_matches_execution_root",
+	"runtime_execution_root_established",
 	"gate_not_timed_out",
 	"gate_no_output_truncation",
 	"gate_error_absent",
@@ -193,10 +193,9 @@ var completenessPredicates = func() map[string]func(ClosureEvidence) bool {
 
 // completenessPredicateCount is the row count the mutation
 // matrix must agree with. Keep in sync with completenessPredicatesInOrder.
-// B2-R1 increased the count from 43 to 47: removed
-// binaryAuthorityValid composite (-1), added five new
-// atomic predicates (+5).
-const completenessPredicateCount = 47
+// B2-R1 increased the count from 43 to 47; B2-R2 increased it
+// to 48 by adding runtimeExecutionRootEstablished.
+const completenessPredicateCount = 48
 
 // ----------------------------------------------------------------------------
 // Small shared helpers
