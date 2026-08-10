@@ -150,7 +150,7 @@ now a table-driven matrix covering every documented
 boundary case:
 
 ```text
-trailing-space    : /tmp/wt trailing-space 
+trailing-space    : /tmp/wt trailing-space<SP>
 leading-space     : /tmp/ leading-space
 embedded-newline  : /tmp/wt\nwith-newline
 ```

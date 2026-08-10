@@ -312,15 +312,17 @@ func isValidSubjectHeadObjectFormat(s string) bool {
 // (Path, HEAD) identity the executor relies on. The
 // annotation set is intentionally narrow.
 //
-// R6-A-CORRECTION02: the parser explicitly does NOT
-// tolerate `bare` (the marker emitted for bare worktrees).
-// Bare worktrees do not have the (Path, HEAD) identity
-// shape the authority assumes, and Closure Protocol V2
-// operates on a real working repository, not on a bare
-// checkout. A bare record is rejected as a malformed
-// structural token so the executor fails closed rather
-// than silently misinterpreting a bare repository as a
-// regular worktree.
+// R6-A-CORRECTION02/CORRECTION03: `bare` is valid Git
+// porcelain syntax (documented as a legitimate boolean
+// attribute for bare worktrees) but is outside the
+// Closure Protocol V2 subject-observation domain. The
+// parser therefore rejects bare fail-closed as an
+// unsupported worktree record, not as malformed syntax:
+// the rejection is intentional policy, not a wire
+// violation. A future R6-X can extend the authority to
+// bare by relaxing this branch; today bare is treated
+// as an observable structural field rather than a
+// non-structural annotation.
 func isKnownPorcelainAnnotation(token string) bool {
 	switch {
 	case strings.HasPrefix(token, "branch "):
@@ -337,11 +339,11 @@ func isKnownPorcelainAnnotation(token string) bool {
 	case token == "pruned":
 		return true
 	case token == "bare":
-		// The parser intentionally rejects bare. A
-		// future R6-X can extend the authority to bare
-		// by relaxing this branch; today bare is an
-		// observable structural field rather than a
-		// non-structural annotation.
+		// R6-A-CORRECTION02/CORRECTION03: reject bare
+		// as outside the subject-observation domain.
+		// The default branch (unknown structural
+		// token) then reports the failure as
+		// subject_observation_unavailable.
 		return false
 	}
 	return false

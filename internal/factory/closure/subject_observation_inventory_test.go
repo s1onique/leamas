@@ -193,15 +193,17 @@ func TestSubjectWorktreeInventoryParserPreservesPathBytes(t *testing.T) {
 			if len(regs) != 1 {
 				t.Fatalf("row %q expected one registration, got %d", row.name, len(regs))
 			}
-			// filepath.Clean strips leading and trailing
-			// whitespace because they are not meaningful
-			// to the OS file system; the canonical
-			// (Path, Head) identity compares post-Clean
-			// paths. The test therefore asserts the path
-			// bytes survive Clean (which preserves the
-			// embedded-newline case and trims the
-			// whitespace cases) rather than survive the
-			// old TrimSpace.
+			// filepath.Clean performs the repository's
+			// lexical path canonicalization (separator
+			// cleanup, ./.., etc.) but it does NOT
+			// generally trim arbitrary whitespace from a
+			// path component. The matrix therefore proves
+			// that whitespace and embedded newlines
+			// survive the parser without TrimSpace: the
+			// parser does not call TrimSpace on the path,
+			// and filepath.Clean does not strip the
+			// whitespace either, so the bytes round-trip
+			// from input to canonical Path.
 			cleaned := filepath.Clean(row.path)
 			if regs[0].Path != cleaned {
 				t.Fatalf("row %q path lost whitespace: got %q want %q",
