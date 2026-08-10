@@ -82,13 +82,15 @@ func validateRunnerAuthorityMap(ra map[string]any) error {
 				Message:      "runner_authority.tool.revision is not a valid OID",
 			}
 		}
+// B2-R6: binary_sha256 MUST be exactly 64 lowercase hex
+// characters. The previous check only validated length.
 		sha, ok := tool["binary_sha256"].(string)
-		if !ok || len(sha) != 64 {
+		if !ok || !lowercaseHex64Pattern.MatchString(sha) {
 			return &DecodeError{
 				Code:         "invalid_tool_sha256",
 				Field:        "runner_authority.tool.binary_sha256",
 				InstancePath: "/runner_authority/tool/binary_sha256",
-				Message:      "runner_authority.tool.binary_sha256 is not a 64-character hex string",
+				Message:      "runner_authority.tool.binary_sha256 is not a 64-character lowercase hexadecimal string",
 			}
 		}
 	default:

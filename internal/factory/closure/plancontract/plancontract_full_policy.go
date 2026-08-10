@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package plancontract - plancontract_full_policy.go owns
-// the Plan Contract v1 /policy validation. B2-R5 makes
-// policy REQUIRED: every closure plan MUST carry all four
-// required fields, and require_clean_before /
-// require_clean_after MUST be true. This is the canonical
-// authority the closure runner and the evidence package
-// share.
+// the Plan Contract v1 /policy validation. B2-R6 requires
+// every closure plan to carry all four required policy
+// siblings as JSON booleans equal to true. This is the
+// canonical authority the closure runner and the evidence
+// package share.
+//
+// B2-R5 made policy REQUIRED and required require_clean_before
+// and require_clean_after to be true. B2-R6 extends the
+// "must equal true" rule to ALL four siblings so the leaf
+// agrees with the canonical descriptor that the closure
+// package's typed validator historically enforced.
 //
 // The closure package's typed validator (closure/plan_policy.go)
-// was deleted in B2-R5 because the wire-contract policy
-// rules now live exclusively here. The closure package's
-// PlanPolicy struct remains as the wire-shape carrier.
+// is preserved for backward compatibility but its rule set
+// now mirrors the leaf exactly; it is no longer an
+// independent authority.
 package plancontract
 
 import "fmt"
@@ -32,10 +37,7 @@ var policyRequiredFields = []string{
 //   - /policy MUST be present as a JSON object (NOT optional,
 //     NOT null).
 //   - each required field MUST be present and a JSON boolean.
-//   - require_clean_before MUST be true.
-//   - require_clean_after MUST be true.
-//   - forbid_tracked_full_digests MUST be present (true or false).
-//   - require_diff_check MUST be present (true or false).
+//   - ALL four required booleans MUST equal true.
 //   - any unrecognised sibling MUST be rejected.
 func validatePolicyRequired(obj map[string]any) error {
 	rawPolicy, ok := obj["policy"]
@@ -60,6 +62,9 @@ func validatePolicyRequired(obj map[string]any) error {
 }
 
 // validatePolicyMap enforces the per-field policy rules.
+// B2-R6: ALL four required siblings MUST equal true, not
+// just require_clean_before/after. The leaf's diagnostic
+// is the canonical authority.
 func validatePolicyMap(policy map[string]any) error {
 	for _, key := range policyRequiredFields {
 		v, ok := policy[key]
@@ -80,20 +85,12 @@ func validatePolicyMap(policy map[string]any) error {
 				Message:      fmt.Sprintf("policy.%s must be a boolean", key),
 			}
 		}
-		if key == "require_clean_before" && !b {
+		if !b {
 			return &DecodeError{
-				Code:         "clean_before_required_true",
-				Field:        "policy.require_clean_before",
-				InstancePath: "/policy/require_clean_before",
-				Message:      "policy.require_clean_before must be true",
-			}
-		}
-		if key == "require_clean_after" && !b {
-			return &DecodeError{
-				Code:         "clean_after_required_true",
-				Field:        "policy.require_clean_after",
-				InstancePath: "/policy/require_clean_after",
-				Message:      "policy.require_clean_after must be true",
+				Code:         "policy_required_true",
+				Field:        "policy." + key,
+				InstancePath: "/policy/" + key,
+				Message:      fmt.Sprintf("policy.%s must be true", key),
 			}
 		}
 	}

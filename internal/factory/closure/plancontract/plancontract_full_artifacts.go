@@ -13,6 +13,7 @@ package plancontract
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // validateArtifactsOptional enforces:
@@ -114,12 +115,23 @@ func validateArtifactMap(index int, raw any, seenIDs map[string]struct{}) error 
 		}
 	}
 
+// B2-R6: required MUST be a JSON boolean. The previous
+// "is the key present" check accepted "required":"yes"
+// which broke the typed-Plan pointer semantics.
 	if _, ok := artifact["required"]; !ok {
 		return &DecodeError{
 			Code:         "missing_field",
 			Field:        fmt.Sprintf("artifacts[%d].required", index),
 			InstancePath: fmt.Sprintf("/artifacts/%d/required", index),
 			Message:      fmt.Sprintf("artifacts[%d].required is required", index),
+		}
+	}
+	if _, ok := artifact["required"].(bool); !ok {
+		return &DecodeError{
+			Code:         "invalid_type",
+			Field:        fmt.Sprintf("artifacts[%d].required", index),
+			InstancePath: fmt.Sprintf("/artifacts/%d/required", index),
+			Message:      fmt.Sprintf("artifacts[%d].required must be a boolean", index),
 		}
 	}
 
@@ -151,8 +163,11 @@ func validateArtifactMap(index int, raw any, seenIDs map[string]struct{}) error 
 		}
 	}
 
+// B2-R6: media_type MUST reject whitespace-only values.
+// The historical typed-Plan validator trimmed whitespace
+// before checking emptiness; preserve that contract.
 	mediaType, ok := artifact["media_type"].(string)
-	if !ok || mediaType == "" || containsClosurePlaceholder(mediaType) {
+		if !ok || strings.TrimSpace(mediaType) == "" || containsClosurePlaceholder(mediaType) {
 		return &DecodeError{
 			Code:         "invalid_media_type",
 			Field:        fmt.Sprintf("artifacts[%d].media_type", index),
