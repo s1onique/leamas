@@ -49,8 +49,8 @@ func validateRepositoryRelativePath(path string, allowDot bool, allowAbs bool) e
 // canonical type directly).
 func errInvalidRepoPath(msg string) error {
 	return &DecodeError{
-		Code:         "invalid_repo_path",
-		Message:      msg,
+		Code:    "invalid_repo_path",
+		Message: msg,
 	}
 }
 

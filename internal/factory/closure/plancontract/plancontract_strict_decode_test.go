@@ -47,8 +47,8 @@ func TestPlanContractStrictDecodeRejectsDuplicateKeys(t *testing.T) {
 
 	rows := []row{
 		{
-			name: "valid document",
-			bytes: []byte(`{"schema_version":1,"protocol":"v1"}`),
+			name:    "valid document",
+			bytes:   []byte(`{"schema_version":1,"protocol":"v1"}`),
 			wantErr: false,
 		},
 		{

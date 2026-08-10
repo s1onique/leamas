@@ -1,3 +1,40 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Package closure - plan.go is the closure-side Plan
+// Contract v1 entry surface.
+//
+// B2-R7 motivation: prior to B2-R7, this file owned the
+// closure runner's typed Plan semantic validator and a
+// hand-maintained set of helpers (validatePlanChecks,
+// validatePlanArtifacts, validatePlanPolicy, etc.) that
+// reproduced every wire-contract rule already enforced by
+// the plancontract leaf. Two authorities cannot agree on
+// whether a plan is valid; the closure runner therefore
+// carried a duplicate semantic authority that the B2-R4
+// "parity assertion" only loosely guarded.
+//
+// B2-R7 deletes every duplicate semantic helper in this
+// package. The typed validators are gone; only the entry
+// points remain. The leaf is now the single semantic
+// authority. validatePlanTyped (the closure-side typed
+// validator) is preserved as a thin adapter in
+// plan_adapter.go so the existing PlanSemanticError
+// diagnostics continue to flow through the legacy
+// typed-error contract.
+//
+// This file owns only:
+//   - the public typed Plan struct surface (kept in
+//     model.go for historical reasons),
+//   - the typed-decode + size-bounded file-load entry
+//     points (DecodePlan, LoadPlan, LoadPlanFromBytes),
+//   - the EncodePlanForValidation helper the adapter
+//     uses to materialise bytes for the leaf,
+//   - a few misc I/O helpers (readBoundedFile) shared
+//     by the loaders.
+//
+// NO wire-contract rule lives here. NO semantic
+// validator lives here. NO typed Plan field is mutated
+// here.
 package closure
 
 import (
@@ -6,35 +43,18 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"regexp"
-	"sort"
-	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/closure/plancontract"
 )
 
-var (
-	actIDPattern           = regexp.MustCompile(`^ACT-[A-Z0-9][A-Z0-9-]{2,199}$`)
-	itemIDPattern          = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
-	oidPattern             = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
-	environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-)
-
-// planExecutionModePath is the canonical JSON pointer used in every
-// diagnostic that names the execution-mode field. Centralising the
-// string keeps the runtime, JSON Schema, and CLI subprocess tests
-// aligned.
-const planExecutionModePath = "/execution/mode"
-
-// DecodePlan is the legacy public entry point. It preserves the
-// documented contract: parse, decode, and ValidatePlan in
-// sequence. The internal composed pipeline routes the bytes
-// through parseBoundedClosurePlanDocument (the single bounded
-// syntactic authority) and the typed-decoder through
-// decodeTypedPlan; composition observability is invocation-local
-// via the compositionObserver interface in
-// plan_contract_validation.go.
+// DecodePlan is the legacy public entry point. It preserves
+// the documented contract: parse, decode, and ValidatePlan
+// in sequence. The internal composed pipeline routes the
+// bytes through parseBoundedClosurePlanDocument (the single
+// bounded syntactic authority) and the typed-decoder
+// through decodeTypedPlan; composition observability is
+// invocation-local via the compositionObserver interface
+// in plan_contract_validation.go.
 func DecodePlan(data []byte) (Plan, error) {
 	root, parseDiagnostics := parseBoundedClosurePlanDocument(data)
 	if len(parseDiagnostics) > 0 {
@@ -50,20 +70,26 @@ func DecodePlan(data []byte) (Plan, error) {
 	return plan, nil
 }
 
-// decodeTypedPlan turns the already-parsed document root into a
-// typed Plan. It uses the same canonical JSON encoder/decoder pair
-// as the parser so no second syntactic parse occurs. The typed
-// decoder uses DisallowUnknownFields so unknown JSON keys still
-// surface as a typed decode error even when the structural
-// validator has accepted the document.
+// decodeTypedPlan turns the already-parsed document root
+// into a typed Plan. It uses the same canonical JSON
+// encoder/decoder pair as the parser so no second
+// syntactic parse occurs. The typed decoder uses
+// DisallowUnknownFields so unknown JSON keys still
+// surface as a typed decode error even when the
+// structural validator has accepted the document.
 func decodeTypedPlan(root any) (Plan, error) {
 	return decodeTypedPlanWithObserver(root, noopCompositionObserver{})
 }
 
-// decodeTypedPlanWithObserver is the internal entry point the
-// composed pipeline uses. The observer is invocation-local; tests
-// pass a per-assertion counting observer and production passes the
-// noop observer.
+// decodeTypedPlanWithObserver is the internal entry point
+// the composed pipeline uses. The observer is invocation-
+// local; tests pass a per-assertion counting observer and
+// production passes the noop observer. The function is a
+// pure typed-decoder wrapper: it does NOT validate any
+// wire-contract rule (the canonical plancontract leaf
+// owns those). DisallowUnknownFields surfaces unknown JSON
+// keys as a typed decode error so a structural validator
+// that accepted the document still rejects unknown fields.
 func decodeTypedPlanWithObserver(root any, observer compositionObserver) (Plan, error) {
 	observer.TypedDecoded()
 	buf, err := json.Marshal(root)
@@ -79,9 +105,9 @@ func decodeTypedPlanWithObserver(root any, observer compositionObserver) (Plan, 
 	return plan, nil
 }
 
-// errorFromDiagnostics turns a list of structural diagnostics into
-// a Go error so the legacy DecodePlan preserves its (Plan{}, error)
-// return contract.
+// errorFromDiagnostics turns a list of structural
+// diagnostics into a Go error so the legacy DecodePlan
+// preserves its (Plan{}, error) return contract.
 func errorFromDiagnostics(diags []PlanValidationError) error {
 	if len(diags) == 0 {
 		return nil
@@ -90,7 +116,7 @@ func errorFromDiagnostics(diags []PlanValidationError) error {
 }
 
 func LoadPlan(path string) (Plan, []byte, error) {
-	data, err := readBoundedFile(path, MaxPlanBytes)
+	data, err := readBoundedFile(path, plancontract.MaxPlanBytes)
 	if err != nil {
 		return Plan{}, nil, fmt.Errorf("read closure plan: %w", err)
 	}
@@ -101,14 +127,16 @@ func LoadPlan(path string) (Plan, []byte, error) {
 	return plan, data, nil
 }
 
-// LoadPlanFromBytes parses plan bytes without reading from the filesystem.
-// It enforces the size bound and strict JSON syntax only; callers that need
-// an executable plan must subsequently invoke ValidatePlan explicitly.
+// LoadPlanFromBytes parses plan bytes without reading from
+// the filesystem. It enforces the size bound and strict
+// JSON syntax only; callers that need an executable plan
+// must subsequently invoke ValidatePlan explicitly.
 //
 // B2-R2: the bounded syntactic decoder is the canonical
 // plancontract.DecodeBytes. The closure runner and the
-// evidence package both consume the same parser pass so the
-// production decoder and the evidence decoder cannot diverge.
+// evidence package both consume the same parser pass so
+// the production decoder and the evidence decoder cannot
+// diverge.
 func LoadPlanFromBytes(data []byte) (Plan, []byte, error) {
 	root, err := plancontract.DecodeBytes(data)
 	if err != nil {
@@ -134,232 +162,35 @@ func convertPlanContractError(err error) string {
 // ValidatePlan is the typed-Plan entry point for the
 // closure runner's plan validation.
 //
-// B2-R4 keeps the typed semantic validators intact for
-// backward compatibility with the closure package's
-// diagnostic contracts (PlanSemanticError, typed
-// JSON-pointer paths, etc.) AND asserts that the
-// re-encoded plan passes plancontract.ValidateFull. This
-// guarantees that every closure-typed semantic rule has a
-// matching wire-contract rule in the plancontract leaf;
-// any divergence is caught here.
-//
-// The function is the closure runner's authoritative
-// plan validator. The evidence package uses
-// plancontract.ValidateFullAndProject so the two paths
-// share the same complete semantic authority (the leaf).
+// B2-R7 single-authority rule: the function delegates to
+// plancontract.DecodeAndValidateFull and adapts the leaf's
+// DecodeError back to the closure package's legacy
+// PlanSemanticError contract. The function MUST NOT
+// re-implement any wire-contract rule. The adapter body
+// is in plan_adapter.go; this comment marks the entry
+// point as a thin shim over the canonical leaf.
 func ValidatePlan(plan Plan) error {
-	if err := validatePlanTyped(plan); err != nil {
-		return err
-	}
-	// Cross-authority parity assertion: re-encode the
-	// typed plan to its wire shape and assert the leaf
-	// accepts it. The leaf MUST agree with the typed
-	// validator on every wire-contract rule. Any
-	// divergence surfaces here as a typed error.
-	bytes, err := encodePlanForValidation(plan)
-	if err != nil {
-		return fmt.Errorf("plan rejected by structural validation: marshal typed plan: %w", err)
-	}
-	if err := plancontract.ValidateFull(bytes); err != nil {
-		return fmt.Errorf("plan rejected by structural validation: parity with leaf: %s", err)
-	}
-	return nil
+	return validatePlanTyped(plan)
 }
 
-// validatePlanTyped is the B2-R4 typed semantic authority
-// preserved for backward compatibility. The function
-// reproduces the pre-R4 closure.ValidatePlan body. The
-// rules are duplicated in plancontract.ValidateFull so
-// the leaf and the closure runner can each reject without
-// depending on the other; the parity assertion in
-// ValidatePlan ensures the two cannot drift.
-func validatePlanTyped(plan Plan) error {
-	if plan.ContractVersion != ContractVersionV1 {
-		return errUnsupportedContractVersion(plan.ContractVersion)
-	}
-	if !actIDPattern.MatchString(plan.ActID) || containsClosurePlaceholder(plan.ActID) {
-		return errInvalidActID(plan.ActID)
-	}
-	if err := validateBaselineCommitOID(plan.Baseline.CommitOID); err != nil {
-		return err
-	}
-	if err := validateBaselineTreeOID(plan.Baseline.TreeOID); err != nil {
-		return err
-	}
-	if err := validatePlanExecutionMode(plan.Execution); err != nil {
-		return err
-	}
-	if len(plan.Checks) == 0 || len(plan.Checks) > MaxChecks {
-		return errInvalidChecksCount(len(plan.Checks))
-	}
-	if len(plan.Artifacts) > MaxArtifacts {
-		return errInvalidArtifactsCount(len(plan.Artifacts))
-	}
-	if err := validatePlanChecks(plan.Checks); err != nil {
-		return err
-	}
-	if err := validatePlanArtifacts(plan.Artifacts); err != nil {
-		return err
-	}
-	if err := validatePlanPolicy(plan.Policy); err != nil {
-		return err
-	}
-	if err := validatePlanAuthority(plan); err != nil {
-		return err
-	}
-	if err := ValidateRunnerAuthority(plan.RunnerAuthority); err != nil {
-		return err
-	}
-	return nil
-}
-
-// encodePlanForValidation re-encodes the typed Plan to the
-// Plan Contract v1 wire shape. The re-encoded bytes are
-// semantically equivalent to the source bytes (modulo
-// whitespace) so the plancontract.ValidateFull parity
-// assertion is authoritative.
+// encodePlanForValidation re-encodes the typed Plan to
+// the Plan Contract v1 wire shape. The adapter uses the
+// re-encoded bytes as the canonical input to
+// plancontract.DecodeAndValidateFull so the leaf's strict
+// syntax + semantic pipeline is the single authority over
+// every wire-contract rule.
+//
+// The re-encoded bytes are semantically equivalent to the
+// source bytes (modulo whitespace) because every typed
+// field is a value type or a pointer whose zero value is
+// the canonical "absent" signal the leaf accepts.
 func encodePlanForValidation(plan Plan) ([]byte, error) {
 	return json.Marshal(plan)
 }
 
-// validatePlanExecutionMode is the single, authoritative entry point
-// for runtime execution-mode validation. It distinguishes every
-// presence category the JSON Schema recognises:
-//
-//   - the property absent            → ExecutionModeMissing;
-//   - the property present, ""        → ExecutionModePresentEmpty;
-//   - the property present, "   "     → ExecutionModePresentWhitespace;
-//   - the property present, anything else not in the closed enum
-//     → ExecutionModePresentUnknown.
-//
-// Every category is rejected. The validator never falls back to a
-// privileged default mode and never accepts an alias.
-func validatePlanExecutionMode(execution PlanExecution) error {
-	if execution.Mode == nil {
-		return &ExecutionModeError{
-			Path:      planExecutionModePath,
-			Value:     "",
-			Presence:  ExecutionModeMissing,
-			Supported: SupportedExecutionModes(),
-		}
-	}
-	_, err := ParseExecutionMode(planExecutionModePath, string(*execution.Mode))
-	return err
-}
-
-func validatePlanChecks(checks []PlanCheck) error {
-	seen := make(map[string]int, len(checks))
-	for i, check := range checks {
-		if !itemIDPattern.MatchString(check.ID) || containsClosurePlaceholder(check.ID) {
-			return errInvalidCheckID(i, check.ID)
-		}
-		if _, exists := seen[check.ID]; exists {
-			return errDuplicateCheckID(i, check.ID)
-		}
-		seen[check.ID] = i
-		switch check.Mode {
-		case CheckModeRun:
-			if err := validateRunnableCheck(i, check); err != nil {
-				return err
-			}
-		case CheckModeExclude:
-			if strings.TrimSpace(check.Reason) == "" || strings.ContainsAny(check.Reason, "\r\n") || len(check.Reason) > 240 || containsClosurePlaceholder(check.Reason) {
-				return errInvalidCheckReason(i)
-			}
-			if len(check.Argv) != 0 || check.WorkingDirectory != "" ||
-				check.TimeoutSeconds != 0 || check.Environment != nil {
-				return errExclusionWithExecutionFields(i, check)
-			}
-		default:
-			return errUnknownCheckMode(i, string(check.Mode))
-		}
-	}
-	return nil
-}
-
-func validateRunnableCheck(index int, check PlanCheck) error {
-	if len(check.Argv) == 0 || len(check.Argv) > MaxArgvElements {
-		return errInvalidCheckArgvCount(index)
-	}
-	for argIndex, arg := range check.Argv {
-		if arg == "" || strings.ContainsRune(arg, 0) || containsClosurePlaceholder(arg) {
-			return errInvalidCheckArgvElement(index, argIndex)
-		}
-	}
-	if err := portablePathValidate(check.WorkingDirectory, true, false); err != nil {
-		return errInvalidCheckWorkingDirectory(index, err)
-	}
-	if check.TimeoutSeconds <= 0 || check.TimeoutSeconds > MaxCheckTimeoutSeconds {
-		return errInvalidCheckTimeout(index)
-	}
-	if check.Environment == nil || len(check.Environment) > MaxEnvironmentEntries {
-		return errInvalidCheckEnvironment(index)
-	}
-	// Sort environment keys for deterministic validation.
-	keys := make([]string, 0, len(check.Environment))
-	for k := range check.Environment {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, name := range keys {
-		value := check.Environment[name]
-		if !environmentNamePattern.MatchString(name) || strings.ContainsRune(value, 0) {
-			return errInvalidCheckEnvironmentKey(index, name)
-		}
-	}
-	if check.Reason != "" {
-		return errRunnableCheckWithReason(index)
-	}
-	return nil
-}
-
-func validatePlanArtifacts(artifacts []PlanArtifact) error {
-	seen := make(map[string]int, len(artifacts))
-	for i, artifact := range artifacts {
-		if !itemIDPattern.MatchString(artifact.ID) || containsClosurePlaceholder(artifact.ID) {
-			return errInvalidArtifactID(i, artifact.ID)
-		}
-		if _, exists := seen[artifact.ID]; exists {
-			return errDuplicateArtifactID(i, artifact.ID)
-		}
-		seen[artifact.ID] = i
-		if err := validateRepositoryRelativePath(artifact.Path, false); err != nil {
-			return errInvalidArtifactPath(i)
-		}
-		if artifact.Required == nil {
-			return errMissingArtifactRequired(i)
-		}
-		if artifact.MaxBytes <= 0 {
-			return errInvalidArtifactMaxBytes(i)
-		}
-		if strings.TrimSpace(artifact.MediaType) == "" || containsClosurePlaceholder(artifact.MediaType) {
-			return errInvalidArtifactMediaType(i)
-		}
-		role := ArtifactRoleFor(artifact)
-		if !validArtifactRole(role) {
-			return errInvalidArtifactRole(i, string(role))
-		}
-	}
-	return nil
-}
-
-func validateRepositoryRelativePath(path string, allowDot bool) error {
-	if path == "" || filepath.IsAbs(path) || strings.ContainsRune(path, 0) || containsClosurePlaceholder(path) {
-		return fmt.Errorf("must be a non-empty repository-relative path")
-	}
-	clean := filepath.Clean(path)
-	if clean == "." && allowDot {
-		return nil
-	}
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("must not escape the repository")
-	}
-	if clean != path {
-		return fmt.Errorf("must be lexically clean")
-	}
-	return nil
-}
-
+// readBoundedFile reads up to limit bytes from path. The
+// caller MUST supply limit; the cap is enforced before
+// allocation so a runaway file cannot exhaust memory.
 func readBoundedFile(path string, limit int) ([]byte, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -386,22 +217,28 @@ func readBoundedFile(path string, limit int) ([]byte, error) {
 	return data, nil
 }
 
-// validateOID validates any OID field using the generic string-based dispatch.
-// This is used by manifest and runner identity validation where field identity
-// is implicit from context. For plan baseline validation, use validateBaselineCommitOID
-// and validateBaselineTreeOID directly for explicit field paths.
-func validateOID(field, value string) error {
-	if containsClosurePlaceholder(value) {
-		if field == "baseline.commit_oid" {
-			return errBaselineCommitOIDPlaceholder()
-		}
-		return errBaselineTreeOIDPlaceholder()
-	}
-	if !oidPattern.MatchString(value) {
-		if field == "baseline.commit_oid" {
-			return errInvalidBaselineCommitOID(value)
-		}
-		return errInvalidBaselineTreeOID(value)
-	}
-	return nil
+// planExecutionModePath is the canonical JSON pointer
+// used in every diagnostic that names the execution-mode
+// field. Centralising the string keeps the runtime,
+// JSON Schema, and CLI subprocess tests aligned. B2-R7
+// preserves the constant for diagnostic compatibility;
+// the canonical semantic authority lives in plancontract.
+const planExecutionModePath = "/execution/mode"
+
+// exactClosurePlaceholders is the closure-package alias
+// for the canonical plancontract placeholder set. The
+// alias exists so existing test files that probe the
+// set directly (for example, render tests) keep working
+// without reaching into the plancontract package's
+// unexported symbol.
+//
+// B2-R7 single-source rule: the underlying set lives in
+// plancontract.exactClosurePlaceholders; this alias is
+// the only mirror.
+var exactClosurePlaceholders = map[string]struct{}{
+	"TBD":            {},
+	"TODO":           {},
+	"UNKNOWN":        {},
+	"RUNNING":        {},
+	"TO BE RECORDED": {},
 }

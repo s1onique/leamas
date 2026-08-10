@@ -15,45 +15,35 @@
 // the DecodeError to its legacy typed PlanSemanticError;
 // the evidence package calls this leaf directly.
 //
-// This file owns only the entry points (ValidateFull,
-// ValidateFullAndProject, ValidateFullMap,
-// DecodeAndValidateFull) and dispatches to the per-section
-// helpers in plancontract_full_*.go. Each helper file stays
-// under the LLM-friendly 400-line threshold.
+// B2-R7 introduces the canonical ValidatedPlan projection
+// (see plancontract_validated.go). DecodeAndValidateFull
+// is the single canonical entry point that returns the
+// projected ValidatedPlan; ValidateFull is a thin wrapper
+// for callers that only need an error result.
+//
+// This file owns the convenience wrappers and dispatches
+// to the per-section helpers in plancontract_full_*.go.
+// Each helper file stays under the LLM-friendly 400-line
+// threshold.
 package plancontract
 
 import "encoding/json"
 
-// DecodeAndValidateFull is the B2-R5 single complete
-// authority for Plan Contract v1 decoding and semantic
-// validation. It composes the bounded syntactic decoder
-// (DecodeBytes) with the full semantic pass (ValidateFull).
-//
-// The function is the only entry point both the closure
-// runner and the evidence package use for the F:P contract.
-// No closure-package or evidence-package code path may
-// bypass it; doing so would re-introduce the second
-// authority B2-R4 left behind.
-func DecodeAndValidateFull(data []byte) error {
-	root, err := DecodeBytes(data)
-	if err != nil {
-		return err
-	}
-	obj, ok := root.(map[string]any)
-	if !ok {
-		return &DecodeError{
-			Code:    "invalid_json",
-			Message: "root is not a JSON object",
-		}
-	}
-	return ValidateFullMap(obj)
-}
-
 // ValidateFull enforces the full Plan Contract v1 semantic
-// invariants on the supplied bytes. It is a convenience
-// wrapper around DecodeAndValidateFull.
+// invariants on the supplied bytes. It is the canonical
+// public entry point for callers that only need an error
+// result. The function composes DecodeBytes with the full
+// semantic pass and returns nil on success.
+//
+// B2-R7 single-authority rule: this function is the only
+// entry point both the closure runner and the evidence
+// package use for the F:P contract when an error is the
+// only signal needed. Callers that also need the
+// canonical projected representation should use
+// DecodeAndValidateFull instead.
 func ValidateFull(data []byte) error {
-	return DecodeAndValidateFull(data)
+	_, err := DecodeAndValidateFull(data)
+	return err
 }
 
 // ValidateFullAndProject is the canonical evidence-package
@@ -63,10 +53,11 @@ func ValidateFull(data []byte) error {
 // evidence package's PlanCheckSpec list derives from. The
 // combined call avoids a redundant second decode pass.
 //
-// The closure runner calls ValidateFull on the frozen
-// bytes; the evidence package calls ValidateFullAndProject
-// so it can both reject invalid plans AND extract the
-// canonical check set in a single decoder pass.
+// B2-R7: this function is preserved for callers that want
+// only the minimal projection. New code that needs the
+// full canonical projection should call
+// DecodeAndValidateFull and read the ValidatedPlan
+// directly.
 func ValidateFullAndProject(data []byte) (DecodeResult, error) {
 	root, err := DecodeBytes(data)
 	if err != nil {
@@ -109,12 +100,12 @@ func ValidatePolicyBytes(data []byte) error {
 
 // ValidateFullMap enforces the full Plan Contract v1
 // semantic invariants on the supplied parsed JSON root.
-// Callers that already have a parsed root (for example, the
-// closure runner after its bounded syntactic decode) may
-// invoke this directly without re-decoding the bytes.
+// Callers that already have a parsed root (for example,
+// the closure runner after its bounded syntactic decode)
+// may invoke this directly without re-decoding the bytes.
 //
-// The function returns a typed *DecodeError so callers can
-// distinguish failure categories by Code.
+// The function returns a typed *DecodeError so callers
+// can distinguish failure categories by Code.
 func ValidateFullMap(obj map[string]any) error {
 	if err := validateContractVersion(obj); err != nil {
 		return err

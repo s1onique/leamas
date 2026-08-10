@@ -30,11 +30,11 @@ import (
 const (
 	// MaxChecks is the maximum number of checks a Plan
 	// Contract v1 document may declare.
-	MaxChecks = 10_000
+	MaxChecks = 4096
 
 	// MaxArtifacts is the maximum number of artifacts a
 	// Plan Contract v1 document may declare.
-	MaxArtifacts = 10_000
+	MaxArtifacts = 4096
 
 	// MaxArgvElements is the maximum number of argv
 	// elements a single check may declare.
