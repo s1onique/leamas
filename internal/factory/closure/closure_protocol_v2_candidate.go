@@ -60,6 +60,28 @@ const (
 type v2RunCandidate struct {
 	Manifest      V2Manifest
 	ManifestBytes []byte
+	// SubjectWorktreePath is the absolute filesystem path of
+	// the detached subject worktree the runner executed
+	// against. Empty when the runner did not observe a
+	// detached worktree.
+	SubjectWorktreePath string
+	// TopologyFacts is the resolved topology the inner runner
+	// proved. The observation derives FAncestorOfSVerified
+	// from this struct, not from a hard-coded boolean.
+	TopologyFacts V2TopologyFacts
+	// SubjectRegistrationBytes are the raw bytes of the
+	// worktree registration set at S. The B2 barrier hashes
+	// these to produce WorktreeInventoryHash; the runner
+	// does not hash a constant string.
+	SubjectRegistrationBytes []byte
+	// RefsBytes are the raw bytes of the refs authority at S.
+	RefsBytes []byte
+	// StatusPorcelain is the raw porcelain status text the
+	// runner observed at S.
+	StatusPorcelain string
+	// CleanupError is the bounded-cleanup error string the
+	// runner observed. Empty means no error.
+	CleanupError string
 }
 
 // V2RunnerSnapshotFunc captures the caller-state observation
