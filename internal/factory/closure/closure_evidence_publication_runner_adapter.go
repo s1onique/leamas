@@ -281,20 +281,21 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	if collector.Calls() != 1 {
 		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate invocation count %d != 1", collector.Calls())
 	}
-	// R6-B-CORRECTION02: the gate failure modes must fail
-	// the integration closed. The collector records the
-	// observed failure; the integration MUST surface it
-	// as a typed error so the B2 predicate never sees a
-	// truncated, timed-out, or nonzero-exit gate.
+	// R6-B-CORRECTION03: the gate failure modes report
+	// through the classifier. The integration records
+	// the observed GateCapture (with the authoritative
+	// truncation flags) and lets ClassifyACTOwnedGate
+	// produce the FAIL / UNAVAILABLE verdict. The B2
+	// predicate then sees the classified gate authority.
 	gate := execResult.Result.GateCapture
 	if gate.TimedOut {
-		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate timeout")
+		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate timeout reached classifier; classification UNAVAILABLE")
 	}
 	if gate.StdoutTruncated || gate.StderrTruncated {
-		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate output truncated")
+		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate output truncated reached classifier; classification FAIL")
 	}
 	if gate.ExitCode != 0 {
-		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate nonzero exit (%d)", gate.ExitCode)
+		return execResult.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: gate nonzero exit (%d) reached classifier; classification FAIL", gate.ExitCode)
 	}
 	// The lane-results check has been removed: the canonical
 	// GateCollector records whatever the parser extracts
