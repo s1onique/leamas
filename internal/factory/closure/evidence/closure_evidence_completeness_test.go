@@ -271,6 +271,20 @@ func TestClosureEvidenceCompletenessCanonical(t *testing.T) {
 		{"gate_subject_execution_root_matches_execution_root: mismatch", func(c *ClosureEvidence) {
 			c.Gate.SubjectExecutionRoot = "/tmp/wrong-path"
 		}},
+		{"gate_repository_root_equals_runtime_repository_root: empty gate repo root", func(c *ClosureEvidence) {
+			c.Gate.RepositoryRoot = ""
+		}},
+		{"gate_repository_root_equals_runtime_repository_root: mismatch", func(c *ClosureEvidence) {
+			c.Gate.RepositoryRoot = "/repo/B"
+		}},
+		// B2-R3 differential: contract_version != 1 must be rejected
+		// by both the production decoder and the evidence decoder.
+		{"runtime_expected_checks_derived_from_plan_bytes: contract_version=2", func(c *ClosureEvidence) {
+			other := []byte("{\"contract_version\":2,\"checks\":[{\"id\":\"c1\",\"mode\":\"run\"}]}")
+			sum := sha256.Sum256(other)
+			c.Runtime.PlanBytes = other
+			c.Runtime.PlanSHA256 = hex.EncodeToString(sum[:])
+		}},
 		// Production-shaped failing test: try to use the SubjectTree
 		// OID as a path. The previous B2-R1 implementation only
 		// checked non-empty, so this would have passed. B2-R2

@@ -214,7 +214,7 @@ func TestPlanContractDecodeBytesReturnsParsedObject(t *testing.T) {
 // pass so the two surfaces cannot diverge.
 func TestPlanContractTypedAndObjectSurfacesAgree(t *testing.T) {
 	t.Parallel()
-	bytes := []byte(`{"contract_version":2,"checks":[` +
+	bytes := []byte(`{"contract_version":1,"checks":[` +
 		`{"id":"a","mode":"run"},` +
 		`{"id":"b","mode":"exclude"}` +
 		`]}`)

@@ -51,6 +51,17 @@ func gateSubjectRootEqualsSExecutionRoot(c ClosureEvidence) bool {
 		c.Gate.SubjectRoot == c.Runtime.SubjectExecutionRoot
 }
 
+// gateRepositoryRootEqualsRuntimeRepositoryRoot reports the
+// gate's repository authority is bound to the runner's
+// repository authority. The previous B2-R2 matrix did not
+// include this predicate, so a candidate could carry
+// different "repository roots" in the gate and the runtime
+// records and still be COMPLETE. B2-R3 closes the gap.
+func gateRepositoryRootEqualsRuntimeRepositoryRoot(c ClosureEvidence) bool {
+	return c.Gate.RepositoryRoot != "" &&
+		c.Gate.RepositoryRoot == c.Runtime.RepositoryRoot
+}
+
 // gateSubjectExecutionRootMatchesExecutionRoot reports the
 // gate's SubjectExecutionRoot field (the path the gate
 // collector recorded for the detached worktree) is non-empty

@@ -10,7 +10,7 @@
 // and the predicate rejects the empty presence of an authority
 // field as INCOMPLETE.
 //
-// The 48 predicates are encoded in declaration order. Each
+// The 49 predicates are encoded in declaration order. Each
 // predicate is a separate function so the mutation matrix in
 // TestClosureEvidenceCompletenessCanonical can exercise them
 // independently. The matrix MUST grow with every added
@@ -39,22 +39,14 @@ func DeriveClosureEvidenceCompleteness(candidate ClosureEvidence) EvidenceComple
 }
 
 // completenessPredicatesInOrder is the authoritative ordered
-// list of the 48 predicates. The slice form drives the
+// list of the 49 predicates. The slice form drives the
 // canonical predicate; the map form (completenessPredicates)
 // drives the mutation matrix test. Both MUST stay in sync.
 //
-// B2-R2 changes vs the prior 47-predicate matrix:
-//   - renamed gateSubjectExecutionRootMatchesTree to
-//     gateSubjectExecutionRootMatchesExecutionRoot because
-//     the predicate compares a path to a path, not a path to
-//     an OID
-//   - added runtimeExecutionRootEstablished (non-empty
-//     SubjectExecutionRoot path is the source of truth for
-//     the gate-bind predicates)
-//   - structural validity now required for caller snapshots
-//     (Head/Tree OID, StatusHash/RefsHash/WorktreeInventoryHash
-//     SHA-256) so an Available-but-malformed snapshot is
-//     rejected just like an Available-but-empty one
+// B2-R3 changes vs the prior 48-predicate matrix:
+//   - added gateRepositoryRootEqualsRuntimeRepositoryRoot so
+//     the gate's repository authority is bound to the
+//     runtime's repository authority (no implicit equality).
 var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	// runtime predicates (1..8)
 	runtimeIdentitiesStructurallyValid,
@@ -82,17 +74,18 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	resultsNoStderrTruncation,
 	resultsNoExecutionCleanupError,
 
-	// gate predicates (21..28)
+	// gate predicates (21..29)
 	gateClassificationEqualsPASS,
 	gateInvocationCountEqualsOne,
 	gateSubjectRootEqualsSExecutionRoot,
+	gateRepositoryRootEqualsRuntimeRepositoryRoot,
 	gateSubjectExecutionRootMatchesExecutionRoot,
 	runtimeExecutionRootEstablished,
 	gateNotTimedOut,
 	gateNoOutputTruncation,
 	gateErrorAbsent,
 
-	// binary predicates (29..39)
+	// binary predicates (30..40)
 	binaryPathNonEmpty,
 	binaryCommitEqualsSubjectCommit,
 	binaryNotModified,
@@ -105,7 +98,7 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 	binarySHA256Valid,
 	binaryCleanupErrorAbsent,
 
-	// caller predicates (39..47)
+	// caller predicates (41..49)
 	callerBeforeAvailable,
 	callerAfterAvailable,
 	callerBeforeSnapshotComplete,
@@ -120,12 +113,8 @@ var completenessPredicatesInOrder = []func(ClosureEvidence) bool{
 // completenessPredicateNamesInOrder is the ordered list of
 // predicate names parallel to completenessPredicatesInOrder.
 // The mutation matrix asserts that every entry has at least
-// one row. B2-R1 rearranged the slots:
-//   - added runtimeExpectedChecksDerivedFromPlanBytes
-//   - added gateSubjectExecutionRootMatchesTree
-//   - replaced binaryAuthorityValid with binaryPathNonEmpty
-//   - added callerBeforeSnapshotComplete and
-//     callerAfterSnapshotComplete
+// one row. B2-R3 added the new gateRepositoryRootEqualsRuntimeRepositoryRoot
+// row.
 var completenessPredicateNamesInOrder = []string{
 	"runtime_identities_structurally_valid",
 	"runtime_freeze_different_from_subject",
@@ -150,6 +139,7 @@ var completenessPredicateNamesInOrder = []string{
 	"gate_classification_equals_pass",
 	"gate_invocation_count_equals_one",
 	"gate_subject_root_equals_s_exec_root",
+	"gate_repository_root_equals_runtime_repository_root",
 	"gate_subject_execution_root_matches_execution_root",
 	"runtime_execution_root_established",
 	"gate_not_timed_out",
@@ -194,8 +184,9 @@ var completenessPredicates = func() map[string]func(ClosureEvidence) bool {
 // completenessPredicateCount is the row count the mutation
 // matrix must agree with. Keep in sync with completenessPredicatesInOrder.
 // B2-R1 increased the count from 43 to 47; B2-R2 increased it
-// to 48 by adding runtimeExecutionRootEstablished.
-const completenessPredicateCount = 48
+// to 48 by adding runtimeExecutionRootEstablished; B2-R3
+// increased it to 49 by adding gateRepositoryRootEqualsRuntimeRepositoryRoot.
+const completenessPredicateCount = 49
 
 // ----------------------------------------------------------------------------
 // Small shared helpers

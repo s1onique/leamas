@@ -17,13 +17,13 @@
 package evidence
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+
+	"github.com/s1onique/leamas/internal/factory/closure/plancontract"
 )
 
 // PublicationCandidate is the typed output of the publication
@@ -91,36 +91,35 @@ func MarshalEvidence(candidate ClosureEvidence) ([]byte, error) {
 // caller that injects "completeness":"COMPLETE" or other
 // authority-looking fields must be rejected, not absorbed.
 //
-// B2-R2 fix: the previous B2-R1 implementation used
-// Decoder.More() to verify EOF, but More() is the wrong
-// primitive. The Go docs define More() as "reporting whether
-// there is another element in the current array or object";
-// EOF after a top-level document is verified by a second
-// Decode call that MUST return io.EOF. Any other return
-// value (a second object, a trailing scalar, malformed
-// trailing garbage) is a strict failure.
+// B2-R2 fixes:
+//
+//  1. DisallowUnknownFields() rejects unknown object keys.
+//  2. Decoder.More() is the wrong primitive for top-level
+//     EOF; the decoder uses a second Decode that MUST
+//     return io.EOF.
+//
+// B2-R3 fix:
+//
+//  3. encoding/json v1 silently accepts duplicate object
+//     member names. The plancontract leaf already rejects
+//     duplicate keys via its strict scanner; B2-R3 routes
+//     through plancontract.StrictDecode so the closure
+//     evidence record and the Plan Contract documents share
+//     the same duplicate-field rejection contract.
 //
 // The decoder in this order:
 //
-//  1. DisallowUnknownFields() rejects unknown object keys
-//     (the "STRICT_UNKNOWN_FIELDS=true" arm).
-//  2. First Decode consumes the single document.
+//  1. DisallowUnknownFields() rejects unknown object keys.
+//  2. plancontract.StrictDecode scans and rejects duplicate
+//     keys at every depth.
 //  3. Second Decode MUST return io.EOF; any other return
-//     rejects ("STRICT_SINGLE_DOCUMENT=true" arm).
+//     rejects.
 func UnmarshalClosureEvidence(data []byte) (ClosureEvidence, error) {
 	var out ClosureEvidence
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&out); err != nil {
+	if err := plancontract.StrictDecode(data, &out); err != nil {
 		return ClosureEvidence{}, fmt.Errorf("evidence: strict decode failed: %w", err)
 	}
-	var extra any
-	if err := dec.Decode(&extra); err == io.EOF {
-		return out, nil
-	} else if err != nil {
-		return ClosureEvidence{}, fmt.Errorf("evidence: strict decode failed: %w", err)
-	}
-	return ClosureEvidence{}, fmt.Errorf("evidence: strict decode rejected trailing JSON value")
+	return out, nil
 }
 
 // ComputeEvidenceSHA256 is the external-metadata helper. The

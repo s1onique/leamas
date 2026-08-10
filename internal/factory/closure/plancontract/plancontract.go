@@ -45,6 +45,14 @@ import (
 // the leaf package independent.
 const MaxPlanBytes = 1 << 20
 
+// ContractVersionV1 is the only legal contract_version. The
+// leaf rejects any other integer so the closure runner and the
+// evidence package cannot diverge on whether a document is
+// valid. The closure package's own ContractVersionV1 constant
+// is the same value; the constant is duplicated here to keep
+// the leaf package independent.
+const ContractVersionV1 = 1
+
 // PlanCheck is the minimal projection of a Plan Contract v1
 // check entry. The closure package's closure.PlanCheck has
 // many more fields; this minimal shape is what both
@@ -145,16 +153,32 @@ func DecodeAndValidate(data []byte) (DecodeResult, error) {
 }
 
 // Validate enforces the semantic invariants of the decoded
-// Plan Contract v1 document. The minimum required shape is
-// the contract_version field and a checks array. The
-// function returns a typed DecodeError so callers can
-// distinguish structural failures from deeper semantic
-// failures.
+// Plan Contract v1 document. B2-R3 closes the contract
+// semantics under the leaf so the closure runner and the
+// evidence package cannot disagree on whether a document is
+// valid:
+//
+//	contract_version MUST equal ContractVersionV1 (1).
+//	checks must be non-empty and ordered.
+//	each check id must be non-empty.
+//	each check mode must be "run" or "exclude".
+//
+// The closure package's own ValidatePlan no longer owns
+// these checks; it only validates the runner authority and
+// the closure-specific structural rules (act_id pattern,
+// baseline OIDs, execution mode, etc.) that are local to
+// the closure domain and not part of the wire contract.
 func Validate(result DecodeResult) error {
-	if result.ContractVersion == 0 {
+	if result.ContractVersion != ContractVersionV1 {
+		return &DecodeError{
+			Code:    "unsupported_version",
+			Message: fmt.Sprintf("contract_version %d is not supported (only %d is)", result.ContractVersion, ContractVersionV1),
+		}
+	}
+	if len(result.Checks) == 0 {
 		return &DecodeError{
 			Code:    "missing_field",
-			Message: "contract_version is required and must be set",
+			Message: "checks is required and must be non-empty",
 		}
 	}
 	for i, c := range result.Checks {
@@ -172,6 +196,56 @@ func Validate(result DecodeResult) error {
 		}
 	}
 	return nil
+}
+
+// StrictDecode is the shared strict single-document JSON
+// entry point for authority documents. It accepts the same
+// bytes the Plan Contract decoder accepts but rejects:
+//
+//	unknown object member names (via DisallowUnknownFields)
+//	duplicate object member names (via the strict scanner)
+//	trailing content after the first document (via a second
+//	  Decode that MUST return io.EOF)
+//
+// The function is the canonical authority for the closure
+// evidence record and any other authority document that
+// needs a duplicate-field rejection contract. Plan Contract
+// documents themselves do not need duplicate rejection
+// because the bounded parser already rejects them, but the
+// helper is exposed so the evidence barrier does not
+// duplicate the parser pass.
+func StrictDecode(data []byte, target any) error {
+	if len(data) == 0 {
+		return &DecodeError{
+			Code:    "invalid_json",
+			Message: "document is empty; expected JSON object",
+		}
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(target); err != nil {
+		return fmt.Errorf("plancontract: strict decode failed: %w", err)
+	}
+	// Reject duplicate string-key names. v1 of encoding/json
+	// does not reject duplicate keys; the Go team flags
+	// this as a top-priority bug. The scanner re-decodes the
+	// number of occurrences for each key and rejects any
+	// key that appears more than once.
+	if err := scanDuplicates(bytes.NewReader(data)); err != nil {
+		return fmt.Errorf("plancontract: strict decode failed: %w", err)
+	}
+	// After exactly one document, the next Decode MUST return
+	// io.EOF. Any other value is a strict failure.
+	var extra any
+	if err := dec.Decode(&extra); err == io.EOF {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("plancontract: strict decode failed: %w", err)
+	}
+	return &DecodeError{
+		Code:    "trailing_value",
+		Message: "trailing JSON value after root document",
+	}
 }
 
 // requireEOF verifies that after the first Decode the
@@ -358,4 +432,97 @@ func joinPath(parent, child string) string {
 		return "/" + child
 	}
 	return parent + "/" + child
+}
+
+// scanDuplicates walks the JSON object tree and rejects any
+// string-key name that appears more than once in the same
+// object. The check is recursive: duplicated keys inside
+// nested objects or arrays of objects are also rejected.
+//
+// The function is intentionally cheap: it streams through
+// the input once with a fresh decoder and rejects on the
+// first duplicate. It only inspects object members; arrays
+// are walked for nested objects.
+func scanDuplicates(r *bytes.Reader) error {
+	dec := json.NewDecoder(r)
+	dec.UseNumber()
+	if _, err := dec.Token(); err != nil {
+		return nil
+	}
+	return walkDuplicateCheck(dec, "")
+}
+
+func walkDuplicateCheck(dec *json.Decoder, path string) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return nil
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	switch delim {
+	case '{':
+		return walkObjectDupes(dec, path)
+	case '[':
+		return walkArrayDupes(dec, path)
+	default:
+		return nil
+	}
+}
+
+func walkArrayDupes(dec *json.Decoder, path string) error {
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if delim, ok := tok.(json.Delim); ok && delim == '{' {
+			if err := walkObjectDupes(dec, path); err != nil {
+				return err
+			}
+		} else if delim == '[' {
+			if err := walkArrayDupes(dec, path); err != nil {
+				return err
+			}
+		}
+	}
+	_, _ = dec.Token()
+	return nil
+}
+
+func walkObjectDupes(dec *json.Decoder, path string) error {
+	seen := map[string]struct{}{}
+	for dec.More() {
+		keyTok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		key, ok := keyTok.(string)
+		if !ok {
+			return nil
+		}
+		if _, dup := seen[key]; dup {
+			return fmt.Errorf("duplicate JSON key %q", joinPath(path, key))
+		}
+		seen[key] = struct{}{}
+		valTok, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		if delim, ok := valTok.(json.Delim); ok {
+			switch delim {
+			case '{':
+				if err := walkObjectDupes(dec, joinPath(path, key)); err != nil {
+					return err
+				}
+			case '[':
+				if err := walkArrayDupes(dec, joinPath(path, key)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	_, _ = dec.Token()
+	return nil
 }

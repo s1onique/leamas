@@ -13,16 +13,22 @@
 //	truncated JSON                 -> reject
 //	whitespace after one document  -> PASS
 //
-// The strict decoder uses json.Decoder.DisallowUnknownFields
-// for "STRICT_UNKNOWN_FIELDS=true" and a second Decode that
-// MUST return io.EOF for "STRICT_SINGLE_DOCUMENT=true".
-// Decoder.More() is the wrong primitive for the second check
-// because it is defined for arrays and objects, not for the
-// top-level document.
+// B2-R3 additions:
+//
+//	duplicate top-level known field -> reject
+//	duplicate nested known field   -> reject
+//
+// The strict decoder uses Decoder.DisallowUnknownFields
+// for unknown-field rejection and a custom duplicate-field
+// scanner (in plancontract.StrictDecode) for duplicate-key
+// rejection. The Go team's v1 encoding/json decoder does not
+// reject duplicate keys, so the scanner catches the third
+// class of malformed input.
 package evidence
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -33,11 +39,11 @@ import (
 func TestClosureEvidenceStrictSingleDocumentDecode(t *testing.T) {
 	t.Parallel()
 
-	// validMarshalableCandidate returns a fully valid
-	// closure-evidence JSON document ready for round-trip
-	// decode. The same base is mutated for the negative
-	// rows.
-	validBytes := func() []byte {
+	// validBase returns a fully valid closure-evidence
+	// JSON document that the matrix mutates. The same
+	// base is used for every row; only the mutation
+	// function changes.
+	validBase := func() []byte {
 		c := validCandidate()
 		b, err := json.Marshal(c)
 		if err != nil {
@@ -99,15 +105,33 @@ func TestClosureEvidenceStrictSingleDocumentDecode(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "whitespace after one document",
-			mutate: func(b []byte) []byte {
-				// Trailing whitespace is permitted by
-				// the io.EOF contract: a second Decode
-				// against whitespace-only input still
-				// returns io.EOF.
-				return append(b, ' ', '\n', '\t')
-			},
+			name:    "whitespace after one document",
+			mutate:  func(b []byte) []byte { return append(b, ' ', '\n', '\t') },
 			wantErr: false,
+		},
+		{
+			name: "duplicate top-level known field",
+			mutate: func(b []byte) []byte {
+				// Two schema_version keys at the top level.
+				// The B2-R3 strict scanner rejects duplicates
+				// even when the keys are well-known. We replace
+				// the closing brace of the document with another
+				// schema_version key.
+				b[len(b)-1] = ' '
+				return append(b, []byte(`"schema_version":4}`)...)
+			},
+			wantErr: true,
+		},
+		{
+			name: "duplicate nested known field",
+			mutate: func(b []byte) []byte {
+				// Two checks keys inside the runtime sub-object.
+				// Pick a candidate that has a checks-shaped field
+				// and inject a duplicate.
+				b2 := strings.Replace(string(b), `"runtime":{`, `"runtime":{"checks":null,`, 1)
+				return []byte(b2)
+			},
+			wantErr: true,
 		},
 	}
 
@@ -115,7 +139,7 @@ func TestClosureEvidenceStrictSingleDocumentDecode(t *testing.T) {
 		r := r
 		t.Run(r.name, func(t *testing.T) {
 			t.Parallel()
-			bytes := r.mutate(validBytes())
+			bytes := r.mutate(validBase())
 			_, err := UnmarshalClosureEvidence(bytes)
 			if r.wantErr && err == nil {
 				t.Fatalf("strict decoder must reject %s, got nil", r.name)
