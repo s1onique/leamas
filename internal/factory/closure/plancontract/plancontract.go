@@ -443,32 +443,37 @@ func joinPath(parent, child string) string {
 // the input once with a fresh decoder and rejects on the
 // first duplicate. It only inspects object members; arrays
 // are walked for nested objects.
+//
+// B2-R4 fix: the previous implementation pre-consumed the
+// root delimiter and then called walkDuplicateCheck, which
+// read a SECOND token expecting it to be the delimiter.
+// For a JSON object the second token is the first key
+// string, not a delimiter, so walkDuplicateCheck returned
+// nil and the root object was never scanned. The fix
+// dispatches on the root delimiter directly: '{' -> walk
+// object, '[' -> walk array. A scalar root cannot contain
+// duplicate keys.
 func scanDuplicates(r *bytes.Reader) error {
 	dec := json.NewDecoder(r)
 	dec.UseNumber()
-	if _, err := dec.Token(); err != nil {
-		return nil
-	}
-	return walkDuplicateCheck(dec, "")
-}
-
-func walkDuplicateCheck(dec *json.Decoder, path string) error {
 	tok, err := dec.Token()
 	if err != nil {
+		// Empty input or malformed JSON; the typed
+		// decoder will surface the syntax error.
 		return nil
 	}
 	delim, ok := tok.(json.Delim)
 	if !ok {
+		// Scalar root has no keys to duplicate.
 		return nil
 	}
 	switch delim {
 	case '{':
-		return walkObjectDupes(dec, path)
+		return walkObjectDupes(dec, "")
 	case '[':
-		return walkArrayDupes(dec, path)
-	default:
-		return nil
+		return walkArrayDupes(dec, "")
 	}
+	return nil
 }
 
 func walkArrayDupes(dec *json.Decoder, path string) error {

@@ -131,7 +131,49 @@ func convertPlanContractError(err error) string {
 	return err.Error()
 }
 
+// ValidatePlan is the typed-Plan entry point for the
+// closure runner's plan validation.
+//
+// B2-R4 keeps the typed semantic validators intact for
+// backward compatibility with the closure package's
+// diagnostic contracts (PlanSemanticError, typed
+// JSON-pointer paths, etc.) AND asserts that the
+// re-encoded plan passes plancontract.ValidateFull. This
+// guarantees that every closure-typed semantic rule has a
+// matching wire-contract rule in the plancontract leaf;
+// any divergence is caught here.
+//
+// The function is the closure runner's authoritative
+// plan validator. The evidence package uses
+// plancontract.ValidateFullAndProject so the two paths
+// share the same complete semantic authority (the leaf).
 func ValidatePlan(plan Plan) error {
+	if err := validatePlanTyped(plan); err != nil {
+		return err
+	}
+	// Cross-authority parity assertion: re-encode the
+	// typed plan to its wire shape and assert the leaf
+	// accepts it. The leaf MUST agree with the typed
+	// validator on every wire-contract rule. Any
+	// divergence surfaces here as a typed error.
+	bytes, err := encodePlanForValidation(plan)
+	if err != nil {
+		return fmt.Errorf("plan rejected by structural validation: marshal typed plan: %w", err)
+	}
+	if err := plancontract.ValidateFull(bytes); err != nil {
+		return fmt.Errorf("plan rejected by structural validation: parity with leaf: %s", err)
+	}
+	return nil
+}
+
+// validatePlanTyped is the B2-R4 typed semantic authority
+// preserved for backward compatibility. The function
+// reproduces the pre-R4 closure.ValidatePlan body. The
+// rules are duplicated in plancontract.ValidateFull so
+// the leaf and the closure runner can each reject without
+// depending on the other; the parity assertion in
+// ValidatePlan ensures the two cannot drift.
+func validatePlanTyped(plan Plan) error {
 	if plan.ContractVersion != ContractVersionV1 {
 		return errUnsupportedContractVersion(plan.ContractVersion)
 	}
@@ -169,6 +211,15 @@ func ValidatePlan(plan Plan) error {
 		return err
 	}
 	return nil
+}
+
+// encodePlanForValidation re-encodes the typed Plan to the
+// Plan Contract v1 wire shape. The re-encoded bytes are
+// semantically equivalent to the source bytes (modulo
+// whitespace) so the plancontract.ValidateFull parity
+// assertion is authoritative.
+func encodePlanForValidation(plan Plan) ([]byte, error) {
+	return json.Marshal(plan)
 }
 
 // validatePlanExecutionMode is the single, authoritative entry point

@@ -232,12 +232,28 @@ func TestClosureSubjectWorktreeAuthority(t *testing.T) {
 // candidate's expected checks to the production decoder
 // applied to Runtime.PlanBytes, so the bytes must declare
 // exactly the checks the candidate claims.
+//
+// B2-R4: the bytes must also satisfy the FULL Plan Contract
+// v1 semantic pass (plancontract.ValidateFull). The minimal
+// bytes the previous B2-R3 tests used are now rejected
+// because they lack the required act_id, baseline, and
+// execution fields. Each run-mode check carries the full
+// argv / working_directory / timeout_seconds / environment
+// tuple; the exclude-mode check carries only reason.
 func validBijectionPlanBytes() []byte {
-	return []byte(`{"contract_version":1,"checks":[` +
-		`{"id":"c1","mode":"run"},` +
-		`{"id":"c2","mode":"run"},` +
-		`{"id":"c3","mode":"exclude"}` +
-		`]}`)
+	run := `{"id":"c#","mode":"run","argv":["go","test"],"working_directory":".","timeout_seconds":60,"environment":{"K":"V"}}`
+	exe := `{"id":"c#","mode":"exclude","reason":"obsolete"}`
+	return []byte(`{"contract_version":1,` +
+		`"act_id":"ACT-BIJECTION-B2R4-01",` +
+		`"baseline":{"commit_oid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tree_oid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},` +
+		`"execution":{"mode":"serial_fail_fast"},` +
+		`"checks":[` +
+		strings.Replace(run, "#", "1", 1) + `,` +
+		strings.Replace(run, "#", "2", 1) + `,` +
+		strings.Replace(exe, "#", "3", 1) +
+		`],` +
+		`"policy":{"require_clean_before":true,"require_clean_after":true,"forbid_tracked_full_digests":true,"require_diff_check":true}` +
+		`}`)
 }
 
 // validBijectionStatusHash / validBijectionRefsHash /

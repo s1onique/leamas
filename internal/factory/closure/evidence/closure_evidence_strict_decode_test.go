@@ -109,27 +109,73 @@ func TestClosureEvidenceStrictSingleDocumentDecode(t *testing.T) {
 			mutate:  func(b []byte) []byte { return append(b, ' ', '\n', '\t') },
 			wantErr: false,
 		},
+// B2-R4: the fixtures are genuine valid JSON with
+// duplicate keys. The previous B2-R3 fixtures were
+// accidentally satisfied by other rejection paths
+// (malformed JSON or unknown-field rejection), not by
+// the duplicate scanner.
 		{
 			name: "duplicate top-level known field",
 			mutate: func(b []byte) []byte {
 				// Two schema_version keys at the top level.
-				// The B2-R3 strict scanner rejects duplicates
-				// even when the keys are well-known. We replace
-				// the closing brace of the document with another
-				// schema_version key.
-				b[len(b)-1] = ' '
-				return append(b, []byte(`"schema_version":4}`)...)
+				// Replace the first occurrence of the key
+				// followed by its value with a duplicate of
+				// the entire (key, value) pair so the
+				// document stays valid JSON.
+				s := string(b)
+				const anchor = `"schema_version":`
+				idx := strings.Index(s, anchor)
+				if idx < 0 {
+					return b
+				}
+				// Find the end of the integer value
+				// (schema_version is always a JSON number).
+				rest := s[idx+len(anchor):]
+				end := 0
+				for end < len(rest) && (rest[end] >= '0' && rest[end] <= '9') {
+					end++
+				}
+				if end == 0 {
+					return b
+				}
+				dup := anchor + rest[:end]
+				return []byte(s[:idx] + dup + "," + s[idx:])
 			},
 			wantErr: true,
 		},
 		{
 			name: "duplicate nested known field",
 			mutate: func(b []byte) []byte {
-				// Two checks keys inside the runtime sub-object.
-				// Pick a candidate that has a checks-shaped field
-				// and inject a duplicate.
-				b2 := strings.Replace(string(b), `"runtime":{`, `"runtime":{"checks":null,`, 1)
-				return []byte(b2)
+				// Duplicate an existing valid nested
+				// member (repository_root) inside the
+				// runtime sub-object. The runtime struct
+				// always has repository_root so the
+				// duplicate is rejected by the scanner
+				// and not by DisallowUnknownFields.
+				s := string(b)
+				const anchor = `"repository_root":`
+				idx := strings.Index(s, anchor)
+				if idx < 0 {
+					return b
+				}
+				// Find the closing quote of the value.
+				rest := s[idx+len(anchor):]
+				if len(rest) == 0 || rest[0] != '"' {
+					return b
+				}
+				end := 1
+				for end < len(rest) && rest[end] != '"' {
+					if rest[end] == '\\' && end+1 < len(rest) {
+						end += 2
+						continue
+					}
+					end++
+				}
+				if end >= len(rest) {
+					return b
+				}
+				dup := anchor + rest[:end+1]
+				return []byte(s[:idx] + dup + "," + s[idx:])
 			},
 			wantErr: true,
 		},

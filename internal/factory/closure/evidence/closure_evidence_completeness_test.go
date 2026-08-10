@@ -33,8 +33,20 @@ import (
 // OID in the SubjectRoot and SubjectExecutionRoot fields,
 // which hid the B2-R1 type error of comparing a path to an
 // OID. The candidate builder now rejects that construction.
+// B2-R4: the embedded F:P bytes must satisfy the FULL
+// Plan Contract v1 semantic pass (plancontract.ValidateFull).
+// The previous minimal bytes ("contract_version" + checks)
+// were accepted by the B2-R3 minimal validator but are
+// rejected by the B2-R4 full validator because they are
+// missing required fields (act_id, baseline, execution).
 func validCandidate() ClosureEvidence {
-	planBytes := []byte("{\"contract_version\":1,\"checks\":[{\"id\":\"c1\",\"mode\":\"run\"}]}")
+	planBytes := []byte(`{"contract_version":1,` +
+		`"act_id":"ACT-PARITY-B2R4-01",` +
+		`"baseline":{"commit_oid":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","tree_oid":"ffffffffffffffffffffffffffffffffffffffff"},` +
+		`"execution":{"mode":"serial_fail_fast"},` +
+		`"checks":[{"id":"c1","mode":"run","argv":["go","test"],"working_directory":".","timeout_seconds":60,"environment":{"K":"V"}}],` +
+		`"policy":{"require_clean_before":true,"require_clean_after":true,"forbid_tracked_full_digests":true,"require_diff_check":true}` +
+		`}`)
 	sum := sha256.Sum256(planBytes)
 	planSHA := hex.EncodeToString(sum[:])
 	subjectCommit := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

@@ -22,20 +22,33 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure/plancontract"
 )
 
-// productionDecodeClosurePlan is the B2-R2 authority entry
+// productionDecodeClosurePlan is the B2-R4 authority entry
 // point. It routes the supplied bytes through the canonical
-// Plan Contract v1 decoder (plancontract.DecodeAndValidate)
-// and projects the result into the evidence package's
-// PlanCheckSpec list. The decoder enforces the MaxPlanBytes
-// cap, rejects malformed JSON, rejects duplicate keys,
-// rejects trailing values, and rejects unknown modes.
+// Plan Contract v1 FULL validator
+// (plancontract.ValidateFullAndProject) and projects the
+// result into the evidence package's PlanCheckSpec list.
+// The decoder enforces the MaxPlanBytes cap, rejects
+// malformed JSON, rejects duplicate keys, rejects trailing
+// values, and applies the COMPLETE semantic pass that
+// closure.ValidatePlan would otherwise own.
+//
+// B2-R4 rationale: the previous B2-R3 implementation
+// called plancontract.DecodeAndValidate which only checked
+// contract_version, non-empty checks, id non-empty, and
+// mode valid. That split left the evidence package with a
+// minimal semantic authority while closure.ValidatePlan
+// owned the typed semantic rules. A plan that passed
+// evidence (e.g. placeholder baseline OID) could fail
+// execution, and vice versa. ValidateFullAndProject routes
+// both paths through the same authority so they cannot
+// disagree.
 //
 // The function is the only path used by the production
 // decoder predicates. Tests that need to drive the decoder
 // route through this helper so the production code path is
 // the only path exercised.
 func productionDecodeClosurePlan(bytes []byte) ([]PlanCheckSpec, error) {
-	result, err := plancontract.DecodeAndValidate(bytes)
+	result, err := plancontract.ValidateFullAndProject(bytes)
 	if err != nil {
 		return nil, err
 	}
