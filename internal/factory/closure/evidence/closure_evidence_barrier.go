@@ -26,21 +26,40 @@ import (
 	"github.com/s1onique/leamas/internal/factory/closure/plancontract"
 )
 
+// publicationCandidateToken is an unexported capability held
+// by every PublicationCandidate. Only PrepareClosureEvidenceForPublication
+// (same package) can mint a token, so the type is unforgeable
+// outside the B2 barrier.
+type publicationCandidateToken struct{}
+
 // PublicationCandidate is the typed output of the publication
 // barrier. The struct is the only object the barrier emits.
 // It pairs the canonical evidence with the exact bytes the
 // barrier produced and the SHA-256 derived from those bytes.
 // The SHA-256 is external metadata and is NEVER embedded in
 // the JSON document.
+//
+// All fields are unexported. Outside the `evidence` package,
+// the only way to obtain a PublicationCandidate is to call
+// PrepareClosureEvidenceForPublication; the unexported token
+// type prevents any external code from constructing one by
+// literal initialization. B3 reads the bytes / digest through
+// the accessor methods only.
 type PublicationCandidate struct {
-	// Evidence is the canonical evidence document.
-	Evidence ClosureEvidence
-	// Bytes is the exact JSON document the barrier produced.
-	// A second JSON decode of these bytes returns io.EOF.
-	Bytes []byte
-	// SHA256 is the lowercase hex SHA-256 of Bytes.
-	SHA256 string
+	_       publicationCandidateToken
+	evidence ClosureEvidence
+	bytes    []byte
+	sha256   string
 }
+
+// Bytes returns the exact JSON document the barrier produced.
+func (p PublicationCandidate) Bytes() []byte { return p.bytes }
+
+// SHA256 returns the lowercase hex SHA-256 of Bytes.
+func (p PublicationCandidate) SHA256() string { return p.sha256 }
+
+// Document returns the canonical ClosureEvidence struct.
+func (p PublicationCandidate) Document() ClosureEvidence { return p.evidence }
 
 // ErrIncompleteEvidence is the typed error the barrier returns
 // when the canonical predicate derives EvidenceIncomplete. The
@@ -68,9 +87,9 @@ func PrepareClosureEvidenceForPublication(candidate ClosureEvidence) (Publicatio
 	}
 	sum := sha256.Sum256(bytes)
 	return PublicationCandidate{
-		Evidence: candidate,
-		Bytes:    bytes,
-		SHA256:   hex.EncodeToString(sum[:]),
+		evidence: candidate,
+		bytes:    bytes,
+		sha256:   hex.EncodeToString(sum[:]),
 	}, nil
 }
 
@@ -125,7 +144,7 @@ func UnmarshalClosureEvidence(data []byte) (ClosureEvidence, error) {
 // ComputeEvidenceSHA256 is the external-metadata helper. The
 // function returns SHA-256 over the supplied bytes. The barrier
 // uses it as a courtesy; the canonical hash is the one stored
-// on PublicationCandidate.SHA256.
+// on PublicationCandidate.SHA256()().
 func ComputeEvidenceSHA256(bytes []byte) string {
 	sum := sha256.Sum256(bytes)
 	return hex.EncodeToString(sum[:])

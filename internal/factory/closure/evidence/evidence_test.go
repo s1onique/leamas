@@ -226,10 +226,10 @@ func TestClosureEvidenceAtomicBarrierRejectsIncomplete(t *testing.T) {
 	if err == nil {
 		t.Fatalf("barrier must reject incomplete candidate, got %+v", got)
 	}
-	if got.Bytes != nil {
+	if got.Bytes() != nil {
 		t.Fatalf("barrier must not return bytes for incomplete candidate")
 	}
-	if got.SHA256 != "" {
+	if got.SHA256() != "" {
 		t.Fatalf("barrier must not return SHA256 for incomplete candidate")
 	}
 	if !strings.Contains(err.Error(), "incomplete") {

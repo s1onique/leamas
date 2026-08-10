@@ -151,11 +151,11 @@ func (p *EvidencePublication) Publish(candidate evidence.PublicationCandidate) E
 	if p == nil || p.closed || p.root == nil {
 		return EvidencePublicationResult{State: EvidencePublicationNotPublished, Err: fmt.Errorf("evidence publication authority is closed")}
 	}
-	if candidate.Bytes == nil {
+	if candidate.Bytes() == nil {
 		return EvidencePublicationResult{State: EvidencePublicationNotPublished, Err: fmt.Errorf("candidate bytes are nil")}
 	}
-	wantSum := sha256.Sum256(candidate.Bytes)
-	if candidate.SHA256 != hex.EncodeToString(wantSum[:]) {
+	wantSum := sha256.Sum256(candidate.Bytes())
+	if candidate.SHA256() != hex.EncodeToString(wantSum[:]) {
 		return EvidencePublicationResult{State: EvidencePublicationNotPublished, Err: fmt.Errorf("candidate SHA-256 does not match candidate bytes")}
 	}
 	if _, err := p.pfs.readFile(p.root, p.jsonName); err == nil {
@@ -196,12 +196,12 @@ func (p *EvidencePublication) Publish(candidate evidence.PublicationCandidate) E
 		return name, nil
 	}
 
-	jsonTmp, err := stage(0o600, candidate.Bytes)
+	jsonTmp, err := stage(0o600, candidate.Bytes())
 	if err != nil {
 		cleanup()
 		return EvidencePublicationResult{State: EvidencePublicationNotPublished, Err: fmt.Errorf("stage JSON: %w", err)}
 	}
-	sidecarBytes := []byte(candidate.SHA256 + "\n")
+	sidecarBytes := []byte(candidate.SHA256() + "\n")
 	sidecarTmp, err := stage(0o600, sidecarBytes)
 	if err != nil {
 		cleanup()
@@ -216,6 +216,10 @@ func (p *EvidencePublication) Publish(candidate evidence.PublicationCandidate) E
 		// The temp lingers; not fatal.
 	}
 	if err := p.pfs.link(p.root, sidecarTmp, p.sidecarName); err != nil {
+		// Best-effort cleanup of the staged sidecar temp; the
+		// JSON remains visible and the state machine reports
+		// it truthfully.
+		_ = p.pfs.unlink(p.root, sidecarTmp)
 		return EvidencePublicationResult{
 			State:         EvidencePublicationJSONVisible,
 			CanonicalJSON: p.canonical,
@@ -226,7 +230,7 @@ func (p *EvidencePublication) Publish(candidate evidence.PublicationCandidate) E
 		// not fatal
 	}
 	gotJSON, err := p.pfs.readFile(p.root, p.jsonName)
-	if err != nil || string(gotJSON) != string(candidate.Bytes) || sha256.Sum256(gotJSON) != wantSum {
+	if err != nil || string(gotJSON) != string(candidate.Bytes()) || sha256.Sum256(gotJSON) != wantSum {
 		return EvidencePublicationResult{
 			State:         EvidencePublicationPairVisible,
 			CanonicalJSON: p.canonical,

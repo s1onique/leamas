@@ -46,11 +46,11 @@ func TestClosureEvidencePublicationBarrier(t *testing.T) {
 		if err == nil {
 			t.Fatalf("barrier must reject %s, got %+v", label, got)
 		}
-		if got.Bytes != nil {
-			t.Fatalf("barrier must not return bytes for %s, got %d bytes", label, len(got.Bytes))
+		if got.Bytes() != nil {
+			t.Fatalf("barrier must not return bytes for %s, got %d bytes", label, len(got.Bytes()))
 		}
-		if got.SHA256 != "" {
-			t.Fatalf("barrier must not return SHA256 for %s, got %q", label, got.SHA256)
+		if got.SHA256() != "" {
+			t.Fatalf("barrier must not return SHA256 for %s, got %q", label, got.SHA256())
 		}
 		if !errors.Is(err, ErrIncompleteEvidence) {
 			// The barrier may also return a validation error
@@ -212,13 +212,13 @@ func TestClosureEvidencePublicationBarrier(t *testing.T) {
 		if err != nil {
 			t.Fatalf("barrier rejected valid candidate: %v", err)
 		}
-		if len(got.Bytes) == 0 {
+		if len(got.Bytes()) == 0 {
 			t.Fatalf("barrier must produce non-empty bytes")
 		}
-		if len(got.SHA256) != 64 {
-			t.Fatalf("barrier SHA256 must be 64-char hex, got %q", got.SHA256)
+		if len(got.SHA256()) != 64 {
+			t.Fatalf("barrier SHA256 must be 64-char hex, got %q", got.SHA256())
 		}
-		if ComputeEvidenceSHA256(got.Bytes) != got.SHA256 {
+		if ComputeEvidenceSHA256(got.Bytes()) != got.SHA256() {
 			t.Fatalf("candidate SHA256 must match SHA256(bytes)")
 		}
 	})

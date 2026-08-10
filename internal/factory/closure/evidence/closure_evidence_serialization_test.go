@@ -72,7 +72,7 @@ func TestClosureEvidenceCanonicalSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("barrier: %v", err)
 		}
-		dec := json.NewDecoder(bytes.NewReader(got.Bytes))
+		dec := json.NewDecoder(bytes.NewReader(got.Bytes()))
 		var first ClosureEvidence
 		if err := dec.Decode(&first); err != nil {
 			t.Fatalf("first decode: %v", err)
@@ -98,11 +98,11 @@ func TestClosureEvidenceCanonicalSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("barrier: %v", err)
 		}
-		if bytesContains(got.Bytes, []byte("self_hash")) {
-			t.Fatalf("canonical JSON must not contain a self_hash field, got %s", got.Bytes)
+		if bytesContains(got.Bytes(), []byte("self_hash")) {
+			t.Fatalf("canonical JSON must not contain a self_hash field, got %s", got.Bytes())
 		}
-		if bytesContains(got.Bytes, []byte("\"sha256\":")) {
-			t.Fatalf("canonical JSON must not contain a top-level sha256 field, got %s", got.Bytes)
+		if bytesContains(got.Bytes(), []byte("\"sha256\":")) {
+			t.Fatalf("canonical JSON must not contain a top-level sha256 field, got %s", got.Bytes())
 		}
 	})
 
@@ -119,8 +119,8 @@ func TestClosureEvidenceCanonicalSerialization(t *testing.T) {
 		}
 		badPlaceholders := []string{"unknown", "TBD", "TODO", "placeholder", "<", ">"}
 		for _, p := range badPlaceholders {
-			if bytesContains(got.Bytes, []byte(p)) {
-				t.Fatalf("canonical JSON must not contain %q, got %s", p, got.Bytes)
+			if bytesContains(got.Bytes(), []byte(p)) {
+				t.Fatalf("canonical JSON must not contain %q, got %s", p, got.Bytes())
 			}
 		}
 	})
@@ -164,12 +164,12 @@ func TestClosureEvidenceCanonicalSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("barrier: %v", err)
 		}
-		before := got.SHA256
+		before := got.SHA256()
 		// Flip the first byte; the SHA-256 must change.
 		// The barrier does not run on this mutated buffer;
 		// the test asserts the external hash truly fingerprints
 		// the bytes.
-		mutated := append([]byte{}, got.Bytes...)
+		mutated := append([]byte{}, got.Bytes()...)
 		mutated[0] ^= 0xFF
 		after := ComputeEvidenceSHA256(mutated)
 		if before == after {
@@ -184,14 +184,14 @@ func TestClosureEvidenceCanonicalSerialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("barrier: %v", err)
 		}
-		if len(got.SHA256) != 64 {
-			t.Fatalf("SHA256 must be 64-char hex, got %q", got.SHA256)
+		if len(got.SHA256()) != 64 {
+			t.Fatalf("SHA256 must be 64-char hex, got %q", got.SHA256())
 		}
-		if !isHexSHA256(got.SHA256) {
-			t.Fatalf("SHA256 must be lowercase hex, got %q", got.SHA256)
+		if !isHexSHA256(got.SHA256()) {
+			t.Fatalf("SHA256 must be lowercase hex, got %q", got.SHA256())
 		}
-		if got.SHA256 != ComputeEvidenceSHA256(got.Bytes) {
-			t.Fatalf("PublicationCandidate.SHA256 must equal SHA256(bytes)")
+		if got.SHA256() != ComputeEvidenceSHA256(got.Bytes()) {
+			t.Fatalf("PublicationCandidate.SHA256() must equal SHA256(bytes)")
 		}
 	})
 

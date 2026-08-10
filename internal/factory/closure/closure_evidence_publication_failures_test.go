@@ -192,6 +192,25 @@ func TestClosureEvidencePublicationFailureMatrix(t *testing.T) {
 					}
 				}
 			}
+			// On JSON-visible (sidecar-link failure) the
+			// staged sidecar temp must be gone; on
+			// pair_durable nothing must remain.
+			if tc.wantState == EvidencePublicationJSONVisible {
+				entries, _ := os.ReadDir(fx.outside)
+				for _, e := range entries {
+					if strings.HasPrefix(e.Name(), ".tmp-closure-") {
+						t.Fatalf("temp residue on JSON-visible: %s", e.Name())
+					}
+				}
+			}
+			if tc.wantState == EvidencePublicationPairDurable {
+				entries, _ := os.ReadDir(fx.outside)
+				for _, e := range entries {
+					if strings.HasPrefix(e.Name(), ".tmp-closure-") {
+						t.Fatalf("temp residue on pair_durable: %s", e.Name())
+					}
+				}
+			}
 		})
 	}
 }
