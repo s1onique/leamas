@@ -4,7 +4,6 @@ package closure
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -163,18 +162,8 @@ func runClosureProtocolV2WithDepsAndTopology(ctx context.Context, req V2Request,
 	if post := callerBefore.State.Diff(callerAfter.State); len(post) > 0 {
 		return V2Manifest{}, &V2Error{Diags: post}
 	}
-	inventory, err := InventoryRepositoryWorktrees(ctx, req.RepositoryRoot, nil)
-	if err != nil {
+	if err := AtomicWriteV2Manifest(req.ManifestOutput, candidate.ManifestBytes); err != nil {
 		return V2Manifest{}, err
-	}
-	publication, err := PrepareEvidencePublication(req.RepositoryRoot, req.ManifestOutput, inventory.RootsAsCanonicalWorktrees())
-	if err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeManifestWriteFailed, err.Error(), "manifest_output", req.ManifestOutput)
-	}
-	defer publication.Close()
-	digest := sha256.Sum256(candidate.ManifestBytes)
-	if err := publication.Publish(PublicationCandidate{Evidence: candidate.Manifest, Bytes: candidate.ManifestBytes, SHA256: digest}); err != nil {
-		return V2Manifest{}, NewV2ErrorWith(V2CodeManifestWriteFailed, err.Error(), "manifest_output", req.ManifestOutput)
 	}
 	return candidate.Manifest, nil
 }
