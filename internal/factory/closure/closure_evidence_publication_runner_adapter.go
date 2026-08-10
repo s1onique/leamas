@@ -4,7 +4,7 @@
 // non-publishing runner entry point that produces the B2
 // evidence inputs from authoritative runner sources.
 //
-// R4 invariant: every field in the V2ExecutionObservation
+// R5 invariant: every field in V2ExecutionObservation
 // comes from a runner source. No field is synthesized.
 // The orchestrator's B2 inputs come from this struct; a
 // caller cannot smuggle a fabricated CandidateInputs bundle
@@ -12,11 +12,13 @@
 package closure
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/closure/evidence"
@@ -25,9 +27,7 @@ import (
 // V2ExecutionObservation is the authoritative execution record
 // the B2 publication barrier requires. Every field is
 // derived from sources the V2 runner already consults; no
-// field is synthesized. The orchestrator's B2 inputs come
-// from this struct; a caller cannot smuggle a fabricated
-// CandidateInputs bundle past the B2 barrier.
+// field is synthesized.
 type V2ExecutionObservation struct {
 	V2Manifest   V2Manifest
 	Runtime      evidence.RuntimeAuthority
@@ -74,9 +74,6 @@ func RunClosureProtocolV2Execute(
 	if !callerBeforeSnap.Available {
 		return zero, V2ExecutionObservation{}, &V2Error{Diags: callerBeforeSnap.Diagnostics}
 	}
-	// F < S topology. The dispatch will reject legacy S < F
-	// relations, so a topology-relation regression
-	// automatically fails the run.
 	candidate, err := runClosureProtocolV2Inner(ctx, req, deps, callerBeforeSnap.State, executionTopologyFreezeBeforeSubject)
 	if err != nil {
 		callerAfterSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
@@ -89,8 +86,6 @@ func RunClosureProtocolV2Execute(
 	if drift := callerBeforeSnap.State.Diff(callerAfterSnap.State); len(drift) > 0 {
 		return candidate.Manifest, V2ExecutionObservation{}, &V2Error{Diags: drift}
 	}
-	// F:P bytes come from the runner's authoritative Git
-	// blob source; the B2 barrier re-derives SHA-256.
 	frozen, ferr := deps.Loader.LoadFrozenPlan(ctx, req.RepositoryRoot, req.FreezeCommit, req.PlanPath)
 	if ferr != nil {
 		return candidate.Manifest, V2ExecutionObservation{}, fmt.Errorf("execute: reload F:P for B2: %w", ferr)
@@ -98,17 +93,8 @@ func RunClosureProtocolV2Execute(
 	planBytes := append([]byte(nil), frozen.Bytes...)
 	planSum := sha256.Sum256(planBytes)
 	planSHA := hex.EncodeToString(planSum[:])
-	// Subject worktree path from the runner's own
-	// `rev-parse --show-toplevel` capture. Empty when the
-	// capture failed; the B2 barrier sees a typed unavailable
-	// state.
 	subjectWorktree := candidate.SubjectWorktreePath
-	// Topology proof derived from the runner's resolved
-	// V2TopologyFacts. FAncestorOfSVerified is true only
-	// when the runner actually accepted the F < S relation
-	// in the chosen topology direction.
 	fAccept := candidate.TopologyFacts.Classify() == V2RelationFreezeBeforeSubject
-	// B2 check results from the runner's own manifest.
 	b2Results := make([]evidence.CheckResult, 0, len(candidate.Manifest.CheckResults))
 	for _, r := range candidate.Manifest.CheckResults {
 		b2Results = append(b2Results, evidence.CheckResult{
@@ -118,14 +104,11 @@ func RunClosureProtocolV2Execute(
 			ExitCode: derefInt(r.ExitCode),
 		})
 	}
-	// B1 binary authority fields. The V2 runner does not
-	// observe SourceClean / SourceDetached /
-	// OutputOutsideAllWorktrees / Executable today; those
-	// are B1's authority. The B2 barrier will reject the
-	// candidate with `binary_source_clean` (etc.) until B1
-	// is wired into the runner — that is the correct honest
-	// signal. BinaryModified is observed from the
-	// runner's V2BinaryIdentity.
+	// B1 binary authority. SourceClean/SourceDetached/
+	// OutputOutsideAllWorktrees/Executable remain false
+	// until B1 is wired into the V2 runner; the B2 barrier
+	// will reject the candidate with the corresponding
+	// `binary_*` predicate (correct honest signal).
 	b2Binary := evidence.BinaryAuthority{
 		BinaryPath:                identity.Path,
 		BinarySHA256:              identity.SHA256,
@@ -140,16 +123,13 @@ func RunClosureProtocolV2Execute(
 	}
 	// B2 gate. The V2 runner does not currently run a
 	// GateCollector; the gate is constructed from the
-	// runner's own observations. The SubjectRoot and
+	// runner's own observations. SubjectRoot and
 	// SubjectExecutionRoot both equal the runner's actual
 	// detached S worktree path; ObservedStatus is the
 	// runner's classified topology relation; Classification
 	// is PASS only when the runner's topology proof accepted
-	// and every check result passed. The B2 barrier will
-	// require the gate's InvariantRunnerAuthority
-	// `gate_repository_root_equals_runtime_repository_root`
-	// to pass; we set RepositoryRoot from the runner's own
-	// req.RepositoryRoot.
+	// and every check result passed; InvocationCount is 1
+	// (the production gate is captured exactly once).
 	gate := evidence.GateAuthority{
 		ObservedStatus:       string(candidate.TopologyFacts.Classify()),
 		Classification:       "PASS",
@@ -168,17 +148,17 @@ func RunClosureProtocolV2Execute(
 		}
 	}
 	// B2 caller-state snapshots: hashes come from the
-	// runner's actual observations (refs bytes, registration
-	// bytes, porcelain). sha256WorktreeRegistrations
-	// consumes its argument — different registration sets
-	// produce different hashes.
+	// runner's actual observations. An empty observation
+	// (e.g. a clean porcelain status) is a valid
+	// observation whose authority hash is the SHA-256 of
+	// zero bytes — never an empty string.
 	b2Before := evidence.CallerStateSnapshot{
 		Available:             true,
 		Head:                  callerBeforeSnap.State.HEADCommit,
 		Tree:                  callerBeforeSnap.State.HEADTree,
 		StatusHash:            sha256OfBytes([]byte(callerBeforeSnap.State.StatusPorcelain)),
 		RefsHash:              sha256OfBytes([]byte(callerBeforeSnap.State.RefsBytes)),
-		WorktreeInventoryHash: sha256OfBytes([]byte(fmt.Sprintf("%v", callerBeforeSnap.State.WorktreeRegistrations))),
+		WorktreeInventoryHash: sha256OfWorktreeInventory(callerBeforeSnap.State.WorktreeRegistrations),
 	}
 	b2After := evidence.CallerStateSnapshot{
 		Available:             true,
@@ -186,12 +166,8 @@ func RunClosureProtocolV2Execute(
 		Tree:                  callerAfterSnap.State.HEADTree,
 		StatusHash:            sha256OfBytes([]byte(callerAfterSnap.State.StatusPorcelain)),
 		RefsHash:              sha256OfBytes([]byte(callerAfterSnap.State.RefsBytes)),
-		WorktreeInventoryHash: sha256OfBytes([]byte(fmt.Sprintf("%v", callerAfterSnap.State.WorktreeRegistrations))),
+		WorktreeInventoryHash: sha256OfWorktreeInventory(callerAfterSnap.State.WorktreeRegistrations),
 	}
-	// Cleanup authority: empty means no error. The inner
-	// runner does not currently observe a bounded-cleanup
-	// result; we record the fact in a typed way so the B2
-	// barrier can reject if it requires observed cleanup.
 	cleanup := evidence.CleanupAuthority{}
 	if candidate.CleanupError != "" {
 		cleanup.SubjectCleanupError = candidate.CleanupError
@@ -222,12 +198,34 @@ func RunClosureProtocolV2Execute(
 	return candidate.Manifest, obs, nil
 }
 
-// sha256OfBytes returns the hex SHA-256 of the bytes.
+// sha256OfBytes returns the hex SHA-256 of the bytes. An
+// empty byte stream is a valid observation whose authority
+// hash is the SHA-256 of zero bytes — never an empty string.
 func sha256OfBytes(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
 	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// sha256OfWorktreeInventory hashes a canonical, versioned
+// serialization of the runner's worktree registration set.
+// Entries are sorted by their path bytes so different
+// insertion orders produce the same hash (the canonical
+// authority), and different sets produce different hashes.
+// This is the durable worktree-inventory authority hash, not
+// a debugging representation.
+func sha256OfWorktreeInventory(invs v2WorktreeRegistrationSet) string {
+	entries := make([]string, 0, len(invs))
+	for _, e := range invs {
+		entries = append(entries, e.Path)
+	}
+	sort.Strings(entries)
+	var buf bytes.Buffer
+	buf.WriteString("worktree-inventory-v1\n")
+	for _, e := range entries {
+		buf.WriteString(e)
+		buf.WriteByte(0)
+	}
+	sum := sha256.Sum256(buf.Bytes())
 	return hex.EncodeToString(sum[:])
 }
 
