@@ -387,13 +387,15 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		TopologyFacts:              req.TopologyFacts,
 		GateCapture:                gateCapture,
 	})
-	if report.HasError() && err == nil {
-		err = NewV2ErrorWith(V2CodeCleanupFailed,
-			fmt.Sprintf("cleanup failed: %s", report.Summary()),
-			"cleanup", report.Summary())
-	}
+	// R6-B-CORRECTION07: subject-cleanup failures are
+	// transported in the populated result so the R6-B
+	// validateSubjectCleanupOutcome can fire. The R6-A
+	// executor no longer wraps cleanup-only failures as
+	// V2CodeCleanupFailed; the result carries the error
+	// in SubjectCleanupError and the R6-B layer owns the
+	// typed surfacing as V2CodeR6BSubjectCleanupFailed.
 	if err != nil {
-		return V2ExecuteResult{}, err
+		return result, err
 	}
 	return result, nil
 }

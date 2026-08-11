@@ -319,6 +319,16 @@ func (c *GateCollector) runCapture(ctx context.Context, req GateCaptureRequest) 
 	}
 	started := time.Now().UTC()
 	result := c.runner.Run(ctx, argv[0], argv[1:], req.SubjectRoot, nil)
+	// R6-B-CORRECTION07: a non-nil Err on the bounded
+	// runner result is the canonical start-failure signal
+	// (e.g. file-not-found, permission-denied). Surface it
+	// as an observation failure so the adapter can fire
+	// V2CodeR6BGateObservationFailed instead of letting
+	// the empty GateCapture trip the classifier's
+	// LaneMissing rule.
+	if result.Err != nil {
+		return GateCapture{}, fmt.Errorf("evidence: gate command start: %w", result.Err)
+	}
 	finished := time.Now().UTC()
 	rawPath := filepath.Join(req.EvidenceDir, "gate-fast.raw.txt")
 	if err := os.WriteFile(rawPath, append(result.Stdout, result.Stderr...), 0o600); err != nil {

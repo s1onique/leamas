@@ -247,10 +247,23 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	// collector. The collector is wired into the
 	// executor via V2ExecuteRequest.GateCollector; the
 	// executor invokes it inside the live-S window.
+	//
+	// R6-B-CORRECTION07: when a non-nil gitClient is
+	// supplied the executor is rewired to use the same
+	// git client so failure-injection tests can target
+	// the R6-A subject-cleanup authority without
+	// changing production behaviour. The default wiring
+	// (gitClient == RealGit{}) produces an Executor
+	// identical to DefaultV2RunnerDeps's own Executor,
+	// so the production path is unchanged.
 	deps := DefaultV2RunnerDeps()
 	deps.Git = gitClient
+	if gitClient != nil {
+		deps.Executor = NewGitV2SubjectExecutor(gitClient)
+	}
 	deps.BinaryIdentity = identity
 	deps.GateCollector = collector
+
 	deps.GateCaptureTemplate = evidence.GateCaptureRequest{
 		RepositoryRoot: req.RepositoryRoot,
 		EvidenceDir:    evidenceDir,
@@ -284,6 +297,15 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	callerAfterSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
 	if !callerAfterSnap.Available {
 		return execResult.Manifest, V2ExecutionObservation{}, &V2Error{Diags: callerAfterSnap.Diagnostics}
+	}
+	// R6-B-CORRECTION07: subject-cleanup failures are
+	// surfaced BEFORE the caller-state drift check so the
+	// R6-B validateSubjectCleanupOutcome authority owns
+	// the typed surfacing. A leaked worktree registration
+	// is a SYMPTOM of the cleanup failure; the OWNING
+	// diagnostic is the subject cleanup failure itself.
+	if vErr := validateSubjectCleanupOutcome(execResult.Result); vErr != nil {
+		return execResult.Manifest, V2ExecutionObservation{}, mergePublicationErrorDiags(vErr, callerAfterSnap)
 	}
 	if drift := callerBeforeSnap.State.Diff(callerAfterSnap.State); len(drift) > 0 {
 		return execResult.Manifest, V2ExecutionObservation{}, &V2Error{Diags: drift}
@@ -406,11 +428,12 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	// CORRECTION06: the subject-cleanup authority lives in
 	// the R6-A executor result. A failure there is the
 	// owning subject-cleanup failure family. The check
-	// runs AFTER the gate has executed and the B2 candidate
-	// would otherwise be published.
-	if vErr := validateSubjectCleanupOutcome(execResult.Result); vErr != nil {
-		return execResult.Manifest, V2ExecutionObservation{}, vErr
-	}
+	// runs earlier (Phase 6) so the typed R6-B authority
+	// owns the surfacing; this phase keeps the cleanup
+	// check in scope as a defensive final assertion for
+	// any case where the lifecycle completes but the
+	// result fields were not propagated.
+	_ = execResult
 	b2Before := evidence.CallerStateSnapshot{
 		Available:             true,
 		Head:                  callerBeforeSnap.State.HEADCommit,

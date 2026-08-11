@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/s1onique/leamas/internal/factory/closure/evidence"
@@ -180,9 +181,15 @@ func makeFakeBinaryBuilderWithUnsafeOutput() func(context.Context, ExactSubjectB
 // production tests override the precise bytes returned so
 // the writer flag and the bytes both reach the gate
 // capture for the AUTHENTIC truncation propagation.
+//
+// The runner maintains an actual mutex-guarded counter
+// (not a constant return) so Phase 21 of the ACT can
+// prove the underlying runner was invoked exactly once.
 type r6BRecordingRunner struct {
+	mu          sync.Mutex
 	argv        []string
 	cwd         string
+	calls       int
 	spawnFail   bool
 	timeOut     bool
 	nonZero     bool
@@ -192,9 +199,23 @@ type r6BRecordingRunner struct {
 	stderrField []byte
 }
 
+// Calls returns the number of underlying runner
+// invocations recorded so far. The counter is incremented
+// on every Run call so tests can assert the production
+// integration invoked the runner exactly once.
+func (r *r6BRecordingRunner) Calls() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.calls
+}
+
 func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string, dir string, env []string) evidence.CommandResult {
+	r.mu.Lock()
 	r.argv = append([]string{name}, args...)
 	r.cwd = dir
+	r.calls++
+	r.mu.Unlock()
+
 	if r.spawnFail {
 		return evidence.CommandResult{
 			ExitCode: 127,
@@ -217,22 +238,22 @@ func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string
 	if r.stderrField != nil {
 		stderr = r.stderrField
 	}
-	if r.stdoutTrunc {
-		stdout = []byte("EXEC_GATE_OBSERVED_STATUS:OK")
-	}
-	if r.stderrTrunc {
-		stderr = []byte("EXEC_GATE_OBSERVED_STATUS:OK")
-	}
+	stdoutTrunc := r.stdoutTrunc
+	stderrTrunc := r.stderrTrunc
 	if r.nonZero {
 		return evidence.CommandResult{
-			ExitCode: 1,
-			Stdout:   stdout,
-			Stderr:   stderr,
+			ExitCode:    1,
+			Stdout:      stdout,
+			Stderr:      stderr,
+			StdoutTrunc: stdoutTrunc,
+			StderrTrunc: stderrTrunc,
 		}
 	}
 	return evidence.CommandResult{
-		ExitCode: 0,
-		Stdout:   stdout,
-		Stderr:   stderr,
+		ExitCode:    0,
+		Stdout:      stdout,
+		Stderr:      stderr,
+		StdoutTrunc: stdoutTrunc,
+		StderrTrunc: stderrTrunc,
 	}
 }

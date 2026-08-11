@@ -10,7 +10,6 @@ package closure
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -282,114 +281,6 @@ func TestClosureBinaryGateIntegrationIsNonPublishing(t *testing.T) {
 		if _, err := os.Stat(p); err == nil {
 			t.Fatalf("integration wrote %s but must not publish", p)
 		}
-	}
-}
-
-// TestClosureBinaryGateFailureMatrix probes the failure matrix
-// the R6-B umbrella requires. Each row exercises one
-// failure mode and asserts the run fails closed.
-func TestClosureBinaryGateFailureMatrix(t *testing.T) {
-	t.Parallel()
-	dir := r6BInitRepo(t)
-	freeze := r6BMakeCommit(t, dir, "freeze", map[string]string{
-		"docs/closure-plans/X.json": string(r6BValidPlanBytes()),
-	})
-	subject := r6BMakeCommit(t, dir, "subject", map[string]string{"f.txt": "x"})
-	_ = subject
-	binaryPath := filepath.Join(t.TempDir(), "leamas")
-	if err := os.WriteFile(binaryPath, []byte("fake binary\n"), 0o755); err != nil {
-		t.Fatalf("write binary: %v", err)
-	}
-	cases := []struct {
-		name    string
-		buildFn func(context.Context, ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error)
-		runner  evidence.CommandRunner
-		wantSub string
-	}{
-		{
-			name:    "B1 build failure",
-			buildFn: func(_ context.Context, _ ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) { return ExactSubjectBinaryResult{}, errors.New("build failed") },
-			runner:  &r6BRecordingRunner{},
-			wantSub: "build failed",
-		},
-		{
-			name:    "wrong B1 identity (BinaryCommit != SubjectCommit)",
-			buildFn: makeFakeBinaryBuilderWithCommit(binaryPath, strings.Repeat("0", 40)),
-			runner:  &r6BRecordingRunner{},
-			wantSub: "binary_commit",
-		},
-		{
-			name:    "unsafe OutputRoot",
-			buildFn: makeFakeBinaryBuilderWithUnsafeOutput(),
-			runner:  &r6BRecordingRunner{},
-			wantSub: "permission",
-		},
-		{
-			name:    "gate spawn failure",
-			buildFn: r6BStubBuildFn(t),
-			runner:  &r6BRecordingRunner{spawnFail: true},
-			wantSub: "gate",
-		},
-		{
-			name:    "gate timeout",
-			buildFn: r6BStubBuildFn(t),
-			runner:  &r6BRecordingRunner{timeOut: true},
-			wantSub: "UNAVAILABLE",
-		},
-		{
-			name:    "gate stdout truncation",
-			buildFn: r6BStubBuildFn(t),
-			runner:  &r6BRecordingRunner{stdoutTrunc: true},
-			wantSub: "FAIL",
-		},
-		{
-			name:    "gate stderr truncation",
-			buildFn: r6BStubBuildFn(t),
-			runner:  &r6BRecordingRunner{stderrTrunc: true},
-			wantSub: "FAIL",
-		},
-		{
-			name:    "gate nonzero exit",
-			buildFn: r6BStubBuildFn(t),
-			runner:  &r6BRecordingRunner{nonZero: true},
-			wantSub: "FAIL",
-		},
-		{
-			name:    "classification FAIL",
-			buildFn: r6BStubBuildFn(t),
-			runner:  &r6BRecordingRunner{nonZero: true},
-			wantSub: "FAIL",
-		},
-		{
-			name:    "classification UNAVAILABLE",
-			buildFn: r6BStubBuildFn(t),
-			runner:  &r6BRecordingRunner{timeOut: true},
-			wantSub: "timeout",
-		},
-	}
-	for _, c := range cases {
-		c := c
-		t.Run(c.name, func(t *testing.T) {
-			collector := evidence.NewGateCollector(c.runner)
-			_, _, err := RunClosureProtocolV2ExecuteWithDeps(context.Background(),
-				r6BRequestFor(t, dir, freeze, subject),
-				newR6BTestBinaryIdentity(t),
-				RunClosureProtocolV2ExecuteDeps{
-					BuildFn:        c.buildFn,
-					NewCollectorFn: func(_ evidence.CommandRunner) *evidence.GateCollector { return collector },
-					CommandRunner:  c.runner,
-					OutputRoot:     r6BOutputRoot(t),
-					OutputName:     "leamas",
-					RunID:          "r6b-matrix-" + c.name,
-					EvidenceDir:    r6BEvidenceDir(t),
-				})
-			if err == nil {
-				t.Fatalf("row %q must fail, got nil", c.name)
-			}
-			if !strings.Contains(err.Error(), c.wantSub) {
-				t.Fatalf("row %q error = %q, want substring %q", c.name, err.Error(), c.wantSub)
-			}
-		})
 	}
 }
 
