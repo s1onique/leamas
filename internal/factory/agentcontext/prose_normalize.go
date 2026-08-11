@@ -1,10 +1,11 @@
 // Prose normalization helpers.
 //
 // This file contains the deterministic normalization primitives
-// used by the prose scanner. They are kept separate from the
-// scanner (prose.go) so that the scanner stays focused on the
-// imperative-vs-protected-operation classification while the
-// normalization rules remain a single coherent unit.
+// used by the prose scanner. Hard sentence boundary detection now
+// lives in prose_boundary.go (splitIntoUnits). The remaining
+// helpers cover fenced-code stripping, contract-block stripping,
+// backtick-delimiter stripping (preserving content), whitespace
+// collapsing, bullet-prefix stripping, and paragraph splitting.
 
 package agentcontext
 
@@ -49,7 +50,7 @@ func stripContractBlock(content string) string {
 }
 
 // stripBacktickDelimiters removes backtick delimiters from inline
-// code spans while PRESERVING the wrapped content. `Run `make gate“.
+// code spans while PRESERVING the wrapped content. `Run `make gate``.
 // becomes "Run make gate." (backticks gone, content retained).
 func stripBacktickDelimiters(content string) string {
 	var sb strings.Builder
@@ -107,40 +108,6 @@ func stripBulletPrefix(line string) string {
 	return line
 }
 
-// splitIntoUnits splits a paragraph into normative sentence/clause
-// units. A boundary is any of:
-//   ";"   semicolon (always a boundary)
-//   "!"   exclamation (always a boundary)
-//   "?"   question (always a boundary)
-//   ". "  period followed by a space and an uppercase letter
-//     (start of a new sentence — NOT a file extension like
-//     ".json" / ".md" / ".txt").
-//
-// The period is RETAINED with the preceding unit. Other punctuation
-// (";!") is consumed by the boundary.
-func splitIntoUnits(paragraph string) []string {
-	// Rewrite period+space+uppercase as period+newline+uppercase so
-	// the period stays attached to the preceding unit.
-	re := regexp.MustCompile(`\.(\s+)([A-Z])`)
-	paragraph = re.ReplaceAllString(paragraph, ".\n$2")
-	var units []string
-	for _, p := range strings.Split(paragraph, "\n") {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		// Strip trailing ; ! ? that were directly consumed.
-		p = strings.TrimRight(p, ";!?")
-		p = strings.TrimRight(p, ".") // keep the period if it remained
-		// Re-attach a possible trailing period stripped above.
-		if !strings.HasSuffix(p, ".") && strings.HasSuffix(paragraph, ".") {
-			// Allow leading period to remain on the unit.
-		}
-		units = append(units, p)
-	}
-	return units
-}
-
 // splitParagraphs splits content into paragraph units.
 func splitParagraphs(content string) []string {
 	parts := strings.Split(content, "\n\n")
@@ -155,8 +122,8 @@ func splitParagraphs(content string) []string {
 	return out
 }
 
-// truncate returns at most n runes of s, ending with "..." if it
-// was actually truncated.
+// truncate returns at most n runes of s, ending with "..." if it was
+// actually truncated.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

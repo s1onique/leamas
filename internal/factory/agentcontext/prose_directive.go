@@ -3,13 +3,19 @@
 // This file implements the small deterministic grammar used to
 // classify persistent agent-context prose. It recognises bounded
 // directive prefixes (always, please, then, next, now, you must,
-// before X,, after X,, for X,, ...), normalises them away, and
-// then splits the remainder into normative clauses bounded by
-// semi-colons, but/however, and coordinating "and" (only when more
-// than one protected operation is present in the clause).
+// before X,, after X,, for X,, ...) and normalises them away. It
+// then splits the remainder into coarse clauses bounded by
+// semi-colons, but/however, and then/then, and finally separates
+// coordinating "and" (only when more than one protected operation is
+// present in the clause).
 //
-// The scanner does NOT attempt to understand general English. It
-// applies a deliberately restricted grammar.
+// CORRECTION04: the prior imperativeVerbToProtectedOp mapping that
+// phantom-inferred protected operations from generic verbs
+// ("commit" -> OpGitCommit, "make" -> OpMakeGate) is REMOVED. A
+// generic imperative verb determines DIRECTIVE INTENT, not operation
+// identity. The operation identity is determined ONLY by the
+// positional protected-op forms. This prevents a sentence like
+// "Create a tag" from producing {git_tag, git_commit}.
 
 package agentcontext
 
@@ -107,27 +113,18 @@ func splitCoarseClauses(lowerUnit string) []string {
 var coordinationSplitPattern = regexp.MustCompile(`\s+and\s+`)
 
 // countDirectiveComponents returns the number of directive
-// components in a clause: positional protected-op forms PLUS any
-// first-word imperative verb that maps to a protected operation.
+// components in a clause: positional protected-op forms.
 func countDirectiveComponents(lowerClause string) int {
-	count := len(findProtectedOccurrences(lowerClause))
-	words := strings.Fields(lowerClause)
-	if len(words) > 0 {
-		if _, ok := imperativeVerbToProtectedOp(words[0]); ok {
-			count++
-		}
-	}
-	return count
+	return len(findProtectedOccurrences(lowerClause))
 }
 
-// splitCoordination splits a clause on " and " when the clause
-// contains more than one part AND at least TWO parts carry a
-// directive component. Splitting on " and " within a single
-// coordination unit that happens to list files (e.g. "commit
-// both at a.json and b.md") would otherwise destroy the unit's
-// guard binding. The rule therefore only splits when at least two
-// parts each carry a directive component, which is the structural
-// signature of two independent operations.
+// splitCoordination splits a clause on " and " ONLY when the clause
+// contains more than one directive component. Splitting on " and "
+// within a single coordination unit that happens to list files
+// (e.g. "commit both at a.json and b.md") would otherwise destroy
+// the unit's guard binding. The rule therefore only splits when
+// at least two parts each carry a directive component, which is the
+// structural signature of two independent operations.
 func splitCoordination(lowerClause string) []string {
 	parts := coordinationSplitPattern.Split(lowerClause, -1)
 	if len(parts) <= 1 {

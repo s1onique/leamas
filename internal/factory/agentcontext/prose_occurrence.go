@@ -6,6 +6,11 @@
 // unit. Word boundaries are enforced at both ends of a match so that
 // "git tag" cannot match across "git tags" and "make gate" cannot
 // match across "make gatekeeper".
+//
+// CORRECTION04: deduplication by operation kind is removed. Repeated
+// occurrences of the same operation in one unit are all preserved as
+// distinct positional records; the existence of multiple occurrences
+// in one sub-clause fails the sub-clause closed (see prose.go).
 
 package agentcontext
 
@@ -50,11 +55,9 @@ func formMatchesAtRange(lowerUnit string, form string, start int) bool {
 	if lowerUnit[start:start+len(form)] != form {
 		return false
 	}
-	// Left boundary
 	if start > 0 && isOccurrenceWordChar(lowerUnit[start-1]) {
 		return false
 	}
-	// Right boundary
 	end := start + len(form)
 	if end < len(lowerUnit) && isOccurrenceWordChar(lowerUnit[end]) {
 		return false
@@ -62,12 +65,13 @@ func formMatchesAtRange(lowerUnit string, form string, start int) bool {
 	return true
 }
 
-// findProtectedOccurrences returns all positional protected-operation
-// occurrences in the unit, sorted by start position. The unit MUST
-// already be lower-cased and whitespace-normalized.
+// findProtectedOccurrences returns every positional protected-operation
+// occurrence in the unit, sorted by start position. Repeated
+// occurrences of the same operation kind are preserved as distinct
+// records; the caller is responsible for combining dedup behavior
+// when reporting findings.
 func findProtectedOccurrences(lowerUnit string) []ProtectedOccurrence {
 	var occurrences []ProtectedOccurrence
-	seen := make(map[ProtectedOpKind]bool)
 	for _, op := range ProtectedOps {
 		for _, form := range op.Forms {
 			pos := 0
@@ -78,15 +82,12 @@ func findProtectedOccurrences(lowerUnit string) []ProtectedOccurrence {
 				}
 				absStart := pos + idx
 				if formMatchesAtRange(lowerUnit, form, absStart) {
-					if !seen[op.Kind] {
-						occurrences = append(occurrences, ProtectedOccurrence{
-							Op:    op.Kind,
-							Form:  form,
-							Start: absStart,
-							End:   absStart + len(form),
-						})
-						seen[op.Kind] = true
-					}
+					occurrences = append(occurrences, ProtectedOccurrence{
+						Op:    op.Kind,
+						Form:  form,
+						Start: absStart,
+						End:   absStart + len(form),
+					})
 				}
 				pos = absStart + len(form)
 				if pos >= len(lowerUnit) {
