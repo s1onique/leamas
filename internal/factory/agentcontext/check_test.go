@@ -3,297 +3,265 @@ package agentcontext
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
-func TestCheckRepo(t *testing.T) {
-	// Create a temporary directory with test files
-	tmpDir := t.TempDir()
-
-	// Create minimal valid AGENTS.md
-	agentsMD := `# AGENTS.md
+// validAgentsMD returns a fixture that satisfies every required anchor
+// in AgentsMDRequiredAnchors and avoids every forbidden anchor in
+// AgentsMDForbiddenAnchors.
+func validAgentsMD() string {
+	return `# AGENTS.md
 
 ## Project
 
-Leamas is a verification tool.
+Leamas is a local-first, web-first, Go-only, single-binary verification witness.
 
 ## Read First
 
 - docs/doctrine/agent-assisted-development.md
+- docs/doctrine/agent-authority-delegation.md
 - docs/doctrine/go-only.md
-- docs/factory/llm-friendliness.md
 
 ## Non-Negotiable Rules
 
 - No Python anywhere.
 - Bash is glue only.
-- make factorize
-- make gate
-- go test ./...
-- go vet ./...
-- CGO_ENABLED=0 go build
 - Do not force-push.
 
-## Close Reports
+## Authority Delegation
 
-Every closed ACT must record exact commands.
+Follow the current ACT's explicit authority.
+
+Do not infer commit authority from permission to edit or test.
+Do not infer push authority from permission to commit.
+Do not infer tag authority from permission to commit.
+
+In interactive agent/editor context, do not run make factorize, make gate-dupcode, or make gate unless the current ACT explicitly authorizes that exact command.
+
+Do not run make factorize unless explicitly authorized by the current ACT.
+Do not run make gate-dupcode unless explicitly authorized by the current ACT.
+Do not run make gate unless explicitly authorized by the current ACT.
+
+Focused checks explicitly required by the ACT remain allowed. When not authorized, report the command as not run.
+
+A validated Factory closure plan may itself authorize execution. Authority comes from the contract, not from caller identity.
+
+Editor checkpoints, restore points, and Compare operations are not Git commits and do not grant Git publication authority.
+
+Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
+
+## Required Verification
+
+Routine implementation loop uses gate-fast.
+
+When Go code exists or changes, also run:
+
+- go test ./...
+- go vet ./...
+- CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 `
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte(agentsMD), 0644); err != nil {
-		t.Fatal(err)
-	}
+}
 
-	// Create minimal valid .clinerules/leamas.md
-	clineMD := `# Cline Rules for Leamas
+// validClineMD returns a fixture that satisfies every required anchor
+// in ClineMDRequiredAnchors and avoids every forbidden anchor in
+// ClineMDForbiddenAnchors.
+func validClineMD() string {
+	return `# Cline Rules for Leamas
 
 Follow AGENTS.md first.
 
 ## Language Boundary
 
 - No Python anywhere.
-- Bash only for tiny glue.
-- make factorize
-- make gate
-- Do not force-push.
+- Bash only for tiny glue and Git hooks.
+
+## Execution Authority
+
+The current ACT is authoritative.
+
+Never run make factorize, make gate-dupcode, or make gate in Cline/editor context unless the current ACT explicitly authorizes that exact command.
+
+When not authorized, report it as not run.
+
+Do not infer Git commit, push, tag, or history-rewrite authority from permission to edit or test.
+
+Cline checkpoints are not Git commits and do not grant Git publication authority.
 
 ## Verification
 
-Run make factorize and make gate.
+Run CGO_ENABLED=0 make gate-fast for ordinary implementation loops.
+
+A refusal from an expensive gate is not run, not pass, and must never be reported as successful verification.
+
+## Git Safety
+
+Do not force-push. Prefer forward corrective commits.
 `
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".clinerules"), 0755); err != nil {
-		t.Fatal(err)
+}
+
+// writeFixture writes content to relPath under tmp and ensures parent
+// directories exist.
+func writeFixture(t *testing.T, tmp, relPath, content string) {
+	t.Helper()
+	full := filepath.Join(tmp, relPath)
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(full), err)
 	}
-	if err := os.WriteFile(filepath.Join(tmpDir, ".clinerules", "leamas.md"), []byte(clineMD), 0644); err != nil {
-		t.Fatal(err)
+	if err := os.WriteFile(full, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", full, err)
 	}
+}
 
-	// Create minimal policy doc
-	policyDoc := `# Agent Context Files
+// writeValidFixtures writes a valid AGENTS.md, .clinerules/leamas.md,
+// and the policy doc under tmp.
+func writeValidFixtures(t *testing.T, tmp string) {
+	t.Helper()
+	writeFixture(t, tmp, "AGENTS.md", validAgentsMD())
+	writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), validClineMD())
+	writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"),
+		"# Agent Context Files\nLeamas uses checked-in agent context files.\n")
+}
 
-Leamas uses checked-in agent context files.
+func TestCheckRepo_Valid(t *testing.T) {
+	tmp := t.TempDir()
+	writeValidFixtures(t, tmp)
 
-## Files
-
-| File | Purpose |
-|------|---------|
-| AGENTS.md | Tool-agnostic instructions |
-| .clinerules/leamas.md | Cline-specific rules |
-`
-	if err := os.MkdirAll(filepath.Join(tmpDir, "docs", "factory"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "docs", "factory", "agent-context-files.md"), []byte(policyDoc), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Run check
-	findings, err := CheckRepo(tmpDir)
+	findings, err := CheckRepo(tmp)
 	if err != nil {
-		t.Fatalf("CheckRepo failed: %v", err)
+		t.Fatalf("CheckRepo: %v", err)
 	}
-
-	// Should have no findings for valid files
 	if len(findings) != 0 {
-		t.Errorf("expected no findings, got %d: %+v", len(findings), findings)
+		var msgs []string
+		for _, f := range findings {
+			msgs = append(msgs, f.Path+": "+f.Kind+": "+f.Message)
+		}
+		t.Fatalf("expected no findings, got: %s", strings.Join(msgs, "\n"))
 	}
 }
 
 func TestCheckRepo_MissingAgentsMD(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmp := t.TempDir()
+	writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), validClineMD())
+	writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"), "policy")
 
-	findings, err := CheckRepo(tmpDir)
+	findings, err := CheckRepo(tmp)
 	if err != nil {
-		t.Fatalf("CheckRepo failed: %v", err)
+		t.Fatalf("CheckRepo: %v", err)
 	}
 
-	found := false
+	foundMissing := false
 	for _, f := range findings {
-		if f.Kind == "missing" && f.Path == filepath.Join(tmpDir, "AGENTS.md") {
-			found = true
+		if f.Kind == "missing" && strings.HasSuffix(f.Path, "AGENTS.md") {
+			foundMissing = true
 			break
 		}
 	}
-	if !found {
-		t.Error("expected finding for missing AGENTS.md")
+	if !foundMissing {
+		t.Fatalf("expected missing finding for AGENTS.md, got: %+v", findings)
 	}
 }
 
 func TestCheckRepo_MissingClineRules(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmp := t.TempDir()
+	writeFixture(t, tmp, "AGENTS.md", validAgentsMD())
+	writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"), "policy")
 
-	// Create only AGENTS.md
-	agentsMD := `# AGENTS.md
-Leamas.
-No Python.
-Bash is glue.
-make factorize.
-make gate.
-go test ./...
-go vet ./...
-CGO_ENABLED=0 go build.
-Do not force-push.
-docs/doctrine/agent-assisted-development.md
-docs/doctrine/go-only.md
-docs/factory/llm-friendliness.md
-`
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte(agentsMD), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	findings, err := CheckRepo(tmpDir)
+	findings, err := CheckRepo(tmp)
 	if err != nil {
-		t.Fatalf("CheckRepo failed: %v", err)
+		t.Fatalf("CheckRepo: %v", err)
 	}
 
-	found := false
+	foundMissing := false
 	for _, f := range findings {
-		if f.Kind == "missing" && f.Path == filepath.Join(tmpDir, ".clinerules", "leamas.md") {
-			found = true
+		if f.Kind == "missing" && strings.HasSuffix(f.Path, filepath.Join(".clinerules", "leamas.md")) {
+			foundMissing = true
 			break
 		}
 	}
-	if !found {
-		t.Error("expected finding for missing .clinerules/leamas.md")
+	if !foundMissing {
+		t.Fatalf("expected missing finding for .clinerules/leamas.md, got: %+v", findings)
 	}
 }
 
 func TestCheckRepo_AgentsMDTooLong(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmp := t.TempDir()
+	writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), validClineMD())
+	writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"), "policy")
 
-	// Create AGENTS.md with too many lines (>160)
-	lines := []string{"# AGENTS.md\n"}
-	for i := 0; i < 170; i++ {
-		lines = append(lines, "Line of content.\n")
+	// Build content that satisfies required anchors but exceeds 160
+	// lines.
+	var sb strings.Builder
+	sb.WriteString(validAgentsMD())
+	for i := 0; i < 200; i++ {
+		sb.WriteString("filler line to push over the line limit\n")
 	}
-	content := ""
-	for _, l := range lines {
-		content += l
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
+	writeFixture(t, tmp, "AGENTS.md", sb.String())
 
-	findings, err := CheckRepo(tmpDir)
+	findings, err := CheckRepo(tmp)
 	if err != nil {
-		t.Fatalf("CheckRepo failed: %v", err)
+		t.Fatalf("CheckRepo: %v", err)
 	}
 
 	found := false
 	for _, f := range findings {
-		if f.Kind == "too_long" {
+		if f.Kind == "too_long" && strings.HasSuffix(f.Path, "AGENTS.md") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("expected finding for AGENTS.md too long")
+		t.Fatalf("expected too_long finding for AGENTS.md, got: %+v", findings)
 	}
 }
 
 func TestCheckRepo_ClineRulesTooLong(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmp := t.TempDir()
+	writeFixture(t, tmp, "AGENTS.md", validAgentsMD())
+	writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"), "policy")
 
-	// Create valid AGENTS.md
-	agentsMD := `# AGENTS.md
-Leamas.
-No Python.
-Bash is glue.
-make factorize.
-make gate.
-go test ./...
-go vet ./...
-CGO_ENABLED=0 go build.
-Do not force-push.
-docs/doctrine/agent-assisted-development.md
-docs/doctrine/go-only.md
-docs/factory/llm-friendliness.md
-`
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte(agentsMD), 0644); err != nil {
-		t.Fatal(err)
+	var sb strings.Builder
+	sb.WriteString(validClineMD())
+	for i := 0; i < 200; i++ {
+		sb.WriteString("filler line to push over the line limit\n")
 	}
+	writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), sb.String())
 
-	// Create .clinerules/leamas.md with too many lines (>120)
-	lines := []string{"# Cline Rules for Leamas\n", "Follow AGENTS.md first.\n"}
-	for i := 0; i < 125; i++ {
-		lines = append(lines, "Line of content.\n")
-	}
-	content := ""
-	for _, l := range lines {
-		content += l
-	}
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".clinerules"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, ".clinerules", "leamas.md"), []byte(content), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	findings, err := CheckRepo(tmpDir)
+	findings, err := CheckRepo(tmp)
 	if err != nil {
-		t.Fatalf("CheckRepo failed: %v", err)
+		t.Fatalf("CheckRepo: %v", err)
 	}
 
 	found := false
 	for _, f := range findings {
-		if f.Kind == "too_long" {
+		if f.Kind == "too_long" && strings.HasSuffix(f.Path, filepath.Join(".clinerules", "leamas.md")) {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("expected finding for .clinerules/leamas.md too long")
+		t.Fatalf("expected too_long finding for .clinerules/leamas.md, got: %+v", findings)
 	}
 }
 
 func TestCheckRepo_MissingPolicyDoc(t *testing.T) {
-	tmpDir := t.TempDir()
+	tmp := t.TempDir()
+	writeFixture(t, tmp, "AGENTS.md", validAgentsMD())
+	writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), validClineMD())
 
-	// Create valid AGENTS.md and .clinerules/leamas.md
-	agentsMD := `# AGENTS.md
-Leamas.
-No Python.
-Bash is glue.
-make factorize.
-make gate.
-go test ./...
-go vet ./...
-CGO_ENABLED=0 go build.
-Do not force-push.
-docs/doctrine/agent-assisted-development.md
-docs/doctrine/go-only.md
-docs/factory/llm-friendliness.md
-`
-	if err := os.WriteFile(filepath.Join(tmpDir, "AGENTS.md"), []byte(agentsMD), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	clineMD := `# Cline Rules for Leamas
-Follow AGENTS.md first.
-No Python.
-Bash only.
-make factorize.
-make gate.
-Do not force-push.
-`
-	if err := os.MkdirAll(filepath.Join(tmpDir, ".clinerules"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, ".clinerules", "leamas.md"), []byte(clineMD), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	findings, err := CheckRepo(tmpDir)
+	findings, err := CheckRepo(tmp)
 	if err != nil {
-		t.Fatalf("CheckRepo failed: %v", err)
+		t.Fatalf("CheckRepo: %v", err)
 	}
 
 	found := false
 	for _, f := range findings {
-		if f.Kind == "missing" && f.Path == filepath.Join(tmpDir, "docs", "factory", "agent-context-files.md") {
+		if f.Kind == "missing" && strings.HasSuffix(f.Path, filepath.Join("docs", "factory", "agent-context-files.md")) {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Error("expected finding for missing docs/factory/agent-context-files.md")
+		t.Fatalf("expected missing finding for policy doc, got: %+v", findings)
 	}
 }

@@ -24,6 +24,15 @@ LLMs and agents may help with Leamas, but their claims must be grounded in evide
 
 → See [agent-assisted-development.md](agent-assisted-development.md)
 
+### Agent Authority Delegation
+
+Authority for editing, testing, committing, pushing, tagging, history
+rewriting, and running aggregate expensive gates is independent. The
+active ACT is authoritative; persistent agent context MUST NOT grant
+expensive-gate, commit, push, or tag authority implicitly.
+
+→ See [agent-authority-delegation.md](agent-authority-delegation.md)
+
 ### Local First
 
 Everything must work on a developer's local machine before considering any other deployment target. Cloud, cluster, or enterprise deployment is optional; local usability is mandatory.

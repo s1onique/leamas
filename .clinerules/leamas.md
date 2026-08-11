@@ -28,32 +28,25 @@ Leamas uses Factory discipline. Doctrine lives under `docs/doctrine/`.
 - Do not add allowlists or bypasses to the LLM-friendliness gate.
 - Split large files instead of weakening thresholds.
 
+## Execution Authority
+
+The current ACT is authoritative.
+
+Never run `make factorize`, `make gate-dupcode`, or `make gate` in Cline/editor context unless the current ACT explicitly authorizes that exact command.
+
+When not authorized, report it as NOT RUN.
+
+Do not infer Git commit, push, tag, or history-rewrite authority from permission to edit or test.
+
+Cline checkpoints are not Git commits and do not grant Git publication authority.
+
+Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
+
 ## Verification
 
 During ordinary implementation and correction loops, run `CGO_ENABLED=0 make gate-fast`.
 
-When changing dupcode-related code, also run `CGO_ENABLED=0 make gate-dupcode`.
-
-**Expensive verification** (canonical gate, factorize) is refused in
-Codium/VS Code/Cline terminal contexts to prevent accidental expensive
-execution during interactive development loops.
-
-Routine instructions must not recommend:
-
-- `make gate`
-- `make factorize`
-- `make gate-dupcode`
-- `go test ./...`
-
-unless the task is explicitly in closure or expensive-verification mode.
-
-For deliberate expensive verification, use explicit overrides:
-
-- `LEAMAS_ALLOW_FULL_GATE=1 make gate`
-- `LEAMAS_ALLOW_FULL_FACTORIZE=1 make factorize`
-
-A refusal from `make gate` or `make factorize` is not a PASS and must
-never be reported as successful verification.
+A refusal from `make factorize`, `make gate-dupcode`, or `make gate` is NOT RUN, not PASS, and must never be reported as successful verification.
 
 ## Git Safety
 
