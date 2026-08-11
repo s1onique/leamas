@@ -289,24 +289,56 @@ func RunClosureProtocolV2ExecuteWithDeps(
 	// captureGate; the captured GateCapture is stored
 	// in V2ExecuteResult.GateCapture.
 	execResult, err := runClosureProtocolV2InnerForExecute(ctx, req, deps, callerBeforeSnap.State, collector)
+	callerAfterSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
 	if err != nil {
-		callerAfterSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
+		// CORRECTION08: the inner runner may return a
+		// populated result with a non-nil err when the
+		// R6-A executor reports a cleanup-only failure
+		// (V2CodeCleanupFailed) or any other post-
+		// execution failure with an observation snapshot.
+		// The R6-B layer MUST inspect the populated
+		// result before propagating the err so it can
+		// surface the OWNING R6-B typed code without
+		// destroying the lower-level cause.
+		//
+		// Cleanup-only failure path: the executor
+		// populated the result AND returned
+		// V2CodeCleanupFailed. R6-B wraps the lower-
+		// level error as Cause of the typed
+		// V2CodeR6BSubjectCleanupFailed surfacing.
+		if vErr := validateSubjectCleanupOutcome(execResult.Result); vErr != nil {
+			if inner := cleanupOutcomeInnerCause(execResult.Result); inner != nil {
+				vErr.Cause = inner
+			}
+			return zero, V2ExecutionObservation{}, mergePublicationErrorDiags(vErr, callerAfterSnap)
+		}
+		// Non-cleanup inner failure: propagate the
+		// original err unchanged. The lower-level
+		// failure is preserved verbatim.
 		return zero, V2ExecutionObservation{}, mergePublicationErrorDiags(err, callerAfterSnap)
 	}
-	// Phase 6: Capture after snapshot.
-	callerAfterSnap := deps.SnapshotFn(ctx, deps.Git, req.RepositoryRoot, V2SnapshotPhaseAfter)
+	// Phase 6: callerAfterSnap is captured above (so the
+	// err path can use it). When the err path returned
+	// we never reach here.
 	if !callerAfterSnap.Available {
 		return execResult.Manifest, V2ExecutionObservation{}, &V2Error{Diags: callerAfterSnap.Diagnostics}
 	}
-	// R6-B-CORRECTION07: subject-cleanup failures are
-	// surfaced BEFORE the caller-state drift check so the
-	// R6-B validateSubjectCleanupOutcome authority owns
-	// the typed surfacing. A leaked worktree registration
-	// is a SYMPTOM of the cleanup failure; the OWNING
-	// diagnostic is the subject cleanup failure itself.
-	if vErr := validateSubjectCleanupOutcome(execResult.Result); vErr != nil {
-		return execResult.Manifest, V2ExecutionObservation{}, mergePublicationErrorDiags(vErr, callerAfterSnap)
-	}
+	// CORRECTION08: the cleanup-only failure path is
+	// handled above (when the inner runner returns a
+	// non-nil err with a populated result). At this
+	// point the executor succeeded (err == nil), so the
+	// subject cleanup was either successful or never
+	// attempted in a way that produced a populated
+	// cleanup observation. The post-success cleanup
+	// check below fires when the executor reported
+	// SubjectCleanupObserved=true AND a non-empty
+	// SubjectCleanupError in the result snapshot (a
+	// belt-and-braces guard; production cleanup
+	// failures MUST produce an executor err).
+	//
+	// Drift check: caller-state drift between BEFORE
+	// and AFTER is a leaked side-effect; the runner
+	// cannot claim success when the caller state changed.
 	if drift := callerBeforeSnap.State.Diff(callerAfterSnap.State); len(drift) > 0 {
 		return execResult.Manifest, V2ExecutionObservation{}, &V2Error{Diags: drift}
 	}
@@ -616,8 +648,14 @@ func runClosureProtocolV2InnerForExecute(
 		GateCollector:       collector,
 		GateCaptureTemplate: deps.GateCaptureTemplate,
 	})
+	// CORRECTION08: preserve the populated execResult on err
+	// so the R6-B adapter can inspect the cleanup observation
+	// (SubjectCleanupObserved / SubjectCleanupError) and
+	// surface the owning R6-B family without losing the
+	// lower-level failure. For ordinary execution failures
+	// execResult is the executor's populated snapshot.
 	if err != nil {
-		return executorResultBundle{}, err
+		return executorResultBundle{Result: execResult}, err
 	}
 	if execResult.ObservedTree != subjectTree {
 		return executorResultBundle{}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
@@ -666,6 +704,36 @@ func binaryAuthorityFromBuild(b ExactSubjectBinaryResult) evidence.BinaryAuthori
 		OutputOutsideAllWorktrees: b.OutputOutsideAllWorktrees,
 		Executable:                b.Executable,
 	}
+}
+
+// cleanupOutcomeInnerCause returns the lower-level cleanup
+// failure error the executor produced when the cleanup-only
+// failure path fired V2CodeCleanupFailed. The helper is the
+// bridge between the R6-A direct cleanup-error contract
+// (populated result + non-nil err with V2CodeCleanupFailed)
+// and the R6-B typed surfacing (V2CodeR6BSubjectCleanupFailed).
+//
+// The R6-B adapter wraps the inner error as V2Error.Cause so
+// the diagnostic ancestry survives: R6-A direct callers see
+// V2CodeCleanupFailed; R6-B callers see
+// V2CodeR6BSubjectCleanupFailed with the lower-level cause
+// reachable via errors.Is / Unwrap.
+//
+// Returns nil when the executor reported no cleanup failure
+// (the result.SubjectCleanupError is empty or unobserved).
+func cleanupOutcomeInnerCause(result V2ExecuteResult) error {
+	if !result.SubjectCleanupObserved {
+		return nil
+	}
+	if result.SubjectCleanupError == "" {
+		return nil
+	}
+	return &V2Error{Diags: V2Diagnostics{{
+		Code:         V2CodeCleanupFailed,
+		Message:      "subject worktree cleanup failed: " + result.SubjectCleanupError,
+		PropertyName: "cleanup",
+		Detail:       result.SubjectCleanupError,
+	}}}
 }
 
 // derefIntPtr returns the dereferenced int or 0 for a nil.

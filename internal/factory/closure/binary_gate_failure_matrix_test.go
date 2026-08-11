@@ -46,20 +46,27 @@ const (
 // r6BMatrixRow is the schema the strict 12-row matrix
 // uses. Each row records the test-time setup, the
 // expected typed V2 code (or typed sentinel), and the
-// B2 consequence requirement.
+// mandatory B2 consequence requirement.
 //
 // Set runner to construct the CommandRunner the
 // GateCollector uses. Set setup to inject any additional
 // failure-injection seams (buildFn, gitClient). Set
 // expectCauseIs to assert the wrapped cause via
 // errors.Is (e.g. evidence.ErrCollectorRequestMismatch).
+//
+// b2Consequence is REQUIRED for every row. There is no
+// opt-out from B2 consequence proof; rows must declare
+// whether the failure surfaces before the candidate is
+// constructible (consequenceCandidateUnreachable) or
+// surfaces after, in which case B2 must reject the
+// candidate as INCOMPLETE (consequenceBarrierRejects).
 type r6BMatrixRow struct {
-	name         string
-	owner        r6BFailureOwner
-	setup        func(t *testing.T, dir, freeze, subject string) RunClosureProtocolV2ExecuteDeps
-	expectCode   V2DiagnosticCode
-	expectCause  error // optional; checked via errors.Is
-	b2Incomplete bool
+	name          string
+	owner         r6BFailureOwner
+	setup         func(t *testing.T, dir, freeze, subject string) RunClosureProtocolV2ExecuteDeps
+	expectCode    V2DiagnosticCode
+	expectCause   error // optional; checked via errors.Is
+	b2Consequence b2Consequence
 }
 
 // r6BMatrixRows returns the canonical 12-row matrix. The
@@ -77,8 +84,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					},
 				}
 			},
-			expectCode:   "", // B1 family surfaces as a non-V2Error in production
-			b2Incomplete: true,
+			expectCode:    "", // B1 family surfaces as a non-V2Error in production
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "02_wrong_b1_identity",
@@ -92,7 +99,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					BuildFn: makeFakeBinaryBuilderWithCommit(binaryPath, strings.Repeat("0", 40)),
 				}
 			},
-			expectCode: V2CodeR6BBinaryAuthorityInvalid,
+			expectCode:    V2CodeR6BBinaryAuthorityInvalid,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "03_unsafe_output_root",
@@ -102,8 +110,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					BuildFn: makeFakeBinaryBuilderWithUnsafeOutput(),
 				}
 			},
-			expectCode:   "", // permission-denied surfaces as a non-V2Error
-			b2Incomplete: true,
+			expectCode:    "", // permission-denied surfaces as a non-V2Error
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "04_gate_spawn_failure",
@@ -119,7 +127,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					EvidenceDir:    r6BEvidenceDir(t),
 				}
 			},
-			expectCode: V2CodeR6BGateObservationFailed,
+			expectCode:    V2CodeR6BGateObservationFailed,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "05_gate_timeout",
@@ -134,7 +143,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					EvidenceDir:   r6BEvidenceDir(t),
 				}
 			},
-			expectCode: V2CodeR6BGateClassificationUnavailable,
+			expectCode:    V2CodeR6BGateClassificationUnavailable,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "06_gate_stdout_truncation",
@@ -149,7 +159,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					EvidenceDir:   r6BEvidenceDir(t),
 				}
 			},
-			expectCode: V2CodeR6BGateClassificationUnavailable,
+			expectCode:    V2CodeR6BGateClassificationUnavailable,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "07_gate_stderr_truncation",
@@ -164,7 +175,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					EvidenceDir:   r6BEvidenceDir(t),
 				}
 			},
-			expectCode: V2CodeR6BGateClassificationUnavailable,
+			expectCode:    V2CodeR6BGateClassificationUnavailable,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "08_gate_nonzero_exit",
@@ -180,7 +192,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					GateACTOwnedPaths: []string{"cmd/leamas/**"},
 				}
 			},
-			expectCode: V2CodeR6BGateClassificationFailed,
+			expectCode:    V2CodeR6BGateClassificationFailed,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "09_classifier_fail_independent",
@@ -196,7 +209,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					GateACTOwnedPaths: []string{"cmd/leamas/**"},
 				}
 			},
-			expectCode: V2CodeR6BGateClassificationFailed,
+			expectCode:    V2CodeR6BGateClassificationFailed,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "10_classifier_unavailable_independent",
@@ -211,7 +225,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					EvidenceDir:   r6BEvidenceDir(t),
 				}
 			},
-			expectCode: V2CodeR6BGateClassificationUnavailable,
+			expectCode:    V2CodeR6BGateClassificationUnavailable,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "11_collector_identity_mismatch",
@@ -242,8 +257,9 @@ func r6BMatrixRows() []r6BMatrixRow {
 					EvidenceDir:    r6BEvidenceDir(t),
 				}
 			},
-			expectCode:  V2CodeR6BGateObservationFailed,
-			expectCause: evidence.ErrCollectorRequestMismatch,
+			expectCode:    V2CodeR6BGateObservationFailed,
+			expectCause:   evidence.ErrCollectorRequestMismatch,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 		{
 			name:  "12_subject_cleanup_failure",
@@ -259,7 +275,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 					GitClient:     r6BRealSubjectCleanupFailureGitClient(),
 				}
 			},
-			expectCode: V2CodeR6BSubjectCleanupFailed,
+			expectCode:    V2CodeR6BSubjectCleanupFailed,
+			b2Consequence: consequenceCandidateUnreachable,
 		},
 	}
 }
@@ -314,25 +331,26 @@ func TestClosureBinaryGateFailureMatrix(t *testing.T) {
 					t.Fatalf("row %q: err = %v, want errors.Is(%v)", row.name, err, row.expectCause)
 				}
 			}
-			// B2 consequence: the candidate cannot cross
-			// the barrier, either because the observation
-			// was rejected before it could be assembled, or
-			// because the B2 barrier rejects it.
-			if row.b2Incomplete {
-				requireB2Incomplete(t, obs, func() error {
-					_, prepErr := evidence.PrepareClosureEvidenceForPublication(
-						evidence.BuildClosureEvidenceCandidate(evidence.CandidateInputs{
-							Runtime:      obs.Runtime,
-							Results:      obs.Results,
-							Gate:         obs.Gate,
-							Binary:       obs.Binary,
-							CallerBefore: obs.CallerBefore,
-							CallerAfter:  obs.CallerAfter,
-							Cleanup:      obs.Cleanup,
-						}))
-					return prepErr
-				})
+			// B2 consequence (mandatory for every row):
+			// the candidate cannot cross the barrier, either
+			// because the observation was rejected before it
+			// could be assembled, or because the B2 barrier
+			// rejects it. The row declares which consequence
+			// applies; the helper asserts it.
+			buildCandidate := func() error {
+				_, prepErr := evidence.PrepareClosureEvidenceForPublication(
+					evidence.BuildClosureEvidenceCandidate(evidence.CandidateInputs{
+						Runtime:      obs.Runtime,
+						Results:      obs.Results,
+						Gate:         obs.Gate,
+						Binary:       obs.Binary,
+						CallerBefore: obs.CallerBefore,
+						CallerAfter:  obs.CallerAfter,
+						Cleanup:      obs.Cleanup,
+					}))
+				return prepErr
 			}
+			requireB2Consequence(t, row.b2Consequence, obs, buildCandidate)
 			semanticRows++
 		})
 	}

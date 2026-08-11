@@ -387,13 +387,24 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		TopologyFacts:              req.TopologyFacts,
 		GateCapture:                gateCapture,
 	})
-	// R6-B-CORRECTION07: subject-cleanup failures are
-	// transported in the populated result so the R6-B
-	// validateSubjectCleanupOutcome can fire. The R6-A
-	// executor no longer wraps cleanup-only failures as
-	// V2CodeCleanupFailed; the result carries the error
-	// in SubjectCleanupError and the R6-B layer owns the
-	// typed surfacing as V2CodeR6BSubjectCleanupFailed.
+	// CORRECTION08: restore the R6-A cleanup-error contract.
+	// A cleanup-only failure MUST produce a populated result
+	// AND a non-nil error so direct R6-A callers see the
+	// owning failure family (V2CodeCleanupFailed). The R6-B
+	// adapter wraps this lower-level error as the cause of
+	// V2CodeR6BSubjectCleanupFailed; the populated result
+	// carries the cleanup observation through so R6-B can
+	// inspect the owning family without re-classifying.
+	//
+	// Primary error and cleanup failure are both preserved:
+	// the original err (from executeChecks, MkdirAll, or
+	// tree-mismatch) is not silently replaced. The cleanup
+	// report is folded in below.
+	if report.HasError() && err == nil {
+		err = NewV2ErrorWith(V2CodeCleanupFailed,
+			"subject worktree cleanup failed: "+report.Summary(),
+			"cleanup", report.Summary())
+	}
 	if err != nil {
 		return result, err
 	}

@@ -1,20 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Package evidence - gate_capture.go implements Phase 4
-// (exactly-once per-run gate capture) and Phase 3
-// (authoritative bounded result fields) of CORRECTION01-R1.
+// Package evidence - gate_capture.go implements the
+// exactly-once GateCollector and the bounded
+// CommandRunner / CommandResult lifecycle authority.
 //
-// GateCollector owns the capture state for exactly one closure
-// run. The first Capture call executes the gate via the runner;
-// every subsequent equivalent call returns the same immutable
-// GateCapture and error without invoking the runner again. A
-// mutex protects request identity and state; sync.Once owns the
-// runner invocation and publishes the cached result.
-
+// CORRECTION08 lifecycle authority:
+//   - CommandResult.StartErr carries the result of
+//     cmd.Start() only. A non-nil StartErr means the
+//     process NEVER successfully started; Err is always
+//     nil in that case.
+//   - CommandResult.Err carries the post-start wait
+//     outcome only (nonzero exit, timeout, cancellation,
+//     exec.ErrWaitDelay). Err is NEVER a command-start
+//     signal — that authority lives on StartErr.
+//   - GateCollector uses StartErr as the canonical
+//     observation-failure signal so post-start wait
+//     outcomes cannot be mis-classified as start
+//     failures.
 package evidence
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -84,27 +89,45 @@ type CommandRunner interface {
 // CommandResult is the authoritative bounded process result.
 // Truncation comes from the writer's authoritative flag, not
 // from a length comparison.
+//
+// CORRECTION08 lifecycle split:
+//   - StartErr is the cmd.Start() result; non-nil ONLY when
+//     the process never reached cmd.Wait(). Err is nil in
+//     that case.
+//   - Err is the cmd.Wait() result; non-nil on post-start
+//     outcomes (nonzero exit, timeout, cancellation,
+//     ErrWaitDelay). Err is NEVER a command-start signal.
 type CommandResult struct {
-	ExitCode      int
-	TimedOut      bool
-	Canceled      bool
-	Stdout        []byte
-	Stderr        []byte
-	StdoutTrunc   bool
-	StderrTrunc   bool
-	Err           error
+	ExitCode int
+	TimedOut bool
+	Canceled bool
+	Stdout   []byte
+	Stderr   []byte
+	StdoutTrunc bool
+	StderrTrunc bool
+	StartErr    error
+	Err         error
 	StartedAtUTC  time.Time
 	FinishedAtUTC time.Time
 }
 
-// OsRunner is the production CommandRunner. WaitDelay is finite
-// so the bounded execution authority is enforced.
+// OsRunner is the production CommandRunner. WaitDelay is
+// finite so the bounded execution authority is enforced.
 type OsRunner struct {
 	OutputCap int
 	WaitDelay time.Duration
 }
 
 // Run invokes the supplied argv through the OS process package.
+//
+// CORRECTION08 lifecycle split:
+//   startErr := cmd.Start()
+//   if startErr != nil { return CommandResult{StartErr: startErr, ...} }
+//   waitErr  := cmd.Wait()
+//   return CommandResult{StartErr: nil, Err: waitErr, ...}
+//
+// The authoritative signal for "process never started" is
+// StartErr, NOT a substring match on Err or the exit code.
 func (r *OsRunner) Run(ctx context.Context, name string, args []string, dir string, env []string) CommandResult {
 	cap := r.OutputCap
 	if cap == 0 {
@@ -126,18 +149,31 @@ func (r *OsRunner) Run(ctx context.Context, name string, args []string, dir stri
 	stderrBuf.cap = cap
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
-	err := cmd.Start()
-	if err != nil {
+	startErr := cmd.Start()
+	if startErr != nil {
+		// Process NEVER reached cmd.Wait(). StartErr is
+		// the canonical signal; Err stays nil so the
+		// GateCollector cannot mistake this for a
+		// post-start wait outcome.
 		return CommandResult{
-			ExitCode: 127, Err: err,
-			Stderr:       []byte(err.Error()),
-			Stdout:       nil,
-			StartedAtUTC: started, FinishedAtUTC: time.Now().UTC(),
+			StartErr:      startErr,
+			Err:           nil,
+			ExitCode:      127,
+			Stderr:        []byte(startErr.Error()),
+			Stdout:        nil,
+			StdoutTrunc:   false,
+			StderrTrunc:   false,
+			TimedOut:      false,
+			Canceled:      false,
+			StartedAtUTC:  started,
+			FinishedAtUTC: time.Now().UTC(),
 		}
 	}
 	waitErr := cmd.Wait()
 	finished := time.Now().UTC()
 	result := CommandResult{
+		StartErr:      nil,
+		Err:           waitErr,
 		ExitCode:      exitCodeFromWait(waitErr),
 		Stdout:        stdoutBuf.bytes(),
 		Stderr:        stderrBuf.bytes(),
@@ -145,7 +181,6 @@ func (r *OsRunner) Run(ctx context.Context, name string, args []string, dir stri
 		StderrTrunc:   stderrBuf.truncated,
 		StartedAtUTC:  started,
 		FinishedAtUTC: finished,
-		Err:           waitErr,
 	}
 	if ctx.Err() == context.DeadlineExceeded {
 		result.TimedOut = true
@@ -167,40 +202,12 @@ func exitCodeFromWait(err error) int {
 	return 1
 }
 
-// truncatedBuffer is the authoritative writer. Its truncated
-// flag is set when overflow occurs; downstream consumers MUST
-// read this flag rather than re-deriving truncation from byte
-// length.
-type truncatedBuffer struct {
-	cap       int
-	buf       bytes.Buffer
-	truncated bool
-}
-
-func (b *truncatedBuffer) Write(p []byte) (int, error) {
-	remaining := b.cap - b.buf.Len()
-	if remaining <= 0 {
-		b.truncated = true
-		return len(p), nil
-	}
-	if len(p) > remaining {
-		b.buf.Write(p[:remaining])
-		b.truncated = true
-		return len(p), nil
-	}
-	b.buf.Write(p)
-	return len(p), nil
-}
-
-func (b *truncatedBuffer) bytes() []byte {
-	return append([]byte(nil), b.buf.Bytes()...)
-}
-
-// GateCollector owns exactly one closure run. The first Capture
-// call invokes the runner; every subsequent equivalent call
-// returns the cached result. Two collectors never share state.
-// sameGateRequest compares every identity-bearing field;
-// MakeExecutable is compared element-by-element in order.
+// GateCollector owns exactly one closure run. The first
+// Capture call invokes the runner; every subsequent
+// equivalent call returns the cached result. Two
+// collectors never share state. sameGateRequest compares
+// every identity-bearing field; MakeExecutable is
+// compared element-by-element in order.
 func sameGateRequest(a, b GateCaptureRequest) bool {
 	if a.RepositoryRoot != b.RepositoryRoot ||
 		a.SubjectRoot != b.SubjectRoot ||
@@ -219,10 +226,12 @@ func sameGateRequest(a, b GateCaptureRequest) bool {
 	return true
 }
 
-// ErrCollectorRequestMismatch is the typed error returned when
-// a subsequent Capture call supplies a different GateCaptureRequest.
+// ErrCollectorRequestMismatch is the typed error returned
+// when a subsequent Capture call supplies a different
+// GateCaptureRequest.
 var ErrCollectorRequestMismatch = errors.New("evidence: collector request identity mismatch")
 
+// CollectorRequestMismatch reports whether err matches the
 // collector-request-mismatch error.
 func CollectorRequestMismatch(err error) bool {
 	return err != nil && errors.Is(err, ErrCollectorRequestMismatch)
@@ -248,9 +257,9 @@ func NewGateCollector(runner CommandRunner) *GateCollector {
 	return &GateCollector{runner: runner}
 }
 
-// Calls returns the number of runner invocations the collector
-// has performed. Exactly-once means this is 0 before Capture
-// and 1 after any number of Capture calls.
+// Calls returns the number of runner invocations the
+// collector has performed. Exactly-once means this is 0
+// before Capture and 1 after any number of Capture calls.
 func (c *GateCollector) Calls() int {
 	if c == nil {
 		return 0
@@ -263,9 +272,9 @@ func (c *GateCollector) Calls() int {
 	return 0
 }
 
-// Capture returns the gate capture for this run. The first call
-// invokes the runner exactly once; every subsequent call
-// returns the cached result.
+// Capture returns the gate capture for this run. The first
+// call invokes the runner exactly once; every subsequent
+// call returns the cached result.
 func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (GateCapture, error) {
 	if c == nil {
 		return GateCapture{}, errors.New("evidence: GateCollector is nil")
@@ -276,10 +285,10 @@ func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (Ga
 	if strings.TrimSpace(req.EvidenceDir) == "" {
 		return GateCapture{}, errors.New("evidence: evidence directory is required")
 	}
-
-	// Bind a defensive copy of the first valid request before entering
-	// sync.Once. sync.Once protects execution count only; it does not
-	// distinguish an equivalent cached request from a different request.
+	// Bind a defensive copy of the first valid request
+	// before entering sync.Once. sync.Once protects
+	// execution count only; it does not distinguish an
+	// equivalent cached request from a different request.
 	boundReq := req
 	boundReq.MakeExecutable = append([]string(nil), req.MakeExecutable...)
 	c.mu.Lock()
@@ -307,8 +316,16 @@ func (c *GateCollector) Capture(ctx context.Context, req GateCaptureRequest) (Ga
 	return c.capture, c.captureErr
 }
 
-// runCapture performs the actual gate invocation. It is called
-// exactly once per collector via sync.Once.
+// runCapture performs the actual gate invocation. It is
+// called exactly once per collector via sync.Once.
+//
+// CORRECTION08: the observation/start-failure split is
+// authoritative on StartErr, NOT Err. A non-nil Err on a
+// successfully-started process (nonzero exit, timeout,
+// cancellation, ErrWaitDelay) is a fully observed gate
+// run; the collector MUST build the GateCapture and let
+// the downstream classifier / fail-closed surface handle
+// the verdict.
 func (c *GateCollector) runCapture(ctx context.Context, req GateCaptureRequest) (GateCapture, error) {
 	if err := os.MkdirAll(req.EvidenceDir, 0o700); err != nil {
 		return GateCapture{}, fmt.Errorf("evidence: create evidence directory: %w", err)
@@ -319,15 +336,16 @@ func (c *GateCollector) runCapture(ctx context.Context, req GateCaptureRequest) 
 	}
 	started := time.Now().UTC()
 	result := c.runner.Run(ctx, argv[0], argv[1:], req.SubjectRoot, nil)
-	// R6-B-CORRECTION07: a non-nil Err on the bounded
-	// runner result is the canonical start-failure signal
-	// (e.g. file-not-found, permission-denied). Surface it
-	// as an observation failure so the adapter can fire
-	// V2CodeR6BGateObservationFailed instead of letting
-	// the empty GateCapture trip the classifier's
-	// LaneMissing rule.
-	if result.Err != nil {
-		return GateCapture{}, fmt.Errorf("evidence: gate command start: %w", result.Err)
+	// StartErr != nil means the process never reached
+	// cmd.Wait(). That is the canonical observation-
+	// failure signal; surface it so the adapter can fire
+	// V2CodeR6BGateObservationFailed. A non-nil Err with
+	// StartErr == nil is a post-start outcome (nonzero
+	// exit, timeout, cancellation, ErrWaitDelay) — the
+	// capture continues and the classifier / fail-closed
+	// surface handles it.
+	if result.StartErr != nil {
+		return GateCapture{}, fmt.Errorf("evidence: gate command start: %w", result.StartErr)
 	}
 	finished := time.Now().UTC()
 	rawPath := filepath.Join(req.EvidenceDir, "gate-fast.raw.txt")

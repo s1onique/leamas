@@ -5,6 +5,19 @@
 // without re-implementing the B1 build or the gate runner.
 // The helpers live in a _test.go file so they are not part of
 // the production binary.
+//
+// CORRECTION08: r6BRecordingRunner follows the production
+// OsRunner lifecycle contract exactly:
+//
+//   - spawnFail     -> StartErr != nil, Err == nil
+//   - timeOut       -> StartErr == nil, TimedOut = true
+//   - nonZero       -> StartErr == nil, ExitCode != 0
+//   - stdoutTrunc   -> StartErr == nil
+//   - stderrTrunc   -> StartErr == nil
+//
+// TestR6BFakeRunnerMatchesProcessLifecycleContract (in
+// binary_gate_runner_parity_test.go) asserts the parity
+// invariant from Phase 27 of CORRECTION08.
 package closure
 
 import (
@@ -185,6 +198,21 @@ func makeFakeBinaryBuilderWithUnsafeOutput() func(context.Context, ExactSubjectB
 // The runner maintains an actual mutex-guarded counter
 // (not a constant return) so Phase 21 of the ACT can
 // prove the underlying runner was invoked exactly once.
+//
+// CORRECTION08 lifecycle contract (must match OsRunner):
+//
+//   - spawnFail    -> StartErr != nil, Err == nil
+//   - timeOut      -> StartErr == nil, TimedOut = true,
+//     Err == nil (NOT context.DeadlineExceeded
+//     — that would be a fake command-start
+//     error and is explicitly forbidden)
+//   - nonZero      -> StartErr == nil, Err != nil (wait error),
+//     ExitCode != 0
+//   - stdoutTrunc  -> StartErr == nil
+//   - stderrTrunc  -> StartErr == nil
+//
+// TestR6BFakeRunnerMatchesProcessLifecycleContract asserts
+// the parity invariant.
 type r6BRecordingRunner struct {
 	mu          sync.Mutex
 	argv        []string
@@ -209,6 +237,24 @@ func (r *r6BRecordingRunner) Calls() int {
 	return r.calls
 }
 
+// runStartError is the deterministic fake-start-error the
+// r6BRecordingRunner returns when spawnFail is set. It is a
+// plain os.PathError so test assertions can inspect it
+// without depending on context.DeadlineExceeded (which is
+// explicitly forbidden as a fake command-start error per
+// Phase 10).
+var runStartError = &fsPathErrorStub{msg: "exec: \"r6b-fake-binary\": file does not exist"}
+
+// fsPathErrorStub is the minimal os.PathError-shaped stub
+// the r6BRecordingRunner uses for simulated start failures.
+// The stub satisfies the error interface and produces the
+// same Error() shape an os/exec spawn failure would.
+type fsPathErrorStub struct {
+	msg string
+}
+
+func (e *fsPathErrorStub) Error() string { return e.msg }
+
 func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string, dir string, env []string) evidence.CommandResult {
 	r.mu.Lock()
 	r.argv = append([]string{name}, args...)
@@ -216,15 +262,25 @@ func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string
 	r.calls++
 	r.mu.Unlock()
 
+	// CORRECTION08: spawn failure is signalled via StartErr
+	// only. Err stays nil so the GateCollector cannot
+	// confuse this with a post-start wait outcome.
 	if r.spawnFail {
 		return evidence.CommandResult{
+			StartErr: runStartError,
+			Err:      nil,
 			ExitCode: 127,
-			Err:      context.DeadlineExceeded,
-			Stderr:   []byte("spawn failed"),
+			Stderr:   []byte(runStartError.Error()),
 		}
 	}
+	// CORRECTION08: timeout is a post-start wait outcome;
+	// StartErr stays nil. The fake MUST NOT use
+	// context.DeadlineExceeded as a fake command-start
+	// error (Phase 10 of CORRECTION08).
 	if r.timeOut {
 		return evidence.CommandResult{
+			StartErr: nil,
+			Err:      nil,
 			ExitCode: 124,
 			TimedOut: true,
 			Stderr:   []byte("timeout"),
@@ -241,7 +297,12 @@ func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string
 	stdoutTrunc := r.stdoutTrunc
 	stderrTrunc := r.stderrTrunc
 	if r.nonZero {
+		// CORRECTION08: nonzero exit is a post-start wait
+		// outcome. StartErr stays nil; Err carries the
+		// canonical *exec.ExitError-shaped wait error.
 		return evidence.CommandResult{
+			StartErr:    nil,
+			Err:         &execExitErrorStub{code: 1},
 			ExitCode:    1,
 			Stdout:      stdout,
 			Stderr:      stderr,
@@ -250,10 +311,51 @@ func (r *r6BRecordingRunner) Run(ctx context.Context, name string, args []string
 		}
 	}
 	return evidence.CommandResult{
+		StartErr:    nil,
+		Err:         nil,
 		ExitCode:    0,
 		Stdout:      stdout,
 		Stderr:      stderr,
 		StdoutTrunc: stdoutTrunc,
 		StderrTrunc: stderrTrunc,
 	}
+}
+
+// execExitErrorStub is the minimal exec.ExitError-shaped
+// stub the r6BRecordingRunner uses for the nonzero-exit
+// wait outcome. The stub satisfies the error interface and
+// reports the supplied exit code so tests can assert the
+// canonical wait-error shape.
+type execExitErrorStub struct {
+	code int
+}
+
+func (e *execExitErrorStub) Error() string {
+	return "exit status " + intToString(e.code)
+}
+
+// intToString is a tiny no-import helper for stable int
+// formatting. Kept package-private to avoid pulling strconv
+// into a test file that does not need it elsewhere.
+func intToString(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	neg := false
+	if i < 0 {
+		neg = true
+		i = -i
+	}
+	var buf [20]byte
+	pos := len(buf)
+	for i > 0 {
+		pos--
+		buf[pos] = byte('0' + i%10)
+		i /= 10
+	}
+	if neg {
+		pos--
+		buf[pos] = '-'
+	}
+	return string(buf[pos:])
 }

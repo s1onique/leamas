@@ -94,32 +94,70 @@ func requireOwnedR6BFailure(t *testing.T, err error, want V2DiagnosticCode) {
 	}
 }
 
-// requireB2Incomplete asserts the B2 publication barrier
-// refuses an attempted candidate with
-// evidence.ErrIncompleteEvidence (or returns a candidate
-// that is INCOMPLETE because the observation was rejected
-// before a candidate could be assembled).
+// b2Consequence is the closed test-metadata enum that names
+// the B2 consequence each matrix row must prove. It is test
+// metadata only; no production authority is introduced.
+type b2Consequence string
+
+const (
+	// consequenceCandidateUnreachable marks a row whose
+	// failure surfaces before a valid B2 candidate can
+	// exist. The observation fields the B2 builder needs
+	// are absent (BinaryPath empty AND Gate.SubjectRoot
+	// empty). The test asserts the observation is
+	// structurally empty; no candidate is built.
+	consequenceCandidateUnreachable b2Consequence = "candidate_unreachable"
+	// consequenceBarrierRejects marks a row whose
+	// failure surfaces AFTER a valid candidate can be
+	// constructed. The observation is populated; the B2
+	// barrier must reject the candidate with
+	// evidence.ErrIncompleteEvidence.
+	consequenceBarrierRejects b2Consequence = "barrier_rejects"
+)
+
+// requireB2Consequence asserts the per-row B2 consequence
+// the matrix schema declared. Every row MUST call this
+// helper so the strict 12-row matrix proves B2 consequence
+// for the full set, not a subset.
 //
 // The helper is the consequence-only assertion: it MUST
-// be called AFTER requireOwnedR6BFailure so the test
+// be called AFTER the owned-failure assertion so the test
 // distinguishes "B2 rejected because the row owns a real
 // R6-B failure" from "B2 rejected because the row failed
 // to produce an observation". The two paths are
 // semantically different for R6-B and both must hold.
-func requireB2Incomplete(t *testing.T, obs V2ExecutionObservation, buildCandidate func() error) {
+//
+// For consequenceCandidateUnreachable the helper asserts
+// the observation is structurally empty. For
+// consequenceBarrierRejects the helper builds the candidate
+// and asserts the B2 barrier rejects with
+// evidence.ErrIncompleteEvidence.
+func requireB2Consequence(t *testing.T, want b2Consequence, obs V2ExecutionObservation, buildCandidate func() error) {
 	t.Helper()
-	if obs.Binary.BinaryPath == "" && obs.Gate.SubjectRoot == "" {
+	switch want {
+	case consequenceCandidateUnreachable:
 		// The integration failed before producing an
-		// observation: the B2 candidate is unreachable,
-		// which is a valid consequence for rows whose
-		// failure surfaces before any observation.
-		return
-	}
-	err := buildCandidate()
-	if err == nil {
-		t.Fatalf("requireB2Incomplete: B2 barrier accepted an invalid candidate")
-	}
-	if !errors.Is(err, evidence.ErrIncompleteEvidence) {
-		t.Fatalf("requireB2Incomplete: err = %v, want ErrIncompleteEvidence", err)
+		// observation: the B2 candidate is unreachable.
+		// The fields the B2 builder needs must be absent.
+		if obs.Binary.BinaryPath != "" || obs.Gate.SubjectRoot != "" {
+			t.Fatalf("requireB2Consequence(candidate_unreachable): observation is unexpectedly populated: binary=%q gate=%q",
+				obs.Binary.BinaryPath, obs.Gate.SubjectRoot)
+		}
+	case consequenceBarrierRejects:
+		// The observation is populated (B1 + gate ran
+		// successfully); B2 must reject the candidate.
+		if obs.Binary.BinaryPath == "" || obs.Gate.SubjectRoot == "" {
+			t.Fatalf("requireB2Consequence(barrier_rejects): observation is empty: binary=%q gate=%q",
+				obs.Binary.BinaryPath, obs.Gate.SubjectRoot)
+		}
+		err := buildCandidate()
+		if err == nil {
+			t.Fatalf("requireB2Consequence(barrier_rejects): B2 barrier accepted an invalid candidate")
+		}
+		if !errors.Is(err, evidence.ErrIncompleteEvidence) {
+			t.Fatalf("requireB2Consequence(barrier_rejects): err = %v, want ErrIncompleteEvidence", err)
+		}
+	default:
+		t.Fatalf("requireB2Consequence: unknown consequence %q", want)
 	}
 }
