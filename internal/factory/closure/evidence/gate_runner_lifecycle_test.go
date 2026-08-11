@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"os/exec"
-	"strings"
 	"testing"
 	"time"
 )
@@ -246,30 +245,54 @@ func TestGateOsRunnerStartWaitContract(t *testing.T) {
 				// The retained-pipe pattern: a parent
 				// process exits while a descendant
 				// holds one of its output pipes.
-				// On Linux/macOS the wait can return
+				//
+				// CORRECTION09: use the proven
+				// retained-pipe fixture from
+				// TestClosureWaitDelayRetainedPipe so
+				// the wait deterministically surfaces
+				// exec.ErrWaitDelay on supported CI
+				// platforms. The descendant
+				// (/bin/sh -c 'sleep 30') inherits the
+				// parent's stdout/stderr pipes and
+				// outlives the parent's exit 0 by
+				// far more than the WaitDelay envelope.
+				// The parent starts successfully,
+				// exits successfully, and the wait
+				// reports a delay outcome via
 				// exec.ErrWaitDelay.
 				runner := &OsRunner{WaitDelay: 200 * time.Millisecond}
 				return runner.Run(ctx, "/bin/sh",
 					[]string{"-c",
-						"{ sleep 5 & } ; sleep 1 ; exit 0"},
+						"/bin/sh -c 'sleep 30' & exit 0"},
 					"/tmp", nil)
 			},
 			check: func(t *testing.T, got CommandResult) {
+				// CORRECTION09 frozen contract for the
+				// dedicated OsRunner retained-pipe test:
+				//
+				//   StartErr == nil
+				//   Err     != nil
+				//   errors.Is(Err, exec.ErrWaitDelay)
+				//
+				// The previous implementation accepted a
+				// substring "wait" as an alternative
+				// authority, which is forbidden: the
+				// typed sentinel is the only contract.
+				// The previous check also dereferenced
+				// got.Err before checking it was non-nil,
+				// which is a nil-deref crash on a clean
+				// wait (Err == nil). The new contract
+				// checks got.Err != nil FIRST so the
+				// typed sentinel assertion is reached
+				// only when Err is guaranteed non-nil.
 				if got.StartErr != nil {
 					t.Fatalf("StartErr = %v, want nil", got.StartErr)
 				}
-				if !errors.Is(got.Err, exec.ErrWaitDelay) &&
-					!strings.Contains(strings.ToLower(got.Err.Error()),
-						"wait") {
-					// On some kernels the wait succeeds
-					// despite the retained pipe. Accept
-					// ErrWaitDelay OR a generic wait error
-					// shape (the canonical signal that
-					// Wait reported a delay outcome, not a
-					// start failure).
-					if got.Err == nil {
-						t.Fatalf("Err = nil, want wait-delay outcome")
-					}
+				if got.Err == nil {
+					t.Fatalf("Err = nil, want wait-delay outcome (retained pipe fixture)")
+				}
+				if !errors.Is(got.Err, exec.ErrWaitDelay) {
+					t.Fatalf("Err = %v, want errors.Is(exec.ErrWaitDelay)", got.Err)
 				}
 				// The key invariant: StartErr == nil.
 				// WaitDelay is a WAIT outcome, NOT a

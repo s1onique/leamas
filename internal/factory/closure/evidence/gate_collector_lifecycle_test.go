@@ -28,7 +28,6 @@ import (
 	"context"
 	"errors"
 	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -54,14 +53,18 @@ func realGateRequest(t *testing.T, argv ...string) (GateCaptureRequest, string) 
 // TestGateCollectorRealNonzeroReachesClassifier runs the
 // real OsRunner through the real GateCollector with a
 // deterministic executable that exits nonzero AFTER
-// producing a valid FAILED gate status. The test proves:
+// producing a valid FAILED gate status AND an ACT-owned
+// finding on cmd/leamas/**. The test proves:
 //
 //   - StartErr == nil (the process started)
-//   - Err != nil (the wait reported a nonzero exit)
-//   - ExitCode != 0
+//   - ExitCode != 0 (nonzero wait outcome)
 //   - GateCapture is returned (NOT an error)
-//   - The classifier sees the populated GateCapture
-//     and the lifecycle markers, NOT a start failure
+//   - ExecGateObservedStatus == "FAILED"
+//   - Findings include a path that intersects
+//     cmd/leamas/** (so classifier FAIL is independently
+//     justified, not relying solely on ExitCode)
+//   - ClassifyACTOwnedGate is called literally and
+//     returns ACTOwnedFail
 //
 // The MatrixRunner's argv points at /bin/sh so the test
 // is hermetic and deterministic.
@@ -70,10 +73,11 @@ func TestGateCollectorRealNonzeroReachesClassifier(t *testing.T) {
 	collector := NewGateCollector(&OsRunner{})
 	req, _ := realGateRequest(t,
 		"/bin/sh", "-c",
-		// printf produces a valid FAILED status the
-		// classifier can read. The subsequent exit 1
-		// is the nonzero wait outcome.
-		"printf 'EXEC_GATE_OBSERVED_STATUS:FAILED\\n'; exit 1")
+		// printf produces a valid FAILED status AND
+		// a deliberate new finding on cmd/leamas/main.go
+		// (ACT-owned path). The subsequent exit 1 is
+		// the nonzero wait outcome.
+		"printf 'EXEC_GATE_OBSERVED_STATUS:FAILED\\ncmd/leamas/main.go:42:warning:rule-new:nonzero-lane finding\\n'; exit 1")
 	capture, err := collector.Capture(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Capture must succeed (nonzero is NOT a start failure); got err = %v", err)
@@ -86,6 +90,36 @@ func TestGateCollectorRealNonzeroReachesClassifier(t *testing.T) {
 	if capture.ExecGateObservedStatus == "" {
 		t.Fatalf("ExecGateObservedStatus empty, want FAILED")
 	}
+	if capture.ExecGateObservedStatus != "FAILED" {
+		t.Fatalf("ExecGateObservedStatus = %q, want FAILED",
+			capture.ExecGateObservedStatus)
+	}
+	// Classifier inputs are built from the actual
+	// capture (NOT a synthetic payload). The ACT-owned
+	// path set is cmd/leamas/** so the finding
+	// intersects an ACT-owned path; the baseline
+	// findings set is empty so the finding is a NEW
+	// finding, not an unchanged baseline. Lane flags
+	// reflect the capture's lifecycle markers.
+	inputs := ClassificationInputs{
+		ObservedStatus:   capture.ExecGateObservedStatus,
+		ObservedFindings: capture.PreExistingFindings,
+		BaselineFindings: nil,
+		ACTOwnedPaths:    []string{"cmd/leamas/**"},
+		LaneMissing:      capture.ExecGateObservedStatus == "",
+		LaneTimedOut:     capture.TimedOut,
+		LaneTruncated:    capture.StdoutTruncated || capture.StderrTruncated,
+	}
+	// Independent classifier verdict (NOT derived from
+	// ExitCode alone). The finding's path intersects
+	// cmd/leamas/** so the verdict is ACTOwnedFail.
+	verdict := ClassifyACTOwnedGate(inputs)
+	if verdict != ACTOwnedFail {
+		t.Fatalf("ClassifyACTOwnedGate verdict = %q, want ACTOwnedFail "+
+			"(status=%q findings=%d owned_paths=cmd/leamas/**)",
+			verdict, capture.ExecGateObservedStatus,
+			len(capture.PreExistingFindings))
+	}
 }
 
 // TestGateCollectorRealTimeoutReachesClassifier runs the
@@ -96,19 +130,28 @@ func TestGateCollectorRealNonzeroReachesClassifier(t *testing.T) {
 //   - StartErr == nil (process started before the deadline)
 //   - TimedOut == true (the bounded context fired)
 //   - GateCapture is returned (NOT a start failure)
-//   - Classifier verdict is UNAVAILABLE (lane timed out)
+//   - Preconditions: ExecGateObservedStatus == OK,
+//     StdoutTruncated == false, StderrTruncated == false
+//     (so timeout — not missing status, not truncation,
+//     not start failure — owns the UNAVAILABLE verdict)
+//   - ClassifyACTOwnedGate is called literally and
+//     returns ACTOwnedUnavailable
 //
-// The MatrixRunner's argv points at /bin/sleep 5 so the
+// The MatrixRunner's argv points at /bin/sh -c so the
 // test is hermetic and deterministic.
 func TestGateCollectorRealTimeoutReachesClassifier(t *testing.T) {
 	t.Parallel()
 	collector := NewGateCollector(&OsRunner{})
 	req, _ := realGateRequest(t,
 		"/bin/sh", "-c",
-		// Emit the status BEFORE sleeping so the
-		// captured stdout has a parseable status
-		// even on the timed-out path. Then sleep
-		// long enough that the bounded ctx fires.
+		// Emit a parseable OK status BEFORE sleeping
+		// so the captured stdout has a status even on
+		// the timed-out path. Then sleep long enough
+		// that the bounded ctx fires. The status
+		// emission MUST happen first; a missing
+		// status would push the verdict to UNAVAILABLE
+		// for the wrong reason (LaneMissing) and
+		// would NOT prove timeout owns the verdict.
 		"printf 'EXEC_GATE_OBSERVED_STATUS:OK\\n'; sleep 5")
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
@@ -118,6 +161,47 @@ func TestGateCollectorRealTimeoutReachesClassifier(t *testing.T) {
 	}
 	if !capture.TimedOut {
 		t.Fatalf("TimedOut = false, want true (bounded context fired)")
+	}
+	// Preconditions: the OK status was emitted BEFORE
+	// the timeout fired, so the captured status is
+	// parseable. No truncation, no missing status, no
+	// start failure. The ONLY lane flag the classifier
+	// sees as true is LaneTimedOut.
+	if capture.ExecGateObservedStatus != "OK" {
+		t.Fatalf("ExecGateObservedStatus = %q, want OK (must be emitted BEFORE sleep)",
+			capture.ExecGateObservedStatus)
+	}
+	if capture.StdoutTruncated {
+		t.Fatalf("StdoutTruncated = true, want false (precondition for timeout-owned verdict)")
+	}
+	if capture.StderrTruncated {
+		t.Fatalf("StderrTruncated = true, want false (precondition for timeout-owned verdict)")
+	}
+	// Classifier inputs are built from the actual
+	// capture. LaneTimedOut is the ONLY true lane flag;
+	// the verdict must be ACTOwnedUnavailable because
+	// of the timeout, not because of a missing or
+	// truncated status.
+	inputs := ClassificationInputs{
+		ObservedStatus:   capture.ExecGateObservedStatus,
+		ObservedFindings: capture.PreExistingFindings,
+		BaselineFindings: nil,
+		ACTOwnedPaths:    []string{"cmd/leamas/**"},
+		LaneMissing:      capture.ExecGateObservedStatus == "",
+		LaneTimedOut:     capture.TimedOut,
+		LaneTruncated:    capture.StdoutTruncated || capture.StderrTruncated,
+	}
+	// Independent classifier verdict (NOT derived from
+	// TimedOut alone). The timeout itself owns the
+	// verdict; the captured status is OK and no
+	// truncation occurred.
+	verdict := ClassifyACTOwnedGate(inputs)
+	if verdict != ACTOwnedUnavailable {
+		t.Fatalf("ClassifyACTOwnedGate verdict = %q, want ACTOwnedUnavailable "+
+			"(status=%q timed_out=%v truncated=%v)",
+			verdict, capture.ExecGateObservedStatus,
+			capture.TimedOut,
+			capture.StdoutTruncated || capture.StderrTruncated)
 	}
 }
 
@@ -209,132 +293,9 @@ func TestGateCollectorErrWaitDelayNotStartFailure(t *testing.T) {
 	}
 }
 
-// TestGateCollectorRealStartWaitMatrix is the umbrella
-// test that runs every lifecycle row through the real
-// OsRunner + real GateCollector pair. The matrix proves
-// the boundary under test is process lifecycle, not the
-// classifier verdict. Each row asserts:
-//
-//	start_failure     -> Capture returns error,
-//	                     no GateCapture authority
-//	nonzero           -> Capture returns GateCapture,
-//	                     not a start failure
-//	timeout           -> Capture returns GateCapture,
-//	                     TimedOut=true
-//	cancellation      -> Capture returns GateCapture,
-//	                     Canceled=true
-//	WaitDelay         -> NOT a start failure
-//
-// Do not require every row to produce the same
-// classifier result.
-func TestGateCollectorRealStartWaitMatrix(t *testing.T) {
-	t.Parallel()
-	rows := []struct {
-		name  string
-		argv  []string
-		ctxFn func() (context.Context, context.CancelFunc)
-		check func(t *testing.T, capture GateCapture, err error)
-	}{
-		{
-			name: "start_failure",
-			argv: []string{"/this/path/does/not/exist/leamas-fake-binary"},
-			ctxFn: func() (context.Context, context.CancelFunc) {
-				return context.Background(), func() {}
-			},
-			check: func(t *testing.T, _ GateCapture, err error) {
-				if err == nil {
-					t.Fatalf("start failure must surface a Capture error")
-				}
-			},
-		},
-		{
-			name: "nonzero",
-			argv: []string{"/bin/sh", "-c",
-				"printf 'EXEC_GATE_OBSERVED_STATUS:FAILED\\n'; exit 1"},
-			ctxFn: func() (context.Context, context.CancelFunc) {
-				return context.Background(), func() {}
-			},
-			check: func(t *testing.T, capture GateCapture, err error) {
-				if err != nil && errorsContainsStartFailure(err) {
-					t.Fatalf("nonzero exit must NOT surface as start failure")
-				}
-				if capture.ExitCode == 0 {
-					t.Fatalf("ExitCode = 0, want nonzero")
-				}
-			},
-		},
-		{
-			name: "timeout",
-			argv: []string{"/bin/sh", "-c",
-				"printf 'EXEC_GATE_OBSERVED_STATUS:OK\\n'; sleep 5"},
-			ctxFn: func() (context.Context, context.CancelFunc) {
-				ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-				return ctx, cancel
-			},
-			check: func(t *testing.T, capture GateCapture, err error) {
-				if err != nil && errorsContainsStartFailure(err) {
-					t.Fatalf("timeout must NOT surface as start failure")
-				}
-				if !capture.TimedOut {
-					t.Fatalf("TimedOut = false, want true")
-				}
-			},
-		},
-		{
-			name: "cancellation",
-			argv: []string{"/bin/sh", "-c",
-				"printf 'EXEC_GATE_OBSERVED_STATUS:OK\\n'; sleep 5"},
-			ctxFn: func() (context.Context, context.CancelFunc) {
-				ctx, cancel := context.WithCancel(context.Background())
-				// Cancel AFTER the process has started.
-				go func() {
-					time.Sleep(25 * time.Millisecond)
-					cancel()
-				}()
-				return ctx, cancel
-			},
-			check: func(t *testing.T, capture GateCapture, err error) {
-				if err != nil && errorsContainsStartFailure(err) {
-					t.Fatalf("cancellation must NOT surface as start failure")
-				}
-				if !capture.Canceled {
-					t.Fatalf("Canceled = false, want true")
-				}
-			},
-		},
-		{
-			name: "WaitDelay",
-			argv: []string{"/bin/sh", "-c",
-				"printf 'EXEC_GATE_OBSERVED_STATUS:OK\\n'; { sleep 5 & } ; exit 0"},
-			ctxFn: func() (context.Context, context.CancelFunc) {
-				return context.Background(), func() {}
-			},
-			check: func(t *testing.T, capture GateCapture, err error) {
-				if err != nil && errorsContainsStartFailure(err) {
-					t.Fatalf("WaitDelay must NOT surface as start failure")
-				}
-				if capture.ExecGateObservedStatus == "" {
-					t.Fatalf("GateCapture must be populated on WaitDelay")
-				}
-			},
-		},
-	}
-	for _, row := range rows {
-		row := row
-		t.Run(row.name, func(t *testing.T) {
-			collector := NewGateCollector(&OsRunner{WaitDelay: 200 * time.Millisecond})
-			req, _ := realGateRequest(t, row.argv...)
-			ctx, cancel := row.ctxFn()
-			defer cancel()
-			capture, err := collector.Capture(ctx, req)
-			row.check(t, capture, err)
-			// SubjectRoot sanity: the GateCapture must
-			// reference the same SubjectRoot the
-			// request supplied.
-			_ = filepath.Clean(req.SubjectRoot)
-		})
-	}
-}
+// The umbrella matrix test moved to
+// gate_collector_lifecycle_matrix_test.go so this file
+// stays under the LLM-friendly 400-line threshold.
 
 // errorsContainsStartFailure reports whether err's
 // message looks like the CORRECTION07 start-failure

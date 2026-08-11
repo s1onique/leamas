@@ -306,8 +306,25 @@ func RunClosureProtocolV2ExecuteWithDeps(
 		// V2CodeCleanupFailed. R6-B wraps the lower-
 		// level error as Cause of the typed
 		// V2CodeR6BSubjectCleanupFailed surfacing.
+		//
+		// CORRECTION09: the actual executor err is the
+		// AUTHORITATIVE cause. The R6-B wrapper MUST NOT
+		// synthesise a replacement from
+		// result.SubjectCleanupError when the real
+		// executor error is available; the synthetic
+		// reconstruction would discard the lower-level
+		// code chain (V2CodeExecutionTreeMismatch,
+		// V2CodeGitOperationFailed, etc.) and replace
+		// the cause object with a string-only stub.
+		// The fallback is retained as a defensive seam
+		// for the unreachable case where the executor
+		// returned a populated cleanup-failure result
+		// without an err; the fallback MUST never
+		// override an authoritative error object.
 		if vErr := validateSubjectCleanupOutcome(execResult.Result); vErr != nil {
-			if inner := cleanupOutcomeInnerCause(execResult.Result); inner != nil {
+			if err != nil {
+				vErr.Cause = err
+			} else if inner := cleanupOutcomeInnerCause(execResult.Result); inner != nil {
 				vErr.Cause = inner
 			}
 			return zero, V2ExecutionObservation{}, mergePublicationErrorDiags(vErr, callerAfterSnap)
