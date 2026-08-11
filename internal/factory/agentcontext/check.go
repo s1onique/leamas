@@ -1,7 +1,8 @@
-// Package agentcontext provides verification for agent instruction files.
-// It ensures AGENTS.md and .clinerules/leamas.md exist and enforce the
-// agent authority-delegation contract defined in
-// docs/doctrine/agent-authority-delegation.md.
+// Package agentcontext provides verification for agent instruction
+// files. It ensures AGENTS.md and .clinerules/leamas.md exist,
+// include the structured authority contract, agree on shared
+// authority semantics, and do not contain unguarded imperative
+// grants of protected operations.
 package agentcontext
 
 import (
@@ -11,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 )
 
 // Finding represents a single agent context verification finding.
@@ -24,11 +24,30 @@ type Finding struct {
 // CheckRepo verifies that agent context files exist and enforce the
 // authority-delegation contract. Findings are sorted deterministically
 // by (Path, Kind).
+//
+// The check is composed of three layers:
+//   1) structured contract (contract.go): authoritative machine-readable
+//      contract that MUST be present, well-formed, and semantically
+//      valid in both files, with shared semantics equal;
+//   2) guarded prose scanner (prose.go): rejects unguarded imperative
+//      grants of protected operations in human-readable prose;
+//   3) presence anchors (presence.go): orthogonal non-authority
+//      requirements such as doctrine references and line limits.
 func CheckRepo(root string) ([]Finding, error) {
 	var findings []Finding
 
-	findings = append(findings, checkFile(root, "AGENTS.md", AgentsMDRequiredAnchors, AgentsMDForbiddenAnchors, 160)...)
-	findings = append(findings, checkFile(root, filepath.Join(".clinerules", "leamas.md"), ClineMDRequiredAnchors, ClineMDForbiddenAnchors, 120)...)
+	agentsContent, agentsExists, agentsFindings := checkAuthorityFile(root, "AGENTS.md", AgentsMDPresenceAnchors, AgentsMDMaxLines)
+	findings = append(findings, agentsFindings...)
+
+	clinePath := filepath.Join(".clinerules", "leamas.md")
+	clineContent, clineExists, clineFindings := checkAuthorityFile(root, clinePath, ClineMDPresenceAnchors, ClineMDMaxLines)
+	findings = append(findings, clineFindings...)
+
+	// Cross-file consistency: shared contract semantics MUST agree.
+	if agentsExists && clineExists {
+		findings = append(findings, checkSharedContractAgreement(root, agentsContent, clineContent)...)
+	}
+
 	findings = append(findings, checkPolicyDoc(root)...)
 
 	sort.Slice(findings, func(i, j int) bool {
@@ -41,49 +60,89 @@ func CheckRepo(root string) ([]Finding, error) {
 	return findings, nil
 }
 
-// checkFile enforces the canonical anchor contract against a single
-// persistent agent-context file. It emits one finding per missing
-// required anchor, one per forbidden (unguarded) anchor, one for
-// missing files, and one for size violations.
-func checkFile(root, relPath string, required, forbidden []Anchor, maxLines int) []Finding {
-	var findings []Finding
+// checkAuthorityFile runs the full verification chain against one
+// persistent agent-context file.
+func checkAuthorityFile(root, relPath string, presenceAnchors []PresenceAnchor, maxLines int) (string, bool, []Finding) {
 	path := filepath.Join(root, relPath)
+	var findings []Finding
 
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return []Finding{{Path: path, Kind: "missing", Message: relPath + " not found"}}
+		return "", false, []Finding{{Path: path, Kind: "missing", Message: relPath + " not found"}}
 	}
 	content := string(data)
-	lower := strings.ToLower(content)
 
-	for _, anchor := range required {
-		if !strings.Contains(lower, anchor.Phrase) {
-			findings = append(findings, Finding{
-				Path:    path,
-				Kind:    "missing_authority",
-				Message: fmt.Sprintf("missing required authority anchor: %s", anchor.ID),
-			})
-		}
-	}
-
-	for _, anchor := range forbidden {
-		if strings.Contains(lower, anchor.Phrase) {
-			findings = append(findings, Finding{
-				Path:    path,
-				Kind:    "unguarded_authority",
-				Message: fmt.Sprintf("unguarded authority instruction: %s", anchor.ID),
-			})
-		}
-	}
-
-	if lineCount := countLines(content); lineCount > maxLines {
+	// 1) Structured contract.
+	contract, contractErr := ParseContractBlock(content)
+	if contractErr != nil {
 		findings = append(findings, Finding{
 			Path:    path,
-			Kind:    "too_long",
-			Message: fmt.Sprintf("%d lines > %d (LLM context bloat)", lineCount, maxLines),
+			Kind:    "contract_malformed",
+			Message: fmt.Sprintf("structured authority contract is malformed: %s", contractErr.Error()),
+		})
+	} else if !contract.IsValidContractSemantics() {
+		findings = append(findings, Finding{
+			Path:    path,
+			Kind:    "contract_semantics_invalid",
+			Message: "structured authority contract values violate doctrinal defaults",
 		})
 	}
 
+	// 2) Prose scanner.
+	proseFindings := FindUnguardedProtectedOps(path, content)
+	for _, pf := range proseFindings {
+		findings = append(findings, Finding{
+			Path:    pf.Path,
+			Kind:    pf.Kind,
+			Message: fmt.Sprintf("unguarded %s in paragraph: %s", pf.Op, pf.Excerpt),
+		})
+	}
+
+	// 3) Presence anchors.
+	for _, a := range MissingPresenceAnchors(content, presenceAnchors) {
+		findings = append(findings, Finding{
+			Path:    path,
+			Kind:    "missing_presence",
+			Message: fmt.Sprintf("missing presence anchor: %s (%s)", a.ID, a.Comment),
+		})
+	}
+
+	// 4) Line limit.
+	if lines := countLines(content); lines > maxLines {
+		findings = append(findings, Finding{
+			Path:    path,
+			Kind:    "too_long",
+			Message: fmt.Sprintf("%d lines > %d (LLM context bloat)", lines, maxLines),
+		})
+	}
+
+	return content, true, findings
+}
+
+// checkSharedContractAgreement parses the contracts in both files
+// and emits findings when their shared semantics disagree.
+func checkSharedContractAgreement(root, agentsContent, clineContent string) []Finding {
+	var findings []Finding
+
+	agentsContract, agentsErr := ParseContractBlock(agentsContent)
+	clineContract, clineErr := ParseContractBlock(clineContent)
+
+	if agentsErr != nil || clineErr != nil {
+		// Per-file contract_malformed findings already emitted.
+		return findings
+	}
+	if !SharedSemanticsEqual(agentsContract, clineContract) {
+		findings = append(findings, Finding{
+			Path:    filepath.Join(root, "AGENTS.md"),
+			Kind:    "contract_shared_semantics_mismatch",
+			Message: "shared authority semantics disagree between AGENTS.md and .clinerules/leamas.md",
+		})
+		findings = append(findings, Finding{
+			Path:    filepath.Join(root, ".clinerules", "leamas.md"),
+			Kind:    "contract_shared_semantics_mismatch",
+			Message: "shared authority semantics disagree between AGENTS.md and .clinerules/leamas.md",
+		})
+	}
 	return findings
 }
 

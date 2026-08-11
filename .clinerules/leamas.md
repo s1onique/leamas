@@ -42,6 +42,21 @@ Cline checkpoints are not Git commits and do not grant Git publication authority
 
 Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
 
+<!-- LEAMAS:AUTHORITY-CONTRACT:BEGIN -->
+authority_source=act
+edit=act
+focused_verification=act
+affected_verification=act
+expensive_verification=explicit_exact
+commit=explicit
+push=explicit
+tag=explicit
+history_rewrite=forbidden
+checkpoint_is_git_publication=false
+unauthorized_expensive_result=NOT_RUN
+frozen_closure_plan_authority=true
+<!-- LEAMAS:AUTHORITY-CONTRACT:END -->
+
 ## Verification
 
 During ordinary implementation and correction loops, run `CGO_ENABLED=0 make gate-fast`.

@@ -54,6 +54,21 @@ Editor checkpoints, restore points, and Compare operations are not Git commits a
 
 Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
 
+<!-- LEAMAS:AUTHORITY-CONTRACT:BEGIN -->
+authority_source=act
+edit=act
+focused_verification=act
+affected_verification=act
+expensive_verification=explicit_exact
+commit=explicit
+push=explicit
+tag=explicit
+history_rewrite=forbidden
+checkpoint_is_git_publication=false
+unauthorized_expensive_result=NOT_RUN
+frozen_closure_plan_authority=true
+<!-- LEAMAS:AUTHORITY-CONTRACT:END -->
+
 ## Required Verification
 
 Routine implementation loop:
@@ -118,7 +133,7 @@ For every behavior-changing task:
 2. Before editing production code, identify the narrowest stable boundary and design an orthogonal, declarative test matrix.
 3. Implement the relevant tests and run them to establish RED for the intended behavioral reason.
 4. Only then implement the smallest coherent production change.
-5. Establish focused GREEN, run affected subsystem tests, and run the repository gate.
+5. Establish focused GREEN and run only verification delegated by the current ACT. Run affected-subsystem or repository gates only when that verification tier is explicitly authorized.
 6. Refactor only while the executable contract remains green.
 
 Test observable behavior rather than private implementation details.

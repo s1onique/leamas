@@ -7,9 +7,28 @@ import (
 	"testing"
 )
 
-// validAgentsMD returns a fixture that satisfies every required anchor
-// in AgentsMDRequiredAnchors and avoids every forbidden anchor in
-// AgentsMDForbiddenAnchors.
+// CanonicalContractBlock is the common contract block used by both
+// AGENTS.md and .clinerules/leamas.md valid fixtures. It encodes the
+// doctrinally required defaults.
+const CanonicalContractBlock = `<!-- LEAMAS:AUTHORITY-CONTRACT:BEGIN -->
+authority_source=act
+edit=act
+focused_verification=act
+affected_verification=act
+expensive_verification=explicit_exact
+commit=explicit
+push=explicit
+tag=explicit
+history_rewrite=forbidden
+checkpoint_is_git_publication=false
+unauthorized_expensive_result=NOT_RUN
+frozen_closure_plan_authority=true
+<!-- LEAMAS:AUTHORITY-CONTRACT:END -->
+`
+
+// validAgentsMD returns a fixture that satisfies every layer of
+// verification: structured contract, prose guards, presence anchors,
+// and line limit.
 func validAgentsMD() string {
 	return `# AGENTS.md
 
@@ -37,23 +56,21 @@ Do not infer commit authority from permission to edit or test.
 Do not infer push authority from permission to commit.
 Do not infer tag authority from permission to commit.
 
-In interactive agent/editor context, do not run make factorize, make gate-dupcode, or make gate unless the current ACT explicitly authorizes that exact command.
-
 Do not run make factorize unless explicitly authorized by the current ACT.
 Do not run make gate-dupcode unless explicitly authorized by the current ACT.
 Do not run make gate unless explicitly authorized by the current ACT.
 
-Focused checks explicitly required by the ACT remain allowed. When not authorized, report the command as not run.
-
-A validated Factory closure plan may itself authorize execution. Authority comes from the contract, not from caller identity.
+When not authorized, report the command as not run.
 
 Editor checkpoints, restore points, and Compare operations are not Git commits and do not grant Git publication authority.
 
 Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
 
+` + CanonicalContractBlock + `
+
 ## Required Verification
 
-Routine implementation loop uses gate-fast.
+Focused checks explicitly required by the ACT remain allowed.
 
 When Go code exists or changes, also run:
 
@@ -63,9 +80,8 @@ When Go code exists or changes, also run:
 `
 }
 
-// validClineMD returns a fixture that satisfies every required anchor
-// in ClineMDRequiredAnchors and avoids every forbidden anchor in
-// ClineMDForbiddenAnchors.
+// validClineMD returns a fixture that satisfies every layer of
+// verification for .clinerules/leamas.md.
 func validClineMD() string {
 	return `# Cline Rules for Leamas
 
@@ -88,9 +104,9 @@ Do not infer Git commit, push, tag, or history-rewrite authority from permission
 
 Cline checkpoints are not Git commits and do not grant Git publication authority.
 
-## Verification
+` + CanonicalContractBlock + `
 
-Run CGO_ENABLED=0 make gate-fast for ordinary implementation loops.
+## Verification
 
 A refusal from an expensive gate is not run, not pass, and must never be reported as successful verification.
 
@@ -189,8 +205,6 @@ func TestCheckRepo_AgentsMDTooLong(t *testing.T) {
 	writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), validClineMD())
 	writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"), "policy")
 
-	// Build content that satisfies required anchors but exceeds 160
-	// lines.
 	var sb strings.Builder
 	sb.WriteString(validAgentsMD())
 	for i := 0; i < 200; i++ {

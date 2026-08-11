@@ -4,14 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
 // findRepoRoot walks up from the test directory until it finds a
 // directory that contains both AGENTS.md and .clinerules/leamas.md.
-// Returns an error if it reaches the filesystem root without finding
-// both files.
 func findRepoRoot(start string) (string, error) {
 	dir := start
 	for i := 0; i < 16; i++ {
@@ -32,12 +29,13 @@ func findRepoRoot(start string) (string, error) {
 }
 
 // TestAgentContextAuthorityDelegationContract is the umbrella test
-// for ACT-LEAMAS-FACTORY-AGENT-AUTHORITY-DELEGATION-CONTRACT01.
+// for ACT-LEAMAS-FACTORY-AGENT-AUTHORITY-DELEGATION-CONTRACT01-CORRECTION01.
 //
 // It reads the real repository AGENTS.md and .clinerules/leamas.md
 // and runs them through the production CheckRepo function. It MUST
-// fail if a future edit reintroduces an unguarded expensive-gate
-// instruction or an implicit commit/push/tag authority grant.
+// fail if a future edit reintroduces an unguarded imperative grant of
+// a protected operation, an implicit commit/push/tag authority, or a
+// shared-semantics mismatch between the two files.
 //
 // The test is intentionally repository-relative and does NOT hard-code
 // any specific Git commit SHA.
@@ -51,43 +49,41 @@ func TestAgentContextAuthorityDelegationContract(t *testing.T) {
 		t.Fatalf("findRepoRoot: %v", err)
 	}
 
+	// 1) Real production CheckRepo.
 	findings, err := CheckRepo(root)
 	if err != nil {
 		t.Fatalf("CheckRepo: %v", err)
 	}
-
 	if len(findings) != 0 {
-		var summary []string
-		for _, f := range findings {
-			summary = append(summary, fmt.Sprintf("%s:%s:%s", f.Path, f.Kind, f.Message))
-		}
-		t.Fatalf("real repo agent-context files violate authority-delegation contract:\n%s",
-			strings.Join(summary, "\n"))
+		t.Fatalf("real repo agent-context files violate authority-delegation contract:\n%+v", findings)
 	}
 
-	// Defense in depth: re-read the files and assert that the
-	// dangerous substrings are absent at the textual level. This
-	// guards against any future regression in the anchor tables
-	// themselves.
-	dangerous := []string{
-		"Always run make factorize",
-		"Always run make gate-dupcode",
-		"Always run make gate",
-		"always commit when tests pass",
-		"automatically push",
-		"push successful work automatically",
+	// 2) Parse the structured contracts from both files and require
+	// shared-semantics equality.
+	agentsBytes, err := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	clineBytes, err := os.ReadFile(filepath.Join(root, ".clinerules", "leamas.md"))
+	if err != nil {
+		t.Fatalf("read .clinerules/leamas.md: %v", err)
 	}
 
-	for _, rel := range []string{"AGENTS.md", filepath.Join(".clinerules", "leamas.md")} {
-		data, err := os.ReadFile(filepath.Join(root, rel))
-		if err != nil {
-			t.Fatalf("read %s: %v", rel, err)
-		}
-		lower := strings.ToLower(string(data))
-		for _, needle := range dangerous {
-			if strings.Contains(lower, strings.ToLower(needle)) {
-				t.Errorf("%s contains dangerous unguarded phrase %q", rel, needle)
-			}
-		}
+	agentsContract, agentsErr := ParseContractBlock(string(agentsBytes))
+	clineContract, clineErr := ParseContractBlock(string(clineBytes))
+	if agentsErr != nil {
+		t.Fatalf("AGENTS.md contract malformed: %v", agentsErr)
+	}
+	if clineErr != nil {
+		t.Fatalf(".clinerules/leamas.md contract malformed: %v", clineErr)
+	}
+	if !agentsContract.IsValidContractSemantics() {
+		t.Fatalf("AGENTS.md contract semantics are doctrinally invalid: %+v", agentsContract)
+	}
+	if !clineContract.IsValidContractSemantics() {
+		t.Fatalf(".clinerules/leamas.md contract semantics are doctrinally invalid: %+v", clineContract)
+	}
+	if !SharedSemanticsEqual(agentsContract, clineContract) {
+		t.Fatalf("shared authority semantics disagree between AGENTS.md and .clinerules/leamas.md\nAGENTS: %+v\nCline:  %+v", agentsContract, clineContract)
 	}
 }

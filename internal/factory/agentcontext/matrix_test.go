@@ -8,11 +8,6 @@ import (
 )
 
 // matrixCase is one row of the authority-delegation matrix.
-//
-// WantPass indicates whether the fixture should produce zero findings.
-// The fixture is built by starting from a known-valid AGENTS.md and
-// .clinerules/leamas.md and then applying a single textual mutation
-// (or no mutation).
 type matrixCase struct {
 	Name     string
 	Mutate   func(content string) string
@@ -34,114 +29,111 @@ func TestCheckRepo_AuthorityDelegationMatrix(t *testing.T) {
 			WantPass: true,
 		},
 
-		// PASS: guarded mention of make factorize (already covered
-		// by the valid fixture, but here we tighten by also checking
-		// the .clinerules case below).
-
-		// FAIL: missing the explicit-authority rule.
+		// FAIL: contract block removed.
 		{
-			Name: "missing_explicit_authority_rule",
+			Name: "contract_block_removed",
 			Mutate: func(s string) string {
-				return strings.ReplaceAll(s, "Follow the current ACT's explicit authority.", "")
+				return removeContractBlock(s)
 			},
 			WantPass: false,
 		},
 
-		// FAIL: missing the NOT RUN rule.
+		// FAIL: contract has wrong value.
 		{
-			Name: "missing_not_run_rule",
+			Name: "contract_commit_implicit",
 			Mutate: func(s string) string {
-				return strings.ReplaceAll(s, "report the command as not run", "report the command status")
+				return strings.ReplaceAll(s, "commit=explicit", "commit=act")
 			},
 			WantPass: false,
 		},
 
-		// FAIL: missing the commit-delegation rule.
+		// FAIL: contract has unknown key.
 		{
-			Name: "missing_commit_delegation_rule",
+			Name: "contract_unknown_key",
 			Mutate: func(s string) string {
-				return strings.ReplaceAll(s, "Do not infer commit authority from permission to edit or test.", "")
+				return strings.Replace(s, "<!-- LEAMAS:AUTHORITY-CONTRACT:END -->", "rogue=true\n<!-- LEAMAS:AUTHORITY-CONTRACT:END -->", 1)
 			},
 			WantPass: false,
 		},
 
-		// FAIL: missing the push-delegation rule.
+		// FAIL: contract has duplicate key.
 		{
-			Name: "missing_push_delegation_rule",
+			Name: "contract_duplicate_key",
 			Mutate: func(s string) string {
-				return strings.ReplaceAll(s, "Do not infer push authority from permission to commit.", "")
-			},
-			WantPass: false,
-		},
-
-		// FAIL: unguarded make factorize.
-		{
-			Name: "unguarded_make_factorize",
-			Mutate: func(s string) string {
-				return s + "\n- Always run make factorize.\n"
-			},
-			WantPass: false,
-		},
-
-		// FAIL: unguarded make gate-dupcode.
-		{
-			Name: "unguarded_make_gate_dupcode",
-			Mutate: func(s string) string {
-				return s + "\n- Always run make gate-dupcode before commit.\n"
+				return strings.Replace(s, "commit=explicit", "commit=explicit\ncommit=explicit", 1)
 			},
 			WantPass: false,
 		},
 
 		// FAIL: unguarded make gate.
 		{
-			Name: "unguarded_make_gate",
+			Name: "unguarded_make_gate_in_prose",
 			Mutate: func(s string) string {
-				return s + "\n- Always run make gate.\n"
+				return s + "\n\nRun make gate now.\n"
 			},
 			WantPass: false,
 		},
 
-		// FAIL: "always commit when tests pass".
+		// FAIL: unguarded make factorize.
 		{
-			Name: "auto_commit_when_tests_pass",
+			Name: "unguarded_make_factorize_in_prose",
 			Mutate: func(s string) string {
-				return s + "\n- Always commit when tests pass.\n"
+				return s + "\n\nExecute make factorize.\n"
 			},
 			WantPass: false,
 		},
 
-		// FAIL: "commit all changes after task".
+		// FAIL: unguarded make gate-dupcode.
 		{
-			Name: "commit_all_changes_after",
+			Name: "unguarded_make_gate_dupcode_in_prose",
 			Mutate: func(s string) string {
-				return s + "\n- Commit all changes after task completion.\n"
+				return s + "\n\nRun make gate-dupcode.\n"
 			},
 			WantPass: false,
 		},
 
-		// FAIL: "push successful work automatically".
+		// FAIL: unguarded repository gate.
 		{
-			Name: "push_successful_work_automatically",
+			Name: "unguarded_repository_gate_in_prose",
 			Mutate: func(s string) string {
-				return s + "\n- Push successful work automatically.\n"
+				return s + "\n\nRun the repository gate.\n"
 			},
 			WantPass: false,
 		},
 
-		// FAIL: "make gate before every commit".
+		// FAIL: unguarded commit.
 		{
-			Name: "make_gate_before_every_commit",
+			Name: "unguarded_commit_in_prose",
 			Mutate: func(s string) string {
-				return s + "\n- Run make gate before every commit.\n"
+				return s + "\n\nCommit completed work.\n"
 			},
 			WantPass: false,
 		},
 
-		// FAIL: "make factorize before every commit".
+		// FAIL: unguarded push.
 		{
-			Name: "make_factorize_before_every_commit",
+			Name: "unguarded_push_in_prose",
 			Mutate: func(s string) string {
-				return s + "\n- Run make factorize before every commit.\n"
+				return s + "\n\nPush the commit.\n"
+			},
+			WantPass: false,
+		},
+
+		// FAIL: unguarded tag.
+		{
+			Name: "unguarded_tag_in_prose",
+			Mutate: func(s string) string {
+				return s + "\n\nTag successful ACTs.\n"
+			},
+			WantPass: false,
+		},
+
+		// FAIL: forced run.
+		{
+			Name: "forced_run_with_no_contract",
+			Mutate: func(s string) string {
+				return strings.ReplaceAll(s, "commit=explicit", "commit=act") +
+					"\n\nRun make gate.\n"
 			},
 			WantPass: false,
 		},
@@ -174,66 +166,78 @@ func TestCheckRepo_AuthorityDelegationMatrix(t *testing.T) {
 	}
 }
 
-// TestCheckRepo_ClineMatrix exercises the same matrix but only against
-// the .clinerules/leamas.md fixture. This proves that the Cline rule
-// alone enforces its own contract independently of AGENTS.md.
+// TestCheckRepo_CrossFileContractMismatch applies a different
+// mutation to AGENTS.md and .clinerules/leamas.md so the shared
+// contract semantics disagree. The verifier MUST reject this even
+// when each file alone is well-formed.
+func TestCheckRepo_CrossFileContractMismatch(t *testing.T) {
+	tmp := t.TempDir()
+
+	// AGENTS.md uses commit=explicit (canonical).
+	agentsContent := validAgentsMD()
+	// .clinerules/leamas.md uses commit=act (mutated shared semantics).
+	clineContent := strings.ReplaceAll(validClineMD(), "commit=explicit", "commit=act")
+
+	writeFixture(t, tmp, "AGENTS.md", agentsContent)
+	writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), clineContent)
+	writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"),
+		"# Agent Context Files\nLeamas uses checked-in agent context files.\n")
+
+	findings, err := CheckRepo(tmp)
+	if err != nil {
+		t.Fatalf("CheckRepo: %v", err)
+	}
+
+	// Both files have valid contracts, so the per-file malformed /
+	// semantic-invalid findings should NOT be present. However, the
+	// shared-semantics mismatch MUST be reported.
+	foundMismatch := false
+	for _, f := range findings {
+		if f.Kind == "contract_shared_semantics_mismatch" {
+			foundMismatch = true
+			break
+		}
+	}
+	if !foundMismatch {
+		t.Fatalf("expected contract_shared_semantics_mismatch finding, got: %+v", findings)
+	}
+}
+
+// TestCheckRepo_ClineMatrix exercises the same matrix but only
+// mutates the .clinerules/leamas.md fixture. This proves that the
+// Cline file alone enforces its own contract independently.
 func TestCheckRepo_ClineMatrix(t *testing.T) {
-	cases := []struct {
-		Name     string
-		Mutate   func(content string) string
-		WantPass bool
-	}{
+	cases := []matrixCase{
 		{
 			Name:     "valid_guarded_cline",
 			Mutate:   func(s string) string { return s },
 			WantPass: true,
 		},
 		{
-			Name: "missing_cline_execution_authority",
+			Name: "contract_block_removed_in_cline",
 			Mutate: func(s string) string {
-				return strings.ReplaceAll(s, "## Execution Authority\n\nThe current ACT is authoritative.\n\n", "")
-			},
-			WantPass: false,
-		},
-		{
-			Name: "missing_not_run_rule_in_cline",
-			Mutate: func(s string) string {
-				return strings.ReplaceAll(s, "report it as not run", "report it as a failure")
-			},
-			WantPass: false,
-		},
-		{
-			Name: "unguarded_make_factorize_in_cline",
-			Mutate: func(s string) string {
-				return s + "\n- Always run make factorize.\n"
+				return removeContractBlock(s)
 			},
 			WantPass: false,
 		},
 		{
 			Name: "unguarded_make_gate_in_cline",
 			Mutate: func(s string) string {
-				return s + "\n- Always run make gate.\n"
+				return s + "\n\nRun make gate.\n"
 			},
 			WantPass: false,
 		},
 		{
-			Name: "auto_commit_in_cline",
+			Name: "unguarded_commit_in_cline",
 			Mutate: func(s string) string {
-				return s + "\n- Always commit when tests pass.\n"
+				return s + "\n\nCommit completed work.\n"
 			},
 			WantPass: false,
 		},
 		{
-			Name: "push_successful_work_in_cline",
+			Name: "unguarded_push_in_cline",
 			Mutate: func(s string) string {
-				return s + "\n- Push successful work automatically.\n"
-			},
-			WantPass: false,
-		},
-		{
-			Name: "force_push_successful_in_cline",
-			Mutate: func(s string) string {
-				return s + "\n- Force-push successful work.\n"
+				return s + "\n\nPush the commit.\n"
 			},
 			WantPass: false,
 		},
@@ -267,9 +271,9 @@ func TestCheckRepo_ClineMatrix(t *testing.T) {
 }
 
 // TestCheckRepo_CheckpointDistinguished verifies that the checkpoint
-// keyword, when paired with the explicit "not Git commits" rule, is
+// keyword, when paired with a valid contract and bounded prose, is
 // accepted; when paired with an unguarded auto-commit clause it is
-// rejected. This guards the D3 doctrine directly.
+// rejected.
 func TestCheckRepo_CheckpointDistinguished(t *testing.T) {
 	t.Run("checkpoint_distinguished_passes", func(t *testing.T) {
 		tmp := t.TempDir()
@@ -286,11 +290,11 @@ func TestCheckRepo_CheckpointDistinguished(t *testing.T) {
 		}
 	})
 
-	t.Run("checkpoint_with_auto_commit_fails", func(t *testing.T) {
+	t.Run("unguarded_commit_in_prose_fails", func(t *testing.T) {
 		tmp := t.TempDir()
-		original := "Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority."
-		replacement := original + "\n\nEditor checkpoints imply commit authority.\n- Always commit when tests pass."
-		bad := strings.ReplaceAll(validAgentsMD(), original, replacement)
+		bad := strings.ReplaceAll(validAgentsMD(),
+			"Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.",
+			"Editor checkpoints imply commit authority.\n\nCommit completed work.")
 		writeFixture(t, tmp, "AGENTS.md", bad)
 		writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), validClineMD())
 		writeFixture(t, tmp, filepath.Join("docs", "factory", "agent-context-files.md"), "policy")
@@ -300,7 +304,26 @@ func TestCheckRepo_CheckpointDistinguished(t *testing.T) {
 			t.Fatalf("CheckRepo: %v", err)
 		}
 		if len(findings) == 0 {
-			t.Fatalf("expected FAIL because 'always commit when tests pass' is unguarded")
+			t.Fatalf("expected FAIL because 'Commit completed work.' is unguarded")
 		}
 	})
+}
+
+// removeContractBlock removes the structured authority contract from
+// the supplied content. Useful for adversarial mutation tests.
+func removeContractBlock(content string) string {
+	beginIdx := strings.Index(content, ContractBeginMarker)
+	endIdx := strings.Index(content, ContractEndMarker)
+	if beginIdx == -1 || endIdx == -1 || endIdx <= beginIdx {
+		return content
+	}
+	return content[:beginIdx] + content[endIdx+len(ContractEndMarker):]
+}
+
+func TestRemoveContractBlock(t *testing.T) {
+	c := minimalValidBlock()
+	got := removeContractBlock(c)
+	if strings.Contains(got, ContractBeginMarker) || strings.Contains(got, ContractEndMarker) {
+		t.Fatalf("contract markers not removed: %s", got)
+	}
 }
