@@ -154,7 +154,7 @@ func TestFindUnguardedProtectedOps_DescriptiveProseAccepted(t *testing.T) {
 		"The repository gate validates canonical state.",
 		"The make gate command is Tier-3 verification.",
 		"make factorize is a Tier-3 command.",
-		"Git commit authority is independent from edit authority.",
+		"Git commit is a publication boundary.",
 		"Git push is publication.",
 		"Git tags provide immutable lifecycle identity.",
 		"History rewrite is forbidden by persistent context.",

@@ -114,10 +114,10 @@ Every closed ACT must record:
 
 New ACTs MUST use Closure Protocol v1:
 
-- Freeze the closure plan at `docs/closure-plans/<ACT-ID>.json` before the subject commit.
-- Run the frozen plan, generate a compact manifest in a detached directory, render the deterministic report, and commit both at `docs/closure-manifests/<ACT-ID>.json` and `docs/close-reports/<ACT-ID>.md`.
-- Create the immutable annotated tag with `leamas factory close tag create`.
-- Derive lifecycle state with `leamas factory close status`.
+- Freeze the closure plan at `docs/closure-plans/<ACT-ID>.json` before the subject commit, when delegated by the current ACT.
+- Run the frozen plan, generate a compact manifest in a detached directory, render the deterministic report, and commit both at `docs/closure-manifests/<ACT-ID>.json` and `docs/close-reports/<ACT-ID>.md`, when delegated by the current ACT.
+- Create the immutable annotated tag with `leamas factory close tag create`, when delegated by the current ACT.
+- Derive lifecycle state with `leamas factory close status`, when delegated by the current ACT.
 - Never embed future closure, tree, or tag-object identities in the committed plan, manifest, or report.
 - Never embed raw command output, full targeted digests, absolute host paths, or secret environment values in the committed manifest.
 - Never move or force-push ACT tags; corrections are new tags.

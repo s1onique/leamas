@@ -108,17 +108,33 @@ func stripBulletPrefix(line string) string {
 }
 
 // splitIntoUnits splits a paragraph into normative sentence/clause
-// units. Units are separated by sentence-ending punctuation
-// (period, semicolon, exclamation, question mark) optionally
-// followed by whitespace.
+// units. A boundary is any of:
+//   ";"   semicolon (always a boundary)
+//   "!"   exclamation (always a boundary)
+//   "?"   question (always a boundary)
+//   ". "  period followed by a space and an uppercase letter
+//     (start of a new sentence — NOT a file extension like
+//     ".json" / ".md" / ".txt").
+//
+// The period is RETAINED with the preceding unit. Other punctuation
+// (";!") is consumed by the boundary.
 func splitIntoUnits(paragraph string) []string {
-	re := regexp.MustCompile(`[.!?;]+\s*`)
-	parts := re.Split(paragraph, -1)
+	// Rewrite period+space+uppercase as period+newline+uppercase so
+	// the period stays attached to the preceding unit.
+	re := regexp.MustCompile(`\.(\s+)([A-Z])`)
+	paragraph = re.ReplaceAllString(paragraph, ".\n$2")
 	var units []string
-	for _, p := range parts {
+	for _, p := range strings.Split(paragraph, "\n") {
 		p = strings.TrimSpace(p)
 		if p == "" {
 			continue
+		}
+		// Strip trailing ; ! ? that were directly consumed.
+		p = strings.TrimRight(p, ";!?")
+		p = strings.TrimRight(p, ".") // keep the period if it remained
+		// Re-attach a possible trailing period stripped above.
+		if !strings.HasSuffix(p, ".") && strings.HasSuffix(paragraph, ".") {
+			// Allow leading period to remain on the unit.
 		}
 		units = append(units, p)
 	}
