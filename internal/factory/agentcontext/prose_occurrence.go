@@ -7,10 +7,12 @@
 // "git tag" cannot match across "git tags" and "make gate" cannot
 // match across "make gatekeeper".
 //
-// CORRECTION04: deduplication by operation kind is removed. Repeated
-// occurrences of the same operation in one unit are all preserved as
-// distinct positional records; the existence of multiple occurrences
-// in one sub-clause fails the sub-clause closed (see prose.go).
+// CORRECTION05: occurrence collection is canonical. When multiple
+// protected-op forms overlap in the same textual span (e.g. "commit
+// completed work" matches both "commit completed work" AND "commit"),
+// the longest non-overlapping match is retained per operation kind.
+// This prevents aliases from manufacturing duplicate logical
+// occurrences.
 
 package agentcontext
 
@@ -65,13 +67,20 @@ func formMatchesAtRange(lowerUnit string, form string, start int) bool {
 	return true
 }
 
-// findProtectedOccurrences returns every positional protected-operation
-// occurrence in the unit, sorted by start position. Repeated
-// occurrences of the same operation kind are preserved as distinct
-// records; the caller is responsible for combining dedup behavior
-// when reporting findings.
+// findProtectedOccurrences returns every canonical positional
+// protected-operation occurrence in the unit, sorted by start
+// position. Overlapping aliases (e.g. "commit completed work" and
+// "commit" at the same position) are collapsed to the longest form.
+// The unit MUST already be lower-cased and whitespace-normalized.
 func findProtectedOccurrences(lowerUnit string) []ProtectedOccurrence {
-	var occurrences []ProtectedOccurrence
+	// Collect all candidate matches, then resolve overlaps.
+	type candidate struct {
+		op   ProtectedOpKind
+		form string
+		start int
+		end   int
+	}
+	var candidates []candidate
 	for _, op := range ProtectedOps {
 		for _, form := range op.Forms {
 			pos := 0
@@ -82,11 +91,11 @@ func findProtectedOccurrences(lowerUnit string) []ProtectedOccurrence {
 				}
 				absStart := pos + idx
 				if formMatchesAtRange(lowerUnit, form, absStart) {
-					occurrences = append(occurrences, ProtectedOccurrence{
-						Op:    op.Kind,
-						Form:  form,
-						Start: absStart,
-						End:   absStart + len(form),
+					candidates = append(candidates, candidate{
+						op:    op.Kind,
+						form:  form,
+						start: absStart,
+						end:   absStart + len(form),
 					})
 				}
 				pos = absStart + len(form)
@@ -96,6 +105,51 @@ func findProtectedOccurrences(lowerUnit string) []ProtectedOccurrence {
 			}
 		}
 	}
+
+	// Sort by start ascending, then by length descending, then by
+	// operation kind for stability.
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].start != candidates[j].start {
+			return candidates[i].start < candidates[j].start
+		}
+		li := candidates[i].end - candidates[i].start
+		lj := candidates[j].end - candidates[j].start
+		if li != lj {
+			return li > lj
+		}
+		return candidates[i].op < candidates[j].op
+	})
+
+	// Resolve overlaps:
+	//   - Candidates are sorted by start ascending, then length
+	//     descending (longest match first).
+	//   - For each candidate, if it overlaps an already-accepted
+	//     occurrence AND shares the same operation kind, it is
+	//     dropped as an alias.
+	//   - Cross-operation-kind overlaps are also dropped (the
+	//     earlier/longer candidate wins).
+	//   - Aliases at the same span are deduplicated to the longest
+	//     form.
+	var occurrences []ProtectedOccurrence
+	for _, c := range candidates {
+		overlaps := false
+		for _, o := range occurrences {
+			if !(c.end <= o.Start || c.start >= o.End) {
+				overlaps = true
+				break
+			}
+		}
+		if overlaps {
+			continue
+		}
+		occurrences = append(occurrences, ProtectedOccurrence{
+			Op:    c.op,
+			Form:  c.form,
+			Start: c.start,
+			End:   c.end,
+		})
+	}
+	// Final sort by start, then by op.
 	sort.Slice(occurrences, func(i, j int) bool {
 		if occurrences[i].Start != occurrences[j].Start {
 			return occurrences[i].Start < occurrences[j].Start

@@ -62,7 +62,6 @@ var authorityGuards = []GuardPhrase{
 		Forms: []string{
 			"when the current act authorizes this exact command",
 			"when the act authorizes this exact command",
-			"explicitly authorizes that exact command",
 		},
 	},
 	{
@@ -95,7 +94,6 @@ var authorityGuards = []GuardPhrase{
 			"when the act delegates",
 			"only when the current act delegates",
 			"only when the act delegates",
-			"only when that verification tier is explicitly authorized",
 		},
 	},
 	{

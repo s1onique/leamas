@@ -143,20 +143,46 @@ func subClauseHasNegation(lowerSubClause string) bool {
 }
 
 // scanSubClause returns the protected-operation occurrences that
-// should be flagged in the given directive sub-clause. Sub-clauses
-// with zero or one protected-operation occurrence are reported
-// unless they are exempt by a guard or negation. Sub-clauses with
-// MORE THAN ONE protected-operation occurrence fail closed
-// (CORRECTION04): ambiguity in shared scope cannot be resolved
-// without explicit per-operation authorization, so every occurrence
-// is reported.
+// should be flagged in the given directive sub-clause.
+//
+// CORRECTION05 classification:
+//
+//   0 logical occurrences
+//       -> no finding
+//
+//   1 logical occurrence
+//       -> allow only if this final sub-clause has an explicit
+//          named authority source OR operation-local negation;
+//          otherwise flag the single occurrence.
+//
+//   >1 logical occurrences
+//       -> FAIL CLOSED. Every occurrence is reported. A single
+//          sub-clause-global guard or negation cannot disambiguate
+//          shared scope across multiple unprotected operations.
 func scanSubClause(lowerSubClause string) []ProtectedOpKind {
 	occs := findProtectedOccurrences(lowerSubClause)
 	if len(occs) == 0 {
 		return nil
 	}
+	// Negation applies to the whole sub-clause regardless of
+	// occurrence count. "Do not X, Y, Z" exempts all occurrences.
 	if subClauseHasNegation(lowerSubClause) {
 		return nil
+	}
+	// Count distinct operation kinds. A sub-clause with multiple
+	// distinct protected operations fails closed. Repeated
+	// instances of the same operation (e.g. "commit" used twice
+	// as both verb and noun) count as ONE logical occurrence.
+	distinct := make(map[ProtectedOpKind]bool)
+	for _, o := range occs {
+		distinct[o.Op] = true
+	}
+	if len(distinct) > 1 {
+		ops := make([]ProtectedOpKind, 0, len(occs))
+		for _, o := range occs {
+			ops = append(ops, o.Op)
+		}
+		return ops
 	}
 	if unitHasAuthoritySource(lowerSubClause) {
 		return nil
