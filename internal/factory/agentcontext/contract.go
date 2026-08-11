@@ -11,9 +11,11 @@
 //   ...
 //   <!-- LEAMAS:AUTHORITY-CONTRACT:END -->
 //
-// The parser is strict: missing markers, unknown keys, duplicate
-// keys, invalid enum values, missing required keys, and malformed
-// key=value pairs all fail closed with a parser error.
+// The parser is strict: each persistent agent context file MUST
+// contain exactly one BEGIN and one END marker. Multiple contract
+// blocks, missing markers, unknown keys, duplicate keys, invalid
+// enum values, missing required keys, and malformed key=value pairs
+// all fail closed with a parser error.
 
 package agentcontext
 
@@ -26,25 +28,16 @@ import (
 	"strings"
 )
 
-// DelegationMode enumerates how a capability is delegated. The
-// parser rejects any value not in this enum.
+// DelegationMode enumerates how a capability is delegated.
 type DelegationMode string
 
 const (
-	// ModeAct means the capability is delegated by the current ACT.
-	ModeAct DelegationMode = "act"
-	// ModeExplicit means the capability requires explicit ACT
-	// delegation per invocation.
-	ModeExplicit DelegationMode = "explicit"
-	// ModeExplicitExact means the capability requires the exact
-	// command or lane to be authorized by the current ACT.
+	ModeAct           DelegationMode = "act"
+	ModeExplicit      DelegationMode = "explicit"
 	ModeExplicitExact DelegationMode = "explicit_exact"
-	// ModeForbidden means the capability is forbidden by persistent
-	// context, regardless of ACT delegation.
-	ModeForbidden DelegationMode = "forbidden"
+	ModeForbidden     DelegationMode = "forbidden"
 )
 
-// AllDelegationModes is the set of legal DelegationMode values.
 var AllDelegationModes = map[DelegationMode]struct{}{
 	ModeAct:           {},
 	ModeExplicit:      {},
@@ -52,47 +45,34 @@ var AllDelegationModes = map[DelegationMode]struct{}{
 	ModeForbidden:     {},
 }
 
-// ValidDelegationMode reports whether m is a recognized mode.
 func ValidDelegationMode(m DelegationMode) bool {
 	_, ok := AllDelegationModes[m]
 	return ok
 }
 
 // AuthorityContract is the structured representation of the
-// LEAMAS:AUTHORITY-CONTRACT block parsed from a persistent agent
-// context file.
-//
-// The fields are intentionally narrow: authority_source identifies
-// where authority comes from; the six DelegationMode fields encode
-// how each capability is delegated; the boolean fields encode the
-// checkpoint vs Git-publication distinction and the frozen-plan
-// authority exception; and UnauthorizedExpensiveResult encodes the
-// required result label for unauthorized Tier-3 commands.
+// LEAMAS:AUTHORITY-CONTRACT block.
 type AuthorityContract struct {
-	AuthoritySource            DelegationMode
-	Edit                       DelegationMode
-	FocusedVerification        DelegationMode
-	AffectedVerification       DelegationMode
-	ExpensiveVerification      DelegationMode
-	Commit                     DelegationMode
-	Push                       DelegationMode
-	Tag                        DelegationMode
-	HistoryRewrite             DelegationMode
-	CheckpointIsGitPublication bool
+	AuthoritySource             DelegationMode
+	Edit                        DelegationMode
+	FocusedVerification         DelegationMode
+	AffectedVerification        DelegationMode
+	ExpensiveVerification       DelegationMode
+	Commit                      DelegationMode
+	Push                        DelegationMode
+	Tag                         DelegationMode
+	HistoryRewrite              DelegationMode
+	CheckpointIsGitPublication  bool
 	UnauthorizedExpensiveResult string
-	FrozenPlanAuthority        bool
+	FrozenPlanAuthority         bool
 }
 
-// FieldSpec describes one key in the contract block, including its
-// expected value type and whether it is required.
 type FieldSpec struct {
 	Key      string
 	Required bool
 	Kind     string // "mode", "bool", "string"
 }
 
-// FieldSpecs is the canonical ordered list of allowed keys. The
-// parser rejects any key not in this list.
 var FieldSpecs = []FieldSpec{
 	{Key: "authority_source", Required: true, Kind: "mode"},
 	{Key: "edit", Required: true, Kind: "mode"},
@@ -108,21 +88,19 @@ var FieldSpecs = []FieldSpec{
 	{Key: "frozen_closure_plan_authority", Required: true, Kind: "bool"},
 }
 
-// ContractMarkers are the BEGIN / END HTML comment markers that
-// bracket a contract block.
 const (
 	ContractBeginMarker = "<!-- LEAMAS:AUTHORITY-CONTRACT:BEGIN -->"
 	ContractEndMarker   = "<!-- LEAMAS:AUTHORITY-CONTRACT:END -->"
 )
 
-// ContractErrorKind classifies the failure mode returned by
-// ParseContractBlock. It exists so callers and tests can distinguish
-// structural failures from value-validation failures.
 type ContractErrorKind string
 
 const (
 	ErrMissingBegin     ContractErrorKind = "missing_begin"
 	ErrMissingEnd       ContractErrorKind = "missing_end"
+	ErrDuplicateBegin   ContractErrorKind = "duplicate_begin"
+	ErrDuplicateEnd     ContractErrorKind = "duplicate_end"
+	ErrMultipleBlocks   ContractErrorKind = "multiple_contract_blocks"
 	ErrInvertedMarkers  ContractErrorKind = "inverted_markers"
 	ErrDuplicateKey     ContractErrorKind = "duplicate_key"
 	ErrUnknownKey       ContractErrorKind = "unknown_key"
@@ -132,16 +110,13 @@ const (
 	ErrMalformedLine    ContractErrorKind = "malformed_line"
 )
 
-// ContractError is the structured error returned by ParseContractBlock.
-// It implements the error interface.
 type ContractError struct {
 	Kind ContractErrorKind
-	Line int    // 1-based line number within the contract block; 0 if not line-specific
-	Key  string // the offending key, when applicable
+	Line int
+	Key  string
 	Msg  string
 }
 
-// Error returns the human-readable message.
 func (e *ContractError) Error() string {
 	if e.Line > 0 {
 		return fmt.Sprintf("contract: %s (line %d): %s", e.Kind, e.Line, e.Msg)
@@ -152,28 +127,69 @@ func (e *ContractError) Error() string {
 	return fmt.Sprintf("contract: %s: %s", e.Kind, e.Msg)
 }
 
-// ParseContractBlock parses a single LEAMAS:AUTHORITY-CONTRACT block
-// from raw text. It returns a non-nil *AuthorityContract and nil
-// error on success, or nil and a *ContractError on any failure.
-//
-// The parser is strict:
-//   - exactly one BEGIN and one END marker are required;
-//   - exactly the keys listed in FieldSpecs are accepted;
-//   - duplicate keys are rejected;
-//   - missing required keys are rejected;
-//   - invalid mode values are rejected;
-//   - invalid bool values are rejected.
-// ParseContractBlock never returns a partial contract on failure.
-func ParseContractBlock(content string) (*AuthorityContract, error) {
-	beginIdx := strings.Index(content, ContractBeginMarker)
-	endIdx := strings.Index(content, ContractEndMarker)
+// CountMarkers returns the number of BEGIN and END markers in
+// content. Exported for tests.
+func CountMarkers(content string) (beginCount, endCount int) {
+	beginCount = strings.Count(content, ContractBeginMarker)
+	endCount = strings.Count(content, ContractEndMarker)
+	return
+}
 
-	if beginIdx == -1 {
+// findMarkerIndices returns the indices of all BEGIN and END markers
+// in content. Returns nil if either marker is absent.
+func findMarkerIndices(content string) (begins, ends []int) {
+	i := 0
+	for {
+		idx := strings.Index(content[i:], ContractBeginMarker)
+		if idx == -1 {
+			break
+		}
+		begins = append(begins, i+idx)
+		i += idx + len(ContractBeginMarker)
+	}
+	i = 0
+	for {
+		idx := strings.Index(content[i:], ContractEndMarker)
+		if idx == -1 {
+			break
+		}
+		ends = append(ends, i+idx)
+		i += idx + len(ContractEndMarker)
+	}
+	return
+}
+
+// ParseContractBlock parses a single LEAMAS:AUTHORITY-CONTRACT block
+// from raw text. The parser is strict: exactly one BEGIN and one END
+// marker must exist; the BEGIN must precede the END; exactly the
+// keys listed in FieldSpecs are accepted; duplicate keys are
+// rejected; missing required keys are rejected; invalid mode
+// values are rejected; invalid bool values are rejected.
+func ParseContractBlock(content string) (*AuthorityContract, error) {
+	begins, ends := findMarkerIndices(content)
+
+	if len(begins) == 0 {
 		return nil, &ContractError{Kind: ErrMissingBegin, Msg: "BEGIN marker not found"}
 	}
-	if endIdx == -1 {
+	if len(ends) == 0 {
 		return nil, &ContractError{Kind: ErrMissingEnd, Msg: "END marker not found"}
 	}
+	if len(begins) > 1 {
+		return nil, &ContractError{
+			Kind: ErrDuplicateBegin,
+			Msg:  fmt.Sprintf("found %d BEGIN markers; exactly one is required", len(begins)),
+		}
+	}
+	if len(ends) > 1 {
+		return nil, &ContractError{
+			Kind: ErrDuplicateEnd,
+			Msg:  fmt.Sprintf("found %d END markers; exactly one is required", len(ends)),
+		}
+	}
+
+	beginIdx := begins[0]
+	endIdx := ends[0]
+
 	if endIdx <= beginIdx {
 		return nil, &ContractError{Kind: ErrInvertedMarkers, Msg: "END marker precedes BEGIN marker"}
 	}
@@ -298,10 +314,7 @@ func ParseContractBlock(content string) (*AuthorityContract, error) {
 }
 
 // SharedSemanticsEqual reports whether the shared authority semantics
-// of two contracts agree. "Shared" semantics are the fields whose
-// values MUST agree between AGENTS.md and .clinerules/leamas.md; the
-// .clinerules/leamas.md contract may be stricter for editor-only
-// fields but MUST NOT weaken the shared ones.
+// of two contracts agree.
 func SharedSemanticsEqual(a, b *AuthorityContract) bool {
 	if a == nil || b == nil {
 		return false
@@ -321,8 +334,7 @@ func SharedSemanticsEqual(a, b *AuthorityContract) bool {
 }
 
 // IsValidContractSemantics checks that the contract values match the
-// doctrinally required defaults. A persistent agent context file
-// MUST express these values; any other value is a doctrinal defect.
+// doctrinally required defaults.
 func (c *AuthorityContract) IsValidContractSemantics() bool {
 	if c == nil {
 		return false

@@ -1,33 +1,32 @@
 // Protected-operation prose scanner.
 //
-// The prose scanner rejects imperative grants of "protected"
-// operations that appear in persistent agent-context prose without an
-// explicit authority guard in the same paragraph. This complements
-// the structured authority contract (contract.go) by enforcing the
-// same rules at the prose level rather than relying on a finite
-// blacklist of complete bad sentences.
+// The scanner rejects imperative grants of "protected" operations
+// that appear in persistent agent-context prose without a
+// per-operation authority guard or negation. The model is:
 //
-// Model:
-//
-//   verb class
+//   imperative intent
 //   + protected operation
-//   + presence/absence of authority guard
+//   + absence of operation-bound guard
+//   + absence of operation-bound negation
 //
-// The scanner detects common imperative forms (run, execute, invoke,
-// use, ...) and common protected operations (make factorize, make
-// gate-dupcode, make gate, repository gate, git commit, git push,
-// git tag, force-push, ...). If a paragraph mentions a protected
-// operation and contains no guard phrase and no negation, it is
-// rejected.
+// A paragraph is split into normative sentence/clause units. Each
+// unit is independently classified. A guard or negation in one
+// unit does NOT authorize an unrelated protected operation in
+// another unit.
 //
-// Fenced code blocks, the structured authority contract block, and
-// inline code spans are stripped before scanning so that example
-// commands and the contract itself are not misinterpreted.
+// Inline Markdown code spans preserve their content; the backtick
+// delimiters are removed but the wrapped text remains in the
+// scanned prose. This makes "Run make gate" and "Run `make gate`"
+// classify identically. Fenced code blocks are excluded because
+// they represent a separately delimited example region.
 //
-// Before substring matching, the scanner normalizes whitespace: any
-// run of internal whitespace is collapsed to a single space. This
-// makes detection robust against double spaces, tabs, and other
-// variations.
+// The structured authority contract block is also excluded from
+// scanning.
+//
+// A paragraph is treated as a single logical unit: soft-wrapped
+// lines within a paragraph are joined with single spaces before
+// sentence units are extracted. Bullets are stripped at the
+// start of each line before the join.
 
 package agentcontext
 
@@ -40,26 +39,28 @@ import (
 type ProtectedOpKind string
 
 const (
-	OpMakeFactorize  ProtectedOpKind = "make_factorize"
+	OpMakeFactorize   ProtectedOpKind = "make_factorize"
 	OpMakeGateDupcode ProtectedOpKind = "make_gate_dupcode"
-	OpMakeGate       ProtectedOpKind = "make_gate"
-	OpRepositoryGate ProtectedOpKind = "repository_gate"
-	OpGitCommit      ProtectedOpKind = "git_commit"
-	OpGitPush        ProtectedOpKind = "git_push"
-	OpGitTag         ProtectedOpKind = "git_tag"
-	OpForcePush      ProtectedOpKind = "force_push"
-	OpHistoryRewrite ProtectedOpKind = "history_rewrite"
+	OpMakeGate        ProtectedOpKind = "make_gate"
+	OpRepositoryGate  ProtectedOpKind = "repository_gate"
+	OpGitCommit       ProtectedOpKind = "git_commit"
+	OpGitPush         ProtectedOpKind = "git_push"
+	OpGitTag          ProtectedOpKind = "git_tag"
+	OpForcePush       ProtectedOpKind = "force_push"
+	OpHistoryRewrite  ProtectedOpKind = "history_rewrite"
 )
 
 // ProtectedOp binds one logical operation to the textual forms it
-// may appear in. Forms are matched case-insensitively as substrings
-// against normalized paragraph text.
+// may appear in.
 type ProtectedOp struct {
 	Kind  ProtectedOpKind
 	Forms []string
 }
 
 // ProtectedOps is the canonical list of protected operations.
+// Plural forms are listed when the noun form is common in the
+// codebase (e.g. "git tags"). A word-boundary check prevents the
+// singular form from accidentally matching the plural.
 var ProtectedOps = []ProtectedOp{
 	{Kind: OpMakeFactorize, Forms: []string{"make factorize"}},
 	{Kind: OpMakeGateDupcode, Forms: []string{"make gate-dupcode"}},
@@ -67,7 +68,7 @@ var ProtectedOps = []ProtectedOp{
 	{Kind: OpRepositoryGate, Forms: []string{"repository gate"}},
 	{Kind: OpGitCommit, Forms: []string{"git commit", "commit the changes", "commit completed work", "create a commit", "make a commit"}},
 	{Kind: OpGitPush, Forms: []string{"git push", "push the commit", "push changes", "push successful work"}},
-	{Kind: OpGitTag, Forms: []string{"git tag", "tag the commit", "create a tag", "tag successful", "tag every", "tag all"}},
+	{Kind: OpGitTag, Forms: []string{"git tag", "git tags", "tag the commit", "create a tag", "tag successful", "tag every", "tag all"}},
 	{Kind: OpForcePush, Forms: []string{"force-push", "force push"}},
 	{Kind: OpHistoryRewrite, Forms: []string{"rewrite history", "rebase", "amend a commit"}},
 }
@@ -154,124 +155,40 @@ var negationPatterns = []string{
 	"aren't ",
 }
 
-// imperativeVerbPattern matches common imperative verbs. Used as a hint.
-var imperativeVerbPattern = regexp.MustCompile(`(?i)\b(run|execute|invoke|use|perform|do|run the|execute the|invoke the|use the)\b`)
-
-// whitespaceCollapse collapses runs of internal whitespace into a single
-// space and lowercases the string. This is the primary normalization
-// applied before scanning.
-func whitespaceCollapse(s string) string {
-	var sb strings.Builder
-	sb.Grow(len(s))
-	prevSpace := false
-	for _, r := range s {
-		if r == ' ' || r == '\t' || r == '\n' || r == '\r' {
-			if !prevSpace {
-				sb.WriteByte(' ')
-			}
-			prevSpace = true
-			continue
-		}
-		prevSpace = false
-		sb.WriteRune(r)
-	}
-	return strings.TrimSpace(sb.String())
+// imperativeVerbs is the canonical list of imperative/directive
+// verbs used to recognize imperative intent in a unit.
+var imperativeVerbs = []string{
+	"run", "execute", "invoke", "use", "perform",
+	"commit", "push", "tag", "create", "make",
+	"rewrite", "amend", "rebase",
 }
 
-// stripExcludedRegions removes fenced code blocks, the authority
-// contract block, and inline backtick code spans from the prose
-// before scanning.
-func stripExcludedRegions(content string) string {
-	beginIdx := strings.Index(content, ContractBeginMarker)
-	endIdx := strings.Index(content, ContractEndMarker)
-	if beginIdx != -1 && endIdx != -1 && endIdx > beginIdx {
-		content = content[:beginIdx] + content[endIdx+len(ContractEndMarker):]
-	} else if beginIdx != -1 {
-		content = content[:beginIdx]
-	}
-
-	var sb2 strings.Builder
-	inFence := false
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "```") {
-			inFence = !inFence
-			continue
-		}
-		if inFence {
-			continue
-		}
-		sb2.WriteString(line)
-		sb2.WriteString("\n")
-	}
-	content = sb2.String()
-
-	content = stripInlineCode(content)
-
-	return content
+// descriptiveVerbs indicate a descriptive sentence. A unit that
+// contains any of these ANYWHERE is treated as descriptive.
+var descriptiveVerbs = []string{
+	"is", "are", "was", "were", "can", "must", "may",
+	"should", "would", "does", "do", "validates",
+	"performs", "records", "defines", "means",
+	"represents", "includes", "supports", "documents",
+	"indicates", "provides", "provide", "allows",
 }
 
-// stripInlineCode replaces content inside single-backtick spans with
-// spaces (preserving offsets and newlines).
-func stripInlineCode(content string) string {
-	var sb strings.Builder
-	sb.Grow(len(content))
-	inCode := false
-	for i := 0; i < len(content); i++ {
-		c := content[i]
-		if c == '`' {
-			inCode = !inCode
-			sb.WriteByte(' ')
-			continue
-		}
-		if inCode {
-			sb.WriteByte(' ')
-		} else {
-			sb.WriteByte(c)
-		}
-	}
-	return sb.String()
-}
+// imperativeVerbPattern matches common imperative verbs.
+var imperativeVerbPattern = regexp.MustCompile(`(?i)\b(run|execute|invoke|use|perform|commit|push|tag|create|make|rewrite|amend|rebase)\b`)
 
-// SplitParagraphs splits content into paragraph units.
-func SplitParagraphs(content string) []string {
-	parts := strings.Split(content, "\n\n")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		out = append(out, p)
-	}
-	return out
-}
-
-// ParagraphHasImperativeVerb reports whether a paragraph contains at
+// ParagraphHasImperativeVerb reports whether the unit contains at
 // least one imperative verb form.
 func ParagraphHasImperativeVerb(lowerPara string) bool {
 	return imperativeVerbPattern.MatchString(lowerPara)
 }
 
-// paragraphMentionsProtectedOp reports whether the normalized
-// paragraph contains any protected-operation form.
-func paragraphMentionsProtectedOp(lowerPara string) (ProtectedOpKind, string) {
-	for _, op := range ProtectedOps {
-		for _, form := range op.Forms {
-			if strings.Contains(lowerPara, form) {
-				return op.Kind, form
-			}
-		}
-	}
-	return "", ""
-}
-
-// paragraphHasGuard reports whether the normalized paragraph contains
-// at least one guard phrase.
-func paragraphHasGuard(lowerPara string) bool {
-	for _, guard := range GuardPhrases {
-		for _, form := range guard.Forms {
-			if strings.Contains(lowerPara, form) {
+// unitHasDescriptiveVerb reports whether the unit contains any
+// descriptive verb (anywhere).
+func unitHasDescriptiveVerb(lowerUnit string) bool {
+	words := strings.Fields(lowerUnit)
+	for _, w := range words {
+		for _, d := range descriptiveVerbs {
+			if w == d {
 				return true
 			}
 		}
@@ -279,11 +196,116 @@ func paragraphHasGuard(lowerPara string) bool {
 	return false
 }
 
-// paragraphHasNegation reports whether the normalized paragraph
-// contains at least one negation form.
-func paragraphHasNegation(lowerPara string) bool {
+// formMatchesAtStart reports whether the form matches at the start of
+// the unit AND is followed by a word boundary (space, punctuation, or
+// end of string). This prevents the singular form from matching the
+// plural form (e.g. "git tag" must not match "git tags").
+func formMatchesAtStart(lowerUnit, form string) bool {
+	if !strings.HasPrefix(lowerUnit, form) {
+		return false
+	}
+	after := lowerUnit[len(form):]
+	if after == "" {
+		return true
+	}
+	c := after[0]
+	return c == ' ' || c == '\t' || c == '\n' || c == '.' || c == ',' ||
+		c == ';' || c == '!' || c == '?' || c == ':'
+}
+
+// unitHasImperativeIntent reports whether the unit expresses an
+// imperative directive (vs descriptive prose).
+//
+// The check has two phases:
+//
+//  1. If the unit starts with a protected-op form (followed by a
+//     word boundary), the unit is imperative UNLESS at least one
+//     descriptive verb appears anywhere in the unit. This catches
+//     both bare commands ("make gate") and subject-complement
+//     patterns ("make factorize is a Tier-3 command", "Git commit
+//     authority is independent ...").
+//
+//  2. Otherwise, the unit is imperative if and only if its first
+//     word is a recognized imperative verb.
+func unitHasImperativeIntent(lowerUnit string) bool {
+	words := strings.Fields(lowerUnit)
+	if len(words) == 0 {
+		return false
+	}
+
+	// Phase 1: protected-op form at start.
+	for _, op := range ProtectedOps {
+		for _, form := range op.Forms {
+			if !formMatchesAtStart(lowerUnit, form) {
+				continue
+			}
+			// Bare form is imperative.
+			if lowerUnit == form {
+				return true
+			}
+			// If the unit has any descriptive verb, treat as
+			// descriptive (catches "X is Y", "X provides Y").
+			if unitHasDescriptiveVerb(lowerUnit) {
+				return false
+			}
+			// Imperative: "Run make gate", "make gate" alone.
+			// Note: "make" alone as first word is in imperativeVerbs
+			// but we already ruled out the form case, so falling
+			// through is fine.
+			return true
+		}
+	}
+
+	// Phase 2: imperative verb at the start of the unit.
+	first := words[0]
+	for _, v := range imperativeVerbs {
+		if first == v {
+			return true
+		}
+	}
+	return false
+}
+
+// protectedOpMatch is one protected operation mentioned in a unit.
+type protectedOpMatch struct {
+	op   ProtectedOpKind
+	form string
+}
+
+// unitsMentionProtectedOps returns all protected operations in the
+// unit, in deterministic insertion order.
+func unitsMentionProtectedOps(lowerUnit string) []protectedOpMatch {
+	seen := make(map[ProtectedOpKind]bool)
+	var matches []protectedOpMatch
+	for _, op := range ProtectedOps {
+		for _, form := range op.Forms {
+			if strings.Contains(lowerUnit, form) {
+				if !seen[op.Kind] {
+					matches = append(matches, protectedOpMatch{op: op.Kind, form: form})
+					seen[op.Kind] = true
+				}
+			}
+		}
+	}
+	return matches
+}
+
+// unitHasGuard reports whether the unit contains a guard phrase.
+func unitHasGuard(lowerUnit string) bool {
+	for _, guard := range GuardPhrases {
+		for _, form := range guard.Forms {
+			if strings.Contains(lowerUnit, form) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// unitHasNegation reports whether the unit contains a negation.
+func unitHasNegation(lowerUnit string) bool {
 	for _, neg := range negationPatterns {
-		if strings.Contains(lowerPara, neg) {
+		if strings.Contains(lowerUnit, neg) {
 			return true
 		}
 	}
@@ -298,41 +320,59 @@ type ProseFinding struct {
 	Excerpt string
 }
 
-// FindUnguardedProtectedOps scans content for unguarded imperative
-// grants of protected operations.
-func FindUnguardedProtectedOps(path, content string) []ProseFinding {
-	cleaned := stripExcludedRegions(content)
-	var findings []ProseFinding
-	for _, para := range SplitParagraphs(cleaned) {
-		normalized := whitespaceCollapse(strings.ToLower(para))
-		if normalized == "" {
+// joinParagraphLines joins soft-wrapped lines in a paragraph into
+// one logical string, stripping Markdown bullet prefixes along the
+// way. Each line is treated as a separate item (bullet or sentence).
+func joinParagraphLines(paragraph string) string {
+	var lines []string
+	for _, raw := range strings.Split(paragraph, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" {
 			continue
 		}
-		op, _ := paragraphMentionsProtectedOp(normalized)
-		if op == "" {
-			continue
-		}
-		if paragraphHasGuard(normalized) {
-			continue
-		}
-		if paragraphHasNegation(normalized) {
-			continue
-		}
-		findings = append(findings, ProseFinding{
-			Path:    path,
-			Kind:    "unguarded_protected_operation",
-			Op:      op,
-			Excerpt: truncate(para, 160),
-		})
+		lines = append(lines, stripBulletPrefix(line))
 	}
-	return findings
+	return strings.Join(lines, " ")
 }
 
-// truncate returns at most n runes of s, ending with "..." if it was
-// actually truncated.
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
+// FindUnguardedProtectedOps scans content for unguarded imperative
+// grants of protected operations. Each paragraph is treated as a
+// single logical unit (soft-wrapped lines joined), then split into
+// sentence/clause units. Each unit is independently classified.
+func FindUnguardedProtectedOps(path, content string) []ProseFinding {
+	stripped := stripContractBlock(content)
+	stripped = stripFencedCodeBlocks(stripped)
+	stripped = stripBacktickDelimiters(stripped)
+
+	var findings []ProseFinding
+	for _, paragraph := range splitParagraphs(stripped) {
+		joined := joinParagraphLines(paragraph)
+		for _, unit := range splitIntoUnits(joined) {
+			normalized := whitespaceCollapse(strings.ToLower(unit))
+			if normalized == "" {
+				continue
+			}
+			if !unitHasImperativeIntent(normalized) {
+				continue
+			}
+			matches := unitsMentionProtectedOps(normalized)
+			if len(matches) == 0 {
+				continue
+			}
+			hasGuard := unitHasGuard(normalized)
+			hasNegation := unitHasNegation(normalized)
+			if hasGuard || hasNegation {
+				continue
+			}
+			for _, m := range matches {
+				findings = append(findings, ProseFinding{
+					Path:    path,
+					Kind:    "unguarded_protected_operation",
+					Op:      m.op,
+					Excerpt: truncate(unit, 160),
+				})
+			}
+		}
 	}
-	return s[:n] + "..."
+	return findings
 }

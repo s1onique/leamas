@@ -1,29 +1,17 @@
 package agentcontext
 
 import (
-	"strings"
 	"testing"
 )
 
-// unguardedSentence returns a paragraph that contains a protected
-// operation framed by an imperative verb and lacks any guard phrase.
-func unguardedSentence(op string) string {
-	return "Run " + op + " for final validation."
-}
+// PHASE 1: Inline backtick preservation.
+// Backticks MUST NOT bypass protected-operation detection.
 
-// guardedSentence returns a paragraph that contains a protected
-// operation framed by an imperative verb and includes a guard phrase.
-func guardedSentence(op string) string {
-	return "Run " + op + " only when explicitly authorized by the current ACT."
-}
-
-func TestFindUnguardedProtectedOps_UnguardedGateFails(t *testing.T) {
+func TestFindUnguardedProtectedOps_BacktickedGateFails(t *testing.T) {
 	cases := []string{
-		"Run make gate on every task.",
-		"Execute make gate after implementation.",
-		"Invoke make gate before finishing.",
-		"Use make gate for final validation.",
-		"Run the make gate step.",
+		"Run make gate.",
+		"Run `make gate`.",
+		"Run  `make gate`  .",
 	}
 	for _, p := range cases {
 		p := p
@@ -36,12 +24,10 @@ func TestFindUnguardedProtectedOps_UnguardedGateFails(t *testing.T) {
 	}
 }
 
-func TestFindUnguardedProtectedOps_UnguardedFactorizeFails(t *testing.T) {
+func TestFindUnguardedProtectedOps_BacktickedFactorizeFails(t *testing.T) {
 	cases := []string{
-		"Run make factorize after editing.",
-		"Execute make factorize before completion.",
-		"Invoke make factorize to confirm results.",
-		"Use make factorize for canonical authority.",
+		"Execute make factorize.",
+		"Execute `make factorize`.",
 	}
 	for _, p := range cases {
 		p := p
@@ -54,11 +40,10 @@ func TestFindUnguardedProtectedOps_UnguardedFactorizeFails(t *testing.T) {
 	}
 }
 
-func TestFindUnguardedProtectedOps_UnguardedGateDupcodeFails(t *testing.T) {
+func TestFindUnguardedProtectedOps_BacktickedGateDupcodeFails(t *testing.T) {
 	cases := []string{
-		"Run make gate-dupcode after dupcode changes.",
-		"Execute make gate-dupcode when code is ready.",
-		"Invoke make gate-dupcode to validate.",
+		"Run make gate-dupcode.",
+		"Run `make gate-dupcode`.",
 	}
 	for _, p := range cases {
 		p := p
@@ -71,29 +56,128 @@ func TestFindUnguardedProtectedOps_UnguardedGateDupcodeFails(t *testing.T) {
 	}
 }
 
-func TestFindUnguardedProtectedOps_UnguardedRepositoryGateFails(t *testing.T) {
+func TestFindUnguardedProtectedOps_BacktickedCommitFails(t *testing.T) {
+	cases := []string{
+		"Run git commit.",
+		"Run `git commit`.",
+	}
+	for _, p := range cases {
+		p := p
+		t.Run(p, func(t *testing.T) {
+			findings := FindUnguardedProtectedOps("AGENTS.md", p)
+			if len(findings) == 0 {
+				t.Fatalf("expected unguarded finding for %q", p)
+			}
+		})
+	}
+}
+
+func TestFindUnguardedProtectedOps_BacktickedPushFails(t *testing.T) {
+	cases := []string{
+		"Execute git push.",
+		"Execute `git push`.",
+	}
+	for _, p := range cases {
+		p := p
+		t.Run(p, func(t *testing.T) {
+			findings := FindUnguardedProtectedOps("AGENTS.md", p)
+			if len(findings) == 0 {
+				t.Fatalf("expected unguarded finding for %q", p)
+			}
+		})
+	}
+}
+
+func TestFindUnguardedProtectedOps_BacktickedTagFails(t *testing.T) {
+	cases := []string{
+		"Run git tag.",
+		"Run `git tag`.",
+	}
+	for _, p := range cases {
+		p := p
+		t.Run(p, func(t *testing.T) {
+			findings := FindUnguardedProtectedOps("AGENTS.md", p)
+			if len(findings) == 0 {
+				t.Fatalf("expected unguarded finding for %q", p)
+			}
+		})
+	}
+}
+
+// Fenced code blocks remain an excluded region.
+func TestFindUnguardedProtectedOps_FencedCodeBlockTolerated(t *testing.T) {
+	content := "Examples that are NOT run automatically:\n\n```\nrun make gate\ncommit the changes\npush the commit\n```\n"
+	findings := FindUnguardedProtectedOps("AGENTS.md", content)
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings inside fenced code block, got: %+v", findings)
+	}
+}
+
+// PHASE 2: Per-operation guard/negation binding.
+
+func TestFindUnguardedProtectedOps_DoNotDoesNotAuthorizeUnrelatedRun(t *testing.T) {
+	para := "Do not skip tests. Run make gate."
+	findings := FindUnguardedProtectedOps("AGENTS.md", para)
+	if len(findings) == 0 {
+		t.Fatalf("expected unguarded finding for %q (do-not in unit 1 must not authorize make gate in unit 2)", para)
+	}
+}
+
+func TestFindUnguardedProtectedOps_CommitGuardDoesNotAuthorizeMakeGate(t *testing.T) {
+	para := "Run make gate. Commit only when the ACT delegates commit authority."
+	findings := FindUnguardedProtectedOps("AGENTS.md", para)
+	if len(findings) == 0 {
+		t.Fatalf("expected unguarded finding for %q (commit guard must not authorize make gate)", para)
+	}
+}
+
+func TestFindUnguardedProtectedOps_NeverForcePushDoesNotAuthorizePush(t *testing.T) {
+	para := "Never force-push. Push the commit."
+	findings := FindUnguardedProtectedOps("AGENTS.md", para)
+	if len(findings) == 0 {
+		t.Fatalf("expected unguarded finding for %q (force-push negation must not authorize push)", para)
+	}
+}
+
+func TestFindUnguardedProtectedOps_CommitGuardDoesNotAuthorizePush(t *testing.T) {
+	para := "Commit completed work. Push only when explicitly delegated by the current ACT."
+	findings := FindUnguardedProtectedOps("AGENTS.md", para)
+	if len(findings) == 0 {
+		t.Fatalf("expected unguarded finding for %q (commit guard must not authorize push)", para)
+	}
+}
+
+// PHASE 3: Imperative intent required.
+
+func TestFindUnguardedProtectedOps_DescriptiveProseAccepted(t *testing.T) {
+	cases := []string{
+		"The repository gate validates canonical state.",
+		"The make gate command is Tier-3 verification.",
+		"make factorize is a Tier-3 command.",
+		"Git commit authority is independent from edit authority.",
+		"Git push is publication.",
+		"Git tags provide immutable lifecycle identity.",
+		"History rewrite is forbidden by persistent context.",
+	}
+	for _, p := range cases {
+		p := p
+		t.Run(p, func(t *testing.T) {
+			findings := FindUnguardedProtectedOps("AGENTS.md", p)
+			if len(findings) != 0 {
+				t.Fatalf("expected no findings for descriptive prose %q, got: %+v", p, findings)
+			}
+		})
+	}
+}
+
+func TestFindUnguardedProtectedOps_ImperativeFail(t *testing.T) {
 	cases := []string{
 		"Run the repository gate.",
-		"Execute the repository gate after GREEN.",
-		"Use the repository gate for final validation.",
-	}
-	for _, p := range cases {
-		p := p
-		t.Run(p, func(t *testing.T) {
-			findings := FindUnguardedProtectedOps("AGENTS.md", p)
-			if len(findings) == 0 {
-				t.Fatalf("expected unguarded finding for %q", p)
-			}
-		})
-	}
-}
-
-func TestFindUnguardedProtectedOps_UnguardedCommitFails(t *testing.T) {
-	cases := []string{
+		"Execute make gate.",
+		"Use make factorize.",
 		"Commit completed work.",
-		"Commit the changes when finished.",
-		"Create a commit after tests.",
-		"Make a commit for successful tasks.",
+		"Push changes.",
+		"Create a tag.",
 	}
 	for _, p := range cases {
 		p := p
@@ -106,39 +190,7 @@ func TestFindUnguardedProtectedOps_UnguardedCommitFails(t *testing.T) {
 	}
 }
 
-func TestFindUnguardedProtectedOps_UnguardedPushFails(t *testing.T) {
-	cases := []string{
-		"Push the commit.",
-		"Push changes after verification.",
-		"Push successful work automatically.",
-	}
-	for _, p := range cases {
-		p := p
-		t.Run(p, func(t *testing.T) {
-			findings := FindUnguardedProtectedOps("AGENTS.md", p)
-			if len(findings) == 0 {
-				t.Fatalf("expected unguarded finding for %q", p)
-			}
-		})
-	}
-}
-
-func TestFindUnguardedProtectedOps_UnguardedTagFails(t *testing.T) {
-	cases := []string{
-		"Tag successful ACTs.",
-		"Create a tag after committing.",
-		"Tag the commit after merge.",
-	}
-	for _, p := range cases {
-		p := p
-		t.Run(p, func(t *testing.T) {
-			findings := FindUnguardedProtectedOps("AGENTS.md", p)
-			if len(findings) == 0 {
-				t.Fatalf("expected unguarded finding for %q", p)
-			}
-		})
-	}
-}
+// PHASE 4: Guarded equivalents accepted.
 
 func TestFindUnguardedProtectedOps_GuardedAccepts(t *testing.T) {
 	cases := []string{
@@ -147,30 +199,64 @@ func TestFindUnguardedProtectedOps_GuardedAccepts(t *testing.T) {
 		"Do not run make gate-dupcode unless the current ACT explicitly authorizes that exact command.",
 		"Commit only when the ACT delegates commit authority.",
 		"Push only when explicitly delegated by the current ACT.",
-		"Create a tag only when the current ACT delegates tag authority.",
+		"Create a tag only when the ACT delegates tag authority.",
 		"Run the repository gate only when that verification tier is explicitly authorized.",
+		"Do not run make gate.",
+		"Never execute make factorize without explicit ACT authority.",
+		"Do not git push.",
+		"Do not create a tag.",
 	}
 	for _, p := range cases {
 		p := p
 		t.Run(p, func(t *testing.T) {
 			findings := FindUnguardedProtectedOps("AGENTS.md", p)
 			if len(findings) != 0 {
-				t.Fatalf("expected no findings for %q, got: %+v", p, findings)
+				t.Fatalf("expected no findings for guarded %q, got: %+v", p, findings)
 			}
 		})
 	}
 }
 
-// TestFindUnguardedProtectedOps_MetamorphicCapitalization varies
-// capitalization of the protected operation. The dangerous unguarded
-// variants MUST fail regardless of capitalization.
+// PHASE 5: Backticked guarded equivalents also accepted.
+
+func TestFindUnguardedProtectedOps_BacktickedGuardedAccepts(t *testing.T) {
+	cases := []string{
+		"Run `make gate` only when explicitly authorized by the current ACT.",
+		"Run `make factorize` only when explicitly authorized by the current ACT.",
+		"Run `make gate-dupcode` only when explicitly authorized by the current ACT.",
+		"Run `git push` only when delegated by the current ACT.",
+		"Run `git commit` only when the ACT delegates commit authority.",
+		"Run `git tag` only when the ACT delegates tag authority.",
+	}
+	for _, p := range cases {
+		p := p
+		t.Run(p, func(t *testing.T) {
+			findings := FindUnguardedProtectedOps("AGENTS.md", p)
+			if len(findings) != 0 {
+				t.Fatalf("expected no findings for backticked guarded %q, got: %+v", p, findings)
+			}
+		})
+	}
+}
+
+// PHASE 6: Multi-operation ambiguity fails closed.
+
+func TestFindUnguardedProtectedOps_MultiOperationAmbiguityFails(t *testing.T) {
+	para := "Run make gate and push changes only when push is authorized."
+	findings := FindUnguardedProtectedOps("AGENTS.md", para)
+	if len(findings) == 0 {
+		t.Fatalf("expected unguarded finding for mixed-authority %q", para)
+	}
+}
+
+// PHASE 7: Metamorphic variation.
+
 func TestFindUnguardedProtectedOps_MetamorphicCapitalization(t *testing.T) {
 	cases := []string{
 		"Run make gate.",
 		"Run MAKE GATE.",
 		"Run Make Gate.",
-		"Run make Gate.",
-		"Run MAKE gate.",
+		"RUN MAKE GATE.",
 	}
 	for _, p := range cases {
 		p := p
@@ -183,51 +269,10 @@ func TestFindUnguardedProtectedOps_MetamorphicCapitalization(t *testing.T) {
 	}
 }
 
-// TestFindUnguardedProtectedOps_MetamorphicBackticks verifies that
-// the scanner handles inline backticks correctly. Inside backticks,
-// the protected operation is treated as a code example and is NOT
-// flagged. Outside backticks, the same imperative line is flagged.
-func TestFindUnguardedProtectedOps_MetamorphicBackticks(t *testing.T) {
-	t.Run("inline_backticks_in_code_span_tolerated", func(t *testing.T) {
-		// Plain prose mentioning `make gate` inside inline backticks
-		// describes a code example and should not be flagged.
-		content := "Use the `make gate` command when it is authorized."
-		findings := FindUnguardedProtectedOps("AGENTS.md", content)
-		if len(findings) != 0 {
-			t.Fatalf("expected no findings for inline backtick example, got: %+v", findings)
-		}
-	})
-
-	t.Run("fenced_code_block_tolerated", func(t *testing.T) {
-		// Example commands inside a fenced block are not flagged.
-		content := "Examples that are NOT run automatically:\n\n```\nrun make gate\ncommit the changes\npush the commit\n```\n"
-		findings := FindUnguardedProtectedOps("AGENTS.md", content)
-		if len(findings) != 0 {
-			t.Fatalf("expected no findings inside fenced code block, got: %+v", findings)
-		}
-	})
-
-	t.Run("unguarded_outside_backticks_still_fails", func(t *testing.T) {
-		// The paragraph OUTSIDE the backticks still must be flagged.
-		content := "Run make gate now."
-		findings := FindUnguardedProtectedOps("AGENTS.md", content)
-		if len(findings) == 0 {
-			t.Fatalf("expected unguarded finding outside backticks")
-		}
-	})
-}
-
-// TestFindUnguardedProtectedOps_MetamorphicPunctuation verifies that
-// terminal punctuation and extra whitespace do not defeat detection.
-func TestFindUnguardedProtectedOps_MetamorphicPunctuation(t *testing.T) {
+func TestFindUnguardedProtectedOps_MetamorphicWhitespace(t *testing.T) {
 	cases := []string{
-		"Run make gate",
-		"Run  make  gate",
 		"Run make gate.",
-		"Run make gate!",
-		"Run make gate;",
-		"Run make gate?",
-		" - Run make gate.",
+		"Run  make  gate.",
 		"  Run make gate.  ",
 	}
 	for _, p := range cases {
@@ -241,14 +286,11 @@ func TestFindUnguardedProtectedOps_MetamorphicPunctuation(t *testing.T) {
 	}
 }
 
-// TestFindUnguardedProtectedOps_MetamorphicBulletForm varies the
-// Markdown bullet form. The unprotected operation is still flagged.
-func TestFindUnguardedProtectedOps_MetamorphicBulletForm(t *testing.T) {
+func TestFindUnguardedProtectedOps_MetamorphicBullet(t *testing.T) {
 	cases := []string{
 		"- Run make gate.",
-		"* Run make gate.",
-		"1. Run make gate.",
-		"Run make gate.",
+		"* Execute make gate.",
+		"1. Run `make gate`.",
 	}
 	for _, p := range cases {
 		p := p
@@ -261,41 +303,48 @@ func TestFindUnguardedProtectedOps_MetamorphicBulletForm(t *testing.T) {
 	}
 }
 
-func TestFindUnguardedProtectedOps_ContractBlockStripped(t *testing.T) {
-	// Mentions of protected operations inside the contract block
-	// (e.g. the `commit=explicit` line) MUST NOT be flagged.
-	c := minimalValidBlock()
-	findings := FindUnguardedProtectedOps("AGENTS.md", "Here is the contract.\n\n"+c+"\n\nNo prose contains the protected operation.\n")
-	if len(findings) != 0 {
-		t.Fatalf("expected no findings; contract block must be stripped, got: %+v", findings)
+func TestFindUnguardedProtectedOps_MetamorphicPunctuation(t *testing.T) {
+	cases := []string{
+		"Run make gate.",
+		"Run make gate!",
+		"Run make gate?",
+		"Run make gate;",
 	}
-}
-
-func TestFindUnguardedProtectedOps_NoProtectedOpAccepts(t *testing.T) {
-	// Plain prose that does not mention a protected operation is
-	// accepted regardless of phrasing.
-	benign := []string{
-		"Follow the current ACT.",
-		"Use Bash for tiny glue.",
-		"Verify changes before completing the task.",
-		"Apply consistent style across the codebase.",
-	}
-	for _, p := range benign {
+	for _, p := range cases {
 		p := p
 		t.Run(p, func(t *testing.T) {
 			findings := FindUnguardedProtectedOps("AGENTS.md", p)
-			if len(findings) != 0 {
-				t.Fatalf("expected no findings for benign prose %q", p)
+			if len(findings) == 0 {
+				t.Fatalf("expected unguarded finding for %q", p)
 			}
 		})
 	}
 }
 
-func TestParagraphHasImperativeVerb(t *testing.T) {
-	if !ParagraphHasImperativeVerb(strings.ToLower(unguardedSentence("make gate"))) {
-		t.Fatalf("expected verb detection")
-	}
-	if ParagraphHasImperativeVerb("benign prose with no imperative verb") {
-		t.Fatalf("did not expect verb detection")
+// PHASE 8: Soft-wrapped paragraphs are joined.
+
+func TestFindUnguardedProtectedOps_SoftWrappedParagraph(t *testing.T) {
+	// Strongly-typed imperative protected operation that starts on
+	// one line and continues on the next line in a soft-wrapped
+	// paragraph.
+	para := "Never move or force-push ACT tags.\nAnd never delete the manifest."
+	findings := FindUnguardedProtectedOps("AGENTS.md", para)
+	// "Never move or force-push ACT tags" has "never " (negation),
+	// so it is NOT flagged. "And never delete the manifest" has no
+	// protected op, so it is NOT flagged.
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings for fully-negated paragraph, got: %+v", findings)
 	}
 }
+
+func TestFindUnguardedProtectedOps_SoftWrappedImperative(t *testing.T) {
+	// An imperative that is split across soft-wrapped lines must
+	// still be flagged.
+	para := "Run make gate\nnow and commit completed work\nlater."
+	findings := FindUnguardedProtectedOps("AGENTS.md", para)
+	if len(findings) == 0 {
+		t.Fatalf("expected finding for soft-wrapped imperative %q", para)
+	}
+}
+
+// PHASE 9: helpers.

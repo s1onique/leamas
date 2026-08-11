@@ -26,13 +26,13 @@ type Finding struct {
 // by (Path, Kind).
 //
 // The check is composed of three layers:
-//   1) structured contract (contract.go): authoritative machine-readable
-//      contract that MUST be present, well-formed, and semantically
-//      valid in both files, with shared semantics equal;
-//   2) guarded prose scanner (prose.go): rejects unguarded imperative
-//      grants of protected operations in human-readable prose;
-//   3) presence anchors (presence.go): orthogonal non-authority
-//      requirements such as doctrine references and line limits.
+//  1. structured contract (contract.go): authoritative machine-readable
+//     contract that MUST be present, well-formed, and semantically
+//     valid in both files, with shared semantics equal;
+//  2. guarded prose scanner (prose.go): rejects unguarded imperative
+//     grants of protected operations in human-readable prose;
+//  3. presence anchors (presence.go): orthogonal non-authority
+//     requirements such as doctrine references and line limits.
 func CheckRepo(root string) ([]Finding, error) {
 	var findings []Finding
 

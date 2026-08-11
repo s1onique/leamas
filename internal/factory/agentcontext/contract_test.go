@@ -131,10 +131,10 @@ func TestParseContractBlock_AllDoctrinalValuesRejected(t *testing.T) {
 	// Each doctrinal violation must be rejected by EITHER the parser
 	// (invalid enum) or the semantic check (parsed-but-wrong).
 	violations := []struct {
-		Name     string
-		Key      string
-		Replace  string
-		CheckAs  string // "mode_invalid", "bool_semantic", "string_semantic"
+		Name    string
+		Key     string
+		Replace string
+		CheckAs string // "mode_invalid", "bool_semantic", "string_semantic"
 	}{
 		{"expensive_verification=always", "expensive_verification=explicit_exact\n", "expensive_verification=always\n", "mode_invalid"},
 		{"commit=implicit", "commit=explicit\n", "commit=implicit\n", "mode_invalid"},
@@ -187,5 +187,37 @@ func TestSharedSemanticsEqual(t *testing.T) {
 
 	if SharedSemanticsEqual(c, nil) {
 		t.Fatalf("expected inequality with nil")
+	}
+}
+
+func TestParseContractBlock_DuplicateBegin(t *testing.T) {
+	body := ContractBeginMarker + "\ncommit=explicit\n" + ContractBeginMarker + "\ncommit=act\n" + ContractEndMarker + "\n"
+	_, err := ParseContractBlock(body)
+	if err == nil {
+		t.Fatalf("expected error for duplicate BEGIN marker")
+	} else if cerr, ok := err.(*ContractError); !ok || cerr.Kind != ErrDuplicateBegin {
+		t.Fatalf("expected ErrDuplicateBegin, got %v", err)
+	}
+}
+
+func TestParseContractBlock_DuplicateEnd(t *testing.T) {
+	body := ContractBeginMarker + "\ncommit=explicit\n" + ContractEndMarker + "\n" + ContractEndMarker + "\n"
+	_, err := ParseContractBlock(body)
+	if err == nil {
+		t.Fatalf("expected error for duplicate END marker")
+	} else if cerr, ok := err.(*ContractError); !ok || cerr.Kind != ErrDuplicateEnd {
+		t.Fatalf("expected ErrDuplicateEnd, got %v", err)
+	}
+}
+
+func TestParseContractBlock_TwoCompleteBlocks(t *testing.T) {
+	body := ContractBeginMarker + "\ncommit=explicit\n" + ContractEndMarker +
+		"\nprose\n" +
+		ContractBeginMarker + "\ncommit=act\n" + ContractEndMarker + "\n"
+	_, err := ParseContractBlock(body)
+	if err == nil {
+		t.Fatalf("expected error for two complete contract blocks")
+	} else if cerr, ok := err.(*ContractError); !ok || cerr.Kind != ErrDuplicateBegin {
+		t.Fatalf("expected ErrDuplicateBegin, got %v", err)
 	}
 }
