@@ -108,7 +108,7 @@ func realCanaryV2BinaryIdentity(t *testing.T) V2BinaryIdentity {
 // inventory) with a hermetic F < S topology to prove the path
 // is exercised without any stub builders or synthetic values.
 func TestClosureBinaryGateRealProductionHappyPath(t *testing.T) {
-	t.Parallel()
+	// NOT parallel: makes commits to caller repo.
 
 	// Phase 1: Verify caller repo is clean.
 	callerRoot := mustRunGit(t, ".", "rev-parse", "--show-toplevel")
