@@ -221,12 +221,12 @@ CORRECTION12.
 ## TRANSFER
 
 ```text
-POST_BUNDLE        = /tmp/leamas-act03/bundles/leamas-public-v3-reconciled-2026-08-12-d72509c6b049.bundle
-POST_BUNDLE_SHA256 = fd613bae4023c67b563719fc5fe796a1a539d96cd4bb8b3a43f806e8a814a407
+POST_BUNDLE        = /tmp/leamas-act03/bundles/leamas-mac-handoff-2026-08-12-adb13ef4a467.bundle
+POST_BUNDLE_SHA256 = 3d68e8c93b40ac099f76e59c7769b21ef1a5e2bf72e8f916b827b713c23bd2c7
 POST_BUNDLE_VERIFY = PASS
 
 REMOTE_HANDOFF_BRANCH = handoff/mac-2026-08-12
-REMOTE_HANDOFF_SHA    = d72509c6b049cce9a21d0d79be3c9c9c3d7750ab
+REMOTE_HANDOFF_SHA    = adb13ef4a46781bde6bad78b8632568800db2720
 FORCE_PUSH_USED       = false
 ```
 
@@ -254,11 +254,35 @@ the verified post-merge bundle at the path above.
 
 ## FINAL AUTHORITY
 
+The reconciliation produced **two** distinct commits on the
+`reconcile/public-v3-2026-08-12` / `origin/handoff/mac-2026-08-12`
+branch. They must not be conflated:
+
 ```text
-ACTIVE_HEAD    = d72509c6b049cce9a21d0d79be3c9c9c3d7750ab
-ACTIVE_TREE    = f68bdede58159941e828eec799a20c6f07936c8c
-ACTIVE_BRANCH  = reconcile/public-v3-2026-08-12  (also: origin/handoff/mac-2026-08-12)
-READY_FOR_MAC  = true
+RECONCILIATION_COMMIT = d72509c6b049cce9a21d0d79be3c9c9c3d7750ab   (factory: merge origin/main into reconcile/public-v3-2026-08-12)
+RECONCILIATION_TREE   = f68bdede58159941e828eec799a20c6f07936c8c
+  - parents: 8f11c05 (CORRECTION12) + b0e4f9ae (public v3 tip)
+  - this is the SEMANTIC reconciliation commit; it is the
+    commit Mac should verify
+  - the conflict (add/add on dogfood test) is resolved here
+
+FINAL_HANDOFF_HEAD    = adb13ef4a46781bde6bad78b8632568800db2720   (docs: record CORRECTION12-public-v3 reconciliation and REMOTE_AUTHORITY_PREFLIGHT doctrine)
+FINAL_HANDOFF_TREE    = 762b6296e736d3b2888ca1cc5e04f8eb98f107db
+  - this is the FINAL handoff/evidence authority
+  - it is a docs-only fast-forward of d72509c
+  - it contains the close-report, the new doctrine, and the
+    previous close report as committed evidence
+  - it is the current ref of origin/handoff/mac-2026-08-12
+
+ANCESTRY_PROOF:
+  git merge-base --is-ancestor d72509c adb13ef   =>   true
+  (adb13ef is a descendant of d72509c; the docs-only commit
+   preserves the reconciliation result)
+
+ACTIVE_BRANCH         = reconcile/public-v3-2026-08-12
+                        = origin/handoff/mac-2026-08-12
+WORKTREE_CLEAN        = true
+READY_FOR_MAC         = true
 ```
 
 ## FACTORY DOCTRINE
@@ -323,3 +347,54 @@ A future ACT candidate:
 * `CGO_ENABLED=0 make gate-fast` was run; it reports FAIL because of
   42 pre-existing closure failures, all verified to predate the
   CORRECTION12 commit and the merge. This is the honest record.
+
+## AUTHORITY-CORRECTION01 ADDENDUM
+
+After the first commit of this close report (`adb13ef`), an external
+review caught an evidence-authority bookkeeping defect: the report's
+own `FINAL AUTHORITY` and `TRANSFER` sections had been authored
+before the docs-only commit existed, so they still pointed at the
+merge commit `d72509c` rather than the actual final handoff head
+`adb13ef`. The code history was correct (the merge commit is
+ancestor of the docs commit, and the docs commit is a fast-forward
+of the merge), but the committed evidence was one commit stale.
+
+This addendum documents the small correction ACT
+`ACT-LEAMAS-MAC-HANDOFF-AUTHORITY-CORRECTION01` that fixes the
+defect:
+
+1. Re-verified:
+   - `local HEAD = adb13ef4a46781bde6bad78b8632568800db2720`
+   - `origin/handoff/mac-2026-08-12 = adb13ef4a46781bde6bad78b8632568800db2720`
+   - `LOCAL == REMOTE` (no force needed for the next push)
+2. Proved `git merge-base --is-ancestor d72509c adb13ef` returns
+   true, so `adb13ef` is the docs/evidence successor of the
+   reconciliation commit.
+3. Distinguished the two commits explicitly in the
+   `FINAL AUTHORITY` section: `d72509c` is the SEMANTIC
+   reconciliation commit; `adb13ef` is the FINAL handoff/evidence
+   authority.
+4. Updated the `TRANSFER` section so the `POST_BUNDLE`,
+   `POST_BUNDLE_SHA256`, and `REMOTE_HANDOFF_SHA` all point at
+   `adb13ef` and the bundle was regenerated from `adb13ef` and
+   re-verified.
+5. Regenerated the Mac handoff manifest against `adb13ef` and
+   re-pushed via ordinary fast-forward to
+   `origin/handoff/mac-2026-08-12`.
+
+The correction is intentionally a small docs-only commit, NOT a
+rebase, NOT an amend of the prior close-report commit, and NOT a
+force-push.
+
+### Digest independence caveat
+
+The reviewer also noted that the targeted digest for this commit
+range reports `GATE_SUMMARY: source_status=missing /
+overall_status=unavailable`. That is honest: the digest does NOT
+independently carry a canonical `.factory/gate-summary.json`
+artifact for this range. This close report does not claim
+otherwise. The close report's own `FACTORY_GATE=FAIL` line is the
+ground truth from `CGO_ENABLED=0 make gate-fast`, which ran 42
+pre-existing closure tests, failed them, and reported
+`gate-fast=FAIL` honestly. The digest is a structural surface
+check, not an independent gate verdict.
