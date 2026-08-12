@@ -13,7 +13,9 @@ import (
 var (
 	v1SchemaJSON = schema.MustBytes(schema.VersionV1)
 	v2SchemaJSON = schema.MustBytes(schema.VersionV2)
+	v3SchemaJSON = schema.MustBytes(schema.VersionV3)
 
 	v1SchemaID = schema.SchemaIDV1
 	v2SchemaID = schema.SchemaIDV2
+	v3SchemaID = schema.SchemaIDV3
 )

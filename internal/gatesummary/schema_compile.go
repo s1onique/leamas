@@ -7,13 +7,14 @@ import (
 	jsonschema "github.com/santhosh-tekuri/jsonschema/v6"
 )
 
-// compiledSchemas holds the immutable, race-safe compiled v1 and v2
+// compiledSchemas holds the immutable, race-safe compiled v1, v2, and v3
 // schemas. Compilation happens once per process; the result is reused
 // for every Decode call. Bootstrap errors are cached so the decoder
 // fails closed.
 type compiledSchemas struct {
 	v1 *jsonschema.Schema
 	v2 *jsonschema.Schema
+	v3 *jsonschema.Schema
 }
 
 var (
@@ -50,6 +51,10 @@ func compileSchemas() {
 		schemaBootEr = fmt.Errorf("add v2 schema: %w", err)
 		return
 	}
+	if err := c.AddResource(v3SchemaID, jsonBytesToAny(v3SchemaJSON)); err != nil {
+		schemaBootEr = fmt.Errorf("add v3 schema: %w", err)
+		return
+	}
 
 	v1, err := c.Compile(v1SchemaID)
 	if err != nil {
@@ -61,8 +66,13 @@ func compileSchemas() {
 		schemaBootEr = fmt.Errorf("compile v2 schema: %w", err)
 		return
 	}
+	v3, err := c.Compile(v3SchemaID)
+	if err != nil {
+		schemaBootEr = fmt.Errorf("compile v3 schema: %w", err)
+		return
+	}
 
-	schemaSet = &compiledSchemas{v1: v1, v2: v2}
+	schemaSet = &compiledSchemas{v1: v1, v2: v2, v3: v3}
 }
 
 // failClosedLoader rejects any URL that is not one of the embedded

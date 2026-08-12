@@ -152,7 +152,7 @@ func TestRegistryWritePropagatesWriterError(t *testing.T) {
 // touching the destination writer.
 func TestRegistryWriteRejectsUnknownVersion(t *testing.T) {
 	w := &countingWriter{}
-	if err := Write(Version("v3"), w); err == nil {
+	if err := Write(Version("v99"), w); err == nil {
 		t.Fatalf("Write must reject unknown version")
 	} else if !IsUnknownVersion(err) {
 		t.Fatalf("Write error = %v, want *UnknownVersionError", err)

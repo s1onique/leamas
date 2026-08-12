@@ -49,8 +49,16 @@ var normalizationContractCorpus = []normalizationContractCase{
 		Stage:         stageNormalized,
 		SuccessSchema: Version2,
 	},
+	{
+		// v3-minimal: v3 is a strict superset of v2 at the top level;
+		// the normalize stage accepts the v3 wire document without
+		// running the v2-only semantic validators.
+		ID: "GS2-NORM-007a", Fixture: "valid/v3-minimal.json",
+		Stage:         stageNormalized,
+		SuccessSchema: Version3,
+	},
 
-	// invalid/ decode-rejected (20 rows)
+	// invalid/ decode-rejected (19 rows after v3 support landed)
 	{
 		ID: "GS2-NORM-008", Fixture: "invalid/v1-unknown-field.json",
 		Stage: stageDecodeRejected,
@@ -179,13 +187,9 @@ var normalizationContractCorpus = []normalizationContractCase{
 			{Code: CodeUnknownField, Path: "/tool"},
 		},
 	},
-	{
-		ID: "GS2-NORM-026", Fixture: "invalid/v2-unsupported-version-3.json",
-		Stage: stageDecodeRejected,
-		WantDiagnostics: []diagnosticProjection{
-			{Code: CodeUnsupportedVersion, Path: "/schema_version"},
-		},
-	},
+	// Note: schema_version=3 is now a SUPPORTED version. The
+	// GS2-NORM-026 entry that previously exercised
+	// `invalid/v2-unsupported-version-3.json` was retired.
 	{
 		ID: "GS2-NORM-027", Fixture: "invalid/v2-uppercase-oid.json",
 		Stage: stageDecodeRejected,

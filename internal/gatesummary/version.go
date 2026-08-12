@@ -40,6 +40,9 @@ func classifyVersion(tok json.Token) versionDecision {
 		if s == "2" {
 			return versionDecision{version: Version2, raw: s}
 		}
+		if s == "3" {
+			return versionDecision{version: Version3, raw: s}
+		}
 		return versionDecision{code: CodeUnsupportedVersion, raw: s}
 	}
 	return versionDecision{code: CodeInvalidVersionType, raw: ""}

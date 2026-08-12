@@ -22,6 +22,7 @@ func TestCorpusValid(t *testing.T) {
 		{"valid/v2-root-scope.json", "", true},
 		{"valid/v2-clinemm-microc3.json", "", true},
 		{"valid/v2-leamas-self-hosted.json", "", true},
+		{"valid/v3-minimal.json", "", true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
@@ -46,7 +47,8 @@ func TestCorpusStructuralInvalid(t *testing.T) {
 		{"invalid/v2-schema-version-decimal.json", CodeInvalidVersionType, false},
 		{"invalid/v2-schema-version-zero.json", CodeUnsupportedVersion, false},
 		{"invalid/v2-schema-version-negative.json", CodeUnsupportedVersion, false},
-		{"invalid/v2-unsupported-version-3.json", CodeUnsupportedVersion, false},
+		// Note: schema_version=3 is now a SUPPORTED version (v3).
+		// See corpus_test.go for the new v3 valid fixture entry.
 		{"invalid/v2-empty-generated-at.json", CodeInvalidTimestamp, false},
 		{"invalid/v2-invalid-timestamp.json", CodeInvalidTimestamp, false},
 		{"invalid/v2-missing-execution-head-oid.json", CodeRequiredFieldMissing, false},
@@ -156,16 +158,21 @@ func TestCorpusLimitShape(t *testing.T) {
 
 func TestCorpusCounts(t *testing.T) {
 	// The corpus must contain exactly 41 committed JSON fixtures.
+	// After v3 support landed:
+	//   valid/    = 8 (7 v1/v2 + 1 v3)
+	//   invalid/  = 27 (one v3-as-unsupported fixture deleted)
+	//   duplicate-keys/ = 3
+	//   limits/   = 3
 	matches, err := filepath.Glob("testdata/valid/*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(matches); got != 7 {
-		t.Errorf("valid fixtures: got %d, want 7", got)
+	if got := len(matches); got != 8 {
+		t.Errorf("valid fixtures: got %d, want 8", got)
 	}
 	matches, _ = filepath.Glob("testdata/invalid/*.json")
-	if got := len(matches); got != 28 {
-		t.Errorf("invalid fixtures: got %d, want 28", got)
+	if got := len(matches); got != 27 {
+		t.Errorf("invalid fixtures: got %d, want 27", got)
 	}
 	matches, _ = filepath.Glob("testdata/duplicate-keys/*.json")
 	if got := len(matches); got != 3 {

@@ -114,6 +114,8 @@ func decodeWithDependencies(r io.Reader, trace *decodeTrace, deps decodeDependen
 		selected = set.v1
 	case Version2:
 		selected = set.v2
+	case Version3:
+		selected = set.v3
 	}
 	markSchemaInvoked(trace)
 	validationErr := deps.validate(selected, data)
@@ -163,6 +165,8 @@ func versionFromString(s string) Version {
 		return Version1
 	case "2":
 		return Version2
+	case "3":
+		return Version3
 	}
 	return 0
 }

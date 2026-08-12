@@ -109,7 +109,8 @@ var structuralInvalidV2 = []string{
 	"v2-schema-version-string.json",
 	"v2-schema-version-zero.json",
 	"v2-unknown-field.json",
-	"v2-unsupported-version-3.json",
+	// Note: v3 is now a SUPPORTED version. The
+	// "v2-unsupported-version-3.json" fixture was retired.
 	"v2-uppercase-oid.json",
 }
 

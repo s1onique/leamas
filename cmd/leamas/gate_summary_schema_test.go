@@ -46,7 +46,8 @@ func TestCLISchemaListExactBytes(t *testing.T) {
 	}
 	want := "VERSION  STATUS     SCHEMA_ID\n" +
 		"v1       supported  urn:leamas:gate-summary:v1\n" +
-		"v2       current    urn:leamas:gate-summary:v2\n"
+		"v2       supported  urn:leamas:gate-summary:v2\n" +
+		"v3       current    urn:indeep:factory:gate-summary:v3\n"
 	if stdout != want {
 		t.Fatalf("list output mismatch.\nWANT:\n%s\nGOT:\n%s", want, stdout)
 	}
@@ -120,15 +121,15 @@ func TestCLIListWritesNothingToStderr(t *testing.T) {
 // TestCLIUnknownVersionFails asserts that an unknown version produces
 // a non-zero exit code and a diagnostic on stderr.
 func TestCLIUnknownVersionFails(t *testing.T) {
-	code, stdout, stderr := runCLI([]string{"show", "v3"})
+	code, stdout, stderr := runCLI([]string{"show", "v99"})
 	if code == 0 {
 		t.Fatalf("unknown version must exit non-zero; got %d", code)
 	}
 	if stdout != "" {
 		t.Fatalf("unknown version must not write stdout; got %q", stdout)
 	}
-	if !strings.Contains(stderr, "v3") {
-		t.Fatalf("unknown-version diagnostic must mention 'v3'; got %q", stderr)
+	if !strings.Contains(stderr, "v99") {
+		t.Fatalf("unknown-version diagnostic must mention 'v99'; got %q", stderr)
 	}
 }
 

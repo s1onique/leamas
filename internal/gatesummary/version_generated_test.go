@@ -79,13 +79,16 @@ func TestVersionGeneratedDecimalExponent(t *testing.T) {
 }
 
 func TestVersionGeneratedUnsupportedInteger(t *testing.T) {
+	// Note: "3" is no longer in the unsupported-integer set. Schema
+	// version 3 is the InDeep Factory Gate Summary v3 wire format
+	// and is dispatched as Version3.
 	lexemes := []string{
-		"-2", "-1", "-0", "0", "3", "4",
+		"-2", "-1", "-0", "0", "4",
 		"99999999999999999999", "-99999999999999999999",
 	}
 	count := runRejectedVersionMatrix(t, lexemes, CodeUnsupportedVersion, stageVersionDispatch)
-	if count != 16 {
-		t.Errorf("expected 16 unsupported-integer executions, got %d", count)
+	if count != 14 {
+		t.Errorf("expected 14 unsupported-integer executions, got %d", count)
 	}
 }
 

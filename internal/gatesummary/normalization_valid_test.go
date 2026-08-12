@@ -246,9 +246,14 @@ func TestNormalizationCorpus(t *testing.T) {
 	t.Logf("limit-shape fixtures: %d (decode-only templates)", limitsCount)
 	t.Logf("total = %d", validCount+invalidDecodeCount+invalidNormalizeCount+duplicateKeyCount+limitsCount)
 
-	// Verify expected counts
-	if validCount != 7 {
-		t.Errorf("expected 7 valid fixtures, got %d", validCount)
+	// Verify expected counts.
+	// After v3 support landed:
+	//   validCount     = 8 (7 v1/v2 valid + 1 v3 valid)
+	//   invalidDecode  = 19 (one v3-as-unsupported fixture retired)
+	//   duplicateKey   = 3
+	//   limits         = 3
+	if validCount != 8 {
+		t.Errorf("expected 8 valid fixtures, got %d", validCount)
 	}
 	if duplicateKeyCount != 3 {
 		t.Errorf("expected 3 duplicate-key fixtures, got %d", duplicateKeyCount)

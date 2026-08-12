@@ -81,7 +81,8 @@ func TestSubprocessSchemaList(t *testing.T) {
 	}
 	want := "VERSION  STATUS     SCHEMA_ID\n" +
 		"v1       supported  urn:leamas:gate-summary:v1\n" +
-		"v2       current    urn:leamas:gate-summary:v2\n"
+		"v2       supported  urn:leamas:gate-summary:v2\n" +
+		"v3       current    urn:indeep:factory:gate-summary:v3\n"
 	if stdout != want {
 		t.Fatalf("subprocess list output mismatch.\nWANT:\n%s\nGOT:\n%s", want, stdout)
 	}
@@ -128,15 +129,15 @@ func TestSubprocessSchemaShowV2(t *testing.T) {
 // diagnostic on stderr.
 func TestSubprocessSchemaUnknownVersion(t *testing.T) {
 	bin := buildLeamasForTest(t)
-	stdout, stderr, err := runLeamas(t, bin, "gate-summary", "schema", "show", "v3")
+	stdout, stderr, err := runLeamas(t, bin, "gate-summary", "schema", "show", "v99")
 	if err == nil {
 		t.Fatalf("unknown version must exit non-zero")
 	}
 	if stdout != "" {
 		t.Fatalf("unknown version must not write stdout; got %q", stdout)
 	}
-	if !strings.Contains(stderr, "v3") {
-		t.Fatalf("unknown-version diagnostic must mention 'v3'; got %q", stderr)
+	if !strings.Contains(stderr, "v99") {
+		t.Fatalf("unknown-version diagnostic must mention 'v99'; got %q", stderr)
 	}
 }
 

@@ -20,6 +20,7 @@ type corpusStageCase struct {
 
 func TestCorpusStageEvidence(t *testing.T) {
 	cases := corpusStageCases()
+	// 7 v1/v2 valid + 1 v3 valid + 27 invalid + 3 dup-key + 3 limit-shape = 41.
 	if len(cases) != 41 {
 		t.Fatalf("stage matrix has %d fixtures, want 41", len(cases))
 	}
@@ -55,6 +56,7 @@ func corpusStageCases() []corpusStageCase {
 		acceptFixture("valid/v2-root-scope.json", Version2),
 		acceptFixture("valid/v2-clinemm-microc3.json", Version2),
 		acceptFixture("valid/v2-leamas-self-hosted.json", Version2),
+		acceptFixture("valid/v3-minimal.json", Version3),
 
 		schemaFixture("invalid/v1-unknown-field.json", Version1, CodeUnknownField,
 			"/scope_id", "/scope_status"),
@@ -63,7 +65,8 @@ func corpusStageCases() []corpusStageCase {
 		versionFixture("invalid/v2-schema-version-decimal.json", stageVersionProbe, CodeInvalidVersionType),
 		versionFixture("invalid/v2-schema-version-zero.json", stageVersionDispatch, CodeUnsupportedVersion),
 		versionFixture("invalid/v2-schema-version-negative.json", stageVersionDispatch, CodeUnsupportedVersion),
-		versionFixture("invalid/v2-unsupported-version-3.json", stageVersionDispatch, CodeUnsupportedVersion),
+		// Note: schema_version=3 is now SUPPORTED. The v3 fixture
+		// (valid/v3-minimal.json) is exercised by TestCorpusValid.
 		schemaFixture("invalid/v2-empty-generated-at.json", Version2, CodeInvalidTimestamp,
 			"/generated_at"),
 		schemaFixture("invalid/v2-invalid-timestamp.json", Version2, CodeInvalidTimestamp,
