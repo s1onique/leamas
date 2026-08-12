@@ -147,15 +147,58 @@ func r6BStubBuildFn(t *testing.T) func(context.Context, ExactSubjectBinaryReques
 }
 
 // makeFakeBinaryBuilderWithCommit returns a BuildFn that
-// reports the supplied binary commit OID. The umbrellas use
-// this to construct a B1 result whose BinaryCommit is
-// explicitly different from the subject commit so the
-// "wrong B1 identity" failure row can assert the run fails
-// closed. The SourceCommit and SourceTree are intentionally
-// pinned to the request so the B2 predicates can match
-// (or not match) on the wrong-binary failure row.
-func makeFakeBinaryBuilderWithCommit(binaryPath, binaryCommit string) func(context.Context, ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
+// writes a stub binary to the request's OutputRoot so the
+// B2 BinaryAuthority matches the on-disk content. The
+// function is used by run-scoped tests that need independent
+// binary paths per run. For "wrong B1 identity" tests,
+// use makeFakeBinaryBuilderWithWrongCommit instead.
+func makeFakeBinaryBuilderWithCommit(binaryPath, _ string) func(context.Context, ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
 	return func(_ context.Context, req ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
+		if err := os.MkdirAll(req.OutputRoot, 0o755); err != nil {
+			return ExactSubjectBinaryResult{}, err
+		}
+		actualPath := binaryPath
+		if actualPath == "" {
+			actualPath = filepath.Join(req.OutputRoot, req.OutputName)
+			if err := os.WriteFile(actualPath, []byte("stub binary\n"), 0o755); err != nil {
+				return ExactSubjectBinaryResult{}, err
+			}
+		}
+		data, err := os.ReadFile(actualPath)
+		if err != nil {
+			return ExactSubjectBinaryResult{}, err
+		}
+		sum := sha256.Sum256(data)
+		return ExactSubjectBinaryResult{
+			BinaryPath:                actualPath,
+			BinarySHA256:              hex.EncodeToString(sum[:]),
+			BinaryCommit:              req.SubjectCommit,
+			BinaryModified:            false,
+			SourceCommit:              req.SubjectCommit,
+			SourceTree:                req.SubjectTree,
+			SourceClean:               true,
+			SourceDetached:            true,
+			OutputOutsideAllWorktrees: true,
+			Executable:                true,
+		}, nil
+	}
+}
+
+// makeFakeBinaryBuilderWithWrongCommit returns a BuildFn that
+// reports a BinaryCommit explicitly different from the subject
+// commit so the "wrong B1 identity" failure row can assert the
+// run fails closed. The mismatch is the only purpose of this
+// builder; the SourceCommit and SourceTree are pinned to the
+// request.
+func makeFakeBinaryBuilderWithWrongCommit(wrongCommit string) func(context.Context, ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
+	return func(_ context.Context, req ExactSubjectBinaryRequest) (ExactSubjectBinaryResult, error) {
+		if err := os.MkdirAll(req.OutputRoot, 0o755); err != nil {
+			return ExactSubjectBinaryResult{}, err
+		}
+		binaryPath := filepath.Join(req.OutputRoot, req.OutputName)
+		if err := os.WriteFile(binaryPath, []byte("wrong binary\n"), 0o755); err != nil {
+			return ExactSubjectBinaryResult{}, err
+		}
 		data, err := os.ReadFile(binaryPath)
 		if err != nil {
 			return ExactSubjectBinaryResult{}, err
@@ -164,7 +207,7 @@ func makeFakeBinaryBuilderWithCommit(binaryPath, binaryCommit string) func(conte
 		return ExactSubjectBinaryResult{
 			BinaryPath:                binaryPath,
 			BinarySHA256:              hex.EncodeToString(sum[:]),
-			BinaryCommit:              binaryCommit,
+			BinaryCommit:              wrongCommit,
 			BinaryModified:            false,
 			SourceCommit:              req.SubjectCommit,
 			SourceTree:                req.SubjectTree,

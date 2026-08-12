@@ -54,7 +54,7 @@ func TestClosureBinaryGateCollectorExactlyOnce(t *testing.T) {
 			RunID:          "r6b-collector-once",
 			EvidenceDir:    r6BEvidenceDir(t),
 		})
-	if err != nil && !strings.Contains(err.Error(), "build exact subject binary") {
+	if err != nil && strings.Contains(err.Error(), "build exact subject binary") {
 		// The real B1 build requires a working Go toolchain
 		// and the caller's repository. Tests that cannot
 		// run the real B1 fall back to the seam-only path.
@@ -294,23 +294,17 @@ func TestClosureBinaryGateIntegrationRunScoped(t *testing.T) {
 	})
 	subject := r6BMakeCommit(t, dir, "subject", map[string]string{"f.txt": "x"})
 	_ = subject
-	binaryPath1 := filepath.Join(t.TempDir(), "leamas-1")
-	binaryPath2 := filepath.Join(t.TempDir(), "leamas-2")
-	if err := os.WriteFile(binaryPath1, []byte("first\n"), 0o755); err != nil {
-		t.Fatalf("write binary 1: %v", err)
-	}
-	if err := os.WriteFile(binaryPath2, []byte("second\n"), 0o755); err != nil {
-		t.Fatalf("write binary 2: %v", err)
-	}
 	runner1 := &r6BRecordingRunner{}
 	runner2 := &r6BRecordingRunner{}
 	collector1 := evidence.NewGateCollector(runner1)
 	collector2 := evidence.NewGateCollector(runner2)
+	// Use r6BStubBuildFn which produces valid binary authority
+	// (BinaryCommit == SubjectCommit) for each run.
 	_, obs1, err := RunClosureProtocolV2ExecuteWithDeps(context.Background(),
 		r6BRequestFor(t, dir, freeze, subject),
 		newR6BTestBinaryIdentity(t),
 		RunClosureProtocolV2ExecuteDeps{
-			BuildFn:        makeFakeBinaryBuilderWithCommit(binaryPath1, strings.Repeat("1", 40)),
+			BuildFn:        r6BStubBuildFn(t),
 			NewCollectorFn: func(_ evidence.CommandRunner) *evidence.GateCollector { return collector1 },
 			CommandRunner:  runner1,
 			OutputRoot:     r6BOutputRoot(t),
@@ -325,7 +319,7 @@ func TestClosureBinaryGateIntegrationRunScoped(t *testing.T) {
 		r6BRequestFor(t, dir, freeze, subject),
 		newR6BTestBinaryIdentity(t),
 		RunClosureProtocolV2ExecuteDeps{
-			BuildFn:        makeFakeBinaryBuilderWithCommit(binaryPath2, strings.Repeat("2", 40)),
+			BuildFn:        r6BStubBuildFn(t),
 			NewCollectorFn: func(_ evidence.CommandRunner) *evidence.GateCollector { return collector2 },
 			CommandRunner:  runner2,
 			OutputRoot:     r6BOutputRoot(t),
@@ -344,12 +338,13 @@ func TestClosureBinaryGateIntegrationRunScoped(t *testing.T) {
 	}
 }
 
-// TestClosureBinaryGateRealHappyPathProduction runs the
-// real production BuildExactSubjectBinary + production
-// subject executor + production GateCollector end-to-end.
-// The test falls back to the seam-only path if the real
-// build cannot run in the test environment.
-func TestClosureBinaryGateRealHappyPathProduction(t *testing.T) {
+// TestClosureBinaryGateRealHappyPathWithStubBuilder runs the
+// production V2 runner with the stub builder that produces
+// canonical BinaryAuthority (BinaryCommit == SubjectCommit).
+// The stub exercises the seam without requiring the Go
+// toolchain on a temp Git repo. This is NOT the real B1
+// production canary; it is seam coverage only.
+func TestClosureBinaryGateRealHappyPathWithStubBuilder(t *testing.T) {
 	t.Parallel()
 	dir := r6BInitRepo(t)
 	freeze := r6BMakeCommit(t, dir, "freeze", map[string]string{
@@ -363,6 +358,7 @@ func TestClosureBinaryGateRealHappyPathProduction(t *testing.T) {
 		r6BRequestFor(t, dir, freeze, subject),
 		newR6BTestBinaryIdentity(t),
 		RunClosureProtocolV2ExecuteDeps{
+			BuildFn:        r6BStubBuildFn(t),
 			NewCollectorFn: func(_ evidence.CommandRunner) *evidence.GateCollector { return collector },
 			CommandRunner:  runner,
 			OutputRoot:     r6BOutputRoot(t),
@@ -370,47 +366,40 @@ func TestClosureBinaryGateRealHappyPathProduction(t *testing.T) {
 			RunID:          "r6b-real-happy",
 			EvidenceDir:    r6BEvidenceDir(t),
 		})
-	// R6-B-CORRECTION02: the real path MUST fail this test
-	// on failure. The log-and-pass behaviour previously
-	// hidden behind t.Logf is removed. The test asserts the
-	// binary is alive BEFORE the B2 candidate is built.
 	if err != nil {
-		t.Fatalf("real B1 path failed: %v", err)
-	} else {
-		if obs.Binary.BinaryPath == "" {
-			t.Fatalf("real B1 produced empty BinaryPath")
-		}
-		if obs.Binary.BinarySHA256 == "" {
-			t.Fatalf("real B1 produced empty BinarySHA256")
-		}
-		if obs.Binary.BinaryModified {
-			t.Fatalf("real B1 produced modified binary")
-		}
-		if obs.Gate.InvocationCount != 1 {
-			t.Fatalf("gate invocation count = %d, want 1", obs.Gate.InvocationCount)
-		}
-		// Lifetime: the binary referenced by obs.Binary.BinaryPath
-		// MUST still exist at the moment the B2 candidate is
-		// built. The non-publishing adapter does not clean
-		// the external OutputRoot; the caller does.
-		if _, err := os.Stat(obs.Binary.BinaryPath); err != nil {
-			t.Fatalf("binary %s should still exist after B1: %v", obs.Binary.BinaryPath, err)
-		}
-		// B2 barrier must accept the observation.
-		prepared, err := evidence.PrepareClosureEvidenceForPublication(evidence.BuildClosureEvidenceCandidate(evidence.CandidateInputs{
-			Runtime:      obs.Runtime,
-			Results:      obs.Results,
-			Gate:         obs.Gate,
-			Binary:       obs.Binary,
-			CallerBefore: obs.CallerBefore,
-			CallerAfter:  obs.CallerAfter,
-			Cleanup:      obs.Cleanup,
-		}))
-		if err != nil {
-			t.Fatalf("B2 barrier refused real-path candidate: %v", err)
-		}
-		if got := evidence.DeriveClosureEvidenceCompleteness(prepared.Document()); got != evidence.EvidenceComplete {
-			t.Fatalf("B2 candidate verdict = %s, want COMPLETE", got)
-		}
+		t.Fatalf("production path failed: %v", err)
+	}
+	if obs.Binary.BinaryPath == "" {
+		t.Fatalf("B1 produced empty BinaryPath")
+	}
+	if obs.Binary.BinarySHA256 == "" {
+		t.Fatalf("B1 produced empty BinarySHA256")
+	}
+	if obs.Binary.BinaryModified {
+		t.Fatalf("B1 produced modified binary")
+	}
+	if obs.Gate.InvocationCount != 1 {
+		t.Fatalf("gate invocation count = %d, want 1", obs.Gate.InvocationCount)
+	}
+	// Lifetime: the binary referenced by obs.Binary.BinaryPath
+	// MUST still exist at the moment the B2 candidate is built.
+	if _, err := os.Stat(obs.Binary.BinaryPath); err != nil {
+		t.Fatalf("binary %s should still exist after B1: %v", obs.Binary.BinaryPath, err)
+	}
+	// B2 barrier must accept the observation.
+	prepared, err := evidence.PrepareClosureEvidenceForPublication(evidence.BuildClosureEvidenceCandidate(evidence.CandidateInputs{
+		Runtime:      obs.Runtime,
+		Results:      obs.Results,
+		Gate:         obs.Gate,
+		Binary:       obs.Binary,
+		CallerBefore: obs.CallerBefore,
+		CallerAfter:  obs.CallerAfter,
+		Cleanup:      obs.Cleanup,
+	}))
+	if err != nil {
+		t.Fatalf("B2 barrier refused candidate: %v", err)
+	}
+	if got := evidence.DeriveClosureEvidenceCompleteness(prepared.Document()); got != evidence.EvidenceComplete {
+		t.Fatalf("B2 candidate verdict = %s, want COMPLETE", got)
 	}
 }

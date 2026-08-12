@@ -91,12 +91,8 @@ func r6BMatrixRows() []r6BMatrixRow {
 			name:  "02_wrong_b1_identity",
 			owner: ownerBinaryAuthority,
 			setup: func(t *testing.T, dir, freeze, subject string) RunClosureProtocolV2ExecuteDeps {
-				binaryPath := filepath.Join(t.TempDir(), "leamas-wrong-identity")
-				if err := os.WriteFile(binaryPath, []byte("wrong\n"), 0o755); err != nil {
-					t.Fatalf("write binary: %v", err)
-				}
 				return RunClosureProtocolV2ExecuteDeps{
-					BuildFn: makeFakeBinaryBuilderWithCommit(binaryPath, strings.Repeat("0", 40)),
+					BuildFn: makeFakeBinaryBuilderWithWrongCommit(strings.Repeat("0", 40)),
 				}
 			},
 			expectCode:    V2CodeR6BBinaryAuthorityInvalid,
