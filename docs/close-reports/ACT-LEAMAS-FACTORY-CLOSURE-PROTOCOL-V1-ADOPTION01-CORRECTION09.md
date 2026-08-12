@@ -1,81 +1,108 @@
-# Close Report: ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-ADOPTION01-CORRECTION09
+# ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-ADOPTION01-CORRECTION09 Close Report
 
-## Summary
+**Status: PARTIAL**
 
-CORRECTION09 produces reviewable committed-range evidence covering the CORRECTION07 and CORRECTION08 implementation, tests, and verification with Closure Protocol V1 identities.
+## Intent
 
-## Implementation Range
+Prove the R6-B production path with a real canary test that verifies:
+- Real B1 binary built from subject source
+- Real GateCollector invoked exactly once
+- Real factory gate execution
+- B2 completeness predicate on real observation
 
-| Identity | Commit |
-|----------|--------|
-| BASE | c9944bf14defdc494fa029c423edbcda8186ac4a |
-| CORRECTION07 | 254c05f1a69caea7f06f66eb01c4d775beefa45b |
-| CORRECTION08 | 43dd25446505a7b228086db43dd11dcb3dbbced0 |
-| Subject (HEAD) | 9276bce (whitespace fix) |
+## What Was Committed
 
-Verified ordering: C07 is ancestor of C08.
+File: `internal/factory/closure/binary_gate_real_canary_test.go`
+
+Test: `TestClosureBinaryGateRealCommandRunner`
+
+## Verdict: PARTIAL
+
+The committed test is **NOT** a real production canary. It proves the **stub seam**, not the real production authority chain.
+
+### P0-1 — Falls Back to Stubbed Build
+
+```go
+if err != nil && strings.Contains(err.Error(), "build exact subject binary") {
+    _, obs, err = RunClosureProtocolV2ExecuteWithDeps(...,
+        BuildFn: r6BStubBuildFn(t),  // STUB
+    )
+}
+```
+
+This explicitly violates the CORRECTION09 requirement:
+- `REAL_CANARY_BUILD_FALLBACK=false` → ACTUALLY: `true`
+- `REAL_B1_EXECUTED=true` → ACTUALLY: `false`
+
+### P0-2 — Uses Recording Fake Runner
+
+```go
+runner := &r6BRecordingRunner{}  // NOT real OsRunner
+collector := evidence.NewGateCollector(runner)
+```
+
+This proves collector wiring and call count, not that `./bin/leamas factory gate --lane=fast` actually ran.
+
+### P0-3 — S-Worktree Proof Removed
+
+The previous version contained worktree HEAD verification that was removed.
+
+### P0-4 — B2 Proof Over Synthetic Observation
+
+Because `obs.Binary` may come from `r6BStubBuildFn` and `obs.Gate` from a collector backed by `r6BRecordingRunner`, the B2 proof does not establish that a real R6-B success reaches B2 COMPLETE.
+
+## What CORRECTION09 Actually Proves
+
+```
+CORRECTION09_STATUS=PARTIAL
+
+TEST_FILE_COMMITTED=true
+COLLECTOR_WRAPPER_CALLS_ONCE=true
+OBS_GATE_INVOCATION_COUNT=1
+
+STUB_B1_AUTHORITY_ASSERTIONS=true
+B2_STRUCTURAL_COMPLETENESS_FROM_STUBBED_OBSERVATION=true
+RUNTIME_SUBJECT_IDENTITY_FIELDS_BOUND=true
+
+REAL_B1_EXECUTED=false
+REAL_CANARY_BUILD_FALLBACK=true
+
+REAL_COMMAND_RUNNER_USED=false
+REAL_FAST_GATE_EXECUTED=false
+
+PRODUCTION_SUBJECT_WORKTREE_PROVED=false
+REAL_FAST_GATE_SUBJECT_IS_S=false
+
+REAL_R6B_SUCCESS_REACHES_B2_COMPLETE=false
+```
+
+## Digest
+
+```
+81f91b55..02c8ef8 AUTHORITY_STATUS=CleanCommitted
+```
 
 ## Files Changed
 
-| File | Change |
-|------|--------|
-| `cmd/leamas/factory_close.go` | Format-aware validation, sibling temp file |
-| `internal/factory/closure/chain.go` | Format-aware ValidateAttestation |
-| `internal/factory/closure/validation.go` | Manifest mandatory, exact tree comparisons |
-| `internal/factory/closure/attestation_test.go` | Complete chain_validity objects |
+- `internal/factory/closure/binary_gate_real_canary_test.go` (137 lines added)
 
-Close reports:
-- `docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-ADOPTION01-CORRECTION07.md`
-- `docs/close-reports/ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V1-ADOPTION01-CORRECTION08.md`
+## Required But Not Run
 
-## Changeset Summary
+Per ACT acceptance criteria:
+- Full closure package test suite with race detection
+- `.factory/gate-summary.json` not produced
 
-```
- cmd/leamas/factory_close.go                        |  10 +-
- internal/factory/closure/attestation_test.go        |  50 +-
- internal/factory/closure/chain.go                  |  62 +-
- internal/factory/closure/validation.go             |   9 +-
- 4 files changed, 121 insertions(+), 68 deletions(-)
-```
+## Next ACT: CORRECTION10
 
-## Behavior Implemented
+CORRECTION09 established that the stub seam test is valuable but insufficient. CORRECTION10 must:
 
-### CORRECTION07: Closure Protocol V1 Authority Gaps
-- Exact manifest tree identity comparisons (F_TREE, S_TREE)
-- Plan path, blob OID, and SHA-256 binding to Git
-- All chain-validity assertions required (8 fields)
-- No-self-reference required (8 indicators)
-- Sibling temp file for atomic output
-
-### CORRECTION08: Mandatory Manifest & Format-Aware Validation
-- VerifyChain requires non-nil manifest (fail closed)
-- ValidateAttestation requires format parameter (SHA-1/SHA-256)
-- CLI detects repository format for validation
-- All OID validations format-aware
-
-## Verification Results
-
-| Command | Result |
-|---------|--------|
-| `git diff --check` | No whitespace errors |
-| `go test ./internal/factory/closure/...` | PASS |
-| `make gate-fast` | PASS |
-
-## Acceptance Criteria
-
-| # | Criterion | Status |
-|-:|-----------|--------|
-| 1 | Digest covers CORRECTION07 and CORRECTION08 range. | PASS |
-| 2 | Production and test files in changeset. | PASS |
-| 3 | Reports, diff, digest agree. | PASS |
-| 4 | CLI positive/negative flows covered. | PASS |
-| 5 | Manifest blob, digest, tree fields mandatory. | PASS |
-| 6 | Immutable plan bytes generate no-self-reference. | PASS |
-| 7 | SHA-1 and SHA-256 flows pass. | PASS |
-| 8 | Gate evidence regenerated against exact S. | PASS |
-| 9 | Generated attestation records C and tag identity. | PASS |
-| 10 | Evidence from clean, published, committed range. | PASS |
-
-## Successor
-
-`ACT-LEAMAS-GATE-FAST-LONG-EXECUTION-BOUNDARY-CORRECTION01`
+1. Run `TestClosureExactSubjectBinaryAuthority` on clean HEAD 02c8ef8 first
+2. No edits before that baseline
+3. If PASS: build a real-canary fixture from a local clone/full source tree
+4. No BuildFn injection
+5. No r6BRecordingRunner
+6. Let production choose BuildExactSubjectBinary + real OsRunner
+7. Assert actual S worktree HEAD/tree
+8. Assert actual factory gate --lane=fast execution
+9. Feed resulting observation to unchanged B2
+10. Only then set R6_B=PASS
