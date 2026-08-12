@@ -293,7 +293,7 @@ func TestCheckRepo_CheckpointDistinguished(t *testing.T) {
 	t.Run("unguarded_commit_in_prose_fails", func(t *testing.T) {
 		tmp := t.TempDir()
 		bad := strings.ReplaceAll(validAgentsMD(),
-			"Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.",
+			"Successful tests do not imply commit authority. Commit only when the ACT delegates this kind of action.",
 			"Editor checkpoints imply commit authority.\n\nCommit completed work.")
 		writeFixture(t, tmp, "AGENTS.md", bad)
 		writeFixture(t, tmp, filepath.Join(".clinerules", "leamas.md"), validClineMD())

@@ -25,12 +25,12 @@ import "strings"
 // splitIntoUnits splits a paragraph into normative sentence/clause
 // units. Hard boundaries are:
 //
-//   .   at end-of-input, OR followed by whitespace. NOT a boundary
-//       when the dot is followed by alphanumeric characters (file
-//       extension, version).
-//   !   always a boundary.
-//   ?   always a boundary.
-//   ;   always a boundary.
+//	.   at end-of-input, OR followed by whitespace. NOT a boundary
+//	    when the dot is followed by alphanumeric characters (file
+//	    extension, version).
+//	!   always a boundary.
+//	?   always a boundary.
+//	;   always a boundary.
 func splitIntoUnits(paragraph string) []string {
 	if paragraph == "" {
 		return nil

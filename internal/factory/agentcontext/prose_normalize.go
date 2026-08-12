@@ -50,8 +50,10 @@ func stripContractBlock(content string) string {
 }
 
 // stripBacktickDelimiters removes backtick delimiters from inline
-// code spans while PRESERVING the wrapped content. `Run `make gate``.
-// becomes "Run make gate." (backticks gone, content retained).
+// code spans while PRESERVING the wrapped content.
+// Example: Run `make gate` after implementation.
+//
+//	becomes Run make gate after implementation.
 func stripBacktickDelimiters(content string) string {
 	var sb strings.Builder
 	sb.Grow(len(content))

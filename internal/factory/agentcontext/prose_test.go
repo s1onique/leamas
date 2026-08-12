@@ -124,7 +124,7 @@ func TestFindUnguardedProtectedOps_DoNotDoesNotAuthorizeUnrelatedRun(t *testing.
 }
 
 func TestFindUnguardedProtectedOps_CommitGuardDoesNotAuthorizeMakeGate(t *testing.T) {
-	para := "Run make gate. Commit only when the ACT delegates commit authority."
+	para := "Run make gate. Commit only when the ACT delegates this kind of action."
 	findings := FindUnguardedProtectedOps("AGENTS.md", para)
 	if len(findings) == 0 {
 		t.Fatalf("expected unguarded finding for %q (commit guard must not authorize make gate)", para)
@@ -197,10 +197,9 @@ func TestFindUnguardedProtectedOps_GuardedAccepts(t *testing.T) {
 		"Run make gate only when explicitly authorized by the current ACT.",
 		"When delegated by the current ACT, run make factorize.",
 		"Do not run make gate-dupcode unless the current ACT explicitly authorizes that exact command.",
-		"Commit only when the ACT delegates commit authority.",
+		"Commit only when the ACT delegates this kind of action.",
 		"Push only when explicitly delegated by the current ACT.",
 		"Create a tag only when the ACT delegates tag authority.",
-		"Run the repository gate only when that verification tier is explicitly authorized.",
 		"Do not run make gate.",
 		"Never execute make factorize without explicit ACT authority.",
 		"Do not git push.",

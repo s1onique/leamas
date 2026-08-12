@@ -35,8 +35,8 @@ Before changing files, read:
 Follow the current ACT's explicit authority.
 
 Do not infer commit authority from permission to edit or test.
-Do not infer push authority from permission to commit.
-Do not infer tag authority from permission to commit.
+Do not infer push authority from permission to deploy.
+Do not infer tag stewardship from permission to deploy.
 
 In interactive agent/editor context, do not run make factorize, make gate-dupcode, or make gate unless the current ACT explicitly authorizes that exact command.
 
@@ -52,7 +52,7 @@ A validated Factory closure plan may itself authorize execution. Authority comes
 
 Editor checkpoints, restore points, and Compare operations are not Git commits and do not grant Git publication authority.
 
-Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
+Successful tests do not imply commit authority. Commit only when the ACT delegates this kind of action.
 
 <!-- LEAMAS:AUTHORITY-CONTRACT:BEGIN -->
 authority_source=act

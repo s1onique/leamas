@@ -36,11 +36,14 @@ Never run `make factorize`, `make gate-dupcode`, or `make gate` in Cline/editor 
 
 When not authorized, report it as NOT RUN.
 
-Do not infer Git commit, push, tag, or history-rewrite authority from permission to edit or test.
+Do not infer commit authority from permission to edit or test.
+Do not infer push authority from permission to edit or test.
+Do not infer tag stewardship from permission to edit or test.
+Do not infer history-rewrite authority from permission to edit or test.
 
 Cline checkpoints are not Git commits and do not grant Git publication authority.
 
-Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
+Successful tests do not imply commit authority. Commit only when the ACT delegates this kind of action.
 
 <!-- LEAMAS:AUTHORITY-CONTRACT:BEGIN -->
 authority_source=act

@@ -18,9 +18,9 @@ import "strings"
 type AuthoritySource string
 
 const (
-	AuthorityNone           AuthoritySource = ""
-	AuthorityCurrentACT      AuthoritySource = "current_act"
-	AuthorityValidatedPlan   AuthoritySource = "validated_frozen_plan"
+	AuthorityNone          AuthoritySource = ""
+	AuthorityCurrentACT    AuthoritySource = "current_act"
+	AuthorityValidatedPlan AuthoritySource = "validated_frozen_plan"
 )
 
 // GuardPhrase is a single authoritative guard phrase. The Source

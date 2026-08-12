@@ -50,7 +50,7 @@ var imperativePrefixes = []string{
 var (
 	beforePrefixPattern = regexp.MustCompile(`(?i)^before\s+[^,]+,\s+`)
 	afterPrefixPattern  = regexp.MustCompile(`(?i)^after\s+[^,]+,\s+`)
-	forPrefixPattern   = regexp.MustCompile(`(?i)^for\s+[^,]+,\s+`)
+	forPrefixPattern    = regexp.MustCompile(`(?i)^for\s+[^,]+,\s+`)
 )
 
 // stripDirectivePrefix strips a single bounded directive prefix from

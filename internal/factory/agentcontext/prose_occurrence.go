@@ -75,8 +75,8 @@ func formMatchesAtRange(lowerUnit string, form string, start int) bool {
 func findProtectedOccurrences(lowerUnit string) []ProtectedOccurrence {
 	// Collect all candidate matches, then resolve overlaps.
 	type candidate struct {
-		op   ProtectedOpKind
-		form string
+		op    ProtectedOpKind
+		form  string
 		start int
 		end   int
 	}

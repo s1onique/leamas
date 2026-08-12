@@ -39,15 +39,15 @@ import (
 type ProtectedOpKind string
 
 const (
-	OpMakeFactorize  ProtectedOpKind = "make_factorize"
+	OpMakeFactorize   ProtectedOpKind = "make_factorize"
 	OpMakeGateDupcode ProtectedOpKind = "make_gate_dupcode"
-	OpMakeGate       ProtectedOpKind = "make_gate"
-	OpRepositoryGate ProtectedOpKind = "repository_gate"
-	OpGitCommit      ProtectedOpKind = "git_commit"
-	OpGitPush        ProtectedOpKind = "git_push"
-	OpGitTag         ProtectedOpKind = "git_tag"
-	OpForcePush      ProtectedOpKind = "force_push"
-	OpHistoryRewrite ProtectedOpKind = "history_rewrite"
+	OpMakeGate        ProtectedOpKind = "make_gate"
+	OpRepositoryGate  ProtectedOpKind = "repository_gate"
+	OpGitCommit       ProtectedOpKind = "git_commit"
+	OpGitPush         ProtectedOpKind = "git_push"
+	OpGitTag          ProtectedOpKind = "git_tag"
+	OpForcePush       ProtectedOpKind = "force_push"
+	OpHistoryRewrite  ProtectedOpKind = "history_rewrite"
 )
 
 // ProtectedOp binds one logical operation to the textual forms it
@@ -142,56 +142,109 @@ func subClauseHasNegation(lowerSubClause string) bool {
 	return false
 }
 
+// directiveOccurrences returns the subset of occs that are NOT
+// covered by any recognised guard phrase span in lowerSubClause. A
+// protected occurrence that lies inside a guard phrase is part of
+// the guard's reference to the operation, not an additional
+// directive. Canonical occurrence count is computed over the
+// directive-only subset, in the order returned by
+// findProtectedOccurrences.
+func directiveOccurrences(occs []ProtectedOccurrence, lowerSubClause string) []ProtectedOccurrence {
+	spans := guardSpans(lowerSubClause)
+	if len(spans) == 0 {
+		return occs
+	}
+	filtered := make([]ProtectedOccurrence, 0, len(occs))
+	for _, o := range occs {
+		if occurrenceCoveredByAny(o, spans) {
+			continue
+		}
+		filtered = append(filtered, o)
+	}
+	return filtered
+}
+
+// guardSpans returns the [Start, End) byte spans of every guard
+// match in lowerSubClause.
+func guardSpans(lowerSubClause string) []guardSpan {
+	matches := findGuardMatches(lowerSubClause)
+	spans := make([]guardSpan, 0, len(matches))
+	for _, m := range matches {
+		if m.Source == AuthorityNone {
+			continue
+		}
+		spans = append(spans, guardSpan{Start: m.Start, End: m.End})
+	}
+	return spans
+}
+
+type guardSpan struct {
+	Start int
+	End   int
+}
+
+func occurrenceCoveredByAny(o ProtectedOccurrence, spans []guardSpan) bool {
+	for _, s := range spans {
+		if o.Start >= s.Start && o.End <= s.End {
+			return true
+		}
+	}
+	return false
+}
+
 // scanSubClause returns the protected-operation occurrences that
 // should be flagged in the given directive sub-clause.
 //
-// CORRECTION05 classification:
+// CORRECTION06 classification:
 //
-//   0 logical occurrences
-//       -> no finding
+//	0 logical directive occurrences
+//	    -> no finding
 //
-//   1 logical occurrence
-//       -> allow only if this final sub-clause has an explicit
-//          named authority source OR operation-local negation;
-//          otherwise flag the single occurrence.
+//	>1 logical directive occurrences
+//	    -> FAIL CLOSED. Every directive occurrence is reported. A
+//	       single sub-clause-global guard or negation cannot
+//	       disambiguate shared scope across multiple unprotected
+//	       operations.
 //
-//   >1 logical occurrences
-//       -> FAIL CLOSED. Every occurrence is reported. A single
-//          sub-clause-global guard or negation cannot disambiguate
-//          shared scope across multiple unprotected operations.
+//	1 logical directive occurrence
+//	    -> negation may exempt it
+//	    -> explicit named authority may exempt it
+//	    -> otherwise reject
+//
+// Ambiguity (multiple canonical occurrences) is decided BEFORE any
+// negation or authority processing. Negation and authority are only
+// consulted when exactly one logical directive protected occurrence
+// remains in the final sub-clause.
+//
+// A protected occurrence is treated as DIRECTIVE only when it lies
+// outside every recognised guard phrase span. The guard phrase
+// itself may reference the operation by name (e.g. "only when the
+// ACT delegates tag authority"); that reference is part of the
+// guard, not a second directive. Filtering these guard-internal
+// occurrences out of the canonical count keeps guards unambiguous.
 func scanSubClause(lowerSubClause string) []ProtectedOpKind {
 	occs := findProtectedOccurrences(lowerSubClause)
-	if len(occs) == 0 {
+	directiveOccs := directiveOccurrences(occs, lowerSubClause)
+	switch len(directiveOccs) {
+	case 0:
 		return nil
-	}
-	// Negation applies to the whole sub-clause regardless of
-	// occurrence count. "Do not X, Y, Z" exempts all occurrences.
-	if subClauseHasNegation(lowerSubClause) {
-		return nil
-	}
-	// Count distinct operation kinds. A sub-clause with multiple
-	// distinct protected operations fails closed. Repeated
-	// instances of the same operation (e.g. "commit" used twice
-	// as both verb and noun) count as ONE logical occurrence.
-	distinct := make(map[ProtectedOpKind]bool)
-	for _, o := range occs {
-		distinct[o.Op] = true
-	}
-	if len(distinct) > 1 {
-		ops := make([]ProtectedOpKind, 0, len(occs))
-		for _, o := range occs {
+	case 1:
+		if subClauseHasNegation(lowerSubClause) {
+			return nil
+		}
+		if unitHasAuthoritySource(lowerSubClause) {
+			return nil
+		}
+		return []ProtectedOpKind{directiveOccs[0].Op}
+	default:
+		// Multiple directive occurrences: fail closed regardless
+		// of any negation or authority.
+		ops := make([]ProtectedOpKind, 0, len(directiveOccs))
+		for _, o := range directiveOccs {
 			ops = append(ops, o.Op)
 		}
 		return ops
 	}
-	if unitHasAuthoritySource(lowerSubClause) {
-		return nil
-	}
-	ops := make([]ProtectedOpKind, 0, len(occs))
-	for _, o := range occs {
-		ops = append(ops, o.Op)
-	}
-	return ops
 }
 
 // scanUnit walks the unit: strip directive prefixes, split into

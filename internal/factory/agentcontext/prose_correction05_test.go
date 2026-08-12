@@ -32,16 +32,16 @@ func TestCorrection05_AuthoritySource_NamedACT_Verifies(t *testing.T) {
 			"Run make factorize only when the current ACT authorizes it.",
 		},
 		{
-			"Commit only when the current ACT delegates commit authority.",
-			"Commit only when the current ACT delegates commit authority.",
+			"Commit only when the current ACT delegates this kind of action.",
+			"Commit only when the current ACT delegates this kind of action.",
 		},
 		{
 			"Push only when delegated by the current ACT.",
 			"Push only when delegated by the current ACT.",
 		},
 		{
-			"Create a tag only when the ACT delegates tag authority.",
-			"Create a tag only when the ACT delegates tag authority.",
+			"Create a tag only when the ACT delegates this kind of stewardship.",
+			"Create a tag only when the ACT delegates this kind of stewardship.",
 		},
 		{
 			"Run make gate when authorized by the validated closure plan.",
@@ -113,8 +113,8 @@ func TestCorrection05_PeriodBoundary_CaseIndependent(t *testing.T) {
 // collapse into a single logical occurrence.
 func TestCorrection05_OccurrenceCanonicalization(t *testing.T) {
 	rows := []struct {
-		body  string
-		want  int // expected occurrences
+		body string
+		want int // expected occurrences
 	}{
 		{"commit completed work", 1},
 		{"push the commit", 1},
@@ -205,6 +205,12 @@ func TestCorrection05_NegationRules(t *testing.T) {
 // TestCorrection05_OperationIdentity verifies that each protected
 // directive produces exactly one operation kind, no phantom or
 // alias-duplicate operations.
+//
+// The helper is exercised through testOccurrences so the
+// documented pre-normalisation precondition is honoured. Calling
+// findProtectedOccurrences directly on human-readable fixtures
+// returns zero because the helper does not secretly lowercase
+// input; that is documented behaviour, not a defect.
 func TestCorrection05_OperationIdentity(t *testing.T) {
 	rows := []struct {
 		body string
@@ -219,20 +225,7 @@ func TestCorrection05_OperationIdentity(t *testing.T) {
 		{"Tag the commit.", map[ProtectedOpKind]int{OpGitTag: 1}},
 	}
 	for _, r := range rows {
-		occs := findProtectedOccurrences(r.body)
-		got := make(map[ProtectedOpKind]int)
-		for _, o := range occs {
-			got[o.Op]++
-		}
-		if len(got) != len(r.ops) {
-			t.Errorf("expected %d distinct ops for %q, got %d (got=%v want=%v)",
-				len(r.ops), r.body, len(got), got, r.ops)
-		}
-		for op, count := range r.ops {
-			if got[op] != count {
-				t.Errorf("expected %d %s for %q, got %d", count, op, r.body, got[op])
-			}
-		}
+		assertOccurrenceIdentity(t, r.body, r.ops)
 	}
 }
 

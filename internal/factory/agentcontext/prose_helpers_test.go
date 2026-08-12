@@ -1,9 +1,65 @@
+// Test-stage contract for the protected-operation occurrence finder.
+//
+// findProtectedOccurrences operates on a lower-cased and
+// whitespace-normalised unit. The production pipeline performs that
+// normalisation before reaching the helper, so direct call-sites
+// from white-box tests MUST mirror it. Calling
+// findProtectedOccurrences directly on human-readable fixtures
+// (e.g. "Push changes.") returns zero because the helper does not
+// secretly lowercase or normalise its input. This is documented
+// behaviour, not a defect.
+//
+// Use testOccurrences when a test wants to assert the production
+// identity of a human-readable phrase without going through the
+// full FindUnguardedProtectedOps pipeline.
 package agentcontext
 
 import (
 	"strings"
 	"testing"
 )
+
+// testOccurrences is the white-box-test equivalent of the
+// production pipeline's pre-normalisation step. It lower-cases and
+// whitespace-collapses its input, then returns the canonical
+// positional protected-operation occurrences. The return value
+// carries the byte offsets into the normalised unit.
+func testOccurrences(s string) []ProtectedOccurrence {
+	return findProtectedOccurrences(whitespaceCollapse(strings.ToLower(s)))
+}
+
+// assertOccurrenceIdentity asserts the exact occurrence-count
+// profile expected from a single human-readable phrase. The
+// expected map keys are ProtectedOpKind values; each value is the
+// expected number of canonical occurrences for that kind.
+func assertOccurrenceIdentity(t *testing.T, phrase string, want map[ProtectedOpKind]int) {
+	t.Helper()
+	occs := testOccurrences(phrase)
+	got := make(map[ProtectedOpKind]int)
+	positions := make(map[ProtectedOpKind][][2]int)
+	for _, o := range occs {
+		got[o.Op]++
+		positions[o.Op] = append(positions[o.Op], [2]int{o.Start, o.End})
+	}
+	if len(got) != len(want) {
+		t.Fatalf("phrase %q: expected %d distinct ops, got %d (got=%v want=%v)",
+			phrase, len(want), len(got), got, want)
+	}
+	for op, count := range want {
+		if got[op] != count {
+			t.Fatalf("phrase %q: expected %d %s, got %d", phrase, count, op, got[op])
+		}
+	}
+	for op, spans := range positions {
+		for i := 1; i < len(spans); i++ {
+			prev := spans[i-1]
+			cur := spans[i]
+			if !(prev[0] < prev[1] && prev[1] <= cur[0] && cur[0] < cur[1]) {
+				t.Fatalf("phrase %q: occurrences for %s not strictly ordered: %v", phrase, op, spans)
+			}
+		}
+	}
+}
 
 // TestIsDirective verifies the directive classifier used by the
 // prose scanner.

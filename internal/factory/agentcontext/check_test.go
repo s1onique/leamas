@@ -53,8 +53,8 @@ Leamas is a local-first, web-first, Go-only, single-binary verification witness.
 Follow the current ACT's explicit authority.
 
 Do not infer commit authority from permission to edit or test.
-Do not infer push authority from permission to commit.
-Do not infer tag authority from permission to commit.
+Do not infer push authority from permission to deploy.
+Do not infer tag stewardship from permission to deploy.
 
 Do not run make factorize unless explicitly authorized by the current ACT.
 Do not run make gate-dupcode unless explicitly authorized by the current ACT.
@@ -64,7 +64,7 @@ When not authorized, report the command as not run.
 
 Editor checkpoints, restore points, and Compare operations are not Git commits and do not grant Git publication authority.
 
-Successful tests do not imply commit authority. Commit only when the ACT delegates commit authority.
+Successful tests do not imply commit authority. Commit only when the ACT delegates this kind of action.
 
 ` + CanonicalContractBlock + `
 
@@ -100,7 +100,10 @@ Never run make factorize, make gate-dupcode, or make gate in Cline/editor contex
 
 When not authorized, report it as not run.
 
-Do not infer Git commit, push, tag, or history-rewrite authority from permission to edit or test.
+Do not infer commit authority from permission to edit or test.
+Do not infer push authority from permission to edit or test.
+Do not infer tag stewardship from permission to edit or test.
+Do not infer history-rewrite authority from permission to edit or test.
 
 Cline checkpoints are not Git commits and do not grant Git publication authority.
 
