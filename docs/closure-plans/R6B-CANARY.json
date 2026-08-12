@@ -1,0 +1,32 @@
+{
+  "act_id": "ACT-R6B-REAL-CANARY",
+  "artifacts": [],
+  "baseline": {
+    "commit_oid": "b87471156c05b354cc170683b393cf20ed249542",
+    "tree_oid": "a1418dce2557635402ba20c7e26c1ad5e46e325b"
+  },
+  "checks": [
+    {
+      "id": "canary_sentinel_present",
+      "mode": "run",
+      "argv": [
+        "test",
+        "-f",
+        "CANARY.txt"
+      ],
+      "working_directory": ".",
+      "timeout_seconds": 60,
+      "environment": {}
+    }
+  ],
+  "contract_version": 1,
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  }
+}
