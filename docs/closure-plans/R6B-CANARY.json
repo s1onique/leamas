@@ -2,8 +2,8 @@
   "act_id": "ACT-R6B-REAL-CANARY",
   "artifacts": [],
   "baseline": {
-    "commit_oid": "b87471156c05b354cc170683b393cf20ed249542",
-    "tree_oid": "a1418dce2557635402ba20c7e26c1ad5e46e325b"
+    "commit_oid": "996fcdf3de4c032b3aaca331f62383a056f27302",
+    "tree_oid": "f02e4ae41fcc0b58cc1c49db4630e5996f804d33"
   },
   "checks": [
     {
