@@ -465,47 +465,11 @@ func TestResolveSubjectTreeProduction(t *testing.T) {
 	})
 }
 
-// TestDiscoverFrozenPlanForActProduction exercises the production
-// discoverFrozenPlanForAct. The function reads F from the
-// canonical sideband ref refs/factory/freeze/<ACT-ID> — NOT
-// from the on-disk plan file (the canonical authority model
-// is: F identifies the plan; the plan does NOT identify F).
-func TestDiscoverFrozenPlanForActProduction(t *testing.T) {
-	t.Run("existing_freeze_ref_returns_freeze_metadata", func(t *testing.T) {
-		fOID := strings.Repeat("f", 40)
-		git := newSimpleGit(map[string]gitCommandResult{
-			"rev-parse\x00--verify\x00--end-of-options\x00refs/factory/freeze/ACT-PROD": {
-				Stdout: []byte(fOID), ExitCode: 0,
-			},
-		})
-		repoRoot := t.TempDir()
-		frozen, err := discoverFrozenPlanForAct(context.Background(), git, repoRoot, "ACT-PROD")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if frozen.FreezeCommit != fOID {
-			t.Errorf("FreezeCommit = %q, want %q", frozen.FreezeCommit, fOID)
-		}
-		if frozen.PlanPath != "docs/closure-plans/ACT-PROD.json" {
-			t.Errorf("PlanPath = %q, want %q", frozen.PlanPath, "docs/closure-plans/ACT-PROD.json")
-		}
-	})
-	t.Run("missing_freeze_ref_returns_act_not_frozen", func(t *testing.T) {
-		git := newSimpleGit(map[string]gitCommandResult{
-			"rev-parse\x00--verify\x00--end-of-options\x00refs/factory/freeze/ACT-NEW": {
-				Stderr: []byte("fatal: not a ref"), ExitCode: 128,
-			},
-		})
-		repoRoot := t.TempDir()
-		_, err := discoverFrozenPlanForAct(context.Background(), git, repoRoot, "ACT-NEW")
-		if err == nil {
-			t.Fatalf("expected act_not_frozen error, got nil")
-		}
-		if !strings.Contains(err.Error(), "act_not_frozen") {
-			t.Errorf("error %q does not contain act_not_frozen", err.Error())
-		}
-	})
-}
+// TestDiscoverFrozenPlanForActProduction was removed in
+// ACT-LEAMAS-FACTORY-FREEZE-REDISCOVERY-PORTABILITY-AND-REAL-DOGFOOD01.
+// The freeze-history-discovery real-Git tests in
+// freeze_history_discovery_real_git_test.go cover this surface
+// more thoroughly than a fake-git fixture could.
 
 // TestBeginActProduction exercises the production BeginAct
 // against a fake gitClient. The fake simulates the bounded

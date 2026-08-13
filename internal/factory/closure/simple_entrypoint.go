@@ -21,12 +21,15 @@
 //	     BeginAct generates canonical Plan bytes (no self-F
 //	     reference), commits them once via a TEMP INDEX so the
 //	     caller's live index is never mutated, and stores F in
-//	     refs/factory/freeze/<ACT-ID> for canonical discovery.
+//	     refs/factory/freeze/<ACT-ID> as an OPTIONAL LOCAL CACHE.
 //
-//	3. FROZEN_PLAN_DISCOVERY production binding:
-//	     discoverFrozenPlanForAct reads F from
-//	     refs/factory/freeze/<ACT-ID> — F identifies the plan,
-//	     the plan does NOT identify F (no circular authority).
+//	3. FROZEN_PLAN_DISCOVERY production binding (HISTORY-DERIVED):
+//	     discoverFrozenPlanForAct is now a thin façade. The
+//	     CANONICAL authority is the COMMITTED Git history
+//	     reachable from S. The sideband ref is purely an
+//	     optional local cache. Authority is derived via
+//	     `git rev-list <S> -- docs/closure-plans/<ACT>.json`
+//	     followed by the F1..F7 structural predicates.
 //
 //	4. BOUNDED_PUSH production binding:
 //	     boundedPush → resolve LOCAL → fetch → resolve REMOTE
@@ -35,14 +38,18 @@
 //
 // Authority model:
 //
-//	  F identifies P
-//	  P does NOT identify F
+//	F = committed Git commit reachable from S
+//	P = docs/closure-plans/<ACT-ID>.json contained in F
+//	F^ = pre-freeze baseline commit
+//	P.baseline.commit_oid = F^
+//	P.baseline.tree_oid   = tree(F^)
+//	F is a strict ancestor of S
 //
-//	  refs/factory/freeze/<ACT-ID> → F
-//	  git show F:<plan-rel>          → canonical P bytes
+//	refs/factory/freeze/<ACT-ID> = optional local cache/index
+//	git show F:<plan-rel>        = canonical P bytes
 //
-//	  close() reads F via the sideband ref; the working-tree
-//	  plan file is informational only.
+//	close() reads F from COMMITTED HISTORY; the sideband ref
+//	is used only as a cache the agent may delete freely.
 
 package closure
 
@@ -71,9 +78,9 @@ type SimpleCloseRequest struct {
 // topology the simplified entrypoint expects. 1 = v1 topology
 // (F strict ancestor of S, freeze-before-subject) — the only
 // topology compatible with the two-command begin/close UX.
-// RunClosureV2 derives F as the sideband ref's value; in v1
-// topology that ref points at the freeze commit of the canonical
-// plan (F != S, F ancestor-of S).
+// RunClosureV2 derives F = parent(S) internally; in v1 topology
+// that derivation is consistent with the canonical history-
+// derived F produced by DiscoverFrozenPlanFromHistory.
 //
 // Lifecycle statement (authoritative, repeated everywhere
 // touched by this façade):
@@ -86,7 +93,7 @@ const SimpleCloseLifecycleVersion = 1
 // SimpleCloseResult is the canonical machine-readable envelope.
 // The subject tree and closure tree are populated from
 // authoritative, distinct sources — never from one another.
-// FreezeCommit binds the envelope to the freeze ref observed
+// FreezeCommit binds the envelope to the freeze commit observed
 // by the underlying closure transaction; in v1 topology F is
 // a strict ancestor of S (F != S).
 type SimpleCloseResult struct {
@@ -122,7 +129,7 @@ func validateActID(actID string) error {
 // FrozenPlan is the in-memory derived result of BeginAct
 // (which creates F) and discoverFrozenPlanForAct (which
 // reads F). The plan schema itself does NOT carry F; the
-// F-to-plan binding lives in refs/factory/freeze/<ACT-ID>.
+// F-to-plan binding lives in committed history.
 type FrozenPlan struct {
 	FreezeCommit string
 	PlanPath     string
@@ -151,7 +158,9 @@ type SimpleCloseDeps struct {
 var supportedLanes = map[string]bool{"fast": true}
 
 // freezeRefName returns the sideband ref name that holds F for
-// the given ACT identifier.
+// the given ACT identifier. After
+// ACT-LEAMAS-FACTORY-FREEZE-REDISCOVERY-PORTABILITY-AND-REAL-DOGFOOD01
+// this is OPTIONAL: the canonical authority is committed history.
 func freezeRefName(actID string) string {
 	return "refs/factory/freeze/" + actID
 }
@@ -224,12 +233,13 @@ func SimpleClose(ctx context.Context, req SimpleCloseRequest, deps SimpleCloseDe
 	})
 
 	if txResult != nil {
-		// Phase 6F: bind the envelope to the freeze ref observed
-		// by the underlying closure transaction AND verify it
-		// equals the sideband F we discovered. In v1 topology
-		// (F < S), RunClosureV2 derives F = S^{commit}; the
-		// sideband ref must agree with that derivation, or the
-		// envelope fails closed with freeze_authority_mismatch.
+		// Bind the envelope to the freeze commit observed by the
+		// underlying closure transaction. RunClosureV2 internally
+		// derives F = parent(S) via verifySingleParent; in v1
+		// topology that derivation is consistent with the canonical
+		// history-derived F we discovered above. Cross-check
+		// against the canonical discovery: if RunClosureV2 saw a
+		// different F, fail closed.
 		if txResult.FreezeCommit != "" {
 			result.FreezeCommit = txResult.FreezeCommit
 		}
@@ -245,25 +255,22 @@ func SimpleClose(ctx context.Context, req SimpleCloseRequest, deps SimpleCloseDe
 		if txResult.Verdict != "" {
 			result.Verdict = txResult.Verdict
 		}
-		// Phase 6G: freeze-authority invariant. The discovered
-		// sideband F MUST be observed by the transaction.
-		//   - Mismatch → freeze_authority_mismatch (agent re-authored)
-		//   - Empty txResult.FreezeCommit → freeze_authority_unavailable
-		//     (transaction failed to derive F; do not paper over)
-		//   - Match → proceed normally
-		if frozen.FreezeCommit != "" && result.FreezeCommit == "" {
-			result.State = "rerun_required"
-			result.Verdict = "FAIL"
-			result.RerunRequired = true
-			result.ReasonCode = "freeze_authority_unavailable"
-			return result, fmt.Errorf("simplified close: freeze_authority_unavailable: sideband=%s but transaction observed empty F; cannot paper over missing F", frozen.FreezeCommit)
-		}
+		// Freeze-authority invariant: the canonical history-derived
+		// F MUST equal the F observed by the transaction. If they
+		// diverge, fail closed with freeze_authority_mismatch.
 		if frozen.FreezeCommit != "" && result.FreezeCommit != "" && frozen.FreezeCommit != result.FreezeCommit {
 			result.State = "rerun_required"
 			result.Verdict = "FAIL"
 			result.RerunRequired = true
 			result.ReasonCode = "freeze_authority_mismatch"
-			return result, fmt.Errorf("simplified close: freeze_authority_mismatch: sideband=%s tx=%s; agent must not re-author the plan mid-flight", frozen.FreezeCommit, result.FreezeCommit)
+			return result, fmt.Errorf("simplified close: freeze_authority_mismatch: history=%s tx=%s; agent must not re-author the plan mid-flight", frozen.FreezeCommit, result.FreezeCommit)
+		}
+		if frozen.FreezeCommit != "" && result.FreezeCommit == "" {
+			result.State = "rerun_required"
+			result.Verdict = "FAIL"
+			result.RerunRequired = true
+			result.ReasonCode = "freeze_authority_unavailable"
+			return result, fmt.Errorf("simplified close: freeze_authority_unavailable: history=%s but transaction observed empty F; cannot paper over missing F", frozen.FreezeCommit)
 		}
 	}
 	if runErr != nil {
@@ -343,15 +350,26 @@ func validateSimpleRequest(req SimpleCloseRequest) (string, bool) {
 	return "", true
 }
 
-// discoverFrozenPlanForAct reads F from the canonical sideband
-// ref refs/factory/freeze/<ACT-ID>. The freeze commit
-// identifies the plan; the plan schema carries no self-F
-// reference (no circular authority dependency).
+// discoverFrozenPlanForAct is the canonical Factory closure
+// entrypoint's discovery façade. As of
+// ACT-LEAMAS-FACTORY-FREEZE-REDISCOVERY-PORTABILITY-AND-REAL-DOGFOOD01
+// the durable authority is the COMMITTED Git history reachable
+// from the subject, NOT the sideband ref. The sideband ref
+// `refs/factory/freeze/<ACT-ID>` is purely an optional local
+// cache/index.
 //
-// Production flow:
-//   - resolve refs/factory/freeze/<ACT-ID> via git rev-parse.
-//   - if the ref is absent, return typed act_not_frozen; the
-//     agent must run `leamas factory begin <ACT-ID>` first.
+// Production flow (portable, history-derived):
+//
+//  1. Read the optional sideband cache (cheap optimization).
+//  2. Independently derive F from committed history via the
+//     canonical primitive DiscoverFrozenPlanFromHistory.
+//  3. Reconcile cache vs. history. The committed history wins.
+//     - cache present and agrees -> continue
+//     - cache present and disagrees -> freeze_authority_mismatch
+//     - cache absent -> continue (the canonical case)
+//
+// A forged or mutated worktree plan has NO effect: authority
+// always comes from `F:P` read via git, not from disk.
 func discoverFrozenPlanForAct(ctx context.Context, git gitClient, repoRoot, actID string) (FrozenPlan, error) {
 	if git == nil {
 		return FrozenPlan{}, errors.New("git client is required")
@@ -362,16 +380,85 @@ func discoverFrozenPlanForAct(ctx context.Context, git gitClient, repoRoot, actI
 	if strings.TrimSpace(actID) == "" {
 		return FrozenPlan{}, errors.New("act_id is required")
 	}
-	refName := freezeRefName(actID)
-	out, err := runGitValue(ctx, git, repoRoot, "rev-parse", "--verify", "--end-of-options", refName)
+	if err := validateActID(actID); err != nil {
+		return FrozenPlan{}, err
+	}
+
+	// Step 1: optional sideband cache lookup. Absence is non-fatal.
+	cacheF, cacheOK, cacheErr := readSidebandCacheF(ctx, git, repoRoot, actID)
+	if cacheErr != nil {
+		return FrozenPlan{}, cacheErr
+	}
+
+	// Step 2: resolve HEAD as the implicit subject. The
+	// simplified-entrypoint workflow requires HEAD == S at close
+	// time, so HEAD is the canonical reference point for history
+	// traversal.
+	headCommit, err := runGitValue(ctx, git, repoRoot,
+		"rev-parse", "--verify", "--end-of-options", "HEAD^{commit}")
 	if err != nil {
-		return FrozenPlan{}, fmt.Errorf("act_not_frozen: ref %s missing; agent must run `leamas factory begin %s` first to establish F: %w", refName, actID, err)
+		return FrozenPlan{}, fmt.Errorf("act_not_frozen: cannot resolve HEAD^{commit}: %w", err)
 	}
-	out = strings.TrimSpace(out)
+	headCommit = strings.TrimSpace(headCommit)
+	if headCommit == "" {
+		return FrozenPlan{}, errors.New("act_not_frozen: empty HEAD^{commit}")
+	}
+
+	// Step 3: independently derive F from committed history.
+	// This is the canonical authority; it never touches the sideband ref.
+	frozen, outcome, err := DiscoverFrozenPlanFromHistory(ctx, git, repoRoot, actID, headCommit)
+	if err != nil {
+		return FrozenPlan{}, err
+	}
+	switch outcome.Reason {
+	case HistoryDiscoveryDerived:
+		// canonical: continue with reconciliation below
+	case HistoryDiscoveryNotFrozen:
+		return FrozenPlan{}, fmt.Errorf("act_not_frozen: no commit in the ancestry of HEAD %s introduces docs/closure-plans/%s.json; agent must run `leamas factory begin %s` first to establish F", headCommit, actID, actID)
+	case HistoryDiscoveryAmbiguous:
+		return FrozenPlan{}, fmt.Errorf("freeze_authority_ambiguous: %d structurally valid candidates for ACT %s in ancestry of HEAD %s: %s; ambiguous authority cannot be resolved",
+			len(outcome.Candidates), actID, headCommit, strings.Join(outcome.Candidates, ", "))
+	default:
+		return FrozenPlan{}, fmt.Errorf("history discovery: unknown outcome %q", outcome.Reason)
+	}
+
+	// Step 4: reconcile cache vs. history. Committed history wins
+	// conceptually; a divergent cache is an authority failure that
+	// must NOT be silently rewritten.
+	if cacheOK && cacheF != frozen.FreezeCommit {
+		return FrozenPlan{}, fmt.Errorf("freeze_authority_mismatch: cache refs/factory/freeze/%s = %s disagrees with history-derived F = %s; agent must not re-author the plan mid-flight", actID, cacheF, frozen.FreezeCommit)
+	}
+
+	return frozen, nil
+}
+
+// readSidebandCacheF reads the optional sideband ref
+// refs/factory/freeze/<ACT-ID> for use as a local cache only.
+//
+// Returns:
+//
+//	(cacheF, true,  nil)    - ref present, value non-empty
+//	("",        false, nil) - ref absent (the canonical case)
+//	("",        false, err) - structural failure reading the ref
+//
+// A missing ref is NOT an error; the sideband cache is optional.
+// Only a ref that exists but cannot be parsed is a structural error.
+func readSidebandCacheF(ctx context.Context, git gitClient, repoRoot, actID string) (string, bool, error) {
+	refName := freezeRefName(actID)
+	res := git.Run(ctx, repoRoot, "rev-parse", "--verify", "--end-of-options", refName)
+	if res.Err != nil || res.ExitCode != 0 {
+		// Treat any non-zero exit as "ref absent" - the sideband
+		// cache is optional.
+		return "", false, nil
+	}
+	out := strings.TrimSpace(string(res.Stdout))
 	if out == "" {
-		return FrozenPlan{}, fmt.Errorf("act_not_frozen: ref %s empty", refName)
+		return "", false, nil
 	}
-	return FrozenPlan{FreezeCommit: out, PlanPath: frozenPlanPath(actID)}, nil
+	if err := validateOID("sideband cache F", out); err != nil {
+		return "", false, fmt.Errorf("sideband cache: invalid OID %q: %w", out, err)
+	}
+	return out, true, nil
 }
 
 // BeginAct creates the freeze commit F and stores it in the
@@ -380,6 +467,12 @@ func discoverFrozenPlanForAct(ctx context.Context, git gitClient, repoRoot, actI
 // mutated. The plan schema carries NO self-F reference
 // (canonical authority model: F identifies P, P does NOT
 // identify F).
+//
+// As of ACT-LEAMAS-FACTORY-FREEZE-REDISCOVERY-PORTABILITY-AND-REAL-DOGFOOD01
+// the sideband ref is an OPTIONAL LOCAL CACHE. The committed
+// history reachable from S is the durable authority. Deleting
+// the sideband ref between Begin and Close MUST NOT change the
+// close verdict.
 //
 // Production sequence (bounded; no --force semantics):
 //
@@ -392,7 +485,7 @@ func discoverFrozenPlanForAct(ctx context.Context, git gitClient, repoRoot, actI
 //     into the temp index (NOT the caller's index)
 //  7. write-tree (against temp index) → treeOID
 //  8. commit-tree treeOID -p HEAD^{commit} -m msg → F
-//  9. update-ref refs/factory/freeze/<ACT-ID> F
+//  9. update-ref refs/factory/freeze/<ACT-ID> F (cache)
 //  10. update-ref HEAD F (rewind; agent commits S on top)
 //  11. write plan file to worktree (informational; may
 //     legitimately diverge from F's plan bytes; F is
