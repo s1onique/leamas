@@ -536,6 +536,7 @@ func TestBeginActProduction(t *testing.T) {
 			"status\x00--porcelain=v1\x00--untracked-files=all":                                                {{Stdout: nil, ExitCode: 0}},
 			"rev-parse\x00--verify\x00refs/factory/freeze/ACT-BEGIN":                                           {{ExitCode: 128, Stderr: []byte("fatal: not a ref")}},
 			"rev-parse\x00--verify\x00--end-of-options\x00HEAD^{commit}":                                       {{Stdout: []byte(headCommit), ExitCode: 0}},
+			"rev-parse\x00--verify\x00--end-of-options\x00HEAD^{tree}":                                         {{Stdout: []byte(headCommit), ExitCode: 0}},
 			"hash-object\x00-w\x00--stdin":                                                                     {{Stdout: []byte(blobOID), ExitCode: 0}},
 			"update-index\x00--add\x00--cacheinfo\x00100644," + blobOID + ",docs/closure-plans/ACT-BEGIN.json": {{ExitCode: 0}},
 			"write-tree": {{Stdout: []byte(treeOID), ExitCode: 0}},
