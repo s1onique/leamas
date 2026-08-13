@@ -136,6 +136,21 @@ func resolveAutoModeWith(repoRoot, toolPath, explicitRange string) (*ResolvedMod
 
 	isDirty := hasStagedChanges || hasUnstagedChanges || hasUntrackedFiles
 
+	// If an explicit range was provided, it takes precedence over the
+	// dirty-worktree auto-detection. The caller explicitly requested a
+	// specific commit range; unrelated worktree dirt must not override
+	// that intent.
+	if explicitRange != "" {
+		result.Mode = ModeRange
+		result.Range = explicitRange
+		result.Reason = "explicit --range; non-authoritative"
+		result.AuthorityStatus = authority.AuthorityExplicitRange
+		result.ResolutionSource = "explicit_cli"
+		result.IsClean = !isDirty
+		return result, nil
+	}
+
+	// No explicit range: auto-detect based on worktree state.
 	if isDirty {
 		result.Mode = ModeDirty
 		result.Reason = "working tree has changes"

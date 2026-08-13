@@ -46,7 +46,12 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	sb.WriteString(fmt.Sprintf("Repo: %s\n", repoRoot))
 	sb.WriteString(fmt.Sprintf("Mode: %s\n", resolved.Mode))
 	sb.WriteString(fmt.Sprintf("Range: %s\n", resolved.Range))
-	if resolved.Reason != "explicit range mode" && resolved.ResolutionSource != "explicit_cli" {
+	// Only show "Resolved from: auto" for auto-detected ranges, not explicit ones.
+	// Use ResolutionSource as the structured source of truth.
+	if resolved.ResolutionSource == "explicit_cli" {
+		// Explicit range: show reason but not "Resolved from: auto"
+		sb.WriteString(fmt.Sprintf("Reason: %s\n", resolved.Reason))
+	} else if resolved.Reason != "" {
 		sb.WriteString(fmt.Sprintf("Resolved from: auto\n"))
 		sb.WriteString(fmt.Sprintf("Reason: %s\n", resolved.Reason))
 	}
