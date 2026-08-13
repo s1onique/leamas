@@ -5,20 +5,34 @@ package reporoot
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 // Errors for root resolution failures.
+//
+// SplitRepoPath propagates every canonicalization, walk-up, and
+// filepath.Rel failure rather than collapsing them into an
+// empty relPath. Each path-authority failure carries a distinct
+// typed error so the caller can decide whether to retry, fall
+// back, or surface a diagnostic; the resolver never substitutes
+// an empty string for relPath when authority cannot be
+// established.
 var (
-	ErrEmptyInput      = errors.New("root resolver: empty input")
-	ErrNotAbsolute     = errors.New("root resolver: path is not absolute")
-	ErrNotDirectory    = errors.New("root resolver: path is not a directory")
-	ErrNotInRepository = errors.New("root resolver: path is not within a Git repository")
-	ErrGitRootFailed   = errors.New("root resolver: failed to discover Git root")
-	ErrSymlinkFailed   = errors.New("root resolver: failed to resolve symlink")
-	ErrUnreadableRoot  = errors.New("root resolver: root directory is not readable")
+	ErrEmptyInput           = errors.New("root resolver: empty input")
+	ErrNotAbsolute          = errors.New("root resolver: path is not absolute")
+	ErrNotDirectory         = errors.New("root resolver: path is not a directory")
+	ErrNotInRepository      = errors.New("root resolver: path is not within a Git repository")
+	ErrGitRootFailed        = errors.New("root resolver: failed to discover Git root")
+	ErrSymlinkFailed        = errors.New("root resolver: failed to resolve symlink")
+	ErrUnreadableRoot       = errors.New("root resolver: root directory is not readable")
+	ErrCanonicalizeFailed   = errors.New("root resolver: canonicalize absolute path failed")
+	ErrCanonicalizeNotExist = errors.New("root resolver: canonicalize reported missing path")
+	ErrWalkUpLstatFailed    = errors.New("root resolver: walk-up lstat failed")
+	ErrWalkUpResolveFailed  = errors.New("root resolver: walk-up resolve failed")
+	ErrRelComputationFailed = errors.New("root resolver: relative path computation failed")
 )
 
 // RootResolver resolves a canonical Git repository root from various input forms.
@@ -126,35 +140,53 @@ func (r *RootResolver) isReadable(dir string) bool {
 // /var/folders/... and /private/var/folders/... identify the
 // same directory).
 //
-// The function canonicalizes absPath through the same
-// EvalSymlinks-based path the production root uses; this is the
-// matching authority for canonical-path comparisons.
+// Failure semantics: SplitRepoPath is fail-closed. Every
+// canonicalization, walk-up, and filepath.Rel failure is
+// surfaced as a typed error so the caller can distinguish
+// "absPath does not exist yet" (a legitimate lifecycle case for
+// future output leaves) from "absPath cannot be resolved" (a
+// hard authority failure). The function NEVER collapses a
+// failure into an empty relPath.
+//
+// Order of operations: canonicalize absPath first (handling
+// non-existence by walking upward to the largest existing
+// prefix), then Resolve the canonical form, then compute the
+// relative path. Doing canonicalization up-front means Resolve
+// always sees an existing canonical path; the previously
+// implicit call to Resolve(absPath) could fail because absPath
+// did not yet exist, which would have masked the legitimate
+// "future output leaf" lifecycle.
 func (r *RootResolver) SplitRepoPath(absPath string) (repoRoot string, relPath string, err error) {
-	root, err := r.Resolve(absPath)
+	if absPath == "" {
+		return "", "", ErrEmptyInput
+	}
+
+	canonicalAbs, err := canonicalizeExistingPrefix(absPath)
 	if err != nil {
 		return "", "", err
 	}
 
-	canonicalAbs, err := filepath.EvalSymlinks(absPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// absPath does not exist on disk. The repo root
-			// exists (Resolve succeeded), so absPath is below
-			// root and never materialized. Walk upward to the
-			// largest existing prefix and re-append the missing
-			// suffix so the relative path is still meaningful.
-			canonicalAbs, err = canonicalizeExistingPrefix(absPath)
-			if err != nil {
-				return root, "", nil
-			}
-		} else {
-			return root, "", nil
+	// Resolve requires an existing path; if canonicalAbs carries
+	// a non-existent leaf (the "future output leaf" lifecycle),
+	// fall back to the canonical parent for the git-root lookup.
+	// The relative path is still computed against canonicalAbs so
+	// the returned relPath is in canonical coordinates.
+	resolveTarget := canonicalAbs
+	if _, lerr := os.Lstat(resolveTarget); lerr != nil {
+		if !os.IsNotExist(lerr) {
+			return "", "", fmt.Errorf("%w: %s: %s", ErrCanonicalizeFailed, resolveTarget, lerr.Error())
 		}
+		resolveTarget = filepath.Dir(canonicalAbs)
+	}
+
+	root, err := r.Resolve(resolveTarget)
+	if err != nil {
+		return "", "", err
 	}
 
 	rel, err := filepath.Rel(root, canonicalAbs)
 	if err != nil {
-		return root, "", nil
+		return "", "", fmt.Errorf("%w: root=%s abs=%s: %s", ErrRelComputationFailed, root, canonicalAbs, err.Error())
 	}
 
 	return root, rel, nil
@@ -162,29 +194,52 @@ func (r *RootResolver) SplitRepoPath(absPath string) (repoRoot string, relPath s
 
 // canonicalizeExistingPrefix returns the canonical form of the
 // largest existing prefix of path with the missing suffix
-// re-appended lexically. When the full path exists, this is
-// identical to filepath.EvalSymlinks. When the path does not
-// exist, this avoids the resolver's reflexive refusal of the
-// nil-exact identity case in SplitRepoPath (the repo root still
-// exists; only the leaf is missing).
+// re-appended lexically.
+//
+// Failure semantics: canonicalizeExistingPrefix distinguishes
+// "this component does not exist yet" (IsNotExist, legitimate
+// walk-up target) from "this component cannot be inspected"
+// (permission, I/O, symlink-loop). The latter is propagated as a
+// typed error rather than silently re-routed through the walk-up
+// branch, because a permission-denied or unreadable ancestor is
+// an authority failure the caller must see.
+//
+// When the full path exists, this is identical to
+// filepath.EvalSymlinks. When the path does not exist, this
+// walks upward to the first existing prefix, resolves its
+// canonical form, and re-appends the missing suffix lexically.
 func canonicalizeExistingPrefix(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %s: %s", ErrCanonicalizeFailed, path, err.Error())
 	}
 	tail := ""
 	cursor := abs
 	for {
-		if _, err := os.Lstat(cursor); err == nil {
-			canonicalCursor, err := filepath.EvalSymlinks(cursor)
-			if err != nil {
-				return "", err
+		info, lerr := os.Lstat(cursor)
+		if lerr == nil {
+			_ = info
+			canonicalCursor, eerr := filepath.EvalSymlinks(cursor)
+			if eerr != nil {
+				return "", fmt.Errorf("%w: %s: %s", ErrWalkUpResolveFailed, cursor, eerr.Error())
 			}
 			return filepath.Join(canonicalCursor, tail), nil
 		}
+		if !os.IsNotExist(lerr) {
+			// Permission, I/O, symlink-loop, or other failure.
+			// This is NOT a legitimate walk-up case; the
+			// component exists but cannot be inspected, which
+			// is exactly the authority failure the resolver is
+			// meant to surface.
+			return "", fmt.Errorf("%w: %s: %s", ErrWalkUpLstatFailed, cursor, lerr.Error())
+		}
 		parent := filepath.Dir(cursor)
 		if parent == cursor {
-			return abs, nil
+			// Walk-up reached the filesystem root without ever
+			// finding an existing prefix. The supplied path is
+			// therefore outside any existing filesystem subtree
+			// and cannot be canonicalized.
+			return "", fmt.Errorf("%w: %s", ErrCanonicalizeNotExist, abs)
 		}
 		base := filepath.Base(cursor)
 		if tail == "" {
