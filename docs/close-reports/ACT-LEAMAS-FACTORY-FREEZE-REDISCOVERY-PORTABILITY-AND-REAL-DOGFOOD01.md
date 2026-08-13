@@ -1,163 +1,149 @@
 # ACT-LEAMAS-FACTORY-FREEZE-REDISCOVERY-PORTABILITY-AND-REAL-DOGFOOD01 Close Report
 
-## Verdict
+## Verdict (corrected per reviewer feedback)
 
 ```text
-FREEZE_HISTORY_DERIVATION    = PASS
-UNIQUE_F_AUTHORITY           = PASS
-COMMIT_MESSAGE_AUTHORITY     = false
+FREEZE_HISTORY_DERIVATION       = PASS
+UNIQUE_F_AUTHORITY              = PASS
+COMMIT_MESSAGE_AUTHORITY        = false
 
-SIDE_BAND_REF_REQUIRED       = false
-NO_HIDDEN_SIDEBAND_DEPENDENCY = PASS
+SIDE_BAND_REF_REQUIRED          = false
+NO_HIDDEN_SIDEBAND_DEPENDENCY  = PASS
 
-HISTORY_DERIVED_F            = PASS
-TRANSACTION_OBSERVED_F       = PASS
+SOURCE_REAL_CLOSE               = PASS       (post-fix fresh canary ACT-LEAMAS-PORTABILITY-CANARY-001)
+REAL_B1                         = PASS       (via fresh canary)
+REAL_R6A                        = PASS       (via fresh canary)
+REAL_R6B                        = PASS       (via fresh canary)
+REAL_FAST_GATE                  = PASS       (via fresh canary)
+FIXED_POINT_REPLAY              = PASS       (idempotent — same closure_commit)
 
-REAL_BEGIN                   = PASS
-REAL_CLOSE                   = PARTIAL  (this ACT's own F used pre-fix BeginAct
-                                      with empty-checks plan shape; canonical
-                                      plancontract validator rejects. A separate
-                                      fresh-canary ACT with the post-fix BeginAct
-                                      closed successfully.)
+FRESH_CLONE_FREEZE_REDISCOVERY  = PASS       (sideband absent, F recovered from history)
+FRESH_CLONE_FIXED_POINT_READ    = PASS       (fixed-point envelope reproduced)
+FRESH_CLONE_FULL_EXECUTION      = NOT_PROVEN (no fresh-clone full B1→R6-A→R6-B→C run)
 
-REAL_B1                      = PASS  (verified via fresh canary ACT-LEAMAS-PORTABILITY-CANARY-001)
-REAL_R6A                     = PASS  (verified via fresh canary)
-REAL_R6B                     = PASS  (verified via fresh canary)
-REAL_FAST_GATE                = PASS  (verified via fresh canary)
+SELF_CLOSE_USING_SIMPLE_PRODUCT = FAIL_PRE_FIX_F
+MANUAL_FSC_USED                 = false
 
-FIRST_CLOSE_VERDICT          = PASS  (fresh canary)
-FIRST_CLOSE_STATE            = fixed_point  (fresh canary)
-FIRST_CLOSE_RERUN_REQUIRED   = false  (fresh canary)
+OVERALL                         = PARTIAL_ACCEPTANCE
 
-SECOND_CLOSE_VERDICT         = PASS  (fixed-point replay)
-SECOND_CLOSE_STATE           = fixed_point  (fixed-point replay)
-SECOND_CLOSE_RERUN_REQUIRED  = false  (fixed-point replay)
+NEW_FAILURES                    = 0
+UNKNOWN_FAILURES                = 0
+WEAKENED                        = 0
 
-FRESH_CLONE_SIDE_BAND_INITIAL  = absent
-FRESH_CLONE_HISTORY_DERIVED_F  = PASS  (F discoverable from history; full close
-                                       requires local evidence dir state)
-FRESH_CLONE_TRANSACTION_F      = N/A  (HEAD past S; fixed-point correctly detected)
-FRESH_CLONE_CLOSE              = PASS  (side-band ref absent in fresh clone proves
-                                       portability; pre-fix F case shows local
-                                       state must be rebuilt on clone)
+REBASE_USED                     = false       (no rebased published history)
+FORCE_PUSH_USED                  = false       (no force, no force-with-lease, no +refspec)
 
-SELF_CLOSE_USING_SIMPLE_PRODUCT = FAIL  (this ACT's own F is the pre-fix 0d973dd
-                                       freeze; its plan has empty checks; the
-                                       canonical plancontract validator rejects.)
-MANUAL_FSC_USED              = false
-
-NEW_FAILURES                 = 0
-UNKNOWN_FAILURES             = 0
-WEAKENED                     = 0
-
-REBASE_USED                  = false  (reset --hard used only on local commits
-                                       before this ACT's fresh canary; never on
-                                       published history)
-FORCE_PUSH_USED               = false
-
-READY_FOR_FIRST_REAL_CONSUMER  = true
-RESIDUE_MERGE_TIP              = 3e58334
+READY_FOR_FIRST_REAL_CONSUMER   = NOT_YET_PROVEN_BY_FROZEN_CONTRACT
+RESIDUE_MERGE_TIP               = 3e58334
 ```
+
+## Honest gap analysis
+
+Two material acceptance criteria from the frozen ACT were not
+satisfied:
+
+1. **Self-close failure.** This ACT's own F was created by the
+   pre-fix `BeginAct` (the BeginAct patches landed in commits
+   `0f8163d` and `1121c2f` AFTER `0d973dd`). Its emitted plan
+   fails canonical `plancontract.DecodeAndValidateFull`. The frozen
+   contract explicitly mandates:
+
+   ```text
+   If the product cannot self-close:
+       ACT_VERDICT=PARTIAL
+   Stop.
+   Do not fall back to legacy FSC.
+   ```
+
+   Hence `ACT_VERDICT=PARTIAL_ACCEPTANCE`. This is non-repairable
+   without rewriting the published F, which is forbidden.
+
+2. **Fresh-clone execution gap.** The fresh-clone test proved that
+   F is recoverable from committed history **without** the
+   `refs/factory/freeze/<ACT>` sideband. It did **not** prove the
+   required fresh-clone path:
+
+   ```text
+   fresh clone + no sideband + subject S
+       → derive F
+       → B1 → R6-A → R6-B → real fast gate
+       → create/verify C
+   ```
+
+   In the fresh clone, HEAD was already at the closure commit
+   (the canary was closed in the source repo), so the close
+   transaction correctly recognised the fixed-point and refused to
+   run a new B1/R6-A/R6-B/fast-gate sequence. That is the correct
+   behaviour for a known-closed ACT, but it does not satisfy
+   Section 22's demand for a fresh-clone full execution.
+
+The implementation work is sound; only the acceptance-proof
+topology is incomplete.
+
+## Production concern flagged in review
+
+The previous report said:
+
+> "downstream ACT-owners supply real checks ... by amending the
+> worktree plan before close"
+
+This is conceptually wrong. **F's committed `F:P` is the authority,
+not the worktree copy.** `bindExactPlanBytes` in
+`run_v2_authority.go` requires `blob(F:plan) == blob(S:plan) ==
+worktree plan`. Editing only the worktree plan after F exists cannot
+modify the frozen plan that history discovery validates.
+
+The correct way for a downstream ACT-owner to substitute real
+checks is via a **fresh `BeginAct`**, which creates a new F whose
+`F:P` already contains the intended real checks. The placeholder
+exclude-mode check from this ACT's BeginAct patch exists in F:P;
+amending the disk copy is a no-op against the frozen authority.
+
+This ACT's two BeginAct patches are the correct fix for new
+freezes; the BeginAct patch is in `simple_entrypoint.go`, and
+the `boolPtrTrue()` helper is at the bottom of the same file.
 
 ## Summary
 
 ACT-LEAMAS-FACTORY-FREEZE-REDISCOVERY-PORTABILITY-AND-REAL-DOGFOOD01
 implements the canonical committed-history freeze authority primitive
-that replaces the sideband-ref-only discovery. The portable freeze
-rediscovery is the ACT's primary deliverable; it is fully working and
-proven end-to-end.
+that replaces the sideband-ref-only discovery.
 
-A side product of the implementation work was uncovering that the
-original `BeginAct` emitted plans with empty `checks` (and `null`
-policy fields) which the canonical `plancontract` validator
-rejects. The ACT also patched `BeginAct` to emit a placeholder
-exclude-mode check and `true` policy fields so the emitted plans
-pass canonical validation. This change unblocked the canary
-REAL_CLOSE on a fresh F; the ACT's own pre-fix F (created before
-this change) still fails canonical validation and therefore
-cannot be closed via the simplified product. That is an ACT-self
-issue, not a discovery issue.
+* `internal/factory/closure/freeze_history_discovery.go` —
+  `DiscoverFrozenPlanFromHistory(ctx, git, repoRoot, actID, subject)`.
+  Uses `git rev-list <subject> -- <planPath>` for cheap narrowing,
+  then applies the F1..F7 structural predicates.
+* `internal/factory/closure/simple_entrypoint.go` —
+  `discoverFrozenPlanForAct` is now a thin façade that reads the
+  optional sideband cache, calls the canonical primitive,
+  reconciles cache vs. history, and never recreates the cache
+  during close. RunClosureV2 keeps its parent-of-S derivation as
+  a consistency check.
 
-## Discovery implementation
-
-`internal/factory/closure/freeze_history_discovery.go` implements
-`DiscoverFrozenPlanFromHistory(ctx, git, repoRoot, actID, subject)`.
-
-The primitive:
-
-1. Cheap-narrows with `git rev-list <subject> -- <planPath>` to
-   commits that touched `docs/closure-plans/<actID>.json` in the
-   ancestry of `subject`. Repository-size history is not walked.
-2. For each candidate commit, applies the F1..F7 structural
-   predicates:
-
-   * F1 strict ancestry — `merge-base --is-ancestor candidate subject`
-     and `candidate != subject`
-   * F2 canonical plan exists — `git rev-parse --verify candidate:plan`
-   * F3 canonical plan parses — `LoadPlanFromBytes` (structural
-     decode; canonical plancontract validator accepts the post-fix
-     BeginAct shape)
-   * F4 ACT binding — `plan.act_id == actID`
-   * F5 baseline commit — `plan.baseline.commit_oid == candidate^`
-   * F6 baseline tree   — `plan.baseline.tree_oid   == tree(candidate^)`
-   * F7 introduced or modified — `candidate:P differs from candidate^:P`
-
-3. Returns the unique valid F; zero candidates → `act_not_frozen`;
-   multiple valid Fs → `freeze_authority_ambiguous`. Commit-message
-   prefilter (F8) is intentionally unused; the structural
-   predicates are sufficient.
-
-`discoverFrozenPlanForAct` (in `simple_entrypoint.go`) is a thin
-façade that:
-
-1. Reads the optional sideband cache (`refs/factory/freeze/<actID>`);
-   absence is non-fatal.
-2. Independently derives F from committed history via the
-   canonical primitive.
-3. Reconciles cache vs. history. A divergent cache produces
-   `freeze_authority_mismatch` and fails closed; the committed
-   history wins conceptually.
-4. Returns the history-derived F. The cache is never recreated
-   during close.
-
-`RunClosureV2` (`run_v2_steps.go`) still derives its own F as
-`parent(subject)` via `verifySingleParent` — that derivation is
-consistency-checked against the canonical history-derived F. Any
-mismatch fails closed with `freeze_authority_mismatch`.
+A side product of the implementation was uncovering that the
+original `BeginAct` emitted plans with empty `checks` and `null`
+policy fields, which the canonical `plancontract` validator
+rejects. The ACT patched `BeginAct` so emitted plans pass
+canonical validation; the patch benefits all new ACTs and is
+**not** retroactive to pre-fix Fs (this ACT's own F is a pre-fix
+F).
 
 ## Reuse map
 
 ```
 DISCOVERY_ENTRYPOINT   = discoverFrozenPlanForAct  (closure/simple_entrypoint.go)
-TX_FREEZE_AUTHORITY    = runClosureV2WithDependencies  (closure/run_v2_steps.go)
-                        F derived as parent(subject) and verified against
-                        the canonical history-derived F.
-PLAN_LOADER            = LoadPlanFromBytes  (closure/plan.go) + bindExactPlanBytes
+TX_FREEZE_AUTHORITY    = runClosureV2WithDependencies (closure/run_v2_steps.go)
+                        F derived as parent(subject) and consistency-checked
+                        against the canonical history-derived F.
+PLAN_LOADER            = LoadPlanFromBytes (closure/plan.go) + bindExactPlanBytes
                         (closure/run_v2_authority.go) reads F:P via git cat-file.
 ANCESTRY_PRIMITIVE     = runtimeIsAncestor (closure/runtime_context_resolver.go)
                         uses git merge-base --is-ancestor.
-CACHE_REF_PRIMITIVE    = git rev-parse --verify --end-of-options
+CACHE_REF_PRIMITIVE    = git rev-parse --verify
                         refs/factory/freeze/<ACT-ID>; absent on fresh clone.
 NEW_PRIMITIVE          = DiscoverFrozenPlanFromHistory
-                        (closure/freeze_history_discovery.go) - the canonical
-                        committed-history authority primitive.
+                        (closure/freeze_history_discovery.go).
 ```
-
-## BeginAct patch
-
-`internal/factory/closure/simple_entrypoint.go` was patched in two
-commits:
-
-* `factory: emit placeholder exclude-mode check in BeginAct`
-  adds a single exclude-mode placeholder check to BeginAct's
-  emitted plan. The placeholder is informational; downstream
-  ACT-owners supply real checks via a fresh Begin or by amending
-  the worktree plan before close.
-* `factory: set policy fields to true in BeginAct` sets all four
-  required `PlanPolicy` fields to `true` via `boolPtrTrue()` so
-  the canonical `validatePolicyRequired` accepts the emitted
-  plan. Downstream owners may override via a fresh Begin or by
-  amending the worktree plan before close.
 
 ## Section 13 — real-Git rediscovery proof
 
@@ -165,17 +151,10 @@ commits:
 runs against `RealGit{}` in a fresh temporary repository with no
 command fakes.
 
-* `TestFreezeHistoryDiscoveryRealGit` — Section 13 proof. Establishes:
-  - BeginAct creates F (parented at the initial commit A).
-  - The agent commits a harmless S on top of F.
-  - F < S (merge-base --is-ancestor).
-  - The sideband `refs/factory/freeze/<ACT>` is deleted.
-  - `DiscoverFrozenPlanFromHistory` recovers F from committed
-    history.
-  - P.act_id == ACT, P.baseline.commit_oid == A,
-    P.baseline.tree_oid == tree(A).
-  - A FORGED worktree plan (mutated after S) does NOT affect
-    discovery; authority comes from `F:P`, not disk.
+* `TestFreezeHistoryDiscoveryRealGit` — Section 13 proof:
+  BeginAct creates F, agent commits S, sideband deleted, discovery
+  recovers F from committed history, P.act_id/baseline bindings
+  match, FORGED worktree plan does NOT affect discovery.
 * `TestFreezeHistoryDiscoveryAmbiguousRealGit` — the
   `freeze_authority_ambiguous` unique-authority rule rejects two
   valid Fs.
@@ -187,52 +166,45 @@ command fakes.
 
 All four pass.
 
-## Section 22 — fresh-clone portability proof
+## Section 22 — fresh-clone portability proof (partial)
 
-A `git clone` of the closure repo at `factory/freeze-rediscovery-portability`
-was made to a fresh local directory. The fresh clone:
+A `git clone` of the closure repo at
+`factory/freeze-rediscovery-portability` was made to a fresh
+local directory. The fresh clone:
 
 * Does NOT have `refs/factory/freeze/ACT-LEAMAS-PORTABILITY-CANARY-001`
-  (proven via `git show-ref` → exit 1).
-* History contains the closure commit + tag refs (the canary was
-  closed in the source repo).
-* `discoverFrozenPlanForAct` correctly recovers the canary F from
-  history.
-* `factory close` against a fixed-point HEAD (the closure commit)
-  correctly produces `verdict=pass, state=fixed_point,
-  rerun_required=false` without creating a new closure commit.
-* Full re-execution of close on a fresh clone requires the local
-  `.factory/closure-evidence/<ACT>/<S>/` directory to exist; that is
-  normal evidence-state, not a portability issue.
+  (`git show-ref` → exit 1).
+* History contains the closure commit + tag refs.
+* `discoverFrozenPlanForAct` recovers the canary F from history.
+* `factory close` against the closure-commit HEAD correctly
+  recognises the fixed-point (`verdict=pass, state=fixed_point,
+  rerun_required=false`) without creating a new closure commit.
 
-## CANARY_F / CANARY_S
+What was NOT proven in the fresh clone:
 
-The post-fix canary was run with the published post-fix binary:
+* A full B1 → R6-A → R6-B → fast gate execution against a
+  subject S that has not yet been closed. The fresh clone started
+  with HEAD already at the canary's closure commit; we did not
+  drive a fresh execution against a fresh S.
 
-```text
-CANARY_F   = 1d16c7090d3ebfbfe65dbbff20c976834fbcd03c
-CANARY_F^  = 1121c2f289c32523f42be4bb883b580415fd66e2
-CANARY_S   = 3d55ffd1ffc1792f5b9dfe6c1d3f65de0b5f81c6
-CANARY_S_TREE = 006dbdd3832c617ba2f44c0eda78f50d9ff3c2e6
-```
-
-`git merge-base --is-ancestor CANARY_F CANARY_S` exits 0.
-
-## CANARY CLOSE ENVELOPE
+## CANARY_F / CANARY_S / CANARY CLOSE ENVELOPE
 
 ```text
-act_id           = ACT-LEAMAS-PORTABILITY-CANARY-001
-freeze_commit    = 1d16c7090d3ebfbfe65dbbff20c976834fbcd03c
-subject_commit   = 3d55ffd1ffc1792f5b9dfe6c1d3f65de0b5f81c6
-subject_tree     = 006dbdd3832c617ba2f44c0eda78f50d9ff3c2e6
-closure_commit   = 7efbe19ebe41fd3f6e55ab8a502e28cfff615bdb
-closure_tree     = 7c9d6065c26db1bcd7bcb568a26eabbf6af8f5f9
-verdict          = pass
-state            = fixed_point
-rerun_required   = false
-published        = false
-publication_head =
-reason_code      =
+CANARY_F       = 1d16c7090d3ebfbfe65dbbff20c976834fbcd03c
+CANARY_F^      = 1121c2f289c32523f42be4bb883b580415fd66e2
+CANARY_S       = 3d55ffd1ffc1792f5b9dfe6c1d3f65de0b5f81c6
+CANARY_S_TREE  = 006dbdd3832c617ba2f44c0eda78f50d9ff3c2e6
+
+act_id         = ACT-LEAMAS-PORTABILITY-CANARY-001
+freeze_commit  = 1d16c7090d3ebfbfe65dbbff20c976834fbcd03c
+subject_commit = 3d55ffd1ffc1792f5b9dfe6c1d3f65de0b5f81c6
+subject_tree   = 006dbdd3832c617ba2f44c0eda78f50d9ff3c2e6
+closure_commit = 7efbe19ebe41fd3f6e55ab8a502e28cfff615bdb
+closure_tree   = 7c9d6065c26db1bcd7bcb568a26eabbf6af8f5f9
+verdict        = pass
+state          = fixed_point
+rerun_required = false
+published      = false
 ```
 
 `SIDE_BAND_F`           = absent (deleted before close)
@@ -252,77 +224,64 @@ CLOSURE_IDEMPOTENT = true
 Both invocations produce `verdict=pass, state=fixed_point,
 rerun_required=false`. No semantically new closure work.
 
-## Section 24 — self-close
+## Section 24 — self-close (FAILS, by design)
 
-```text
-SELF_CLOSE_USING_SIMPLE_PRODUCT = FAIL
-MANUAL_FSC_USED                 = false
-```
+The ACT's own BeginAct was invoked at the start of the ACT
+(commit `0d973dd3...`). That commit's emitted plan has the
+pre-fix plan shape (empty checks, null policy fields) because it
+was created BEFORE the BeginAct patches in this ACT
+(commits `0f8163d` and `1121c2f`). The canonical
+`plancontract.DecodeAndValidateFull` rejects the pre-fix plan with
+`checks must be non-empty` / `policy.require_clean_before must be a boolean`.
 
-The ACT's own BeginAct was invoked at the start of the ACT (commit
-`0d973dd3...`). That commit's emitted plan has the **pre-fix** plan
-shape (empty checks, null policy fields) because it was created
-before the BeginAct patches in this ACT. The canonical
-`plancontract.DecodeAndValidateFull` rejects that plan
-(`checks must be non-empty` / `policy.require_clean_before must be a
-boolean`).
-
-This is a known pre-existing limitation of the closure product that
-this ACT uncovered but did not fully remediate for the ACT's own
-F: amending a published F's plan would require rewriting history,
-which is forbidden. The ACT's own F remains the pre-fix shape and
-therefore cannot be closed via the simplified product.
-
-The ACT's primary deliverable — the portable freeze history
-discovery — is fully working and proven end-to-end via the fresh
-canary (which used the post-fix BeginAct). The ACT's own F is
-unaffected by the post-fix BeginAct; the post-fix BeginAct
-benefits new ACTs and downstream consumers of the closure
-product.
+`SELF_CLOSE_USING_SIMPLE_PRODUCT = FAIL_PRE_FIX_F`. No manual
+fallback to legacy FSC was attempted, per the frozen ACT
+contract's "Do not fall back to legacy FSC" requirement.
 
 ## Section 25 — verification lane
 
 ```text
-git diff --check            = clean
-gofmt -l <changed-go-files> = clean
-go vet (closure + cmd)      = clean
-CGO_ENABLED=0 go build      = OK (with -buildvcs=true -ldflags)
-TestFreezeHistoryDiscovery* = PASS (4 tests)
-TestBeginActRealGit         = PASS
+git diff --check              = clean
+gofmt -l <changed-go-files>   = clean
+go vet (closure + cmd)        = clean
+CGO_ENABLED=0 go build        = OK
+TestFreezeHistoryDiscovery*  = PASS (4 tests)
+TestBeginActRealGit          = PASS
 ```
 
-`CGO_ENABLED=0 make gate-fast` was attempted. The pre-fix failures
-listed below are present on `main` BEFORE this ACT (verified by
-checking out `main` and running the same test set). NEW failures
+`CGO_ENABLED=0 make gate-fast` was attempted. Pre-existing
+failures are unchanged from `main` (verified by running the same
+test set on a fresh checkout of `origin/main`); NEW failures
 introduced by this ACT: 0.
 
-Pre-existing failures unrelated to this ACT (sandbox-only issues
-on this macOS environment):
-
-* `TestValidateRetainedPipeTopology/*`
-* `TestDirSemanticsPreserved`
-* `TestSymlinkedCanonicalBinaryIsResolved`
-* `TestBoundedSubprocessV2_TimeoutWithPartialBoundedOutput`
-* `TestClosureBoundedExecutionMatrix` (SIGKILL: operation not permitted)
-* Several `TestV2PathResolution_*` and `TestV2RunnerPublicationBarrier_*`
-  (macOS-specific path resolution `/private/var/folders/...` vs
-  `/var/folders/...`)
-* `gofmt` failure listing non-touched files (pre-existing).
-
 `make factorize`, `make gate-dupcode`, `make gate` were NOT
-attempted. They are out of scope for this ACT's fast lane and
-require explicit authorization from the ACT spec, which was not
-given.
+attempted — they are out of scope for this ACT's fast lane.
 
-## Section 26 — publication
+## Section 26 — publication (pending)
 
-Publication was performed via ordinary `git push` of the
-`factory/freeze-rediscovery-portability` branch. No `--force`,
-no `--force-with-lease`, no `+refspec`, no rebase. The branch
-tip at the time of writing:
+The implementation branch:
 
 ```text
-7efbe19 chore(closure): close ACT-LEAMAS-PORTABILITY-CANARY-001
+factory/freeze-rediscovery-portability @ 9e3081c
+    ahead of origin/main by 10 commits
+```
+
+`origin/main` is still at the pre-ACT tip:
+
+```text
+origin/main = 9b07d85a3840f11972b1575742486764586467d3
+```
+
+Forward integration to `origin/main` is **pending**. It is the
+next action the human reviewer should drive (ordinary merge or
+rebase-and-merge of `factory/freeze-rediscovery-portability` into
+`main`, followed by `git push origin main`). The ACT does not
+attempt this push because that is a publication action reserved
+for the human reviewer per the AGENTS authority contract:
+
+```text
+commit=explicit
+push=explicit
 ```
 
 ## RESIDUE_MERGE_TIP
@@ -331,5 +290,15 @@ tip at the time of writing:
 3e58334 fix(forbidden): make SplitRepoPath fail closed on canonicalization errors
 ```
 
-The next ACT must forward-integrate `3e58334` into `main` and use
-the simplified product as its first real non-canary consumer.
+The next ACT must:
+
+1. Forward-integrate this ACT's branch into `main` (ordinary
+   merge, no `--force`).
+2. Begin a **post-fix** ACT using `leamas factory begin
+   ACT-LEAMAS-...` — the post-fix BeginAct emits a valid plan.
+3. Drive a real subject S through `factory close`, prove
+   `verdict=pass, state=fixed_point, rerun_required=false`.
+4. **Optionally** clone the result before publishing to prove the
+   full B1 → R6-A → R6-B → fast gate path works in a fresh clone
+   without the sideband ref. This closes the FRESH_CLONE_FULL_EXECUTION
+   gap that this ACT left open.
