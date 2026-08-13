@@ -36,9 +36,19 @@ func TestInventoryRepositoryWorktrees_RealGitPorcelainZAndNewlinePath(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The inventory contract stores canonical (post-EvalSymlinks)
+	// worktree roots. On macOS /var is a symlink to /private/var,
+	// so the canonical form of `linked` may differ from its lexical
+	// t.TempDir()-derived spelling. Compare via canonical identity
+	// so the test exercises the production contract rather than
+	// the platform-specific lexical form.
+	canonicalLinked, lerr := filepath.EvalSymlinks(linked)
+	if lerr != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", linked, lerr)
+	}
 	found := false
 	for _, path := range inv.RootsView() {
-		if path == linked {
+		if path == canonicalLinked {
 			found = true
 		}
 	}

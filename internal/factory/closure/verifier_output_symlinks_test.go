@@ -6,7 +6,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -137,6 +136,14 @@ func canonicalFromInventory(inv RepositoryWorktreeInventory) []CanonicalWorktree
 // Name() equals the resolved parent from the inventory-aware
 // resolver. A drift here would mean a future refactor that
 // re-resolves the destination after opening the parent.
+//
+// The authority exposes canonical paths (post-EvalSymlinks); on
+// macOS /var is a symlink to /private/var, so a string-equality
+// comparison between the lexical fixture path and the canonical
+// parent would drift spuriously. The test therefore uses
+// os.SameFile as the canonical-identity oracle: two paths
+// reference the same directory iff their os.Stat results carry
+// matching inode identity.
 func TestConfineDestination_RootNameMatchesOpenedParent(t *testing.T) {
 	fx := newSymlinkFixture(t)
 	inventory := inventoryWithRoots(fx.main, fx.linkedReal)
@@ -148,14 +155,28 @@ func TestConfineDestination_RootNameMatchesOpenedParent(t *testing.T) {
 	defer auth.Close()
 	wantParent := filepath.Clean(fx.outside)
 	gotParent := filepath.Dir(auth.CanonicalPath())
-	if gotParent != wantParent {
-		t.Fatalf("parent mismatch: got %q want %q", gotParent, wantParent)
+	wantInfo, werr := os.Stat(wantParent)
+	if werr != nil {
+		t.Fatalf("stat wantParent %q: %v", wantParent, werr)
+	}
+	gotInfo, gerr := os.Stat(gotParent)
+	if gerr != nil {
+		t.Fatalf("stat gotParent %q: %v", gotParent, gerr)
+	}
+	if !os.SameFile(wantInfo, gotInfo) {
+		t.Fatalf("parent mismatch: got %q want %q (same-file=false)", gotParent, wantParent)
 	}
 }
 
 // TestConfineDestination_PrepareRoundTrip confirms the
 // canonical destination set during preparation survives a
 // defer-cleaned close and the auth's String methods.
+//
+// The publication contract exposes canonical (post-EvalSymlinks)
+// paths; on macOS /var is a symlink to /private/var, so a
+// raw strings.HasPrefix between the lexical fixture path and
+// the canonical destination would drift spuriously. The test
+// compares via os.SameFile on the parent directory.
 func TestConfineDestination_PrepareRoundTrip(t *testing.T) {
 	fx := newSymlinkFixture(t)
 	inventory := inventoryWithRoots(fx.main, fx.linkedReal)
@@ -168,8 +189,16 @@ func TestConfineDestination_PrepareRoundTrip(t *testing.T) {
 	if auth.CanonicalPath() == "" {
 		t.Fatalf("canonical path empty")
 	}
-	if !strings.HasPrefix(auth.CanonicalPath(), filepath.Clean(fx.outside)) {
-		t.Fatalf("canonical %q outside %q", auth.CanonicalPath(), fx.outside)
+	wantParentInfo, werr := os.Stat(fx.outside)
+	if werr != nil {
+		t.Fatalf("stat wantParent %q: %v", fx.outside, werr)
+	}
+	gotParentInfo, gerr := os.Stat(filepath.Dir(auth.CanonicalPath()))
+	if gerr != nil {
+		t.Fatalf("stat gotParent %q: %v", filepath.Dir(auth.CanonicalPath()), gerr)
+	}
+	if !os.SameFile(wantParentInfo, gotParentInfo) {
+		t.Fatalf("canonical %q not under %q (same-file=false)", auth.CanonicalPath(), fx.outside)
 	}
 	if auth.State() != PublicationNotPublished {
 		t.Fatalf("expected initial state not_published, got %s", auth.State())

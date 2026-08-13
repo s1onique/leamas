@@ -102,9 +102,22 @@ type RepositoryWorktreeInventory struct {
 }
 
 // newRepositoryWorktreeInventoryFromCanonical constructs the
-// production inventory from already observed roots. It still
-// validates the authority boundary so callers cannot smuggle
-// relative, dirty, unresolved, or duplicate roots into it.
+// production inventory from observed roots. Each root MUST be
+// an existing absolute path; the function canonicalizes every
+// root via canonicalizeWorktreeRoot (which resolves symlink
+// components) and stores the canonical form so downstream
+// callers observe one shared identity. Non-absolute, non-clean,
+// or unresolvable inputs are rejected with a typed diagnostic;
+// duplicate canonical forms collapse to a single entry.
+//
+// Note: the canonical form is intentionally the post-EvalSymlinks
+// result. On platforms that expose user-facing symlinked
+// ancestors (notably macOS, where /var is a symlink to
+// /private/var), a caller that supplies /var/folders/... must
+// see the inventory store /private/var/folders/... so all
+// downstream root comparisons use a single identity. Strict
+// equality between input and canonical form is therefore
+// incorrect; canonicalization is.
 func newRepositoryWorktreeInventoryFromCanonical(roots []string) (RepositoryWorktreeInventory, error) {
 	if len(roots) == 0 {
 		return RepositoryWorktreeInventory{}, NewV2VerifierError(V2VerifierDiagnostic{
@@ -119,18 +132,15 @@ func newRepositoryWorktreeInventoryFromCanonical(roots []string) (RepositoryWork
 		if !filepath.IsAbs(root) || filepath.Clean(root) != root {
 			return RepositoryWorktreeInventory{}, newWorktreeInventoryError("worktree root is not absolute and clean: %q", root)
 		}
-		resolved, err := canonicalizeWorktreeRoot(root)
+		canonicalRoot, err := canonicalizeWorktreeRoot(root)
 		if err != nil {
 			return RepositoryWorktreeInventory{}, newWorktreeInventoryError("canonicalize worktree root %q: %s", root, err)
 		}
-		if resolved != root {
-			return RepositoryWorktreeInventory{}, newWorktreeInventoryError("worktree root is not canonical: %q", root)
-		}
-		if _, ok := seen[root]; ok {
+		if _, ok := seen[canonicalRoot]; ok {
 			continue
 		}
-		seen[root] = struct{}{}
-		canonical = append(canonical, root)
+		seen[canonicalRoot] = struct{}{}
+		canonical = append(canonical, canonicalRoot)
 	}
 	return RepositoryWorktreeInventory{roots: canonical}, nil
 }

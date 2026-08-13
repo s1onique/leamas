@@ -344,7 +344,20 @@ func TestPublication_AuthoritativeDirectory(t *testing.T) {
 		t.Fatalf("CanonicalPath mismatch: result %q vs authority %q",
 			res.CanonicalPath, auth.CanonicalPath())
 	}
-	if !strings.HasPrefix(res.CanonicalPath, filepath.Clean(outside)) {
-		t.Fatalf("CanonicalPath %q not under %q", res.CanonicalPath, outside)
+	// The publication contract exposes canonical (post-EvalSymlinks)
+	// destinations. On macOS /var is a symlink to /private/var, so a
+	// raw strings.HasPrefix between the lexical fixture path and the
+	// canonical path would drift spuriously. Compare via canonical
+	// containment using filepath.Rel on canonical forms, which the
+	// verifier uses internally, so the test exercises the production
+	// contract rather than the platform-specific lexical form.
+	canonicalOutside, oerr := filepath.EvalSymlinks(outside)
+	if oerr != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", outside, oerr)
+	}
+	rel, rerr := filepath.Rel(canonicalOutside, res.CanonicalPath)
+	if rerr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		t.Fatalf("CanonicalPath %q not under canonical %q (rel=%q err=%v)",
+			res.CanonicalPath, canonicalOutside, rel, rerr)
 	}
 }

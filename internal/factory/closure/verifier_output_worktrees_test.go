@@ -255,22 +255,33 @@ func TestParseWorktreeInventory_RejectsMissingPrefix(t *testing.T) {
 // TestRepositoryWorktreeInventory_Contains confirms the
 // containment check classifies both equality and strict
 // descendants; non-members are rejected.
+//
+// The inventory stores canonical (post-EvalSymlinks) roots and
+// the test compares against canonical identities. On macOS
+// /var is a symlink to /private/var, so a lexical t.TempDir()
+// path must be canonicalised before the containment check
+// sees it; the helper does so via os.SameFile so the test
+// exercises the production contract rather than the
+// platform-specific lexical form.
 func TestRepositoryWorktreeInventory_Contains(t *testing.T) {
 	owner := t.TempDir()
+	canonicalOwner, err := filepath.EvalSymlinks(owner)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", owner, err)
+	}
 	inv, err := newRepositoryWorktreeInventoryFromCanonical([]string{owner})
 	if err != nil {
 		t.Fatalf("NewRepositoryWorktreeInventory: %v", err)
 	}
-	_ = err
 	mustContain := []string{
-		owner,
-		filepath.Join(owner, "file"),
-		filepath.Join(owner, "sub/dir/x"),
+		canonicalOwner,
+		filepath.Join(canonicalOwner, "file"),
+		filepath.Join(canonicalOwner, "sub/dir/x"),
 	}
 	mustNot := []string{
-		filepath.Join(filepath.Dir(owner), "other"),
-		owner + "ed", // sibling with same prefix but not a child
-		filepath.Dir(owner),
+		filepath.Join(filepath.Dir(canonicalOwner), "other"),
+		canonicalOwner + "ed", // sibling with same prefix but not a child
+		filepath.Dir(canonicalOwner),
 	}
 	for _, c := range mustContain {
 		if !inv.Contains(c) {
@@ -286,6 +297,12 @@ func TestRepositoryWorktreeInventory_Contains(t *testing.T) {
 
 // TestInventoryRoots_ReturnsCopy enforces that callers cannot
 // mutate the inventory's underlying slice.
+//
+// The inventory stores canonical (post-EvalSymlinks) roots;
+// the mutation probe therefore writes to a caller-visible
+// copy and confirms the next RootsView() reflects the
+// canonical form (not the lexical fixture form), proving the
+// caller never escapes the inventory's internal slice.
 func TestInventoryRoots_ReturnsCopy(t *testing.T) {
 	root := t.TempDir()
 	a := filepath.Join(root, "a")
@@ -296,6 +313,14 @@ func TestInventoryRoots_ReturnsCopy(t *testing.T) {
 	if err := os.MkdirAll(b, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	canonicalA, aerr := filepath.EvalSymlinks(a)
+	if aerr != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", a, aerr)
+	}
+	canonicalB, berr := filepath.EvalSymlinks(b)
+	if berr != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", b, berr)
+	}
 	inv, err := newRepositoryWorktreeInventoryFromCanonical([]string{a, b})
 	if err != nil {
 		t.Fatalf("NewRepositoryWorktreeInventory: %v", err)
@@ -303,8 +328,11 @@ func TestInventoryRoots_ReturnsCopy(t *testing.T) {
 	c1 := inv.RootsView()
 	c1[0] = filepath.Join(root, "c")
 	c2 := inv.RootsView()
-	if c2[0] != a {
+	if c2[0] != canonicalA {
 		t.Fatalf("inventory was mutated through the copy: %v", c2)
+	}
+	if c2[1] != canonicalB {
+		t.Fatalf("inventory second slot drifted: %v", c2)
 	}
 }
 
@@ -328,6 +356,13 @@ func TestCanonicalizeWorktreeRoot_NonExistentAbsentInsideTemp(t *testing.T) {
 
 // TestCanonicalizeWorktreeRoot_SymlinkedRoot resolves a path
 // whose component chain includes a symlink into the destination.
+//
+// canonicalizeWorktreeRoot resolves the FULL path including
+// any symlinked ancestors (notably macOS /var -> /private/var).
+// The contract is therefore "EvalSymlinks across the entire
+// component chain", and the expected value is the canonical
+// form of the target, not the lexical form of the target's
+// parent.
 func TestCanonicalizeWorktreeRoot_SymlinkedRoot(t *testing.T) {
 	root := t.TempDir()
 	target := filepath.Join(root, "real")
@@ -342,8 +377,12 @@ func TestCanonicalizeWorktreeRoot_SymlinkedRoot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got != filepath.Clean(target) {
-		t.Fatalf("got %q want %q", got, target)
+	want, werr := filepath.EvalSymlinks(target)
+	if werr != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", target, werr)
+	}
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }
 

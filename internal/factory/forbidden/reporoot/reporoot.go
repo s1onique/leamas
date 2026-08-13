@@ -115,18 +115,85 @@ func (r *RootResolver) isReadable(dir string) bool {
 }
 
 // SplitRepoPath splits an absolute path into (repoRoot, relativePath).
+//
+// Both root and the relative-path operand MUST be in the same
+// canonical form for filepath.Rel to produce a sensible answer
+// (e.g. "." for the repo root itself, "internal/factory" for a
+// sub-path). Without canonicalization of absPath the function
+// silently returns paths full of ".." segments when the caller
+// supplies a path whose ancestors include a symlink (notably on
+// macOS, where /var is a symlink to /private/var, so
+// /var/folders/... and /private/var/folders/... identify the
+// same directory).
+//
+// The function canonicalizes absPath through the same
+// EvalSymlinks-based path the production root uses; this is the
+// matching authority for canonical-path comparisons.
 func (r *RootResolver) SplitRepoPath(absPath string) (repoRoot string, relPath string, err error) {
 	root, err := r.Resolve(absPath)
 	if err != nil {
 		return "", "", err
 	}
 
-	rel, err := filepath.Rel(root, absPath)
+	canonicalAbs, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// absPath does not exist on disk. The repo root
+			// exists (Resolve succeeded), so absPath is below
+			// root and never materialized. Walk upward to the
+			// largest existing prefix and re-append the missing
+			// suffix so the relative path is still meaningful.
+			canonicalAbs, err = canonicalizeExistingPrefix(absPath)
+			if err != nil {
+				return root, "", nil
+			}
+		} else {
+			return root, "", nil
+		}
+	}
+
+	rel, err := filepath.Rel(root, canonicalAbs)
 	if err != nil {
 		return root, "", nil
 	}
 
 	return root, rel, nil
+}
+
+// canonicalizeExistingPrefix returns the canonical form of the
+// largest existing prefix of path with the missing suffix
+// re-appended lexically. When the full path exists, this is
+// identical to filepath.EvalSymlinks. When the path does not
+// exist, this avoids the resolver's reflexive refusal of the
+// nil-exact identity case in SplitRepoPath (the repo root still
+// exists; only the leaf is missing).
+func canonicalizeExistingPrefix(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	tail := ""
+	cursor := abs
+	for {
+		if _, err := os.Lstat(cursor); err == nil {
+			canonicalCursor, err := filepath.EvalSymlinks(cursor)
+			if err != nil {
+				return "", err
+			}
+			return filepath.Join(canonicalCursor, tail), nil
+		}
+		parent := filepath.Dir(cursor)
+		if parent == cursor {
+			return abs, nil
+		}
+		base := filepath.Base(cursor)
+		if tail == "" {
+			tail = base
+		} else {
+			tail = filepath.Join(base, tail)
+		}
+		cursor = parent
+	}
 }
 
 // ImportPathFromRelPath converts a repository-relative path to an import path.
