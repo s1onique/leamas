@@ -586,7 +586,16 @@ func BeginAct(ctx context.Context, deps SimpleCloseDeps, actID string) (FrozenPl
 		// resolve S^{tree} downstream.
 		Baseline:  Baseline{CommitOID: headCommit, TreeOID: headTree},
 		Execution: PlanExecution{Mode: &serialMode},
-		Checks:    []PlanCheck{},
+		// Single exclude-mode placeholder check so the canonical
+		// Plan Contract v1 validator accepts the emitted plan
+		// ("checks must be non-empty"). BeginAct is the freeze
+		// authority; downstream ACT-owners REPLACE these checks via
+		// a fresh Begin or by amending the worktree plan before close.
+		Checks: []PlanCheck{{
+			ID:   "factory-begin-placeholder",
+			Mode: "exclude",
+			Reason: "factory begin emits a placeholder exclude-mode check so the plan passes canonical validation; downstream owners supply real checks via a fresh begin or by amending the worktree plan.",
+		}},
 		Artifacts: []PlanArtifact{},
 		Policy:    PlanPolicy{},
 	}
