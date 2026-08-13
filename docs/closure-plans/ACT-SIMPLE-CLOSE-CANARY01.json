@@ -1,0 +1,1 @@
+{"contract_version":1,"act_id":"ACT-SIMPLE-CLOSE-CANARY01","baseline":{"commit_oid":"a6c6497eb45c24d3228a1f3fb3cacea730068324","tree_oid":""},"execution":{"mode":"serial_fail_fast"},"checks":[],"artifacts":[],"policy":{"require_clean_before":null,"require_clean_after":null,"forbid_tracked_full_digests":null,"require_diff_check":null}}
