@@ -1,0 +1,92 @@
+{
+  "act_id": "ACT-LEAMAS-MACOS-PATH-AUTHORITY-PORTABILITY-AND-PROMOTION-CLOSURE01",
+  "artifacts": [],
+  "baseline": {
+    "commit_oid": "e1b54b31ec9c2afb6917804fbab9512bd6f2d8bb",
+    "tree_oid": "42df2a6bdfff73af75a9df902158721d734c9801"
+  },
+  "checks": [
+    {
+      "argv": ["go", "test", "-count=1", "-v", "-run", "TestClosureBinaryGateRealProductionHappyPath|TestClosureBinaryGateIsolatedFixtureCanary|TestClosureExactSubjectBinaryOutputConfinement", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "portability-closure-production-canary",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "test", "-count=1", "-v", "-run", "^TestGateOsRunnerStartWaitContract$", "./internal/factory/closure/evidence/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "portability-closure-runner-start-wait-contract",
+      "mode": "run",
+      "timeout_seconds": 120,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "test", "-count=1", "-v", "-run", "TestR6BSubjectCleanup|TestR6BBinaryAuthorityResultValidation|TestR6BGateObservationFailureSurfaced|TestR6BGateClassificationFailSurfaced|TestR6BGateClassificationUnavailableSurfaced|TestR6BCollectorMismatchPropagates|TestSubjectExecutorCleanupFailureStillErrors|TestSubjectExecutorPrimaryAndCleanupFailurePreserved|TestR6BSubjectCleanupCausePreservesInnerErr", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "portability-closure-adapter-evidence-preservation",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "test", "-count=1", "-v", "-run", "TestV2PathMatrix_InsideRepoRejected|TestV2PathMatrix_RelativeRepoRootRejected|TestV2PathMatrix_NonexistentLeafSymlinkIntoRepoRejected|TestV2PathMatrix_WorkingPlanDifferingFromFP|TestV2PathMatrix_WorkingPlanInsideRepoRejected|TestV2PathMatrix_ManifestInsideRepoRejected|TestV2PathMatrix_NULByteRejected|TestV2VerifierValidatePathMatrix|TestV2VerifierAuthorityResolvePathObjectMatrix|TestV2AbsolutePlanPathRejected|TestV2VerifierFrozenPlanAuthority|TestV2VerifierCommittedManifestAuthority|TestNormativePathPolicyFailClosed|TestRunExecutionFieldsPathPolicyDiscoverable|TestSemanticTaxonomyPathsFailOnDrift", "./internal/factory/closure/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "portability-closure-path-authority-strict-pass",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "test", "-count=1", "-run", "TestGateOsRunnerStartWaitContract|TestGateRunnerLifecycle", "./internal/factory/closure/evidence/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "portability-closure-runner-lifecycle-evidence",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "vet", "./internal/factory/closure/...", "./internal/factory/closure/evidence/..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "portability-closure-vet",
+      "mode": "run",
+      "timeout_seconds": 180,
+      "working_directory": "."
+    },
+    {
+      "argv": ["gofmt", "-l", "internal/factory/closure/closure_protocol_v2_executor.go", "internal/factory/closure/closure_evidence_publication_runner_adapter.go", "internal/factory/closure/binary_gate_testhelpers_test.go", "internal/factory/closure/closure_exact_subject_binary_output_test.go", "internal/factory/closure/evidence/gate_runner_lifecycle_test.go"],
+      "environment": {},
+      "id": "portability-closure-gofmt",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["git", "diff", "--check"],
+      "environment": {},
+      "id": "portability-closure-diff-check",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": ["go", "build", "-trimpath", "./..."],
+      "environment": {"CGO_ENABLED": "0"},
+      "id": "portability-closure-static-build",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    }
+  ],
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "require_clean_before": true,
+    "require_clean_after": true,
+    "forbid_tracked_full_digests": true,
+    "require_diff_check": true
+  },
+  "contract_version": 1
+}
