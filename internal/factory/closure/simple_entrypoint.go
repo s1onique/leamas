@@ -597,7 +597,17 @@ func BeginAct(ctx context.Context, deps SimpleCloseDeps, actID string) (FrozenPl
 			Reason: "factory begin emits a placeholder exclude-mode check so the plan passes canonical validation; downstream owners supply real checks via a fresh begin or by amending the worktree plan.",
 		}},
 		Artifacts: []PlanArtifact{},
-		Policy:    PlanPolicy{},
+		// Policy fields must be present and true per plancontract
+		// validatePolicyRequired. BeginAct sets them all true so the
+		// emitted plan passes canonical validation; downstream
+		// ACT-owners may override via a fresh Begin or by amending
+		// the worktree plan before close.
+		Policy: PlanPolicy{
+			RequireCleanBefore:       boolPtrTrue(),
+			RequireCleanAfter:        boolPtrTrue(),
+			ForbidTrackedFullDigests: boolPtrTrue(),
+			RequireDiffCheck:         boolPtrTrue(),
+		},
 	}
 	planBytes, err := json.Marshal(&plan)
 	if err != nil {
@@ -839,3 +849,9 @@ func simpleBoundedGitFailureDetail(res gitCommandResult) string {
 	}
 	return "git command failed"
 }
+
+
+
+// boolPtrTrue returns a pointer to true. Used to set nullable
+// boolean fields in the canonical Plan Contract v1 wire shape.
+func boolPtrTrue() *bool { v := true; return &v }
