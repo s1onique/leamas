@@ -3,7 +3,7 @@
 ## STATUS
 
 ```text
-OPEN
+CLOSED (bootstrap exception)
 ```
 
 ## MISSION
