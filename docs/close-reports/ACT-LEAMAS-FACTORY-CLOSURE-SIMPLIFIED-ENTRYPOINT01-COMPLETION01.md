@@ -1,11 +1,36 @@
 # ACT-LEAMAS-FACTORY-CLOSURE-SIMPLIFIED-ENTRYPOINT01-COMPLETION01 Close Report
 
-## Verdict
+## Verdict (tightened by review)
 
-**PARTIAL_PORTABILITY**
+```text
+CORE_PRODUCT                  = GREEN
+CLI                           = GREEN
+BEGIN_REAL_GIT                = PASS
 
-Core product is GREEN, published, and proven by real-Git tests
-plus a real-Git dogfood canary. Fresh-clone portability is OPEN.
+FULL_SIMPLIFIED_CLOSE_CANARY  = NOT YET PROVEN
+FRESH_CLONE_CLOSE             = FAIL
+FREEZE_REF_PORTABILITY        = OPEN
+
+OVERALL                       = PARTIAL_PORTABILITY_AND_CANARY
+```
+
+Core product is GREEN and published. BeginAct is proven on
+real Git (HEAD == F, freeze-ref == F, F^ == A, idempotent
+re-Begin, traversal rejected). The CLI pair is GREEN. Five
+adversarial authority cases PASS.
+
+What is NOT yet proven in this ACT:
+
+* The dogfood canary did NOT complete `factory close`
+  successfully after the `baseline.tree_oid` correction:
+  REAL_GATE = PARTIAL, REAL_CANARY_RERUN_REQUIRED = true,
+  close was exercised only against the pre-fix F. The next
+  ACT must redo the canary end-to-end on a fresh F.
+* Fresh-clone close fails because the sideband
+  `refs/factory/freeze/*` is local-only.
+
+Both gaps are addressed by
+`ACT-LEAMAS-FACTORY-FREEZE-REDISCOVERY-PORTABILITY-AND-REAL-DOGFOOD01`.
 
 ## BASE_COMMIT
 
