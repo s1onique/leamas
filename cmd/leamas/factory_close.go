@@ -18,11 +18,21 @@ func handleFactoryClose() {
 	os.Exit(runFactoryClose(os.Args[3:], os.Stdout, os.Stderr))
 }
 
+// runFactoryClose dispatches `leamas factory close <args>...`.
+// If the first token starts with `--`, the simplified close
+// path handles the invocation directly using
+// --act/--subject/--lane flags. Otherwise the first token is
+// treated as a legacy subcommand and dispatched to its
+// specialized handler.
 func runFactoryClose(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprintln(stderr, "factory close: missing subcommand")
 		printFactoryCloseUsage(stderr)
 		return closeFailureCode("usage", "missing subcommand")
+	}
+	// Simplified close: first arg is a flag, not a subcommand.
+	if strings.HasPrefix(args[0], "-") {
+		return runFactorySimpleClose(args, stdout, stderr)
 	}
 	switch args[0] {
 	case "plan":
