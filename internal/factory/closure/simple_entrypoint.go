@@ -432,7 +432,9 @@ func BeginAct(ctx context.Context, deps SimpleCloseDeps, actID string) (FrozenPl
 		return FrozenPlan{}, fmt.Errorf("begin: caller worktree is dirty; commit or stash changes before running `leamas factory begin`. dirty output:\n%s", string(statusRes.Stdout))
 	}
 
-	// 2. Resolve current HEAD^{commit}. F will be parented there.
+	// 2. Resolve current HEAD^{commit} and HEAD^{tree}. F will be
+	//    parented at HEAD; the canonical Plan MUST carry both
+	//    commit_oid and tree_oid (plancontract rejects empty OIDs).
 	headCommit, err := runGitValue(ctx, deps.Git, deps.RepositoryRoot,
 		"rev-parse", "--verify", "--end-of-options", "HEAD^{commit}")
 	if err != nil {
@@ -441,6 +443,15 @@ func BeginAct(ctx context.Context, deps SimpleCloseDeps, actID string) (FrozenPl
 	headCommit = strings.TrimSpace(headCommit)
 	if headCommit == "" {
 		return FrozenPlan{}, errors.New("begin: empty HEAD^{commit}")
+	}
+	headTree, err := runGitValue(ctx, deps.Git, deps.RepositoryRoot,
+		"rev-parse", "--verify", "--end-of-options", "HEAD^{tree}")
+	if err != nil {
+		return FrozenPlan{}, fmt.Errorf("begin: rev-parse HEAD^{tree}: %w", err)
+	}
+	headTree = strings.TrimSpace(headTree)
+	if headTree == "" {
+		return FrozenPlan{}, errors.New("begin: empty HEAD^{tree}")
 	}
 
 	// 2.5. EARLY ref-existence check (before any blob/tree/commit).
@@ -477,11 +488,14 @@ func BeginAct(ctx context.Context, deps SimpleCloseDeps, actID string) (FrozenPl
 	plan := Plan{
 		ContractVersion: 1,
 		ActID:           actID,
-		Baseline:        Baseline{CommitOID: headCommit},
-		Execution:       PlanExecution{Mode: &serialMode},
-		Checks:          []PlanCheck{},
-		Artifacts:       []PlanArtifact{},
-		Policy:          PlanPolicy{},
+		// Both OIDs are required: plancontract rejects empty
+		// baseline fields. The closure machinery uses these to
+		// resolve S^{tree} downstream.
+		Baseline:  Baseline{CommitOID: headCommit, TreeOID: headTree},
+		Execution: PlanExecution{Mode: &serialMode},
+		Checks:    []PlanCheck{},
+		Artifacts: []PlanArtifact{},
+		Policy:    PlanPolicy{},
 	}
 	planBytes, err := json.Marshal(&plan)
 	if err != nil {
