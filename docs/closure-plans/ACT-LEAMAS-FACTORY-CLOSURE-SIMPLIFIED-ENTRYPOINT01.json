@@ -1,0 +1,112 @@
+{
+  "act_id": "ACT-LEAMAS-FACTORY-CLOSURE-SIMPLIFIED-ENTRYPOINT01",
+  "artifacts": [],
+  "baseline": {
+    "commit_oid": "6da31e3f3df45e7a1171cc1748c1539bed89a42a",
+    "tree_oid": "7c16a44a99764b91fbb1f00bb79a67a4815bd0d1"
+  },
+  "checks": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestSimpleClose|TestResolveSubjectTreeProduction|TestDiscoverFrozenPlanForActProduction|TestBeginAct|TestBoundedPushProduction",
+        "./internal/factory/closure/"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "focused-closure",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestFactoryBegin|TestFactoryClose|TestIsLegacyCloseSubcommand|TestParseFactoryCommand",
+        "./cmd/leamas/"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "focused-cli",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./cmd/leamas/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "vet",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "build",
+        "-buildvcs=true",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-simplified-entrypoint-self",
+        "./cmd/leamas"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "build",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "diff-check",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "Bootstrap exception: no dupcode gate in this ACT."
+    }
+  ],
+  "contract_version": 1,
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "policy_profile": "leamas-act-v1",
+  "bootstrap": {
+    "manual_fsc": true,
+    "exception_id": "ACT-LEAMAS-FACTORY-CLOSURE-SIMPLIFIED-ENTRYPOINT01",
+    "note": "THIS_IS_THE_FINAL_BOOTSTRAP_ACT_USING_AGENT_ORCHESTRATED_FSC"
+  }
+}
