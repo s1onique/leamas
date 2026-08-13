@@ -1,0 +1,440 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-MACOS-PATH-AUTHORITY-PORTABILITY-AND-PROMOTION-CLOSURE01",
+  "plan": {
+    "sha256": "5248ef8470c3274116032e7c945ef13326980fe07e526bc420fe7419a024ac74",
+    "path": "docs/closure-plans/ACT-LEAMAS-MACOS-PATH-AUTHORITY-PORTABILITY-AND-PROMOTION-CLOSURE01.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "cf69ef40c1be63a58ac9113ab7f437335ad9e964",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-MACOS-PATH-AUTHORITY-PORTABILITY-AND-PROMOTION-CLOSURE01.json",
+    "plan_blob_oid": "7e80ef54ea6f1de30cd67b6ac075914344a4f702",
+    "plan_sha256": "5248ef8470c3274116032e7c945ef13326980fe07e526bc420fe7419a024ac74",
+    "subject_commit": "2b6a2f1e125283ebf003f50dc5667a3dcddc51f1"
+  },
+  "subject": {
+    "commit_oid": "2b6a2f1e125283ebf003f50dc5667a3dcddc51f1",
+    "tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev.b0e4f9ae9868.20260810T150909Z",
+    "binary_sha256": "3fbf9925041cc05b9c5bb407c3916d016993a0e03181028660687f9a55081bbb",
+    "vcs_revision": "b0e4f9ae98686da77f91b12cf4cf56080e8bb4d2",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "2b6a2f1e125283ebf003f50dc5667a3dcddc51f1",
+    "head_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+    "origin_main_commit_oid": "e1b54b31ec9c2afb6917804fbab9512bd6f2d8bb",
+    "ahead_by": 2,
+    "behind_by": 0,
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "checks": [
+    {
+      "check_id": "portability-closure-production-canary",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "-run",
+        "TestClosureBinaryGateRealProductionHappyPath|TestClosureBinaryGateIsolatedFixtureCanary|TestClosureExactSubjectBinaryOutputConfinement",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-13T06:09:40.99528Z",
+      "finished_at_utc": "2026-08-13T06:09:44.02387Z",
+      "duration_ms": 3028,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "d5aa46825ccb1e4a814c1f4998bf9b2d8193b950eb3149b200de3dfe8710f533",
+      "stdout_byte_count": 2927,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 2927,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-runner-start-wait-contract",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "-run",
+        "^TestGateOsRunnerStartWaitContract$",
+        "./internal/factory/closure/evidence/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-13T06:09:44.038524Z",
+      "finished_at_utc": "2026-08-13T06:09:44.622822Z",
+      "duration_ms": 584,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "7125e976f11c0d9360e213989fb4cd33f94f22d56a09a1102fd9176e696291e0",
+      "stdout_byte_count": 1022,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 1022,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-adapter-evidence-preservation",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "-run",
+        "TestR6BSubjectCleanup|TestR6BBinaryAuthorityResultValidation|TestR6BGateObservationFailureSurfaced|TestR6BGateClassificationFailSurfaced|TestR6BGateClassificationUnavailableSurfaced|TestR6BCollectorMismatchPropagates|TestSubjectExecutorCleanupFailureStillErrors|TestSubjectExecutorPrimaryAndCleanupFailurePreserved|TestR6BSubjectCleanupCausePreservesInnerErr",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-13T06:09:44.704623Z",
+      "finished_at_utc": "2026-08-13T06:09:45.878173Z",
+      "duration_ms": 1173,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "0f92f16c8c5be1e026bdc17a288181a417c3e96d6d8dd711595cbe32e0f78f93",
+      "stdout_byte_count": 4759,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 4759,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-path-authority-strict-pass",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-v",
+        "-run",
+        "TestV2PathMatrix_InsideRepoRejected|TestV2PathMatrix_RelativeRepoRootRejected|TestV2PathMatrix_NonexistentLeafSymlinkIntoRepoRejected|TestV2PathMatrix_WorkingPlanDifferingFromFP|TestV2PathMatrix_WorkingPlanInsideRepoRejected|TestV2PathMatrix_ManifestInsideRepoRejected|TestV2PathMatrix_NULByteRejected|TestV2VerifierValidatePathMatrix|TestV2VerifierAuthorityResolvePathObjectMatrix|TestV2AbsolutePlanPathRejected|TestV2VerifierFrozenPlanAuthority|TestV2VerifierCommittedManifestAuthority|TestNormativePathPolicyFailClosed|TestRunExecutionFieldsPathPolicyDiscoverable|TestSemanticTaxonomyPathsFailOnDrift",
+        "./internal/factory/closure/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-13T06:09:45.888028Z",
+      "finished_at_utc": "2026-08-13T06:09:49.428268Z",
+      "duration_ms": 3540,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "57338e4e6f1e87c1452c5082b9276ca3ec44e7002d0b328988f5dd7f44d698b6",
+      "stdout_byte_count": 9041,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 9041,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-runner-lifecycle-evidence",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "-run",
+        "TestGateOsRunnerStartWaitContract|TestGateRunnerLifecycle",
+        "./internal/factory/closure/evidence/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-13T06:09:49.442239Z",
+      "finished_at_utc": "2026-08-13T06:09:50.011124Z",
+      "duration_ms": 568,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "a46ec3b8196e86d6e51ad49db02d24eee15a968f8e2023f95c1777a07cfbb4ce",
+      "stdout_byte_count": 73,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 73,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-vet",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/closure/...",
+        "./internal/factory/closure/evidence/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-13T06:09:50.03574Z",
+      "finished_at_utc": "2026-08-13T06:09:50.393556Z",
+      "duration_ms": 357,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-gofmt",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "gofmt",
+        "-l",
+        "internal/factory/closure/closure_protocol_v2_executor.go",
+        "internal/factory/closure/closure_evidence_publication_runner_adapter.go",
+        "internal/factory/closure/binary_gate_testhelpers_test.go",
+        "internal/factory/closure/closure_exact_subject_binary_output_test.go",
+        "internal/factory/closure/evidence/gate_runner_lifecycle_test.go"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [],
+      "started_at_utc": "2026-08-13T06:09:50.403661Z",
+      "finished_at_utc": "2026-08-13T06:09:50.410281Z",
+      "duration_ms": 6,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-diff-check",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [],
+      "started_at_utc": "2026-08-13T06:09:50.42073Z",
+      "finished_at_utc": "2026-08-13T06:09:50.428872Z",
+      "duration_ms": 8,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "portability-closure-static-build",
+      "subject_tree_oid": "8e9495067cbb79fd2ef704ef2a618c5997311295",
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "./..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-13T06:09:50.437648Z",
+      "finished_at_utc": "2026-08-13T06:09:51.17146Z",
+      "duration_ms": 733,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    }
+  ],
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "portability-closure-production-canary.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "d5aa46825ccb1e4a814c1f4998bf9b2d8193b950eb3149b200de3dfe8710f533",
+      "byte_count": 2927,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-production-canary.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-runner-start-wait-contract.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "7125e976f11c0d9360e213989fb4cd33f94f22d56a09a1102fd9176e696291e0",
+      "byte_count": 1022,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-runner-start-wait-contract.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-adapter-evidence-preservation.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "0f92f16c8c5be1e026bdc17a288181a417c3e96d6d8dd711595cbe32e0f78f93",
+      "byte_count": 4759,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-adapter-evidence-preservation.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-path-authority-strict-pass.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "57338e4e6f1e87c1452c5082b9276ca3ec44e7002d0b328988f5dd7f44d698b6",
+      "byte_count": 9041,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-path-authority-strict-pass.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-runner-lifecycle-evidence.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "a46ec3b8196e86d6e51ad49db02d24eee15a968f8e2023f95c1777a07cfbb4ce",
+      "byte_count": 73,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-runner-lifecycle-evidence.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-vet.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-vet.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-gofmt.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-gofmt.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-diff-check.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-diff-check.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-static-build.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "portability-closure-static-build.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "runner.diagnostics",
+      "media_type": "application/json",
+      "sha256": "4a32f774f801b92f5b63f8e498e5d07df9c4008195c3ff0d7128f180d4559294",
+      "byte_count": 172,
+      "availability": "detached"
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [],
+  "verdict": "pass"
+}
