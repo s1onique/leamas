@@ -1,0 +1,34 @@
+{
+  "contract_version": 1,
+  "closure_protocol_version": 2,
+  "act_id": "ACT-LEAMAS-PORTABILITY-CANARY-001",
+  "plan": {
+    "sha256": "3c40890154f75fbf254e0dcc0f96c3d47f254c7dc0a8ba160ef8f63c4f00671b",
+    "path": "docs/closure-plans/ACT-LEAMAS-PORTABILITY-CANARY-001.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "1d16c7090d3ebfbfe65dbbff20c976834fbcd03c",
+    "freeze_tree": "1f0bea186560bda2ab86eebf526d5613335c2fe5",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-PORTABILITY-CANARY-001.json",
+    "plan_blob_oid": "6523c6b10103160f96cfefeb659c5aa03cae0140",
+    "plan_sha256": "3c40890154f75fbf254e0dcc0f96c3d47f254c7dc0a8ba160ef8f63c4f00671b",
+    "subject_commit": "3d55ffd1ffc1792f5b9dfe6c1d3f65de0b5f81c6"
+  },
+  "subject": {
+    "commit_oid": "3d55ffd1ffc1792f5b9dfe6c1d3f65de0b5f81c6",
+    "tree_oid": "006dbdd3832c617ba2f44c0eda78f50d9ff3c2e6"
+  },
+  "runner_authority": {
+    "mode": "subject_exact"
+  },
+  "checks": [],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "verdict": "pass"
+}
