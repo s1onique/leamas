@@ -132,8 +132,13 @@ func TestGateOsRunnerStartWaitContract(t *testing.T) {
 			name: "success",
 			invoke: func(t *testing.T, ctx context.Context) CommandResult {
 				runner := &OsRunner{}
-				// /bin/true exits 0 on every POSIX system.
-				return runner.Run(ctx, "/bin/true",
+				// CORRECTION07: use LookPath to find the utility
+				// from PATH, avoiding hardcoded /bin assumptions.
+				truePath, err := exec.LookPath("true")
+				if err != nil {
+					t.Skipf("true not in PATH: %v", err)
+				}
+				return runner.Run(ctx, truePath,
 					[]string{}, "/tmp", nil)
 			},
 			check: func(t *testing.T, got CommandResult) {
@@ -156,8 +161,13 @@ func TestGateOsRunnerStartWaitContract(t *testing.T) {
 			name: "nonzero_exit",
 			invoke: func(t *testing.T, ctx context.Context) CommandResult {
 				runner := &OsRunner{}
-				// /bin/false exits 1 on every POSIX system.
-				return runner.Run(ctx, "/bin/false",
+				// CORRECTION07: use LookPath to find the utility
+				// from PATH, avoiding hardcoded /bin assumptions.
+				falsePath, err := exec.LookPath("false")
+				if err != nil {
+					t.Skipf("false not in PATH: %v", err)
+				}
+				return runner.Run(ctx, falsePath,
 					[]string{}, "/tmp", nil)
 			},
 			check: func(t *testing.T, got CommandResult) {
@@ -189,9 +199,13 @@ func TestGateOsRunnerStartWaitContract(t *testing.T) {
 				ctx, cancel := context.WithTimeout(ctx, 25*time.Millisecond)
 				defer cancel()
 				runner := &OsRunner{}
-				// /bin/sleep 5 is universally available
-				// and reliably exceeds 25ms.
-				return runner.Run(ctx, "/bin/sleep",
+				// CORRECTION07: use LookPath to find the utility
+				// from PATH, avoiding hardcoded /bin assumptions.
+				sleepPath, err := exec.LookPath("sleep")
+				if err != nil {
+					t.Skipf("sleep not in PATH: %v", err)
+				}
+				return runner.Run(ctx, sleepPath,
 					[]string{"5"}, "/tmp", nil)
 			},
 			check: func(t *testing.T, got CommandResult) {
@@ -224,7 +238,13 @@ func TestGateOsRunnerStartWaitContract(t *testing.T) {
 					cancel()
 				}()
 				runner := &OsRunner{}
-				return runner.Run(ctx, "/bin/sleep",
+				// CORRECTION07: use LookPath to find the utility
+				// from PATH, avoiding hardcoded /bin assumptions.
+				sleepPath, err := exec.LookPath("sleep")
+				if err != nil {
+					t.Skipf("sleep not in PATH: %v", err)
+				}
+				return runner.Run(ctx, sleepPath,
 					[]string{"5"}, "/tmp", nil)
 			},
 			check: func(t *testing.T, got CommandResult) {
@@ -261,9 +281,19 @@ func TestGateOsRunnerStartWaitContract(t *testing.T) {
 				// reports a delay outcome via
 				// exec.ErrWaitDelay.
 				runner := &OsRunner{WaitDelay: 200 * time.Millisecond}
-				return runner.Run(ctx, "/bin/sh",
+				// CORRECTION07: use LookPath to find the utility
+				// from PATH, avoiding hardcoded /bin assumptions.
+				shPath, err := exec.LookPath("sh")
+				if err != nil {
+					t.Skipf("sh not in PATH: %v", err)
+				}
+				sleepPath, err := exec.LookPath("sleep")
+				if err != nil {
+					t.Skipf("sleep not in PATH: %v", err)
+				}
+				return runner.Run(ctx, shPath,
 					[]string{"-c",
-						"/bin/sh -c 'sleep 30' & exit 0"},
+						shPath + " -c '" + sleepPath + " 30' & exit 0"},
 					"/tmp", nil)
 			},
 			check: func(t *testing.T, got CommandResult) {

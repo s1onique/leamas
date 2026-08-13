@@ -675,7 +675,12 @@ func runClosureProtocolV2InnerForExecute(
 		return executorResultBundle{Result: execResult}, err
 	}
 	if execResult.ObservedTree != subjectTree {
-		return executorResultBundle{}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
+		// CORRECTION06: preserve the populated result on tree mismatch.
+		// The executor already constructed a complete V2ExecuteResult via
+		// afterFailure with SubjectCleanupObserved=true. Returning zero
+		// discards the cleanup observation, causing the R6-B adapter's
+		// validateSubjectCleanupOutcome to see SubjectCleanupObserved=false.
+		return executorResultBundle{Result: execResult}, NewV2ErrorWith(V2CodeExecutionTreeMismatch,
 			fmt.Sprintf("executor observed tree %s does not match subject tree %s",
 				execResult.ObservedTree, subjectTree),
 			"execution_tree", execResult.ObservedTree)

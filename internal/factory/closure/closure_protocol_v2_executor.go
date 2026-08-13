@@ -48,6 +48,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -107,12 +108,26 @@ func (e *GitV2SubjectExecutor) ExecuteSubjectChecks(ctx context.Context, req V2E
 		context.Background(), defaultV2CleanupTimeout,
 	)
 	defer cancelCleanup()
-	worktreePath, err := os.MkdirTemp("", "leamas-v2-worktree-*")
+	createdPath, err := os.MkdirTemp("", "leamas-v2-worktree-*")
 	if err != nil {
 		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeGitOperationFailed,
 			fmt.Sprintf("create temp dir: %s", err.Error()),
 			"execution_tree", err.Error())
 	}
+	// CORRECTION06: on macOS, os.MkdirTemp uses /var/folders/...
+	// which is symlinked to /private/var/folders/.... Resolve the
+	// path to its canonical form so comparisons with Git's inventory
+	// (which stores resolved paths) are consistent.
+	canonicalPath, err := filepath.EvalSymlinks(createdPath)
+	if err != nil {
+		// CORRECTION06: cleanup the path we definitely created,
+		// not the result of the failing EvalSymlinks call.
+		_ = os.RemoveAll(createdPath)
+		return V2ExecuteResult{}, NewV2ErrorWith(V2CodeGitOperationFailed,
+			fmt.Sprintf("resolve worktree symlinks: %s", err.Error()),
+			"execution_tree", err.Error())
+	}
+	worktreePath := canonicalPath
 	// R6-A Phase 7: capture the Before inventory (porcelain -z).
 	// This snapshot is the no-leak baseline for the After
 	// comparison. A failure here fails closed immediately.

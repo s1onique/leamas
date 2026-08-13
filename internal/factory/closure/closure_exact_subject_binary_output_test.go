@@ -67,7 +67,13 @@ func TestClosureExactSubjectBinaryOutputConfinement(t *testing.T) {
 		t.Fatal("inventory must contain at least the caller root")
 	}
 
-	linked := t.TempDir()
+	// CORRECTION06: on macOS, t.TempDir() returns /var/folders/...
+	// which is symlinked to /private/var/folders/.... Resolve before
+	// use so the path matches what the inventory records.
+	linked, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve temp dir symlinks: %v", err)
+	}
 	linkedWorktree := filepath.Join(linked, "wt")
 	mustRunGit(t, caller, "worktree", "add", "--detach", linkedWorktree, subject)
 	defer mustRunGit(t, caller, "worktree", "remove", "--force", linkedWorktree)

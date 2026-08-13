@@ -82,7 +82,14 @@ func r6BRequestFor(t *testing.T, dir, freeze, subject string) V2Request {
 // output root the R6-B umbrellas use.
 func r6BOutputRoot(t *testing.T) string {
 	t.Helper()
-	return filepath.Join(t.TempDir(), "leamas-binary-gate")
+	// CORRECTION06: on macOS, t.TempDir() returns /var/folders/...
+	// which is symlinked to /private/var/folders/.... Resolve before
+	// use so the path matches what the inventory records.
+	tempDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve temp dir symlinks: %v", err)
+	}
+	return filepath.Join(tempDir, "leamas-binary-gate")
 }
 
 // r6BEvidenceDir returns a fresh per-run external gate
@@ -97,7 +104,16 @@ func r6BEvidenceDir(t *testing.T) string {
 // disk so the manifest identity validation accepts.
 func newR6BTestBinaryIdentity(t testing.TB) V2BinaryIdentity {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "leamas-test-binary")
+	// CORRECTION06: on macOS, t.TempDir() returns /var/folders/...
+	// which is symlinked to /private/var/folders/.... The
+	// binary identity validation requires the path to be
+	// symlink-resolved before comparison. Pre-resolve the
+	// temp directory to ensure the identity path passes.
+	tempDir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatalf("resolve temp dir symlinks: %v", err)
+	}
+	path := filepath.Join(tempDir, "leamas-test-binary")
 	data := []byte("deterministic fake leamas binary identity\n")
 	if err := os.WriteFile(path, data, 0o700); err != nil {
 		t.Fatal(err)
