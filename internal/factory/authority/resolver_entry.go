@@ -144,21 +144,42 @@ func Resolve(opts ResolverOptions) (*ResolvedAuthority, error) {
 //
 //	<rev>                  (right endpoint = rev)
 //	<base>..<rev>          (right endpoint = rev)
-//	<rev1>..<rev2>..<rev3> (treat as base..rev = the trailing token)
+//
+// CORRECTION02: the three-dot form `A...B` is REJECTED. Git
+// defines `A...B` separately as symmetric-difference notation
+// for revision-walking commands (git log, git rev-list); for
+// `git diff`, three-dot has its own merge-base-to-B meaning.
+// The range-scope diagnostic in this codebase explicitly rejects
+// `A...B` as a product policy choice. The authority resolver
+// follows the same policy rather than accidentally interpreting
+// it: a naive strings.Split("A...B", "..") would produce
+// ["A", ".B"], the trailing token would still resolve via
+// rev-parse, and the resolver would silently accept what the
+// range-scope layer rejected. CORRECTION02 makes that rejection
+// explicit at the resolver boundary.
 //
 // Returns the empty string when rev-parse fails (malformed
-// input, missing object). The resolver never panics or fails
-// closed solely on right-endpoint resolution: the explicit
-// range still classifies as AuthorityExplicitRange with the
-// original DigestRange verbatim, and downstream renderers
-// fall back to their documented empty-subject behavior.
+// input, missing object) or when the expression uses the
+// three-dot form. The resolver never panics or fails closed
+// solely on right-endpoint resolution: the explicit range still
+// classifies as AuthorityExplicitRange with the original
+// DigestRange verbatim, and downstream renderers apply the
+// authority-sensitive fallback (no HEAD fallback for
+// AuthorityExplicitRange).
 func explicitRangeRightEndpoint(git GitRunner, repoRoot, expr string) string {
 	expr = strings.TrimSpace(expr)
 	if expr == "" || git == nil {
 		return ""
 	}
+	// CORRECTION02: explicitly reject the three-dot form.
+	// The range-scope diagnostic already rejects "A...B";
+	// the resolver must follow the same policy.
+	if strings.Contains(expr, "...") {
+		return ""
+	}
 	// Split on ".." and take the rightmost non-empty token.
-	// This mirrors git's own symmetric difference syntax.
+	// For "A..B" this yields right="B"; for a bare rev it
+	// yields right=<rev>; for an empty token it yields "".
 	parts := strings.Split(expr, "..")
 	right := ""
 	for _, p := range parts {

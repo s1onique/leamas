@@ -182,6 +182,14 @@ func TestRenderLifecycleCorrection01_GeneratorAtHEAD_NotSubject(t *testing.T) {
 // the CORRECTION01 subject resolution order at the renderer
 // boundary. The resolver MUST consult LifecycleSubjectRange
 // before LifecycleSubject before HeadCommit.
+//
+// CORRECTION02 amendment: subject resolution is now
+// authority-sensitive. The chain LifecycleSubjectRange ->
+// LifecycleSubject -> HeadCommit applies ONLY to
+// AuthorityExplicitRange. For all other authorities the chain
+// is LifecycleSubject -> HeadCommit (no range fallback). The
+// rows in this matrix therefore carry explicit AuthorityStatus
+// values to lock the per-axis policy.
 func TestRenderLifecycleCorrection01_SubjectResolutionOrder(t *testing.T) {
 	const x = "0123456789abcdef0123456789abcdef01234567"
 	const y = "fedcba9876543210fedcba9876543210fedcba98"
@@ -189,30 +197,42 @@ func TestRenderLifecycleCorrection01_SubjectResolutionOrder(t *testing.T) {
 
 	cases := []struct {
 		name                               string
+		auth                               authority.AuthorityStatus
 		rangeV, lifecycle, head, generator string
 		wantSubjectBinding                 string
 		wantStatus                         string
 	}{
 		{
-			name:   "LifecycleSubjectRange_wins_over_HeadCommit",
+			name:   "ExplicitRange_LifecycleSubjectRange_used",
+			auth:   authority.AuthorityExplicitRange,
 			rangeV: y, lifecycle: x, head: x, generator: y,
 			wantSubjectBinding: "MATCH",
 			wantStatus:         "AUTHORITATIVE",
 		},
 		{
-			name:   "LifecycleSubject_falls_through_when_range_empty",
+			name:   "ExplicitRange_unresolved_endpoint_yields_unbound",
+			auth:   authority.AuthorityExplicitRange,
 			rangeV: "", lifecycle: x, head: z, generator: x,
-			wantSubjectBinding: "MATCH",
-			wantStatus:         "AUTHORITATIVE",
+			wantSubjectBinding: "UNBOUND",
+			wantStatus:         "IDENTITY_UNBOUND",
 		},
 		{
-			name:   "empty_subjects_fall_through_to_HeadCommit",
+			name:   "AuthoritativeClosed_falls_through_to_HeadCommit",
+			auth:   authority.AuthorityAuthoritativeClosed,
 			rangeV: "", lifecycle: "", head: x, generator: x,
 			wantSubjectBinding: "MATCH",
 			wantStatus:         "AUTHORITATIVE",
 		},
 		{
-			name:   "all_empty_yields_unbound",
+			name:   "AuthoritativeClosed_LifecycleSubject_wins_over_Head",
+			auth:   authority.AuthorityAuthoritativeClosed,
+			rangeV: "", lifecycle: x, head: z, generator: x,
+			wantSubjectBinding: "MATCH",
+			wantStatus:         "AUTHORITATIVE",
+		},
+		{
+			name:   "AuthoritativeClosed_all_empty_yields_unbound",
+			auth:   authority.AuthorityAuthoritativeClosed,
 			rangeV: "", lifecycle: "", head: "", generator: x,
 			wantSubjectBinding: "UNBOUND",
 			wantStatus:         "IDENTITY_UNBOUND",
@@ -226,6 +246,7 @@ func TestRenderLifecycleCorrection01_SubjectResolutionOrder(t *testing.T) {
 				GeneratorCommit:       tc.generator,
 				LifecycleSubject:      tc.lifecycle,
 				LifecycleSubjectRange: tc.rangeV,
+				AuthorityStatus:       tc.auth,
 				IsClean:               true,
 			})
 			if !strings.Contains(rendered,

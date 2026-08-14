@@ -18,6 +18,8 @@ package digest
 import (
 	"fmt"
 	"strings"
+
+	"github.com/s1onique/leamas/internal/factory/authority"
 )
 
 // LifecycleField names rendered into the digest. These are part of
@@ -107,20 +109,26 @@ func RenderLifecycle(r *ResolvedMode) string {
 // function performs no I/O; the caller has already resolved all
 // required identities.
 //
-// CORRECTION01: subject resolution order is now explicit.
+// Subject resolution is authority-sensitive:
 //
-//  1. LifecycleSubjectRange — the resolved right endpoint of an
-//     explicit --range. When non-empty, this is the digest
-//     subject for binding purposes, regardless of ambient HEAD.
-//  2. LifecycleSubject — the manifest-derived subject (clean
-//     committed resolutions).
-//  3. HeadCommit — the ambient repository HEAD (single-commit
-//     fallback).
+//   - AuthorityExplicitRange: the digest subject is the resolved
+//     right endpoint of the explicit range (LifecycleSubjectRange).
+//     NO fallback to HEAD is permitted. When the right endpoint
+//     could not be resolved (RangeSubjectEnd empty), the subject
+//     stays empty and the classifier reports IDENTITY_UNBOUND with
+//     AUTHORITATIVE=false. This is the CORRECTION02 fail-closed
+//     contract: ambiguous explicit-range subjects cannot silently
+//     become HEAD authority.
+//   - All other authorities (auto, manifest-derived, dirty, etc.):
+//     fallback chain is LifecycleSubject -> HeadCommit. The ambient
+//     HEAD is the documented subject for the single-commit fallback
+//     in clean auto-mode.
 //
-// Prior to CORRECTION01 the renderer fell back to HEAD when
-// LifecycleSubject was empty, which silently substituted ambient
-// HEAD for an explicit-range right endpoint. That fallback is
-// preserved only when no resolved endpoint is available.
+// CORRECTION01 history: the renderer previously had a flat
+// fallback chain LifecycleSubjectRange -> LifecycleSubject ->
+// HeadCommit, which silently substituted ambient HEAD for an
+// unresolved explicit-range right endpoint. That fallback is now
+// suppressed for AuthorityExplicitRange.
 func resolveGeneratorBindingForRender(r *ResolvedMode) GeneratorBinding {
 	if r == nil {
 		return GeneratorBinding{
@@ -134,16 +142,38 @@ func resolveGeneratorBindingForRender(r *ResolvedMode) GeneratorBinding {
 	}
 	generatorCommit := strings.TrimSpace(r.GeneratorCommit)
 	repoHead := strings.TrimSpace(r.HeadCommit)
-	// CORRECTION01: subject resolution order.
-	subjectCommit := strings.TrimSpace(r.LifecycleSubjectRange)
-	if subjectCommit == "" {
-		subjectCommit = strings.TrimSpace(r.LifecycleSubject)
-	}
-	if subjectCommit == "" {
-		subjectCommit = strings.TrimSpace(r.HeadCommit)
-	}
+	subjectCommit := resolveSubjectForBinding(r)
 	dirty := !r.IsClean
 	return ResolveGeneratorBinding(generatorCommit, repoHead, subjectCommit, dirty)
+}
+
+// resolveSubjectForBinding returns the digest subject used by the
+// generator binding classifier. For AuthorityExplicitRange the
+// subject is exclusively LifecycleSubjectRange; if that is empty
+// the function returns "" and the classifier reports
+// IDENTITY_UNBOUND. For all other authorities the documented
+// fallback chain LifecycleSubject -> HeadCommit applies.
+//
+// CORRECTION02: this helper encapsulates the authority-sensitive
+// fallback policy so the renderer does not silently embed a
+// classifier policy branch.
+func resolveSubjectForBinding(r *ResolvedMode) string {
+	if r == nil {
+		return ""
+	}
+	if r.AuthorityStatus == authority.AuthorityExplicitRange {
+		// AuthorityExplicitRange: subject is the resolved
+		// right endpoint of the explicit range only. No
+		// fallback to HEAD is permitted: an unresolved
+		// endpoint is definitionally ambiguous and the
+		// classifier must report IDENTITY_UNBOUND.
+		return strings.TrimSpace(r.LifecycleSubjectRange)
+	}
+	// All other authorities: documented fallback chain.
+	if v := strings.TrimSpace(r.LifecycleSubject); v != "" {
+		return v
+	}
+	return strings.TrimSpace(r.HeadCommit)
 }
 
 // renderBool renders a strict boolean as the stable lowercase
