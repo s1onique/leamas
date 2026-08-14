@@ -1,0 +1,234 @@
+LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION: 3
+LEAMAS_VERSION: 0.1.0+dev.483ac074e33f.20260814T184327Z
+LEAMAS_COMMIT: 483ac074e33f122943ff74adf765c6d46ac58475
+LEAMAS_BUILD_TIME: 2026-08-14T18:43:27Z
+DIGEST_MODE: range
+DIGEST_CREATED_AT: 2026-08-14T18:44:08Z
+
+# Targeted digest
+
+Generated at: 2026-08-14T18:44:08Z
+Repo: /private/var/folders/0g/mpt_55f524ndzxymkp20wjfc0000gn/T/tmp.bIpMyXgGuf
+Mode: range
+Range: 4cac5092431699240cf1b27b20c3472639194ace..c84baa2ade204e3d8a9c6318cbaa010125461cdd
+Reason: explicit --range; non-authoritative
+
+## CHANGESET_MANIFEST
+M  f.txt
+
+## CHANGESET_STATS
+files_changed=1
+added_files=0
+modified_files=1
+deleted_files=0
+type_changed_files=0
+renamed_files=0
+copied_files=0
+unmerged_files=0
+unknown_files=0
+broken_pair_files=0
+untracked_files=0
+binary_files=0
+generated_files=0
+test_files=0
+doc_files=0
+source_files=1
+config_files=0
+
+## REVIEW_MAP
+production:
+  - f.txt
+tests:
+  - none
+docs:
+  - none
+config:
+  - none
+generated:
+  - none
+binary:
+  - none
+
+## RISK_SIGNALS
+production_without_tests=true
+tests_without_production=false
+docs_without_code=false
+generated_files_changed=false
+config_files_changed=false
+deleted_files_changed=false
+unmerged_files_present=false
+large_file_changed=false
+large_file_threshold_bytes=1048576
+
+## RANGE_SCOPE
+
+authority=explicit_range
+left_endpoint=4cac50924316
+right_endpoint=c84baa2ade20
+commit_count=1
+merge_commit_count=0
+files_changed=1
+crosses_merge=false
+targetedness=NORMAL
+warning_code=none
+diagnostic_status=available
+## PATCH_HYGIENE
+git_diff_check=pass
+whitespace_errors=0
+conflict_markers=0
+diagnostic_lines=0
+## EVIDENCE_HASHES
+hash_algorithm=sha256
+hash_scope=normalized_digest_v3_sections
+changeset_manifest_sha256=366dd03facdb8619e68ad09c342d9ec5c70a495eecc4afe35de05a9cc095bebf
+changeset_stats_sha256=ac4df1f55264dfe4902b9c5185540d010cebebb442c1586c7e8cf6f32fcedb19
+review_map_sha256=81dd004fc0a9ad576ae816a8728b44cd7f36a3a3b99ee09ee32d2dbed0cc0faf
+risk_signals_sha256=5ae5c2683714f7212c4fcc06b800e19260ebc4bcb33aadfece766cb7e3c8165e
+patch_hygiene_sha256=f27875c941202711acb3533af03c7c417c0cf045c2e5a4bf685548a3655b897d
+public_surface_delta_sha256=56d0b627a60e664876f489d463445f7e744e3dae4c1e3fab0fca19070f2253b0
+dependency_delta_sha256=a79a8c9ddb40b378b8cf5f4b6937504f78528ed2fa6f625af76d026111e9009f
+gate_summary_sha256=73cce26af50abee0c4cd36a10b3b1292f0e9d4bd789a61653e5c0aa867ca6ae7
+file_evidence_sha256=e9789e045470846d242f2e48c16938ec51bf870fa92bea1084d67064eccefd12
+digest_evidence_sha256=d32f0666390fc5afa1bf6cffdbc4560df9583018137e7be705daf9312d32ff8d
+## GATE_SUMMARY
+source=.factory/gate-summary.json
+source_status=missing
+failure_stage=
+binding_status=NOT_APPLICABLE
+source_validity=ABSENT
+authoritative_for_digest=false
+state_binding=UNBOUND
+scope_binding=NOT_APPLICABLE
+warning_code=GATE_SUMMARY_NOT_APPLICABLE
+schema_version=0
+generated_at=
+overall_status=unavailable
+checks_total=0
+checks_passed=0
+checks_failed=0
+checks_skipped=0
+checks_unavailable=0
+## PUBLIC_SURFACE_DELTA
+language=go
+source_status=present
+packages_changed=0
+symbols_added=0
+symbols_removed=0
+symbols_modified=0
+cli_commands_changed=0
+
+packages:
+  - none
+
+added:
+  - none
+
+removed:
+  - none
+
+modified:
+  - none
+
+cli_commands:
+  - none
+
+## DEPENDENCY_DELTA
+ecosystem=go
+source_status=absent
+go_mod_changed=false
+go_sum_changed=false
+module_path_changed=false
+go_version_changed=false
+toolchain_changed=false
+requires_added=0
+requires_removed=0
+requires_modified=0
+replaces_added=0
+replaces_removed=0
+replaces_modified=0
+
+module:
+  before=
+  after=
+
+go_version:
+  before=
+  after=
+
+toolchain:
+  before=
+  after=
+
+requires_added:
+  - none
+
+requires_removed:
+  - none
+
+requires_modified:
+  - none
+
+replaces_added:
+  - none
+
+replaces_removed:
+  - none
+
+replaces_modified:
+  - none
+
+go_sum_added:
+  - none
+
+go_sum_removed:
+  - none
+## Changed files
+f.txt  [modified]
+
+## Diffs
+
+=== f.txt ===
+
+REDACTION_POLICY:
+  class=non_source
+  decision=redact
+  redaction_applied=true
+
+
+Status: modified
+
+diff --git a/f.txt b/f.txt
+index 626799f..8c1384d 100644
+--- a/f.txt
++++ b/f.txt
+@@ -1 +1 @@
+-v1
++v2
+
+## LIFECYCLE
+
+AUTO_RANGE_STRATEGY: unset
+ACT_ID: unset
+RANGE_BASE: unset
+RANGE_HEAD: 8892b6575025520af665435ae32e0635158c9ecd
+RANGE_REASON: explicit --range; non-authoritative
+LIFECYCLE_FREEZE: unset
+LIFECYCLE_SUBJECT: unset
+LIFECYCLE_CLOSURE: unset
+INCLUDED_COMMITS: unset
+GENERATOR_COMMIT: 483ac074e33f122943ff74adf765c6d46ac58475
+REPOSITORY_HEAD: 8892b6575025520af665435ae32e0635158c9ecd
+GENERATOR_STALE: true: embedded leamas commit does not match repository HEAD
+GENERATOR_STALE_BASIS: commit_vs_repository_head
+GENERATOR_COMMIT_MATCHES_HEAD: false
+GENERATOR_BINDING_STATUS: SUBJECT_MISMATCH
+GENERATOR_COMMIT_BINDING: MISMATCH
+GENERATOR_SUBJECT_BINDING: MISMATCH
+GENERATOR_AUTHORITATIVE_FOR_DIGEST: false
+GENERATOR_WARNING_CODE: GENERATOR_SUBJECT_MISMATCH
+AUTHORITY_STATUS: ExplicitRange
+RESOLUTION_SOURCE: explicit_cli
+
+## Workflow anchors
+No workflow anchors configured.
+

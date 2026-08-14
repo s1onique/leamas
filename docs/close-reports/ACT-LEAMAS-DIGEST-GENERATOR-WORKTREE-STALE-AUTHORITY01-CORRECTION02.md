@@ -299,6 +299,71 @@ Combined with the renderer fix, the CLI surface for `A...B`
 now renders `IDENTITY_UNBOUND` instead of silently accepting
 the trailing-token interpretation.
 
+### CLI self-hosted evidence (current binary)
+
+```text
+$ CGO_ENABLED=0 go build -trimpath -o /tmp/leamas-final ./cmd/leamas
+$ /tmp/leamas-final version --json
+{
+  "version": "0.1.0+dev.483ac074e33f.20260814T184327Z",
+  "declared_version": "dev",
+  "commit": "483ac074e33f122943ff74adf765c6d46ac58475",
+  "build_time": "2026-08-14T18:43:27Z"
+}
+
+$ cd $(mktemp -d) && git init -q && echo v1 > f.txt && git add f.txt \
+    && git -c user.email=t@t -c user.name=t commit -q -m A \
+    && echo v2 > f.txt && git add f.txt \
+    && git -c user.email=t@t -c user.name=t commit -q -m B \
+    && echo v3 > f.txt && git add f.txt \
+    && git -c user.email=t@t -c user.name=t commit -q -m C
+$ A=$(git rev-parse HEAD~2) && B=$(git rev-parse HEAD~1)
+$ /tmp/leamas-final factory digest --range $A..$B --output /tmp/c02-dig.txt
+digest: mode=range output=/tmp/c02-dig.txt time=0.10s OK
+
+$ sed -n '/LIFECYCLE/,/^$/p' /tmp/c02-dig.txt
+## LIFECYCLE
+
+LIFECYCLE_FREEZE: unset
+LIFECYCLE_SUBJECT: unset
+LIFECYCLE_CLOSURE: unset
+INCLUDED_COMMITS: unset
+GENERATOR_COMMIT: 483ac074e33f122943ff74adf765c6d46ac58475
+REPOSITORY_HEAD: 8892b6575025520af665435ae32e0635158c9ecd
+GENERATOR_STALE: true: embedded leamas commit does not match repository HEAD
+GENERATOR_STALE_BASIS: commit_vs_repository_head
+GENERATOR_COMMIT_MATCHES_HEAD: false
+GENERATOR_BINDING_STATUS: SUBJECT_MISMATCH
+GENERATOR_COMMIT_BINDING: MISMATCH
+GENERATOR_SUBJECT_BINDING: MISMATCH
+GENERATOR_AUTHORITATIVE_FOR_DIGEST: false
+GENERATOR_WARNING_CODE: GENERATOR_SUBJECT_MISMATCH
+AUTHORITY_STATUS: ExplicitRange
+RESOLUTION_SOURCE: explicit_cli
+```
+
+The full digest body is preserved at
+`docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02/acceptance-explicit-A..B-lifecycle.txt`
+(sha256: 2b0915c6ab5f9511fc853b7c514e60695a43dc395bdddf7a3344a7345c82c91b,
+4935 bytes).
+
+The CLI evidence shows the CORRECTION02 generator binding
+surface rendered with the production binary:
+- `GENERATOR_BINDING_STATUS: SUBJECT_MISMATCH` (new vocabulary)
+- `GENERATOR_AUTHORITATIVE_FOR_DIGEST: false`
+- `GENERATOR_STALE: true` (legacy freshness signal)
+- `GENERATOR_COMMIT_BINDING: MISMATCH`
+- `GENERATOR_SUBJECT_BINDING: MISMATCH`
+- `AUTHORITY_STATUS: ExplicitRange`
+
+In this run the binary's embedded commit (`483ac07`, the closure
+commit) does not coincide with the resolved subject (`B`); that
+is the CORRECTION02 fail-closed path firing correctly via the
+new vocabulary. To exercise the AUTHORITATIVE+STALE=true
+coexistence case end-to-end through the CLI requires rebuilding
+the binary at the fixture's resolved endpoint; that case is
+locked by `TestRenderLifecycleCorrection01_GeneratorAtSubject_Authoritative`.
+
 ## Skipped or Deferred Checks
 
 ```text

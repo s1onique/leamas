@@ -23,6 +23,43 @@
     "owned_file_count": 11,
     "max_owned_loc": 336
   },
+  "evidence_index": [
+    {
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02/acceptance-explicit-A..B-lifecycle.txt",
+      "media_type": "text/plain",
+      "schema_version": 1,
+      "byte_count": 4935,
+      "sha256": "2b0915c6ab5f9511fc853b7c514e60695a43dc395bdddf7a3344a7345c82c91b"
+    },
+    {
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02/build-output.txt",
+      "media_type": "text/plain",
+      "schema_version": 1,
+      "byte_count": 5,
+      "sha256": "7e1cd69fab85528649b3c67810caed1f9db026f90623c7d226ea1477c93b6a46"
+    },
+    {
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02/gofmt-output.txt",
+      "media_type": "text/plain",
+      "schema_version": 1,
+      "byte_count": 12,
+      "sha256": "8bf710e077da5cbecff100526227323eee06c805019859b56bda4260a05cbb94"
+    },
+    {
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02/test-output.txt",
+      "media_type": "text/plain",
+      "schema_version": 1,
+      "byte_count": 64,
+      "sha256": "e1c5c4fd0a9d2e6a850dbad76138d39b2812a74866ef0b80f796a92ca4a188ac"
+    },
+    {
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02/vet-output.txt",
+      "media_type": "text/plain",
+      "schema_version": 1,
+      "byte_count": 5,
+      "sha256": "7e1cd69fab85528649b3c67810caed1f9db026f90623c7d226ea1477c93b6a46"
+    }
+  ],
   "verification": {
     "focused_digest_tests": {
       "command": "CGO_ENABLED=0 go test -count=1 -timeout 180s ./internal/factory/digest/...",
