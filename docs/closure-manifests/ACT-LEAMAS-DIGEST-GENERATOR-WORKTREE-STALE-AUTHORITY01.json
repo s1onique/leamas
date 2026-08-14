@@ -1,0 +1,103 @@
+{
+  "act_id": "ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01",
+  "artifact_summary": {
+    "failed": 0,
+    "generated_outputs": 0,
+    "inputs": 0,
+    "missing": 0,
+    "passed": 0,
+    "post_commit_evidence": 0
+  },
+  "check_summary": {
+    "excluded": 3,
+    "failed": 0,
+    "not_run": 0,
+    "passed": 4,
+    "total": 4
+  },
+  "closure_policy": {
+    "diagnostic_count": 0,
+    "tracked_full_digest_status": "pass"
+  },
+  "contract_version": 1,
+  "evidence_index": [
+    {
+      "byte_count": 5,
+      "media_type": "text/plain",
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01/build-output.txt",
+      "schema_version": 1,
+      "sha256": "7e1cd69fab85528649b3c67810caed1f9db026f90623c7d226ea1477c93b6a46"
+    },
+    {
+      "byte_count": 5,
+      "media_type": "text/plain",
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01/diff-check-output.txt",
+      "schema_version": 1,
+      "sha256": "7e1cd69fab85528649b3c67810caed1f9db026f90623c7d226ea1477c93b6a46"
+    },
+    {
+      "byte_count": 5,
+      "media_type": "text/plain",
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01/vet-output.txt",
+      "schema_version": 1,
+      "sha256": "7e1cd69fab85528649b3c67810caed1f9db026f90623c7d226ea1477c93b6a46"
+    },
+    {
+      "byte_count": 70,
+      "media_type": "text/plain",
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01/test-output.txt",
+      "schema_version": 1,
+      "sha256": "e394ee6c74ae9f3fdf501a380424de8c3ae41fc757b576ba701e32682986dacd"
+    },
+    {
+      "byte_count": 779,
+      "media_type": "text/plain",
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01/acceptance-dirty-lifecycle.txt",
+      "schema_version": 1,
+      "sha256": "58689fc6279a66f8d867ca9817c43822fa0e1570961936ed40dec2e1b41df521"
+    },
+    {
+      "byte_count": 759,
+      "media_type": "text/plain",
+      "path": "docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01/acceptance-clean-lifecycle.txt",
+      "schema_version": 1,
+      "sha256": "743090cf049cd8cddffe2cd805324d556916e6a9a0cb2505fb7037015a08576d"
+    }
+  ],
+  "execution_snapshot": {
+    "branch": "main",
+    "head_commit_oid": "bc6db8a076d2db4cf4fbce867e15dcce3ae8985b",
+    "head_tree_oid": "194261cdb1b74bead7ffb41fda64f06acf41d756",
+    "root": ".",
+    "working_tree_clean_after": true,
+    "working_tree_clean_before": true
+  },
+  "patch_hygiene": {
+    "diagnostic_count": 0,
+    "status": "pass"
+  },
+  "plan": {
+    "path": "docs/closure-plans/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01.json",
+    "sha256": "d46f31aaec2107c11b0372cb0dd7657ee85b786afba07c63ec4156e745ddc929"
+  },
+  "plan_freeze": {
+    "freeze_commit": "2f6bcbd584a4d8f4f9bd500add86d61694f1ba61",
+    "plan_blob_oid": "9a8895420f08eb57390ba004efdb25bb2673cf15",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01.json",
+    "plan_sha256": "d46f31aaec2107c11b0372cb0dd7657ee85b786afba07c63ec4156e745ddc929",
+    "subject_commit": "bc6db8a076d2db4cf4fbce867e15dcce3ae8985b"
+  },
+  "runner": {
+    "binary_sha256": "4f369cfc0f5fe604e749e5ebc204925294bc150cbb12662dcda7723836b97f5e",
+    "leamas_version": "0.1.0+dev.bc6db8a076d2.20260814T162548Z",
+    "vcs_modified": false,
+    "vcs_revision": "bc6db8a076d2db4cf4fbce867e15dcce3ae8985b"
+  },
+  "subject": {
+    "end_commit_oid": "bc6db8a076d2db4cf4fbce867e15dcce3ae8985b",
+    "end_tree_oid": "194261cdb1b74bead7ffb41fda64f06acf41d756",
+    "start_commit_oid": "2f6bcbd584a4d8f4f9bd500add86d61694f1ba61"
+  },
+  "tag": null,
+  "verdict": "pass"
+}

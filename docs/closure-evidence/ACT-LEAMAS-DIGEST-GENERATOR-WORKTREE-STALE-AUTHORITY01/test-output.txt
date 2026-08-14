@@ -1,0 +1,3 @@
+ok  	github.com/s1onique/leamas/internal/factory/digest	18.915s
+
+RC=0
