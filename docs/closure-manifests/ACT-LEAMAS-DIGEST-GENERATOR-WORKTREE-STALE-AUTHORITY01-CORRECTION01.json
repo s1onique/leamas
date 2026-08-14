@@ -1,0 +1,162 @@
+{
+  "act_id": "ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION01",
+  "parent_act": "ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01",
+  "contract_version": 1,
+  "execution_snapshot": {
+    "root": ".",
+    "branch": "main",
+    "initial_head_commit_oid": "5dbbf6a30873540f77c15be9acf0afb552571574",
+    "initial_head_tree_oid": "7f6884eba36ecf136110edc1a8e141c34be72c5a",
+    "final_head_commit_oid": "dcc56b3413f67eb23a5059e77c93c0dab085a8ad",
+    "final_head_tree_oid": "ecd74cfc972053bb5693f5952ec7299a9d47fed3",
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0,
+    "gofmt_clean": true,
+    "git_diff_check_clean": true,
+    "files_owned_under_400_loc": true,
+    "owned_file_count": 12,
+    "max_owned_loc": 327
+  },
+  "verification": {
+    "focused_digest_tests": {
+      "command": "CGO_ENABLED=0 go test -count=1 -timeout 180s ./internal/factory/digest/...",
+      "result": "ok",
+      "elapsed_seconds": 23.5,
+      "rc": 0
+    },
+    "authority_tests": {
+      "command": "CGO_ENABLED=0 go test -count=1 -timeout 120s ./internal/factory/authority/...",
+      "result": "FAIL",
+      "elapsed_seconds": 4.7,
+      "rc": 1,
+      "failures": [
+        {
+          "test": "TestSymlinkedCanonicalBinaryIsResolved",
+          "status": "PRE-EXISTING",
+          "baseline": "5dbbf6a",
+          "introduced_by_correction01": false
+        }
+      ]
+    },
+    "go_vet": {
+      "command": "CGO_ENABLED=0 go vet ./...",
+      "result": "pass",
+      "rc": 0
+    },
+    "build": {
+      "command": "CGO_ENABLED=0 go build -trimpath -o /tmp/leamas-final ./cmd/leamas",
+      "result": "pass",
+      "rc": 0
+    },
+    "make_factorize": { "result": "NOT_RUN", "delegation": "not granted by ACT" },
+    "make_gate_dupcode": { "result": "NOT_RUN", "delegation": "not granted by ACT" },
+    "make_gate": { "result": "NOT_RUN", "delegation": "not granted by ACT" }
+  },
+  "corrections": [
+    {
+      "id": "C1",
+      "summary": "classifier composition inverted; commit-vs-HEAD no longer dominates overall verdict",
+      "fix": "removed Stage C commit-binding short-circuit; new SUBJECT_MISMATCH vocabulary; subject axis now drives the verdict"
+    },
+    {
+      "id": "C2",
+      "summary": "renderer fell back to ambient HEAD for explicit-range subjects",
+      "fix": "explicitRangeRightEndpoint resolves rightmost '..' token via git rev-parse; LifecycleSubjectRange added to ResolvedMode; renderer consults RangeSubject before Subject before HEAD"
+    },
+    {
+      "id": "C3",
+      "summary": "real A--B--C(HEAD) integration regression test added",
+      "fix": "TestRenderLifecycleCorrection01_GeneratorAtSubject_Authoritative drives ResolveAutoModeExplicitRange end-to-end"
+    },
+    {
+      "id": "C4",
+      "summary": "generator=B authoritative for A..B",
+      "fix": "covered by C3"
+    },
+    {
+      "id": "C5",
+      "summary": "generator=C not authoritative for A..B",
+      "fix": "TestRenderLifecycleCorrection01_GeneratorAtHEAD_NotSubject"
+    },
+    {
+      "id": "C6",
+      "summary": "close-report identity stale (FINAL_HEAD pointed at plan commit)",
+      "fix": "this manifest + new CORRECTION01 close report have refreshed FINAL_HEAD"
+    },
+    {
+      "id": "C7",
+      "summary": "history_range_generator_mismatches_both matrix row added",
+      "fix": "new matrix row locks the SUBJECT_MISMATCH verdict when both axes fail"
+    },
+    {
+      "id": "C8",
+      "summary": "TestEvaluateGeneratorBindingClockIndependence was misnamed",
+      "fix": "renamed to TestEvaluateGeneratorBindingIdentitySensitivity; test asserts identity sensitivity, not clock"
+    }
+  ],
+  "files_changed": [
+    {
+      "path": "internal/factory/authority/resolver_core.go",
+      "kind": "modified",
+      "loc": 308
+    },
+    {
+      "path": "internal/factory/authority/resolver_entry.go",
+      "kind": "modified",
+      "loc": 182
+    },
+    {
+      "path": "internal/factory/digest/generator_binding.go",
+      "kind": "modified",
+      "loc": 212
+    },
+    {
+      "path": "internal/factory/digest/generator_binding_classifier.go",
+      "kind": "modified",
+      "loc": 235
+    },
+    {
+      "path": "internal/factory/digest/generator_binding_classifier_test.go",
+      "kind": "modified",
+      "loc": 160
+    },
+    {
+      "path": "internal/factory/digest/generator_binding_classifier_matrix_test.go",
+      "kind": "new",
+      "loc": 287
+    },
+    {
+      "path": "internal/factory/digest/lifecycle_render.go",
+      "kind": "modified",
+      "loc": 194
+    },
+    {
+      "path": "internal/factory/digest/lifecycle_render_generator_test.go",
+      "kind": "modified",
+      "loc": 327
+    },
+    {
+      "path": "internal/factory/digest/lifecycle_render_correction01_test.go",
+      "kind": "new",
+      "loc": 315
+    },
+    {
+      "path": "internal/factory/digest/resolve.go",
+      "kind": "modified",
+      "loc": 285
+    }
+  ],
+  "implementation_commits": [
+    {
+      "oid": "dcc56b3413f67eb23a5059e77c93c0dab085a8ad",
+      "subject": "factory: separate subject authority from ambient-HEAD freshness (CORRECTION01)"
+    }
+  ],
+  "verdict": "pass",
+  "scope": "closed",
+  "tags": null
+}

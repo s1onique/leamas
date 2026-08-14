@@ -1,8 +1,36 @@
 # Close Report — ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01
 
-## VERDICT
+## Status: SUPERSEDED
 
-PASS
+This report documents the original ACT closure at the plan commit
+(`bc6db8a`). It was filed with `VERDICT=PASS` based on the matrix
+the original ACT specified, but a follow-up review by a Git
+provenance engineer found that the implementation inverted the
+classifier composition and the renderer fell back to ambient HEAD
+for explicit-range subjects.
+
+**CORRECTION01** addresses these defects:
+
+- Production defect 1 (C1): classifier's overall verdict was
+  driven by the commit-vs-HEAD axis instead of the
+  generator-vs-digest-subject axis. Fixed by removing the
+  commit-mismatch short-circuit; the SUBJECT axis now dominates.
+- Production defect 2 (C2): renderer fell back to HEAD when
+  `LifecycleSubject` was empty. Fixed by resolving the explicit
+  range's right endpoint through `git rev-parse` and adding
+  `LifecycleSubjectRange` to the subject resolution order.
+
+The corrected implementation lands at
+`dcc56b3 factory: separate subject authority from ambient-HEAD
+freshness (CORRECTION01)`. See
+`docs/close-reports/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION01.md`
+for the corrected verdict, acceptance board, and self-hosted
+evidence.
+
+## VERDICT (original ACT)
+
+PASS at plan commit, but the production implementation was
+backwards for historical ranges. Superseded by CORRECTION01.
 
 ## Identity
 
