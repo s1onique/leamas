@@ -7,10 +7,12 @@
     "branch": "main",
     "initial_head_commit_oid": "96b6ff39e67713257d33f8c447f610f85cb92158",
     "initial_head_tree_oid": "20a3ce6a8e532a02955c1069fcca37f31d14ab6e",
-    "qualified_subject_head": "dcc56b3413f67eb23a5059e77c93c0dab085a8ad",
+    "qualified_subject_head": "9bcdc0c151c86a29b3e8ad150635df5bcee1a0b0",
+    "qualified_subject_tree": "9d1cb286d833b3aa93004f6472b6daf61b01b154",
     "final_head_tree_oid": "ecd74cfc972053bb5693f5952ec7299a9d47fed3",
     "working_tree_clean_before": true,
-    "working_tree_clean_after": true
+    "working_tree_clean_after": true,
+    "subject_identity_note": "CORRECTION02 production commit is 9bcdc0c. The earlier value (dcc56b3) was CORRECTION01's subject and has been replaced."
   },
   "patch_hygiene": {
     "status": "pass",
@@ -112,8 +114,9 @@
   ],
   "implementation_commits": [
     {
-      "subject": "factory: fail-closed authority-sensitive subject resolution (CORRECTION02)",
-      "note": "see HEAD of this branch"
+      "oid": "9bcdc0c151c86a29b3e8ad150635df5bcee1a0b0",
+      "tree_oid": "9d1cb286d833b3aa93004f6472b6daf61b01b154",
+      "subject": "factory: fail-closed authority-sensitive subject resolution (CORRECTION02)"
     }
   ],
   "verdict": "pass",

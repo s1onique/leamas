@@ -16,11 +16,13 @@ BRANCH=main
 
 INITIAL_HEAD=96b6ff39e67713257d33f8c447f610f85cb92158
 INITIAL_TREE=20a3ce6a8e532a02955c1069fcca37f31d14ab6e
-FINAL_HEAD=dcc56b3413f67eb23a5059e77c93c0dab085a8ad   (QUALIFIED_SUBJECT_HEAD;
-                                                          not terminal HEAD;
-                                                          see AGENTS.md rule)
-QUALIFIED_SUBJECT_HEAD=dcc56b3413f67eb23a5059e77c93c0dab085a8ad
+QUALIFIED_SUBJECT_HEAD=9bcdc0c151c86a29b3e8ad150635df5bcee1a0b0
+QUALIFIED_SUBJECT_TREE=9d1cb286d833b3aa93004f6472b6daf61b01b154
 FINAL_TREE=ecd74cfc972053bb5693f5952ec7299a9d47fed3
+FINAL_HEAD=see HEAD of this branch; not embedded to avoid
+            self-reference. The closure commit is the terminal
+            HEAD that contains this report; the qualified subject
+            is the CORRECTION02 production commit (above).
 
 CLOSURE_COMMIT=see HEAD of this branch (self-referential;
                 see AGENTS.md rule: never embed future closure
@@ -29,7 +31,15 @@ CLOSURE_COMMIT=see HEAD of this branch (self-referential;
 WORKTREE_STATUS_BEFORE=clean
 WORKTREE_STATUS_AFTER=clean
 
-CORRECTION02_COMMIT=see HEAD of this branch
+CORRECTION02_PRODUCTION_COMMIT=9bcdc0c151c86a29b3e8ad150635df5bcee1a0b0
+CORRECTION02_PRODUCTION_TREE=9d1cb286d833b3aa93004f6472b6daf61b01b154
+
+PROVENANCE_FIX:
+  The earlier draft of this report recorded QUALIFIED_SUBJECT_HEAD
+  as dcc56b3..., which is CORRECTION01's production commit. That
+  was wrong: CORRECTION02's actual production commit is 9bcdc0c.
+  This provenance-only correction replaces dcc56b3 with 9bcdc0c
+  (and adds QUALIFIED_SUBJECT_TREE). No production code changed.
 ```
 
 ## What CORRECTION02 fixed
