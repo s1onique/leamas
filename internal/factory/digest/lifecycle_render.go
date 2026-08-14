@@ -106,6 +106,21 @@ func RenderLifecycle(r *ResolvedMode) string {
 // the typed binding inputs and invokes the pure classifier. The
 // function performs no I/O; the caller has already resolved all
 // required identities.
+//
+// CORRECTION01: subject resolution order is now explicit.
+//
+//  1. LifecycleSubjectRange — the resolved right endpoint of an
+//     explicit --range. When non-empty, this is the digest
+//     subject for binding purposes, regardless of ambient HEAD.
+//  2. LifecycleSubject — the manifest-derived subject (clean
+//     committed resolutions).
+//  3. HeadCommit — the ambient repository HEAD (single-commit
+//     fallback).
+//
+// Prior to CORRECTION01 the renderer fell back to HEAD when
+// LifecycleSubject was empty, which silently substituted ambient
+// HEAD for an explicit-range right endpoint. That fallback is
+// preserved only when no resolved endpoint is available.
 func resolveGeneratorBindingForRender(r *ResolvedMode) GeneratorBinding {
 	if r == nil {
 		return GeneratorBinding{
@@ -119,12 +134,11 @@ func resolveGeneratorBindingForRender(r *ResolvedMode) GeneratorBinding {
 	}
 	generatorCommit := strings.TrimSpace(r.GeneratorCommit)
 	repoHead := strings.TrimSpace(r.HeadCommit)
-	// The digest subject is the lifecycle subject (manifest
-	// subject.commit_oid for authoritative resolutions) or
-	// the range right endpoint for explicit ranges. For
-	// dirty mode the subject includes uncommitted state; the
-	// adapter's dirty flag captures that semantic.
-	subjectCommit := strings.TrimSpace(r.LifecycleSubject)
+	// CORRECTION01: subject resolution order.
+	subjectCommit := strings.TrimSpace(r.LifecycleSubjectRange)
+	if subjectCommit == "" {
+		subjectCommit = strings.TrimSpace(r.LifecycleSubject)
+	}
 	if subjectCommit == "" {
 		subjectCommit = strings.TrimSpace(r.HeadCommit)
 	}

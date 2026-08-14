@@ -62,6 +62,16 @@ const (
 	// against the current working tree.
 	GeneratorBindingCommitMismatch GeneratorBindingStatus = "COMMIT_MISMATCH"
 
+	// GeneratorBindingSubjectMismatch (CORRECTION01): the
+	// generator's embedded commit does not equal the digest
+	// subject commit. Distinct from COMMIT_MISMATCH:
+	// COMMIT_MISMATCH records ambient-HEAD drift (the legacy
+	// GENERATOR_STALE signal); SUBJECT_MISMATCH records actual
+	// authority failure (the new GENERATOR_AUTHORITATIVE_FOR_DIGEST
+	// signal). They may legitimately differ for historical-range
+	// digests.
+	GeneratorBindingSubjectMismatch GeneratorBindingStatus = "SUBJECT_MISMATCH"
+
 	// GeneratorBindingDirtySubjectUnbound: the generator's
 	// embedded commit equals the repository HEAD, but the digest
 	// subject includes uncommitted source state (tracked-dirty,
@@ -195,6 +205,7 @@ type GeneratorBinding struct {
 const (
 	GeneratorWarningCodeNone                = "none"
 	GeneratorWarningCodeCommitMismatch      = "GENERATOR_COMMIT_MISMATCH"
+	GeneratorWarningCodeSubjectMismatch     = "GENERATOR_SUBJECT_MISMATCH"
 	GeneratorWarningCodeDirtySubjectUnbound = "GENERATOR_DIRTY_SUBJECT_UNBOUND"
 	GeneratorWarningCodeIdentityUnbound     = "GENERATOR_IDENTITY_UNBOUND"
 	GeneratorWarningCodeEvidenceInvalid     = "GENERATOR_EVIDENCE_INVALID"

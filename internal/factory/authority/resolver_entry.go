@@ -35,9 +35,19 @@ func Resolve(opts ResolverOptions) (*ResolvedAuthority, error) {
 	tool.RepositoryTree = headTree
 
 	if strings.TrimSpace(opts.ExplicitRange) != "" {
+		// CORRECTION01: resolve the right endpoint of the explicit
+		// range so downstream renderers can bind the digest
+		// subject against the resolved endpoint rather than
+		// falling back to ambient HEAD. Only A..B and B-style
+		// forms are resolved here; rev-parse failure (which is
+		// possible for malformed input) yields an empty
+		// RangeSubjectEnd and the renderer falls back to its
+		// documented empty-subject behavior.
+		right := explicitRangeRightEndpoint(git, opts.RepoRoot, strings.TrimSpace(opts.ExplicitRange))
 		return &ResolvedAuthority{
 			AuthorityStatus: AuthorityExplicitRange,
 			DigestRange:     strings.TrimSpace(opts.ExplicitRange),
+			RangeSubjectEnd: right,
 			ResolutionSrc:   "explicit_cli",
 			ToolIdentity:    tool,
 		}, nil
@@ -125,4 +135,48 @@ func Resolve(opts ResolverOptions) (*ResolvedAuthority, error) {
 	}
 	resolved.ToolIdentity = tool
 	return resolved, nil
+}
+
+// explicitRangeRightEndpoint (CORRECTION01) resolves the right
+// endpoint of an explicit --range expression to a full OID.
+//
+// Supports the documented forms:
+//
+//	<rev>                  (right endpoint = rev)
+//	<base>..<rev>          (right endpoint = rev)
+//	<rev1>..<rev2>..<rev3> (treat as base..rev = the trailing token)
+//
+// Returns the empty string when rev-parse fails (malformed
+// input, missing object). The resolver never panics or fails
+// closed solely on right-endpoint resolution: the explicit
+// range still classifies as AuthorityExplicitRange with the
+// original DigestRange verbatim, and downstream renderers
+// fall back to their documented empty-subject behavior.
+func explicitRangeRightEndpoint(git GitRunner, repoRoot, expr string) string {
+	expr = strings.TrimSpace(expr)
+	if expr == "" || git == nil {
+		return ""
+	}
+	// Split on ".." and take the rightmost non-empty token.
+	// This mirrors git's own symmetric difference syntax.
+	parts := strings.Split(expr, "..")
+	right := ""
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			right = p
+		}
+	}
+	if right == "" {
+		return ""
+	}
+	resolved, err := git(repoRoot, "rev-parse", "--verify", right+"^{commit}")
+	if err != nil {
+		return ""
+	}
+	resolved = strings.TrimSpace(resolved)
+	if resolved == "" {
+		return ""
+	}
+	return resolved
 }

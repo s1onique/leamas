@@ -40,16 +40,23 @@ type ResolvedMode struct {
 	HeadCommit string
 
 	// Lifecycle metadata (populated by the auto-range resolver).
-	AutoRangeStrategy   string
-	ActID               string
-	LifecycleFreeze     string
-	LifecycleSubject    string
-	LifecycleClosure    string
-	IncludedCommits     []string
-	GeneratorCommit     string
-	GeneratorIsAncestor bool
-	GeneratorStale      bool
-	StaleReason         string
+	AutoRangeStrategy string
+	ActID             string
+	LifecycleFreeze   string
+	LifecycleSubject  string
+	// LifecycleSubjectRange (CORRECTION01) is the resolved
+	// right endpoint of an explicit --range. When non-empty
+	// the renderer uses this value (not HeadCommit) as the
+	// digest subject for binding purposes. Empty for clean
+	// committed auto-mode resolutions where LifecycleSubject
+	// already records the same value.
+	LifecycleSubjectRange string
+	LifecycleClosure      string
+	IncludedCommits       []string
+	GeneratorCommit       string
+	GeneratorIsAncestor   bool
+	GeneratorStale        bool
+	StaleReason           string
 
 	// AuthorityStatus is the typed classification from the shared
 	// authority resolver. It is the single source of truth for
@@ -156,13 +163,24 @@ func resolveAutoModeWith(repoRoot, toolPath, explicitRange string) (*ResolvedMod
 	// dirty-worktree auto-detection. The caller explicitly requested a
 	// specific commit range; unrelated worktree dirt must not override
 	// that intent.
+	//
+	// CORRECTION01: even the explicit-range path delegates to
+	// the shared authority resolver so the resolver populates
+	// RangeSubjectEnd (the resolved right endpoint) and the
+	// downstream renderer can bind the digest subject against
+	// the correct endpoint rather than falling back to ambient
+	// HEAD.
 	if explicitRange != "" {
-		result.Mode = ModeRange
-		result.Range = explicitRange
-		result.Reason = "explicit --range; non-authoritative"
-		result.AuthorityStatus = authority.AuthorityExplicitRange
-		result.ResolutionSource = "explicit_cli"
 		result.IsClean = !isDirty
+		resolved, err := authority.Resolve(authority.ResolverOptions{
+			RepoRoot:       repoRoot,
+			ToolBinaryPath: toolPath,
+			ExplicitRange:  explicitRange,
+		})
+		if err != nil {
+			return nil, err
+		}
+		applyAuthorityToResolved(result, resolved)
 		return result, nil
 	}
 
@@ -213,6 +231,9 @@ func applyAuthorityToResolved(out *ResolvedMode, r *authority.ResolvedAuthority)
 	out.ActID = r.ActID
 	out.LifecycleFreeze = r.FreezeCommit
 	out.LifecycleSubject = r.SubjectEnd
+	// CORRECTION01: propagate the resolved explicit-range right
+	// endpoint so the renderer can use it for SUBJECT_BINDING.
+	out.LifecycleSubjectRange = r.RangeSubjectEnd
 	out.LifecycleClosure = r.ClosureCommit
 	out.HeadCommit = r.ToolIdentity.RepositoryHead
 	out.GeneratorCommit = r.ToolIdentity.ToolCommit

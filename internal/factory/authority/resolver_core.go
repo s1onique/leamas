@@ -148,6 +148,16 @@ type ResolvedAuthority struct {
 	FreezeCommit    string
 	SubjectStart    string
 	SubjectEnd      string
+	// RangeSubjectEnd (CORRECTION01) is the resolved right
+	// endpoint of the digest range when the resolver classifies
+	// the resolution as AuthorityExplicitRange. For the
+	// AuthorityExplicitRange path, SubjectEnd is not populated
+	// because lifecycle artifacts are not consulted; downstream
+	// renderers (notably the generator binding renderer) need
+	// the explicit-range right endpoint to compute
+	// SUBJECT_BINDING rather than falling back to ambient HEAD.
+	// Empty for non-explicit-range resolutions.
+	RangeSubjectEnd string
 	ClosureCommit   string
 	AttestationPath string
 	AttestationSHA  string

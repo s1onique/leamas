@@ -99,10 +99,20 @@ func TestRenderLifecycleDirtySubjectUnbound(t *testing.T) {
 }
 
 // TestRenderLifecycleGeneratorMismatch proves that when the
-// embedded generator commit differs from HEAD, both legacy and
-// new verdicts agree: GENERATOR_STALE=true,
-// GENERATOR_BINDING_STATUS=COMMIT_MISMATCH,
-// GENERATOR_AUTHORITATIVE_FOR_DIGEST=false.
+// embedded generator commit differs from both HEAD and the
+// digest subject, the verdict separates cleanly:
+//
+//	legacy GENERATOR_STALE=true
+//	GENERATOR_COMMIT_MATCHES_HEAD: false
+//	GENERATOR_BINDING_STATUS: SUBJECT_MISMATCH
+//	GENERATOR_COMMIT_BINDING: MISMATCH
+//	GENERATOR_SUBJECT_BINDING: MISMATCH
+//	GENERATOR_AUTHORITATIVE_FOR_DIGEST: false
+//
+// CORRECTION01: the legacy freshness signal still matches the
+// new overall verdict (both false), but the overall status is
+// the SUBJECT verdict (SUBJECT_MISMATCH), not COMMIT_MISMATCH,
+// because the binding's reference point is the digest subject.
 func TestRenderLifecycleGeneratorMismatch(t *testing.T) {
 	const x = "0123456789abcdef0123456789abcdef01234567"
 	const y = "fedcba9876543210fedcba9876543210fedcba98"
@@ -111,7 +121,7 @@ func TestRenderLifecycleGeneratorMismatch(t *testing.T) {
 	// resolveAutoModeWith (via computeLegacyGeneratorStale).
 	// Direct RenderLifecycle calls preserve whatever the
 	// caller populated. We set GeneratorStale=true so the
-	// legacy render matches the new COMMIT_MISMATCH verdict.
+	// legacy render matches the new SUBJECT_MISMATCH verdict.
 	rendered := RenderLifecycle(&ResolvedMode{
 		HeadCommit:       x,
 		GeneratorCommit:  y,
@@ -122,11 +132,11 @@ func TestRenderLifecycleGeneratorMismatch(t *testing.T) {
 	})
 	for _, want := range []string{
 		"GENERATOR_COMMIT_MATCHES_HEAD: false",
-		"GENERATOR_BINDING_STATUS: COMMIT_MISMATCH",
+		"GENERATOR_BINDING_STATUS: SUBJECT_MISMATCH",
 		"GENERATOR_COMMIT_BINDING: MISMATCH",
 		"GENERATOR_SUBJECT_BINDING: MISMATCH",
 		"GENERATOR_AUTHORITATIVE_FOR_DIGEST: false",
-		"GENERATOR_WARNING_CODE: GENERATOR_COMMIT_MISMATCH",
+		"GENERATOR_WARNING_CODE: GENERATOR_SUBJECT_MISMATCH",
 		"GENERATOR_STALE: true",
 	} {
 		if !strings.Contains(rendered, want) {

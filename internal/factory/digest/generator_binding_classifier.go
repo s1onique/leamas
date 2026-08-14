@@ -65,8 +65,24 @@ func EvaluateGeneratorBinding(generator GeneratorIdentity, repo RepositoryIdenti
 	// Stage 3: compose the overall verdict from the per-axis
 	// bindings, the dirty flag, and the validity of every
 	// identity.
+	//
+	// IMPORTANT (CORRECTION01): the overall verdict is driven by
+	// the SUBJECT binding (generator ↔ digest subject), NOT by the
+	// commit binding (generator ↔ ambient HEAD). The doctrine is:
+	//
+	//	GENERATOR AUTHORITY MUST BIND TO THE DIGEST SUBJECT,
+	//	NOT MERELY TO AMBIENT HEAD.
+	//
+	// Commit binding is recorded verbatim on the result and
+	// surfaced in the digest as the legacy freshness signal, but
+	// it MUST NOT short-circuit the subject verdict. A historical
+	// digest (A..B) with generator=B and ambient HEAD=C is fully
+	// authoritative for the digest subject, even though the
+	// generator is "stale" relative to ambient HEAD. The legacy
+	// GENERATOR_STALE flag captures the latter signal; the new
+	// GENERATOR_AUTHORITATIVE_FOR_DIGEST captures the former.
 	result.Status, result.AuthoritativeForDigest, result.WarningCode =
-		composeGeneratorVerdict(generator, repo, digest, result.CommitBinding, result.SubjectBinding)
+		composeGeneratorVerdict(generator, repo, digest, result.SubjectBinding)
 
 	return result
 }
@@ -109,7 +125,26 @@ func classifySubjectBinding(generator GeneratorIdentity, digest DigestAuthorityS
 // per-axis bindings, the dirty flag, and the validity flags.
 // The ordering matters: invalid evidence is checked first
 // (EVIDENCE_INVALID), then missing identity (IDENTITY_UNBOUND),
-// then the binding predicates.
+// then the subject-binding predicates.
+//
+// CORRECTION01: the ambient-HEAD axis (commit binding) is
+// deliberately NOT consulted here. The legacy GENERATOR_STALE
+// signal is surfaced verbatim by the renderer on the
+// GENERATOR_COMMIT_MATCHES_HEAD / GENERATOR_STALE fields, which
+// are mechanical mirrors of the per-axis CommitBinding. The
+// overall verdict reflects ONLY the digest-subject authority
+// question, because that is the only question a digest consumer
+// actually needs answered:
+//
+//	GENERATOR AUTHORITY MUST BIND TO THE DIGEST SUBJECT,
+//	NOT MERELY TO AMBIENT HEAD.
+//
+// A historical digest (A..B) with generator=B and ambient
+// HEAD=C is fully AUTHORITATIVE for the digest subject. The
+// fact that the binary is "stale" relative to ambient HEAD is
+// documented by GENERATOR_STALE=true alongside
+// AUTHORITATIVE=true — exactly the separation the ACT
+// introduced.
 //
 // The classifier never silently promotes an unknown value to a
 // valid-authoritative result. Any non-{valid identity, valid
@@ -119,7 +154,6 @@ func composeGeneratorVerdict(
 	generator GeneratorIdentity,
 	repo RepositoryIdentity,
 	digest DigestAuthoritySubject,
-	commitBinding GeneratorStateBindingStatus,
 	subjectBinding GeneratorStateBindingStatus,
 ) (GeneratorBindingStatus, bool, string) {
 	// Stage A: invalid evidence (non-empty but malformed OID).
@@ -127,6 +161,15 @@ func composeGeneratorVerdict(
 	// classifier reports EVIDENCE_INVALID. This is distinct
 	// from "identity is missing" — the latter is reported as
 	// IDENTITY_UNBOUND.
+	//
+	// The repo HEAD check is intentionally part of this stage:
+	// when the repository HEAD identity is malformed, the
+	// GENERATOR_STALE signal is not meaningful and the
+	// classifier must surface the ambiguity through the
+	// overall verdict. CORRECTION01 doctrine: ambient-HEAD
+	// mismatches are recorded on the per-axis CommitBinding
+	// field (and rendered as GENERATOR_STALE) but do NOT
+	// dominate the overall status.
 	anyIdentityMalformed := (generator.Commit != "" && !generator.CommitIsValid) ||
 		(repo.HeadCommit != "" && !repo.HeadCommitIsValid) ||
 		(digest.SubjectCommit != "" && !digest.SubjectCommitIsValid)
@@ -143,43 +186,44 @@ func composeGeneratorVerdict(
 		return GeneratorBindingIdentityUnbound, false, GeneratorWarningCodeIdentityUnbound
 	}
 
-	// Stage C: commit mismatch. If the generator commit does
-	// not equal repository HEAD, the generator cannot be
-	// authoritative for any digest that resolves against the
-	// current working tree. This takes precedence over the
-	// subject binding verdict: an explicit-range subject may
-	// still match the generator commit while ambient HEAD does
-	// not, but we report COMMIT_MISMATCH because the legacy
-	// GENERATOR_STALE signal is also stale. The ACT specifies
-	// commit-mismatch as the dominant verdict.
-	if commitBinding == GeneratorStateMismatch {
-		return GeneratorBindingCommitMismatch, false, GeneratorWarningCodeCommitMismatch
+	// Stage C: subject mismatch. The generator's embedded
+	// commit does not equal the digest subject commit. The
+	// generator cannot be authoritative for the digest
+	// subject — it was not built from that commit.
+	//
+	// Note: the ambient-HEAD axis (commit binding) is
+	// deliberately NOT consulted here. Historical ranges
+	// (A..B) with generator=B and ambient HEAD=C report
+	// SUBJECT_MISMATCH here when the digest subject is
+	// neither B nor anything the binary matches. When the
+	// digest subject equals B and the binary equals B, the
+	// subject binding is MATCH and we fall through to the
+	// AUTHORITATIVE verdict — regardless of ambient HEAD=C.
+	if subjectBinding == GeneratorStateMismatch {
+		return GeneratorBindingSubjectMismatch, false, GeneratorWarningCodeSubjectMismatch
 	}
 
-	// Stage D: dirty subject. Commit binding is MATCH, but the
-	// subject itself is dirty. Commit identity cannot establish
-	// authority for uncommitted source state. This is the
-	// decisive regression the ACT fixes: an old binary built
-	// from a dirty tree may actually contain the change, but
-	// the digest cannot prove it from commit identity alone.
+	// Stage D: dirty subject. The generator commit equals
+	// the digest subject commit, but the subject itself
+	// includes uncommitted source state. Commit identity
+	// cannot establish authority for uncommitted source
+	// state. This is the decisive regression the ACT
+	// originally fixed: an old binary built from a dirty
+	// tree may actually contain the change, but the digest
+	// cannot prove it from commit identity alone.
 	if subjectBinding == GeneratorStateUnbound && digest.Dirty {
 		return GeneratorBindingDirtySubjectUnbound, false, GeneratorWarningCodeDirtySubjectUnbound
 	}
 
-	// Stage E: explicit-range subject mismatch. Generator
-	// commit equals HEAD, but the digest subject is a
-	// historical range endpoint that differs from HEAD. We
-	// classify COMMIT_MISMATCH because the generator is not
-	// authoritative for the historical subject — it was built
-	// from a different commit.
-	if subjectBinding == GeneratorStateMismatch {
-		return GeneratorBindingCommitMismatch, false, GeneratorWarningCodeCommitMismatch
-	}
-
-	// Stage F: every predicate passed: generator commit
-	// equals HEAD, generator commit equals subject, subject is
-	// not dirty, every identity was available and valid.
-	if commitBinding == GeneratorStateMatch && subjectBinding == GeneratorStateMatch {
+	// Stage E: every predicate passed: generator commit
+	// equals the digest subject commit, the subject is not
+	// dirty, and every identity was available and valid.
+	//
+	// Note: this does NOT require the generator commit to
+	// equal the repository HEAD. The doctrine is:
+	// "GENERATOR AUTHORITY MUST BIND TO THE DIGEST SUBJECT,
+	// NOT MERELY TO AMBIENT HEAD."
+	if subjectBinding == GeneratorStateMatch {
 		return GeneratorBindingAuthoritative, true, GeneratorWarningCodeNone
 	}
 
