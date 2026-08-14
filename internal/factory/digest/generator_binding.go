@@ -14,12 +14,12 @@
 // The classifier separates two distinct questions that were
 // previously conflated under a single GENERATOR_STALE flag:
 //
-//	1. Does the running binary's embedded commit equal the
-//	   repository HEAD?  (commit-vs-HEAD freshness)
+//  1. Does the running binary's embedded commit equal the
+//     repository HEAD?  (commit-vs-HEAD freshness)
 //
-//	2. Is the running binary provably authoritative for the
-//	   complete source subject the digest represents?
-//	   (commit-vs-digest-subject authority)
+//  2. Is the running binary provably authoritative for the
+//     complete source subject the digest represents?
+//     (commit-vs-digest-subject authority)
 //
 // The first question is a freshness signal that has always been
 // the (legacy) GENERATOR_STALE field's intent. The second question
@@ -193,9 +193,9 @@ type GeneratorBinding struct {
 // with the gate-evidence and range-scope warning codes declared
 // elsewhere in this package.
 const (
-	GeneratorWarningCodeNone               = "none"
-	GeneratorWarningCodeCommitMismatch     = "GENERATOR_COMMIT_MISMATCH"
+	GeneratorWarningCodeNone                = "none"
+	GeneratorWarningCodeCommitMismatch      = "GENERATOR_COMMIT_MISMATCH"
 	GeneratorWarningCodeDirtySubjectUnbound = "GENERATOR_DIRTY_SUBJECT_UNBOUND"
-	GeneratorWarningCodeIdentityUnbound    = "GENERATOR_IDENTITY_UNBOUND"
-	GeneratorWarningCodeEvidenceInvalid    = "GENERATOR_EVIDENCE_INVALID"
+	GeneratorWarningCodeIdentityUnbound     = "GENERATOR_IDENTITY_UNBOUND"
+	GeneratorWarningCodeEvidenceInvalid     = "GENERATOR_EVIDENCE_INVALID"
 )
