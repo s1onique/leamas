@@ -33,6 +33,7 @@ package digest
 import (
 	"errors"
 	"regexp"
+	"strings"
 )
 
 // Range strategy labels rendered into the digest and surfaced in errors.
@@ -126,6 +127,42 @@ var actIDPattern = regexp.MustCompile(`^ACT-[A-Z0-9][A-Z0-9-]{2,199}$`)
 
 // fullOIDPattern matches 40+ hex chars used as a full Git SHA.
 var fullOIDPattern = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+
+// computeLegacyGeneratorStale returns the legacy
+// GENERATOR_STALE boolean: true iff the embedded generator
+// commit is non-empty, looks like a valid OID, and does not
+// match the repository HEAD.
+//
+// The legacy semantic is the commit-vs-repository-HEAD signal
+// only. It is NOT a digest-subject authority signal; that
+// signal is computed by EvaluateGeneratorBinding and surfaced
+// under GENERATOR_AUTHORITATIVE_FOR_DIGEST.
+//
+// The boolean is conservative: an unset or invalid generator
+// commit is reported as stale=false (we cannot prove the
+// binary is older than HEAD without identity). This matches
+// the pre-ACT behavior so existing consumers continue to
+// observe GENERATOR_STALE=false in the common development case
+// where the operator has not yet rebuilt.
+func computeLegacyGeneratorStale(generatorCommit, repoHead string) bool {
+	generatorCommit = strings.TrimSpace(generatorCommit)
+	repoHead = strings.TrimSpace(repoHead)
+	if generatorCommit == "" || repoHead == "" {
+		return false
+	}
+	// Both values must look like valid OIDs. Otherwise the
+	// comparison is meaningless; report not-stale so the
+	// renderer can surface the proper
+	// EVIDENCE_INVALID / IDENTITY_UNBOUND verdict through
+	// the new authority fields.
+	if !fullOIDPattern.MatchString(strings.ToLower(generatorCommit)) {
+		return false
+	}
+	if !fullOIDPattern.MatchString(strings.ToLower(repoHead)) {
+		return false
+	}
+	return !strings.EqualFold(generatorCommit, repoHead)
+}
 
 // shortOIDPattern matches 7+ hex chars used as a short Git SHA. Used
 // by extractFirstOID to find OIDs embedded in commit messages or

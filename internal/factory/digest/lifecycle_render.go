@@ -7,6 +7,12 @@
 // The fields are surfaced under a dedicated "## LIFECYCLE" section
 // so reviewers and downstream tooling can verify how the range was
 // selected without having to cross-reference the source code.
+//
+// ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01 extends
+// the section with the generator<->digest-subject binding fields.
+// The legacy GENERATOR_STALE flag is preserved at its existing
+// position; new keys are appended so existing parsers continue
+// to work and the additive contract is documented.
 package digest
 
 import (
@@ -17,25 +23,39 @@ import (
 // LifecycleField names rendered into the digest. These are part of
 // the digest's documented surface area and must remain stable.
 const (
-	LifecycleFieldAutoRangeStrategy = "AUTO_RANGE_STRATEGY"
-	LifecycleFieldActID             = "ACT_ID"
-	LifecycleFieldRangeBase         = "RANGE_BASE"
-	LifecycleFieldRangeHead         = "RANGE_HEAD"
-	LifecycleFieldRangeReason       = "RANGE_REASON"
-	LifecycleFieldFreeze            = "LIFECYCLE_FREEZE"
-	LifecycleFieldSubject           = "LIFECYCLE_SUBJECT"
-	LifecycleFieldClosure           = "LIFECYCLE_CLOSURE"
-	LifecycleFieldIncludedCommits   = "INCLUDED_COMMITS"
-	LifecycleFieldGeneratorCommit   = "GENERATOR_COMMIT"
-	LifecycleFieldRepositoryHead    = "REPOSITORY_HEAD"
-	LifecycleFieldGeneratorStale    = "GENERATOR_STALE"
-	LifecycleFieldAuthorityStatus   = "AUTHORITY_STATUS"
-	LifecycleFieldResolutionSource  = "RESOLUTION_SOURCE"
+	LifecycleFieldAutoRangeStrategy    = "AUTO_RANGE_STRATEGY"
+	LifecycleFieldActID                = "ACT_ID"
+	LifecycleFieldRangeBase            = "RANGE_BASE"
+	LifecycleFieldRangeHead            = "RANGE_HEAD"
+	LifecycleFieldRangeReason          = "RANGE_REASON"
+	LifecycleFieldFreeze               = "LIFECYCLE_FREEZE"
+	LifecycleFieldSubject              = "LIFECYCLE_SUBJECT"
+	LifecycleFieldClosure              = "LIFECYCLE_CLOSURE"
+	LifecycleFieldIncludedCommits      = "INCLUDED_COMMITS"
+	LifecycleFieldGeneratorCommit      = "GENERATOR_COMMIT"
+	LifecycleFieldRepositoryHead       = "REPOSITORY_HEAD"
+	LifecycleFieldGeneratorStale       = "GENERATOR_STALE"
+	LifecycleFieldGeneratorStaleBasis  = "GENERATOR_STALE_BASIS"
+	LifecycleFieldAuthorityStatus      = "AUTHORITY_STATUS"
+	LifecycleFieldResolutionSource     = "RESOLUTION_SOURCE"
+	// Generator binding fields (ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01).
+	LifecycleFieldGeneratorCommitMatchesHead = "GENERATOR_COMMIT_MATCHES_HEAD"
+	LifecycleFieldGeneratorBindingStatus     = "GENERATOR_BINDING_STATUS"
+	LifecycleFieldGeneratorCommitBinding     = "GENERATOR_COMMIT_BINDING"
+	LifecycleFieldGeneratorSubjectBinding    = "GENERATOR_SUBJECT_BINDING"
+	LifecycleFieldGeneratorAuthoritative     = "GENERATOR_AUTHORITATIVE_FOR_DIGEST"
+	LifecycleFieldGeneratorWarningCode       = "GENERATOR_WARNING_CODE"
 )
 
 // LifecycleSectionHeader is the section heading under which the
 // lifecycle metadata appears.
 const LifecycleSectionHeader = "## LIFECYCLE"
+
+// generatorStaleBasisLabel documents the legacy GENERATOR_STALE
+// semantics. The field is the commit-vs-repository-HEAD signal,
+// NOT a digest-subject authority signal. Renderers MUST surface
+// this label so reviewers do not silently conflate the two.
+const generatorStaleBasisLabel = "commit_vs_repository_head"
 
 // RenderLifecycle renders the lifecycle metadata section. The output
 // is deterministic and uses short (12-char) OIDs for readability while
@@ -64,9 +84,62 @@ func RenderLifecycle(r *ResolvedMode) string {
 	appendKV(LifecycleFieldGeneratorCommit, renderOrUnset(r.GeneratorCommit))
 	appendKV(LifecycleFieldRepositoryHead, renderOrUnset(r.HeadCommit))
 	appendKV(LifecycleFieldGeneratorStale, renderStale(r))
+	appendKV(LifecycleFieldGeneratorStaleBasis, generatorStaleBasisLabel)
+	// Generator binding fields. Rendered adjacent to the
+	// legacy GENERATOR_STALE block so reviewers can verify
+	// both claims without scrolling. The values come from the
+	// pure EvaluateGeneratorBinding classifier; the renderer
+	// MUST NOT recompute the verdict.
+	binding := resolveGeneratorBindingForRender(r)
+	appendKV(LifecycleFieldGeneratorCommitMatchesHead, renderBool(binding.CommitMatchesHead))
+	appendKV(LifecycleFieldGeneratorBindingStatus, renderOrUnset(string(binding.Status)))
+	appendKV(LifecycleFieldGeneratorCommitBinding, renderOrUnset(string(binding.CommitBinding)))
+	appendKV(LifecycleFieldGeneratorSubjectBinding, renderOrUnset(string(binding.SubjectBinding)))
+	appendKV(LifecycleFieldGeneratorAuthoritative, renderBool(binding.AuthoritativeForDigest))
+	appendKV(LifecycleFieldGeneratorWarningCode, renderOrUnset(binding.WarningCode))
 	appendKV(LifecycleFieldAuthorityStatus, renderOrUnset(string(r.AuthorityStatus)))
 	appendKV(LifecycleFieldResolutionSource, renderOrUnset(r.ResolutionSource))
 	return sb.String()
+}
+
+// resolveGeneratorBindingForRender translates ResolvedMode into
+// the typed binding inputs and invokes the pure classifier. The
+// function performs no I/O; the caller has already resolved all
+// required identities.
+func resolveGeneratorBindingForRender(r *ResolvedMode) GeneratorBinding {
+	if r == nil {
+		return GeneratorBinding{
+			Status:                 GeneratorBindingIdentityUnbound,
+			CommitBinding:          GeneratorStateUnbound,
+			SubjectBinding:         GeneratorStateUnbound,
+			CommitMatchesHead:      false,
+			AuthoritativeForDigest: false,
+			WarningCode:            GeneratorWarningCodeIdentityUnbound,
+		}
+	}
+	generatorCommit := strings.TrimSpace(r.GeneratorCommit)
+	repoHead := strings.TrimSpace(r.HeadCommit)
+	// The digest subject is the lifecycle subject (manifest
+	// subject.commit_oid for authoritative resolutions) or
+	// the range right endpoint for explicit ranges. For
+	// dirty mode the subject includes uncommitted state; the
+	// adapter's dirty flag captures that semantic.
+	subjectCommit := strings.TrimSpace(r.LifecycleSubject)
+	if subjectCommit == "" {
+		subjectCommit = strings.TrimSpace(r.HeadCommit)
+	}
+	dirty := !r.IsClean
+	return ResolveGeneratorBinding(generatorCommit, repoHead, subjectCommit, dirty)
+}
+
+// renderBool renders a strict boolean as the stable lowercase
+// string. We deliberately do NOT render "unset" for false so
+// the new fields are machine-distinguishable from missing data.
+func renderBool(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 // renderOrUnset renders the value or a sentinel when the field is empty.

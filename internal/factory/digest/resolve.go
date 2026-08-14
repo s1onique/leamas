@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/s1onique/leamas/internal/factory/authority"
+	"github.com/s1onique/leamas/internal/version"
 )
 
 // Mode represents the digest generation mode.
@@ -118,6 +119,21 @@ func resolveAutoModeWith(repoRoot, toolPath, explicitRange string) (*ResolvedMod
 		return nil, fmt.Errorf("failed to get HEAD: %w", err)
 	}
 	result.HeadCommit = mustResolveOID(repoRoot, head)
+
+	// Generator identity. Recorded from the binary's embedded
+	// VCS commit (linker + runtime/debug.ReadBuildInfo
+	// fallback). Populated before the legacy
+	// GENERATOR_STALE boolean is computed so the new
+	// EvaluateGeneratorBinding classifier (in the renderer)
+	// has the inputs it needs. The legacy boolean is the
+	// commit-vs-repository-HEAD signal; the new authority
+	// signal is rendered from the same value plus the digest
+	// subject (see resolveGeneratorBindingForRender).
+	result.GeneratorCommit = strings.TrimSpace(version.Get().Commit)
+	result.GeneratorStale = computeLegacyGeneratorStale(result.GeneratorCommit, result.HeadCommit)
+	if result.GeneratorStale {
+		result.StaleReason = "embedded leamas commit does not match repository HEAD"
+	}
 
 	// Check for staged changes - git diff --cached --quiet returns error if there are staged changes
 	_, stagedErr := runGitBytes(repoRoot, "diff", "--cached", "--quiet")
