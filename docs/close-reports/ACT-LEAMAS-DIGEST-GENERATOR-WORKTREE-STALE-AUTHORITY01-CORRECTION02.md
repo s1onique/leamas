@@ -344,8 +344,8 @@ RESOLUTION_SOURCE: explicit_cli
 
 The full digest body is preserved at
 `docs/closure-evidence/ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02/acceptance-explicit-A..B-lifecycle.txt`
-(sha256: 2b0915c6ab5f9511fc853b7c514e60695a43dc395bdddf7a3344a7345c82c91b,
-4935 bytes).
+(sha256: 545f69ef5ed9aee826cf8a02f5c5b3be04606fecf65c010823e8bcb504d232a5,
+4934 bytes).
 
 The CLI evidence shows the CORRECTION02 generator binding
 surface rendered with the production binary:

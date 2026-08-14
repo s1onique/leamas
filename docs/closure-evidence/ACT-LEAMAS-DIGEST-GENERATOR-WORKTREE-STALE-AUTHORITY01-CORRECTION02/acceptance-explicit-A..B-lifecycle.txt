@@ -231,4 +231,3 @@ RESOLUTION_SOURCE: explicit_cli
 
 ## Workflow anchors
 No workflow anchors configured.
-
