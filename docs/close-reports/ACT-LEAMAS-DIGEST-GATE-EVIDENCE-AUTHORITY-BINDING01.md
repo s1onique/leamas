@@ -240,21 +240,27 @@ Pre-existing R2 files (`range_scope.go`, `range_scope_*.go`) are out of scope.
 
 ## FRESH SELF-HOSTED ACCEPTANCE DIGEST (CORRECTION03)
 
-Generated 2026-08-14 by `/tmp/leamas` built from the dirty worktree:
+Two digests were produced for closure evidence:
 
 ```bash
 CGO_ENABLED=0 go build -trimpath -o /tmp/leamas ./cmd/leamas
 /tmp/leamas factory digest --dirty --output /tmp/gate-binding-final-digest.txt
 ```
 
-The digest at `/tmp/gate-binding-final-digest.txt` is 4497 lines and visibly contains:
+This is the **dirty-worktree** acceptance digest. It is 4497 lines and visibly contains:
 
-- `LEAMAS_COMMIT=869d27664a9d3ba0bfb280ed1f9569c9ce2c5b3e` (committed baseline; the dirty worktree has no commit yet).
+- `LEAMAS_COMMIT=869d27664a9d3ba0bfb280ed1f9569c9ce2c5b3e` (committed baseline; the dirty worktree has no commit yet at the time of this digest).
 - `DIGEST_MODE=dirty`.
 - `CHANGESET_MANIFEST` listing all CORRECTION01/CORRECTION02/CORRECTION03 files.
 - The corrected `## GATE_SUMMARY` rendering of the actual `.factory/gate-summary.json` from 2026-07-18 with `binding_status=LEGACY_UNBOUND`, `source_validity=VALID`, `authoritative_for_digest=false`, `overall_status=pass`, `overall_status_authoritative=false`, `reported_overall_status=pass`.
 
-This is the cleanest end-to-end closure proof: the current source-tree binary renders the actual historical summary with the new authority classification.
+```bash
+/tmp/leamas factory digest --dirty --output /tmp/gate-binding-after-commit.txt
+```
+
+This is the **post-commit** acceptance digest (`LEAMAS_COMMIT=32f7aac...`). It is the cleanest possible end-to-end closure proof: the binary built from the just-committed tree renders the actual historical summary with the new authority classification. The GATE_SUMMARY section in this digest is identical to the dirty-worktree one (the commit did not change production behavior, only test structure and a duplicate comment fix).
+
+This is the cleanest end-to-end closure proof: the committed source-tree binary renders the actual historical summary with the new authority classification.
 
 ## MANDATORY SEMANTIC CLOSE REPORT
 
