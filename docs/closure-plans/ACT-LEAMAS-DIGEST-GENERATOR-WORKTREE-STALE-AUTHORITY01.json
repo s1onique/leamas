@@ -1,0 +1,96 @@
+{
+  "act_id": "ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01",
+  "baseline": {
+    "commit_oid": "2f6bcbd584a4d8f4f9bd500add86d61694f1ba61",
+    "tree_oid": "f9d6fd213dbdacd8c904e634615965be54113f6b"
+  },
+  "checks": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/digest/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "focused-digest-tests",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/digest/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "vet",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-genauthority",
+        "./cmd/leamas"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "build",
+      "mode": "run",
+      "timeout_seconds": 120,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "diff-check",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "id": "dupcode",
+      "mode": "exclude",
+      "reason": "No dupcode-owned source or registration changed."
+    },
+    {
+      "id": "factorize",
+      "mode": "exclude",
+      "reason": "Cline/editor context. ACT does not delegate factorize authority."
+    },
+    {
+      "id": "gate",
+      "mode": "exclude",
+      "reason": "Cline/editor context. ACT does not delegate canonical gate authority."
+    }
+  ],
+  "artifacts": [],
+  "contract_version": 1,
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "policy_profile": "leamas-act-v1"
+}
