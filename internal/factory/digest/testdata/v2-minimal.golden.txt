@@ -1,6 +1,14 @@
 ## GATE_SUMMARY
 source=.factory/gate-summary.json
 source_status=present
+binding_status=STATE_MISMATCH
+source_validity=VALID
+authoritative_for_digest=false
+state_binding=MISMATCH
+scope_binding=UNBOUND
+warning_code=GATE_SUMMARY_STATE_MISMATCH
+gate_execution_head_oid=0123456789abcdef0123456789abcdef01234567
+gate_scope_id=ACT-DEMO-ROOT
 schema_version=2
 generated_at=2026-07-19T08:43:26Z
 scope_id=ACT-DEMO-ROOT
@@ -11,6 +19,8 @@ parent_status=closed
 parent_disposition=root scope; no parent
 parent_root=true
 overall_status=pass
+overall_status_authoritative=false
+reported_overall_status=pass
 overall_disposition=all checks passed
 execution_head_oid=0123456789abcdef0123456789abcdef01234567
 execution_tree_oid=0123456789abcdef0123456789abcdef01234567

@@ -1,6 +1,15 @@
 ## GATE_SUMMARY
 source=.factory/gate-summary.json
 source_status=present
+binding_status=STATE_MISMATCH
+source_validity=VALID
+authoritative_for_digest=false
+state_binding=MISMATCH
+scope_binding=UNBOUND
+warning_code=GATE_SUMMARY_STATE_MISMATCH
+gate_execution_head_oid=4bd2c5646f7a4d9c8e1f0123456789abcdef0123
+gate_scope_id=ACT-CLINEMM-FORK-BASELINE01-CORRECTION21-MICROC3
+gate_parent_act=ACT-CLINEMM-FORK-BASELINE01-CORRECTION21
 schema_version=2
 generated_at=2026-07-19T08:43:26.649Z
 scope_id=ACT-CLINEMM-FORK-BASELINE01-CORRECTION21-MICROC3
@@ -11,6 +20,8 @@ parent_status=open
 parent_disposition=production bundle absent
 parent_root=false
 overall_status=fail
+overall_status_authoritative=false
+reported_overall_status=fail
 overall_disposition=child closed; parent open
 execution_head_oid=4bd2c5646f7a4d9c8e1f0123456789abcdef0123
 execution_tree_oid=984aaf36abc12345def67890abcdef0123456789

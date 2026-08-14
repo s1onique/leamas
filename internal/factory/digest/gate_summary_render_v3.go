@@ -102,11 +102,13 @@ func copyAndSortChecksV3(checks []gatesummary.Check) []gatesummary.Check {
 // extract the canonical fields. V3-only per-check evidence appears as
 // additional fields on the same row, prefixed to keep the v2 surface
 // stable.
-func renderGateSummaryV3(sourcePath string, summary gatesummary.Summary) string {
+func renderGateSummaryV3(sourcePath string, summary gatesummary.Summary, binding GateEvidenceBinding) string {
 	var sb strings.Builder
+	identity := summarizeGateIdentity(summary)
 	sb.WriteString("## GATE_SUMMARY\n")
 	sb.WriteString(fmt.Sprintf("source=%s\n", gateSummaryPath))
 	sb.WriteString("source_status=present\n")
+	sb.WriteString(bindingFieldKV(binding, identity))
 	sb.WriteString(fmt.Sprintf("schema_version=3\n"))
 	sb.WriteString(fmt.Sprintf("generated_at=%s\n", sanitizeLine(summary.GeneratedAt)))
 
@@ -138,8 +140,19 @@ func renderGateSummaryV3(sourcePath string, summary gatesummary.Summary) string 
 		sb.WriteString("parent_root=\n")
 	}
 
-	// Overall fields (identical layout to v2)
+	// Overall fields (identical layout to v2). The original
+	// overall_status= field is preserved for every v3
+	// rendering to maintain contract compatibility with
+	// consumers that read it. A new
+	// overall_status_authoritative=true|false qualifier is
+	// emitted immediately adjacent so consumers can
+	// distinguish the historical verdict from the current
+	// authoritative verdict. The optional
+	// reported_overall_status= alias is also emitted to
+	// surface the same data under a non-ambiguous name.
 	sb.WriteString(fmt.Sprintf("overall_status=%s\n", summary.Overall.Status))
+	sb.WriteString(fmt.Sprintf("overall_status_authoritative=%s\n", boolStr(binding.AuthoritativeForDigest)))
+	sb.WriteString(fmt.Sprintf("reported_overall_status=%s\n", summary.Overall.Status))
 	if summary.Overall.Disposition != nil {
 		sb.WriteString(fmt.Sprintf("overall_disposition=%s\n", sanitizeLine(*summary.Overall.Disposition)))
 	} else {

@@ -21,15 +21,32 @@ func compareIntegers(left, right *gatesummary.Integer) int {
 	return leftBig.Cmp(rightBig)
 }
 
-// renderGateSummaryV1 renders a valid v1 summary.
-func renderGateSummaryV1(sourcePath string, summary gatesummary.Summary) string {
+// renderGateSummaryV1 renders a valid v1 summary. The binding
+// block is rendered BEFORE the historical verdict so that
+// authoritative qualification is adjacent to the verdict it
+// qualifies. v1 wire shape lacks execution identity, so the
+// binding classifier always reports LEGACY_UNBOUND.
+func renderGateSummaryV1(sourcePath string, summary gatesummary.Summary, binding GateEvidenceBinding) string {
 	var sb strings.Builder
+	identity := summarizeGateIdentity(summary)
 	sb.WriteString("## GATE_SUMMARY\n")
 	sb.WriteString(fmt.Sprintf("source=%s\n", gateSummaryPath))
 	sb.WriteString("source_status=present\n")
+	sb.WriteString(bindingFieldKV(binding, identity))
 	sb.WriteString(fmt.Sprintf("schema_version=1\n"))
 	sb.WriteString(fmt.Sprintf("generated_at=%s\n", sanitizeLine(summary.GeneratedAt)))
+	// The original overall_status= field is preserved for
+	// every v1 rendering to maintain contract
+	// compatibility with consumers that read it. A new
+	// overall_status_authoritative=true|false qualifier is
+	// emitted immediately adjacent so consumers can
+	// distinguish the historical verdict from the current
+	// authoritative verdict. The optional
+	// reported_overall_status= alias is also emitted to
+	// surface the same data under a non-ambiguous name.
 	sb.WriteString(fmt.Sprintf("overall_status=%s\n", summary.Overall.Status))
+	sb.WriteString(fmt.Sprintf("overall_status_authoritative=%s\n", boolStr(binding.AuthoritativeForDigest)))
+	sb.WriteString(fmt.Sprintf("reported_overall_status=%s\n", summary.Overall.Status))
 
 	// Count checks
 	totals := countChecks(summary.Checks)
@@ -67,12 +84,16 @@ func renderGateSummaryV1(sourcePath string, summary gatesummary.Summary) string 
 
 // renderGateSummaryV2 renders a valid v2 summary with fixed check row geometry.
 // All fields are rendered in fixed order with empty values when absent for
-// deterministic downstream parsing.
-func renderGateSummaryV2(sourcePath string, summary gatesummary.Summary) string {
+// deterministic downstream parsing. The binding block is rendered BEFORE
+// the historical verdict so that authoritative qualification is adjacent
+// to the verdict it qualifies.
+func renderGateSummaryV2(sourcePath string, summary gatesummary.Summary, binding GateEvidenceBinding) string {
 	var sb strings.Builder
+	identity := summarizeGateIdentity(summary)
 	sb.WriteString("## GATE_SUMMARY\n")
 	sb.WriteString(fmt.Sprintf("source=%s\n", gateSummaryPath))
 	sb.WriteString("source_status=present\n")
+	sb.WriteString(bindingFieldKV(binding, identity))
 	sb.WriteString(fmt.Sprintf("schema_version=2\n"))
 	sb.WriteString(fmt.Sprintf("generated_at=%s\n", sanitizeLine(summary.GeneratedAt)))
 
@@ -104,8 +125,18 @@ func renderGateSummaryV2(sourcePath string, summary gatesummary.Summary) string 
 		sb.WriteString("parent_root=\n")
 	}
 
-	// Overall fields
+	// Overall fields. The original overall_status= field is
+	// preserved for every v2 rendering to maintain contract
+	// compatibility with consumers that read it. A new
+	// overall_status_authoritative=true|false qualifier is
+	// emitted immediately adjacent so consumers can
+	// distinguish the historical verdict from the current
+	// authoritative verdict. The optional
+	// reported_overall_status= alias is also emitted to
+	// surface the same data under a non-ambiguous name.
 	sb.WriteString(fmt.Sprintf("overall_status=%s\n", summary.Overall.Status))
+	sb.WriteString(fmt.Sprintf("overall_status_authoritative=%s\n", boolStr(binding.AuthoritativeForDigest)))
+	sb.WriteString(fmt.Sprintf("reported_overall_status=%s\n", summary.Overall.Status))
 	if summary.Overall.Disposition != nil {
 		sb.WriteString(fmt.Sprintf("overall_disposition=%s\n", sanitizeLine(*summary.Overall.Disposition)))
 	} else {

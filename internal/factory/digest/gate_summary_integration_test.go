@@ -9,8 +9,14 @@ import (
 	"testing"
 )
 
-// TestGateSummaryDigestModeParity proves that gate_summary section is identical
-// across dirty, staged/resolved, and range rendering modes.
+// TestGateSummaryDigestModeParity proves that the gate-summary
+// payload (the historical verdict + checks) is identical across
+// dirty, staged, and range rendering modes, while the binding
+// block is intentionally allowed to differ. This is the new
+// ACT-LEAMAS-DIGEST-GATE-EVIDENCE-AUTHORITY-BINDING01 invariant:
+// the gate summary's historical verdict is preserved verbatim,
+// but its authoritative qualification is recomputed for each
+// digest mode.
 func TestGateSummaryDigestModeParity(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
@@ -42,15 +48,63 @@ func TestGateSummaryDigestModeParity(t *testing.T) {
 	}
 	rangeSection := extractSection(rangeDigest, "GATE_SUMMARY")
 
-	// All modes must produce identical GATE_SUMMARY section
-	if dirtySection != stagedSection {
-		t.Errorf("dirty and staged sections differ")
+	// The historical verdict payload (everything AFTER the
+	// binding block) must be identical across modes. The
+	// binding block is intentionally allowed to differ
+	// because dirty mode forces Dirty=true and the binding
+	// classifier classifies dirty submissions as
+	// DIRTY_SUBJECT_UNBOUND.
+	dirtyPayload := stripBindingBlock(dirtySection)
+	stagedPayload := stripBindingBlock(stagedSection)
+	rangePayload := stripBindingBlock(rangeSection)
+
+	if dirtyPayload != stagedPayload {
+		t.Errorf("dirty and staged payload sections differ:\n--- DIRTY ---\n%s\n--- STAGED ---\n%s", dirtyPayload, stagedPayload)
 	}
-	if dirtySection != rangeSection {
-		t.Errorf("dirty and range sections differ")
+	if dirtyPayload != rangePayload {
+		t.Errorf("dirty and range payload sections differ:\n--- DIRTY ---\n%s\n--- RANGE ---\n%s", dirtyPayload, rangePayload)
+	}
+
+	// The dirty-mode section MUST include DIRTY_SUBJECT_UNBOUND
+	// because the gate summary binds only to a commit HEAD
+	// but the digest subject is uncommitted.
+	if !strings.Contains(dirtySection, "DIRTY_SUBJECT_UNBOUND") {
+		t.Errorf("dirty mode section must classify binding as DIRTY_SUBJECT_UNBOUND:\n%s", dirtySection)
+	}
+	if !strings.Contains(dirtySection, "authoritative_for_digest=false") {
+		t.Errorf("dirty mode section must declare authoritative_for_digest=false:\n%s", dirtySection)
 	}
 
 	t.Logf("GATE_SUMMARY section length: %d bytes", len(dirtySection))
+}
+
+// stripBindingBlock removes the binding block (everything from
+// the second line up to and including the warning_code line)
+// from a GATE_SUMMARY section. The remaining text is the
+// historical payload that must be identical across digest modes.
+func stripBindingBlock(section string) string {
+	lines := strings.Split(section, "\n")
+	out := []string{}
+	inBinding := false
+	for _, line := range lines {
+		// The binding block starts at the first key=value
+		// line that is not source/source_status and ends
+		// at the warning_code line. The header line
+		// "## GATE_SUMMARY" is preserved.
+		if strings.HasPrefix(line, "binding_status=") {
+			inBinding = true
+			continue
+		}
+		if inBinding {
+			if strings.HasPrefix(line, "warning_code=") {
+				inBinding = false
+				continue
+			}
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 // TestGateSummarySectionOrdering proves that sections appear in correct order

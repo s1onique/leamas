@@ -14,7 +14,7 @@ func TestGateSummarySourceMissing(t *testing.T) {
 	t.Parallel()
 
 	tmpDir := t.TempDir()
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 
 	if !strings.Contains(section, "source_status=missing") {
 		t.Errorf("expected source_status=missing, got:\n%s", section)
@@ -42,7 +42,7 @@ func TestGateSummarySourceInvalidRead(t *testing.T) {
 		t.Fatalf("failed to create directory: %v", err)
 	}
 
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 
 	if !strings.Contains(section, "source_status=invalid") {
 		t.Errorf("expected source_status=invalid, got:\n%s", section)
@@ -71,7 +71,7 @@ func TestGateSummarySourceInvalidDecode(t *testing.T) {
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, []byte("{invalid json"))
 
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 
 	if !strings.Contains(section, "source_status=invalid") {
 		t.Errorf("expected source_status=invalid, got:\n%s", section)
@@ -139,7 +139,7 @@ func TestGateSummarySourceInvalidNormalize(t *testing.T) {
 	}`
 	writeGateSummaryFile(t, tmpDir, []byte(invalidV2))
 
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 
 	if !strings.Contains(section, "source_status=invalid") {
 		t.Errorf("expected source_status=invalid, got:\n%s", section)

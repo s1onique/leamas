@@ -24,6 +24,23 @@ func readGolden(name string) (string, error) {
 	return string(content), err
 }
 
+// writeGoldenIfRequested writes the rendered section to the
+// golden file when the WRITE_GOLDEN environment variable is
+// set to "1". This is a one-shot regeneration hook used by the
+// ACT-LEAMAS-DIGEST-GATE-EVIDENCE-AUTHORITY-BINDING01
+// classifiers. Without WRITE_GOLDEN=1, the function is a no-op.
+func writeGoldenIfRequested(t *testing.T, name, section string) {
+	t.Helper()
+	if os.Getenv("WRITE_GOLDEN") != "1" {
+		return
+	}
+	path := filepath.Join(goldenDir, name+".golden.txt")
+	if err := os.WriteFile(path, []byte(section), 0644); err != nil {
+		t.Fatalf("failed to write golden %s: %v", path, err)
+	}
+	t.Logf("wrote golden: %s", path)
+}
+
 func writeGateSummaryFile(t *testing.T, tmpDir string, content []byte) {
 	t.Helper()
 	factoryDir := filepath.Join(tmpDir, ".factory")
@@ -45,7 +62,8 @@ func TestGateSummaryV1Minimal(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
+	writeGoldenIfRequested(t, "v1-minimal", section)
 	golden, err := readGolden("v1-minimal")
 	if err != nil {
 		t.Fatalf("failed to read golden: %v", err)
@@ -64,7 +82,8 @@ func TestGateSummaryV1Full(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
+	writeGoldenIfRequested(t, "v1-full", section)
 	golden, err := readGolden("v1-full")
 	if err != nil {
 		t.Fatalf("failed to read golden: %v", err)
@@ -83,7 +102,8 @@ func TestGateSummaryV2Minimal(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
+	writeGoldenIfRequested(t, "v2-minimal", section)
 	golden, err := readGolden("v2-minimal")
 	if err != nil {
 		t.Fatalf("failed to read golden: %v", err)
@@ -102,7 +122,8 @@ func TestGateSummaryV2ClineMM(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
+	writeGoldenIfRequested(t, "v2-clinemm-microc3", section)
 	golden, err := readGolden("v2-clinemm-microc3")
 	if err != nil {
 		t.Fatalf("failed to read golden: %v", err)
@@ -121,7 +142,8 @@ func TestGateSummaryV2Full(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
+	writeGoldenIfRequested(t, "v2-full", section)
 	golden, err := readGolden("v2-full")
 	if err != nil {
 		t.Fatalf("failed to read golden: %v", err)
@@ -140,7 +162,8 @@ func TestGateSummaryV2LeamasSelfHosted(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
+	writeGoldenIfRequested(t, "v2-leamas-self-hosted", section)
 	golden, err := readGolden("v2-leamas-self-hosted")
 	if err != nil {
 		t.Fatalf("failed to read golden: %v", err)
@@ -161,7 +184,7 @@ func TestGateSummaryDeterminism20x(t *testing.T) {
 	writeGateSummaryFile(t, tmpDir, fixture)
 	var first string
 	for i := 0; i < 20; i++ {
-		section := buildGateSummarySection(tmpDir)
+		section := buildGateSummarySection(tmpDir, nil)
 		if i == 0 {
 			first = section
 		} else if section != first {
@@ -179,8 +202,8 @@ func TestGateSummaryCheckOrderDeterministic(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section1 := buildGateSummarySection(tmpDir)
-	section2 := buildGateSummarySection(tmpDir)
+	section1 := buildGateSummarySection(tmpDir, nil)
+	section2 := buildGateSummarySection(tmpDir, nil)
 	if section1 != section2 {
 		t.Errorf("identical input should produce identical output")
 	}
@@ -222,9 +245,9 @@ func TestGateSummaryNoSourceMutation(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section1 := buildGateSummarySection(tmpDir)
-	section2 := buildGateSummarySection(tmpDir)
-	section3 := buildGateSummarySection(tmpDir)
+	section1 := buildGateSummarySection(tmpDir, nil)
+	section2 := buildGateSummarySection(tmpDir, nil)
+	section3 := buildGateSummarySection(tmpDir, nil)
 	if section1 != section2 || section2 != section3 {
 		t.Errorf("subsequent renders differ, suggesting source mutation")
 	}
@@ -246,7 +269,7 @@ func TestGateSummarySameNameDeterministic(t *testing.T) {
 	}`
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, []byte(fixture))
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 	if !strings.Contains(section, "source_status=present") {
 		t.Errorf("expected source_status=present, got:\n%s", section)
 	}
@@ -254,7 +277,7 @@ func TestGateSummarySameNameDeterministic(t *testing.T) {
 		t.Errorf("expected checks_total=3, got:\n%s", section)
 	}
 	// Render twice and compare
-	section2 := buildGateSummarySection(tmpDir)
+	section2 := buildGateSummarySection(tmpDir, nil)
 	if section != section2 {
 		t.Errorf("same-name checks should produce deterministic output")
 	}
@@ -273,7 +296,7 @@ func TestGateSummaryV1ZeroDurationOmitted(t *testing.T) {
 	}`
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, []byte(fixture))
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 	// V1: zero duration should be omitted, not rendered as duration_ms=0
 	if strings.Contains(section, "duration_ms=") {
 		t.Errorf("v1 zero duration should be omitted, got:\n%s", section)
@@ -321,7 +344,7 @@ func TestGateSummaryV2ZeroDurationRendered(t *testing.T) {
 	}`
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, []byte(fixture))
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 	// V2: zero duration should be rendered as duration_ms=0
 	if !strings.Contains(section, "duration_ms=0") {
 		t.Errorf("v2 zero duration should be rendered as duration_ms=0, got:\n%s", section)

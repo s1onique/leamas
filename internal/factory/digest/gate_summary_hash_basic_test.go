@@ -29,7 +29,7 @@ func TestGateSummaryHashUsesExactRenderedSection(t *testing.T) {
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
 
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, section)
 
 	wantHash := ComputeSectionHash(section)
@@ -67,17 +67,17 @@ func TestGateSummaryLifecycleChangesHash(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	writeGateSummaryFile(t, tmpDir, fixture)
-	baseSection := buildGateSummarySection(tmpDir)
+	baseSection := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, baseSection)
 	baseHash := ComputeSectionHash(baseSection)
 
 	writeGateSummaryFile(t, tmpDir, []byte(scopeFixture))
-	scopeSection := buildGateSummarySection(tmpDir)
+	scopeSection := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, scopeSection)
 	scopeHash := ComputeSectionHash(scopeSection)
 
 	writeGateSummaryFile(t, tmpDir, []byte(parentFixture))
-	parentSection := buildGateSummarySection(tmpDir)
+	parentSection := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, parentSection)
 	parentHash := ComputeSectionHash(parentSection)
 
@@ -109,12 +109,12 @@ func TestGateSummaryV1AndV2ProduceDifferentHashes(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	writeGateSummaryFile(t, tmpDir, []byte(v1Fixture))
-	v1Section := buildGateSummarySection(tmpDir)
+	v1Section := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, v1Section)
 	v1Hash := ComputeSectionHash(v1Section)
 
 	writeGateSummaryFile(t, tmpDir, v2Fixture)
-	v2Section := buildGateSummarySection(tmpDir)
+	v2Section := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, v2Section)
 	v2Hash := ComputeSectionHash(v2Section)
 
@@ -141,12 +141,12 @@ func TestGateSummaryLifecycleOverallStatusChangesHash(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	writeGateSummaryFile(t, tmpDir, fixture)
-	passSection := buildGateSummarySection(tmpDir)
+	passSection := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, passSection)
 	passHash := ComputeSectionHash(passSection)
 
 	writeGateSummaryFile(t, tmpDir, []byte(failFixture))
-	failSection := buildGateSummarySection(tmpDir)
+	failSection := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, failSection)
 	failHash := ComputeSectionHash(failSection)
 
@@ -165,7 +165,7 @@ func TestGateSummarySectionAppearsExactlyOnce(t *testing.T) {
 	}
 	tmpDir := t.TempDir()
 	writeGateSummaryFile(t, tmpDir, fixture)
-	section := buildGateSummarySection(tmpDir)
+	section := buildGateSummarySection(tmpDir, nil)
 
 	count := strings.Count(section, "## GATE_SUMMARY")
 	if count != 1 {

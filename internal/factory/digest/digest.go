@@ -170,6 +170,15 @@ func WriteWithWarnings(opts Options, content string) ([]SourceSecretWarning, err
 
 // RenderDigest creates the markdown digest content.
 func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, error) {
+	// Construct a minimal ResolvedMode so the gate-summary
+	// binding classifier receives the digest's mode intent.
+	// Dirty mode forces Dirty=true so the classifier
+	// refuses to bind a commit-only gate summary.
+	resolved := &ResolvedMode{
+		Mode:    mode,
+		Reason:  "explicit " + string(mode) + " mode",
+		IsClean: mode != ModeDirty,
+	}
 	var sb strings.Builder
 
 	// Get version metadata and timestamp once
@@ -240,8 +249,11 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
 	// GATE_SUMMARY section - compute before writing to include in evidence hashes
-	// Use the shared adapter for all digest modes
-	gateSummarySection := buildGateSummarySection(repoRoot)
+	// Use the shared adapter for all digest modes. The resolved
+	// digest mode is threaded into the binding classifier so the
+	// rendered section reports whether the discovered gate summary
+	// is authoritative for the current digest.
+	gateSummarySection := buildGateSummarySection(repoRoot, resolved)
 
 	// Compute evidence hashes (includes PUBLIC_SURFACE_DELTA, DEPENDENCY_DELTA, and GATE_SUMMARY)
 	evidenceHashes := ComputeEvidenceHashes(

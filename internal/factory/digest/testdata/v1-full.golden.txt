@@ -1,9 +1,17 @@
 ## GATE_SUMMARY
 source=.factory/gate-summary.json
 source_status=present
+binding_status=LEGACY_UNBOUND
+source_validity=VALID
+authoritative_for_digest=false
+state_binding=UNBOUND
+scope_binding=UNBOUND
+warning_code=GATE_SUMMARY_LEGACY_UNBOUND
 schema_version=1
 generated_at=2026-07-19T08:43:26Z
 overall_status=pass
+overall_status_authoritative=false
+reported_overall_status=pass
 checks_total=4
 checks_passed=3
 checks_failed=0

@@ -71,6 +71,17 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	sb.WriteString(riskSignalsSection)
 	sb.WriteString("\n")
 
+	// RANGE_SCOPE section: compute for explicit ranges only.
+	// This is an advisory diagnostic; it does not change the digest range
+	// or gate semantics. Always render the section (even if unavailable)
+	// to ensure EXPLICIT_RANGE => RANGE_SCOPE_PRESENT.
+	var rangeScopeSection string
+	if resolved.ResolutionSource == "explicit_cli" && resolved.Range != "" {
+		scope := CollectRangeScope(repoRoot, resolved.Range, len(files))
+		rangeScopeSection = RenderRangeScope(scope)
+	}
+	sb.WriteString(rangeScopeSection)
+
 	patchHygiene := RunPatchHygiene(repoRoot, resolved.Range)
 	patchHygieneSection := RenderPatchHygiene(patchHygiene)
 	sb.WriteString(patchHygieneSection)
@@ -87,8 +98,11 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 
 	fileEvidenceSection := RenderRangeFileEvidence(repoRoot, files, resolved.Range)
 
-	// GATE_SUMMARY section - use the shared adapter for all digest modes
-	gateSummarySection := buildGateSummarySection(repoRoot)
+	// GATE_SUMMARY section - use the shared adapter for all digest modes.
+	// The resolved digest mode is threaded into the binding classifier so
+	// the rendered section reports whether the discovered gate summary is
+	// authoritative for the current digest.
+	gateSummarySection := buildGateSummarySection(repoRoot, resolved)
 
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection, statsSection, reviewMapSection, riskSignalsSection,
@@ -181,8 +195,11 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 
 	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
 
-	// GATE_SUMMARY section - use the shared adapter for all digest modes
-	gateSummarySection := buildGateSummarySection(repoRoot)
+	// GATE_SUMMARY section - use the shared adapter for all digest modes.
+	// The resolved digest mode is threaded into the binding classifier
+	// when available so the rendered section reports whether the
+	// discovered gate summary is authoritative for the digest.
+	gateSummarySection := buildGateSummarySection(repoRoot, resolved)
 
 	evidenceHashes := ComputeEvidenceHashes(
 		manifestSection, statsSection, reviewMapSection, riskSignalsSection,

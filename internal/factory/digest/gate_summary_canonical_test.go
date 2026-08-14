@@ -50,11 +50,11 @@ func TestGateSummarySourceOrderDoesNotChangeHash(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	writeGateSummaryFile(t, tmpDir, []byte(orderedFixture))
-	orderedSection := buildGateSummarySection(tmpDir)
+	orderedSection := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, orderedSection)
 
 	writeGateSummaryFile(t, tmpDir, []byte(shuffledFixture))
-	shuffledSection := buildGateSummarySection(tmpDir)
+	shuffledSection := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, shuffledSection)
 
 	if orderedSection != shuffledSection {
@@ -88,11 +88,11 @@ func TestGateSummaryV1CanonicalOrderUsesFullDurationValue(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	writeGateSummaryFile(t, tmpDir, []byte(fixtureA))
-	sectionA := buildGateSummarySection(tmpDir)
+	sectionA := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, sectionA)
 
 	writeGateSummaryFile(t, tmpDir, []byte(fixtureB))
-	sectionB := buildGateSummarySection(tmpDir)
+	sectionB := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, sectionB)
 
 	if sectionA != sectionB {
@@ -122,11 +122,11 @@ func TestGateSummaryV2CanonicalOrderUsesFullDurationValue(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	writeGateSummaryFile(t, tmpDir, []byte(fixtureA))
-	sectionA := buildGateSummarySection(tmpDir)
+	sectionA := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, sectionA)
 
 	writeGateSummaryFile(t, tmpDir, []byte(fixtureB))
-	sectionB := buildGateSummarySection(tmpDir)
+	sectionB := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, sectionB)
 
 	if sectionA != sectionB {
@@ -165,11 +165,11 @@ func TestGateSummaryV2CanonicalOrderUsesFullExitCodeValue(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	writeGateSummaryFile(t, tmpDir, []byte(fixtureA))
-	sectionA := buildGateSummarySection(tmpDir)
+	sectionA := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, sectionA)
 
 	writeGateSummaryFile(t, tmpDir, []byte(fixtureB))
-	sectionB := buildGateSummarySection(tmpDir)
+	sectionB := buildGateSummarySection(tmpDir, nil)
 	requirePresent(t, sectionB)
 
 	if sectionA != sectionB {
