@@ -16,7 +16,15 @@ BRANCH=main
 
 INITIAL_HEAD=5dbbf6a30873540f77c15be9acf0afb552571574
 INITIAL_TREE=7f6884eba36ecf136110edc1a8e141c34be72c5a
-FINAL_HEAD=dcc56b3413f67eb23a5059e77c93c0dab085a8ad
+FINAL_HEAD=dcc56b3413f67eb23a5059e77c93c0dab085a8ad   (this is the
+                                                              production-fix commit;
+                                                              the closure commit is
+                                                              "git rev-parse HEAD"
+                                                              at any future point —
+                                                              see CORRECTION02 close
+                                                              report for the
+                                                              QUALIFIED_SUBJECT_HEAD
+                                                              vocabulary amendment)
 FINAL_TREE=ecd74cfc972053bb5693f5952ec7299a9d47fed3
 CLOSURE_COMMIT=see HEAD of this branch; the report is committed
                 at the same commit as the artifacts it references
@@ -259,7 +267,10 @@ EXPLICIT_RANGE_SUBJECT_ADAPTER        = PASS
     malformed rev fails soft (empty + status preserved)
 
 CLOSE_REPORT_FINAL_IDENTITY           = PASS
-  FINAL_HEAD=dcc56b3413f67eb23a5059e77c93c0dab085a8ad
+  FINAL_HEAD=dcc56b3413f67eb23a5059e77c93c0dab085a8ad (production-fix
+                                                        commit; see CORRECTION02
+                                                        close report for
+                                                        QUALIFIED_SUBJECT_HEAD)
   FINAL_TREE=ecd74cfc972053bb5693f5952ec7299a9d47fed3
   CORRECTION01_COMMIT=dcc56b3413f67eb23a5059e77c93c0dab085a8ad
 

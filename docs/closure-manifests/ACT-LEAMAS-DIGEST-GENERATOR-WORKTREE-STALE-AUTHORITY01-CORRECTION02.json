@@ -1,0 +1,122 @@
+{
+  "act_id": "ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION02",
+  "parent_act": "ACT-LEAMAS-DIGEST-GENERATOR-WORKTREE-STALE-AUTHORITY01-CORRECTION01",
+  "contract_version": 1,
+  "execution_snapshot": {
+    "root": ".",
+    "branch": "main",
+    "initial_head_commit_oid": "96b6ff39e67713257d33f8c447f610f85cb92158",
+    "initial_head_tree_oid": "20a3ce6a8e532a02955c1069fcca37f31d14ab6e",
+    "qualified_subject_head": "dcc56b3413f67eb23a5059e77c93c0dab085a8ad",
+    "final_head_tree_oid": "ecd74cfc972053bb5693f5952ec7299a9d47fed3",
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0,
+    "gofmt_clean": true,
+    "git_diff_check_clean": true,
+    "files_owned_under_400_loc": true,
+    "owned_file_count": 11,
+    "max_owned_loc": 336
+  },
+  "verification": {
+    "focused_digest_tests": {
+      "command": "CGO_ENABLED=0 go test -count=1 -timeout 180s ./internal/factory/digest/...",
+      "result": "ok",
+      "elapsed_seconds": 21.869,
+      "rc": 0
+    },
+    "authority_tests": {
+      "command": "CGO_ENABLED=0 go test -count=1 -timeout 120s ./internal/factory/authority/...",
+      "result": "FAIL",
+      "elapsed_seconds": 4.488,
+      "rc": 1,
+      "failures": [
+        {
+          "test": "TestSymlinkedCanonicalBinaryIsResolved",
+          "status": "PRE-EXISTING",
+          "baseline": "96b6ff3",
+          "introduced_by_correction02": false
+        }
+      ]
+    },
+    "go_vet": {
+      "command": "CGO_ENABLED=0 go vet ./...",
+      "result": "pass",
+      "rc": 0
+    },
+    "build": {
+      "command": "CGO_ENABLED=0 go build -trimpath -o /tmp/leamas-final ./cmd/leamas",
+      "result": "pass",
+      "rc": 0
+    },
+    "make_factorize": { "result": "NOT_RUN", "delegation": "not granted by ACT" },
+    "make_gate_dupcode": { "result": "NOT_RUN", "delegation": "not granted by ACT" },
+    "make_gate": { "result": "NOT_RUN", "delegation": "not granted by ACT" }
+  },
+  "corrections": [
+    {
+      "id": "C1",
+      "summary": "renderer falls back to HEAD for unresolved explicit-range subject",
+      "fix": "resolveSubjectForBinding: AuthorityExplicitRange uses LifecycleSubjectRange only; no HEAD fallback. IDENTITY_UNBOUND + AUTHORITATIVE=false when endpoint unresolved."
+    },
+    {
+      "id": "C2",
+      "summary": "unresolved explicit-range subject must produce IDENTITY_UNBOUND",
+      "fix": "covered by C1 (locked by TestRenderLifecycleCorrection02_UnresolvedExplicitRangeFailsClosed)"
+    },
+    {
+      "id": "C3",
+      "summary": "renderer regression for the dangerous generator=HEAD case",
+      "fix": "TestRenderLifecycleCorrection02_UnresolvedExplicitRangeFailsClosed asserts IDENTITY_UNBOUND even when generator==HEAD"
+    },
+    {
+      "id": "C4",
+      "summary": "A...B three-dot form is silently accepted by CORRECTION01 helper",
+      "fix": "explicit pre-check strings.Contains(expr, '...') returns \"\" before the strings.Split"
+    },
+    {
+      "id": "C5",
+      "summary": "A...B must not accidentally bind to HEAD",
+      "fix": "TestExplicitRangeRightEndpoint_ThreeDotRejected asserts RangeSubjectEnd=\"\" for A...B"
+    },
+    {
+      "id": "C6",
+      "summary": "FINAL_HEAD vocabulary conflated production-fix commit with closure commit",
+      "fix": "introduced QUALIFIED_SUBJECT_HEAD in CORRECTION02 close report; legacy FINAL_HEAD kept as historical record"
+    }
+  ],
+  "files_changed": [
+    {
+      "path": "internal/factory/authority/resolver_entry.go",
+      "kind": "modified",
+      "loc": 203
+    },
+    {
+      "path": "internal/factory/digest/lifecycle_render.go",
+      "kind": "modified",
+      "loc": 224
+    },
+    {
+      "path": "internal/factory/digest/lifecycle_render_correction01_test.go",
+      "kind": "modified",
+      "loc": 336
+    },
+    {
+      "path": "internal/factory/digest/lifecycle_render_correction02_test.go",
+      "kind": "new",
+      "loc": 183
+    }
+  ],
+  "implementation_commits": [
+    {
+      "subject": "factory: fail-closed authority-sensitive subject resolution (CORRECTION02)",
+      "note": "see HEAD of this branch"
+    }
+  ],
+  "verdict": "pass",
+  "scope": "closed",
+  "tags": null
+}
