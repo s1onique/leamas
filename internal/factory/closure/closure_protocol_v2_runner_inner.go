@@ -21,6 +21,7 @@ package closure
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -145,6 +146,37 @@ func runClosureProtocolV2Inner(ctx context.Context, req V2Request, deps V2Runner
 	// diagnostic in the typed V2Error.
 	if _, err := ValidateFrozenPlanV2(frozen.Bytes); err != nil {
 		return v2RunCandidate{}, err
+	}
+	// Phase 1b (CLOSURE-V2-IDENTITY-AUTHORITY-CORRECTION01):
+	// repository-bound baseline Git-object truth validation.
+	// Verify baseline.commit_oid exists as a commit, baseline.tree_oid
+	// exists as a tree, and baseline.commit_oid^{tree} == baseline.tree_oid.
+	// This prevents fabricated placeholder tree OIDs from becoming authoritative.
+	// Each failure type maps to a dedicated stable V2Code so downstream
+	// tooling can distinguish baseline failures from blob loading failures.
+	if err := ValidateBaselineGitObjects(ctx, deps.Git, req.RepositoryRoot, plan.Baseline); err != nil {
+		var terr *BaselineGitValidationError
+		if errors.As(err, &terr) {
+			var code V2DiagnosticCode
+			switch terr.Code {
+			case "baseline_commit_not_found":
+				code = V2CodeBaselineCommitNotFound
+			case "baseline_tree_not_found":
+				code = V2CodeBaselineTreeNotFound
+			case "baseline_tree_mismatch":
+				code = V2CodeBaselineTreeMismatch
+			default:
+				// An unknown baseline validation code should not silently
+				// fall through to frozen_plan_not_blob or binary_identity_invalid,
+				// which would misclassify the failure domain. Use a dedicated
+				// baseline-internal code so the failure is correctly attributed.
+				code = V2CodeBaselineValidationFailed
+			}
+			return v2RunCandidate{}, NewV2ErrorWith(code, terr.Message, terr.Field, terr.Code)
+		}
+		return v2RunCandidate{}, NewV2ErrorWith(V2CodeFrozenPlanNotBlob,
+			fmt.Sprintf("baseline Git object validation: %v", err),
+			"baseline", err.Error())
 	}
 	if err := os.MkdirAll(req.EvidenceDirectory, 0o700); err != nil {
 		return v2RunCandidate{}, NewV2ErrorWith(V2CodeGitOperationFailed,

@@ -98,11 +98,19 @@ const (
 	V2CodeSubjectObservationUnavailable V2DiagnosticCode = "subject_observation_unavailable"
 	// R6-A adds a registration-mismatch code for Phase 8: when
 	// the live AtSubject inventory contains a row for the
-	// captured worktree path but the row's HEAD does not match
-	// the requested subject commit, the executor fails closed
-	// with this code so downstream code cannot silently accept a
-	// mismatched registration.
+	// worktree but the SHA-256 hash does not match the expected
+	// value from the binary-identity digest.
 	V2CodeSubjectRegistrationMismatch V2DiagnosticCode = "subject_registration_mismatch"
+	// ACT-LEAMAS-CLOSURE-V2-IDENTITY-AUTHORITY-CORRECTION01
+	// adds repository-bound baseline provenance codes. These
+	// distinguish baseline object failures from blob loading
+	// failures (frozen_plan_not_blob is wrong because the plan
+	// WAS successfully loaded as a blob; the failure is in
+	// repository-bound provenance verification).
+	V2CodeBaselineCommitNotFound  V2DiagnosticCode = "baseline_commit_not_found"
+	V2CodeBaselineTreeNotFound    V2DiagnosticCode = "baseline_tree_not_found"
+	V2CodeBaselineTreeMismatch    V2DiagnosticCode = "baseline_tree_mismatch"
+	V2CodeBaselineValidationFailed V2DiagnosticCode = "baseline_validation_failed"
 	// ACT-LEAMAS-FACTORY-CLOSURE-PROTOCOL-V2-BINARY-GATE-INTEGRATION01-CORRECTION06
 	// adds the R6-B fail-closed surface codes. Each code names
 	// a single authority the integration owns; downstream code

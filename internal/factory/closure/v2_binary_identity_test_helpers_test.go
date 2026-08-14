@@ -14,6 +14,10 @@ import (
 
 // newV2TestBinaryIdentity returns a complete deterministic fake whose path and
 // digest are runtime-verifiable by the production identity validator.
+//
+// Note: on macOS, /var -> /private/var causes filepath.EvalSymlinks to resolve
+// to a different path. We canonicalize the path so it passes the production
+// "must already be symlink-resolved" check.
 func newV2TestBinaryIdentity(t testing.TB) V2BinaryIdentity {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "leamas-test-binary")
@@ -22,8 +26,16 @@ func newV2TestBinaryIdentity(t testing.TB) V2BinaryIdentity {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(data)
+
+	// Canonicalize path for macOS compatibility: /var -> /private/var
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("cannot resolve symlinks for test binary: %v", err)
+	}
+	resolved = filepath.Clean(resolved)
+
 	return V2BinaryIdentity{
-		Path:          path,
+		Path:          resolved,
 		SHA256:        hex.EncodeToString(sum[:]),
 		VCSRevision:   strings.Repeat("7", 40),
 		VCSModified:   false,

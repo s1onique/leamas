@@ -45,7 +45,11 @@ var (
 	// rather than reporting only the derived stamp.
 	DeclaredVersion = "dev"
 
-	// Commit is the VCS commit hash, trim-able to shortSHA.
+	// Commit is the full 40-character Git OID. The linker injects
+	// the value from the Makefile's $(COMMIT). The effective
+	// version display truncates it to 12 characters via
+	// sanitizeCommit for SemVer build metadata; the full value
+	// is used for closure v2 authority validation.
 	Commit = "unknown"
 
 	// BuildTime is the build timestamp in RFC3339/UTC.

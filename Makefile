@@ -30,6 +30,12 @@ MODULE_PATH := github.com/s1onique/leamas
 # runtime/debug.ReadBuildInfo() (`vcs.modified`) when the binary
 # is built with `-buildvcs=true` (the modern Go default).
 #
+# Commit carries the FULL 40-character Git OID. The
+# internal/version package truncates it to 12 characters for
+# display in the SemVer build metadata (via sanitizeCommit), but
+# the full value is preserved in Info.FullCommit for closure
+# v2 authority validation.
+#
 # When the caller leaves VERSION at its `dev` default, the
 # internal/version package derives a SemVer-compatible effective
 # stamp at runtime. A dedicated DeclaredVersion value is also
@@ -40,7 +46,7 @@ MODULE_PATH := github.com/s1onique/leamas
 # SemVer; the release-build recipe below enforces that guard
 # (placeholder detection plus strict SemVer pattern matching).
 VERSION ?= dev
-COMMIT ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+COMMIT ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)
 
 LDFLAGS := -X '$(MODULE_PATH)/internal/version.Version=$(VERSION)' \

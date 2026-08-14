@@ -35,19 +35,82 @@ func canonicalPlanPath(repositoryRoot, planPath, actID string) (string, error) {
 	return canonical, nil
 }
 
+// validateBaselineIdentity is the v1 legacy wrapper that validates
+// baseline commit/tree binding. The v2 runner uses ValidateBaselineGitObjects
+// which provides more detailed error codes.
 func validateBaselineIdentity(ctx context.Context, git gitClient, root string, baseline Baseline) error {
-	commit, err := resolveGitObject(ctx, git, root, baseline.CommitOID+"^{commit}")
+	return ValidateBaselineGitObjects(ctx, git, root, baseline)
+}
+
+// ValidateBaselineGitObjects verifies that the baseline commit and tree
+// OIDs exist in the repository and that the tree is the committed tree
+// of the baseline commit. This is the repository-bound authority stage
+// for v2 runner execution.
+//
+// Returns typed errors:
+//   - baseline_commit_not_found: baseline.commit_oid does not exist
+//   - baseline_tree_not_found: baseline.tree_oid does not exist
+//   - baseline_tree_mismatch: baseline.commit_oid^{tree} != baseline.tree_oid
+func ValidateBaselineGitObjects(ctx context.Context, git gitClient, root string, baseline Baseline) error {
+	// Step 1: Verify baseline.commit_oid exists as a commit
+	_, err := resolveGitObject(ctx, git, root, baseline.CommitOID+"^{commit}")
 	if err != nil {
-		return fmt.Errorf("resolve baseline commit: %w", err)
+		return &BaselineGitValidationError{
+			Field:   "baseline.commit_oid",
+			Code:    "baseline_commit_not_found",
+			Message: fmt.Sprintf("baseline commit %s not found in repository", baseline.CommitOID),
+			Cause:   err,
+		}
 	}
-	tree, err := resolveGitObject(ctx, git, root, baseline.CommitOID+"^{tree}")
+
+	// Step 2: Verify baseline.tree_oid exists as a tree
+	_, err = resolveGitObject(ctx, git, root, baseline.TreeOID+"^{tree}")
 	if err != nil {
-		return fmt.Errorf("resolve baseline tree: %w", err)
+		return &BaselineGitValidationError{
+			Field:   "baseline.tree_oid",
+			Code:    "baseline_tree_not_found",
+			Message: fmt.Sprintf("baseline tree %s not found in repository", baseline.TreeOID),
+			Cause:   err,
+		}
 	}
-	if commit != baseline.CommitOID || tree != baseline.TreeOID {
-		return fmt.Errorf("baseline commit/tree binding mismatch")
+
+	// Step 3: Verify baseline.commit_oid^{tree} == baseline.tree_oid
+	actualTree, err := resolveGitObject(ctx, git, root, baseline.CommitOID+"^{tree}")
+	if err != nil {
+		return &BaselineGitValidationError{
+			Field:   "baseline.tree_oid",
+			Code:    "baseline_tree_mismatch",
+			Message: fmt.Sprintf("baseline commit %s^{tree} (%s) does not match declared tree %s", baseline.CommitOID, actualTree, baseline.TreeOID),
+			Cause:   err,
+		}
+	}
+	if actualTree != baseline.TreeOID {
+		return &BaselineGitValidationError{
+			Field:   "baseline.tree_oid",
+			Code:    "baseline_tree_mismatch",
+			Message: fmt.Sprintf("baseline commit %s^{tree} (%s) does not match declared tree %s", baseline.CommitOID, actualTree, baseline.TreeOID),
+		}
 	}
 	return nil
+}
+
+// BaselineGitValidationError is a typed error for baseline Git object validation failures.
+type BaselineGitValidationError struct {
+	Field   string
+	Code    string
+	Message string
+	Cause   error
+}
+
+func (e *BaselineGitValidationError) Error() string {
+	if e.Cause != nil {
+		return fmt.Sprintf("%s: %s (%v)", e.Code, e.Message, e.Cause)
+	}
+	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+}
+
+func (e *BaselineGitValidationError) Unwrap() error {
+	return e.Cause
 }
 
 // evaluateRequiredPatchHygiene is the Closure Protocol v1 (legacy
