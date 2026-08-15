@@ -1,0 +1,91 @@
+{
+  "act_id": "ACT-LEAMAS-TARGETED-DIGEST-RECURSIVE-EVIDENCE-GUARD01-CLOSURE01",
+  "baseline": {
+    "commit_oid": "a9e549bfe009790c3c47abf152972b932b1a51d2",
+    "tree_oid": "fd6c47939771431b11d145bb24c358593504750a"
+  },
+  "checks": [
+    {
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/digest/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "focused-digest-tests",
+      "mode": "run",
+      "timeout_seconds": 600,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/digest/..."
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "digest-vet",
+      "mode": "run",
+      "timeout_seconds": 60,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "gofmt",
+        "-l",
+        "internal/factory/digest/"
+      ],
+      "environment": {},
+      "id": "digest-gofmt",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-targeted-digest-recursive-evidence-guard01",
+        "./cmd/leamas"
+      ],
+      "environment": {
+        "CGO_ENABLED": "0"
+      },
+      "id": "build",
+      "mode": "run",
+      "timeout_seconds": 300,
+      "working_directory": "."
+    },
+    {
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "environment": {},
+      "id": "diff-check",
+      "mode": "run",
+      "timeout_seconds": 30,
+      "working_directory": "."
+    }
+  ],
+  "artifacts": [],
+  "contract_version": 1,
+  "execution": {
+    "mode": "serial_fail_fast"
+  },
+  "policy": {
+    "forbid_tracked_full_digests": true,
+    "require_clean_after": true,
+    "require_clean_before": true,
+    "require_diff_check": true
+  },
+  "policy_profile": "leamas-act-v1"
+}
