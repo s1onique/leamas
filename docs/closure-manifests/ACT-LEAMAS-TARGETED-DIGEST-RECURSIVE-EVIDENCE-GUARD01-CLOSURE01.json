@@ -1,0 +1,259 @@
+{
+  "contract_version": 1,
+  "act_id": "ACT-LEAMAS-TARGETED-DIGEST-RECURSIVE-EVIDENCE-GUARD01-CLOSURE01",
+  "plan": {
+    "sha256": "7dee3bc093c3d0c4f9797d13cd246c90a41e68a3d4e93efb55ac492f54de4acc",
+    "path": "docs/closure-plans/ACT-LEAMAS-TARGETED-DIGEST-RECURSIVE-EVIDENCE-GUARD01-CLOSURE01.json"
+  },
+  "plan_freeze": {
+    "freeze_commit": "641a8e2fb162c89a80dd25beca018b8044cb3fd3",
+    "plan_path": "docs/closure-plans/ACT-LEAMAS-TARGETED-DIGEST-RECURSIVE-EVIDENCE-GUARD01-CLOSURE01.json",
+    "plan_blob_oid": "7840e1a62416e30f8a6ff8d7714434441a033026",
+    "plan_sha256": "7dee3bc093c3d0c4f9797d13cd246c90a41e68a3d4e93efb55ac492f54de4acc",
+    "subject_commit": "2d7478f481e445e5afc1b128c29fe6ad035e21eb"
+  },
+  "subject": {
+    "commit_oid": "2d7478f481e445e5afc1b128c29fe6ad035e21eb",
+    "tree_oid": "ad3e92a57c3fd1a75f2928a69546d2b5f9512165"
+  },
+  "runner": {
+    "leamas_version": "0.1.0+dev.2d7478f481e4.20260815T130235Z",
+    "binary_sha256": "d98dfadf6810c2b9bc7462698dc9ba8d807afa1f003374e265fc6092db9261c9",
+    "vcs_revision": "2d7478f481e445e5afc1b128c29fe6ad035e21eb",
+    "vcs_modified": false
+  },
+  "repository": {
+    "root": ".",
+    "remote_url": "git@github.com:s1onique/leamas.git",
+    "branch": "main",
+    "head_commit_oid": "2d7478f481e445e5afc1b128c29fe6ad035e21eb",
+    "head_tree_oid": "ad3e92a57c3fd1a75f2928a69546d2b5f9512165",
+    "origin_main_commit_oid": "a9e549bfe009790c3c47abf152972b932b1a51d2",
+    "ahead_by": 2,
+    "behind_by": 0,
+    "working_tree_clean_before": true,
+    "working_tree_clean_after": true
+  },
+  "checks": [
+    {
+      "check_id": "focused-digest-tests",
+      "subject_tree_oid": "ad3e92a57c3fd1a75f2928a69546d2b5f9512165",
+      "argv": [
+        "go",
+        "test",
+        "-count=1",
+        "./internal/factory/digest/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-15T13:05:36.895433Z",
+      "finished_at_utc": "2026-08-15T13:06:23.843575Z",
+      "duration_ms": 46947,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "ddee4fc0f7fde7a35e15e89270f7b9b24901ec9f68ac2e6b4193710a7c0c0c8a",
+      "stdout_byte_count": 64,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 64,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "digest-vet",
+      "subject_tree_oid": "ad3e92a57c3fd1a75f2928a69546d2b5f9512165",
+      "argv": [
+        "go",
+        "vet",
+        "./internal/factory/digest/..."
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-15T13:06:23.860063Z",
+      "finished_at_utc": "2026-08-15T13:06:24.100506Z",
+      "duration_ms": 240,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "digest-gofmt",
+      "subject_tree_oid": "ad3e92a57c3fd1a75f2928a69546d2b5f9512165",
+      "argv": [
+        "gofmt",
+        "-l",
+        "internal/factory/digest/"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [],
+      "started_at_utc": "2026-08-15T13:06:24.133703Z",
+      "finished_at_utc": "2026-08-15T13:06:24.157748Z",
+      "duration_ms": 24,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "build",
+      "subject_tree_oid": "ad3e92a57c3fd1a75f2928a69546d2b5f9512165",
+      "argv": [
+        "go",
+        "build",
+        "-trimpath",
+        "-o",
+        "/tmp/leamas-targeted-digest-recursive-evidence-guard01",
+        "./cmd/leamas"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [
+        "CGO_ENABLED"
+      ],
+      "started_at_utc": "2026-08-15T13:06:24.165621Z",
+      "finished_at_utc": "2026-08-15T13:06:24.411152Z",
+      "duration_ms": 245,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    },
+    {
+      "check_id": "diff-check",
+      "subject_tree_oid": "ad3e92a57c3fd1a75f2928a69546d2b5f9512165",
+      "argv": [
+        "git",
+        "diff",
+        "--check"
+      ],
+      "working_directory": ".",
+      "overridden_environment": [],
+      "started_at_utc": "2026-08-15T13:06:24.419956Z",
+      "finished_at_utc": "2026-08-15T13:06:24.429571Z",
+      "duration_ms": 9,
+      "exit_code": 0,
+      "status": "pass",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout_byte_count": 0,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_byte_count": 0,
+      "output_truncated": false,
+      "output_incomplete": false,
+      "output_bytes_observed": 0,
+      "cleanup_status": "pass"
+    }
+  ],
+  "artifacts": [],
+  "detached_evidence": [
+    {
+      "logical_name": "focused-digest-tests.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "ddee4fc0f7fde7a35e15e89270f7b9b24901ec9f68ac2e6b4193710a7c0c0c8a",
+      "byte_count": 64,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "focused-digest-tests.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "digest-vet.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "digest-vet.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "digest-gofmt.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "digest-gofmt.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "build.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stdout",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "diff-check.stderr",
+      "media_type": "text/plain; charset=utf-8",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "byte_count": 0,
+      "availability": "detached"
+    },
+    {
+      "logical_name": "runner.diagnostics",
+      "media_type": "application/json",
+      "sha256": "d847e29e7f354b20a29cb55a52b5977ba8e6648c4957d09fe856983e131bc773",
+      "byte_count": 168,
+      "availability": "detached"
+    }
+  ],
+  "patch_hygiene": {
+    "status": "pass",
+    "diagnostic_count": 0
+  },
+  "closure_policy": {
+    "tracked_full_digest_status": "pass",
+    "diagnostic_count": 0
+  },
+  "excluded_checks": [],
+  "verdict": "pass"
+}
