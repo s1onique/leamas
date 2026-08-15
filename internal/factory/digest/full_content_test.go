@@ -68,24 +68,38 @@ func TestDigest_UntrackedFile_IncludesFullContent(t *testing.T) {
 	}
 }
 
-// TestDigest_UntrackedFile_LargeBytes verifies files > MaxPreviewBytes (16KB)
-// are still fully included.
+// TestDigest_UntrackedFile_LargeBytes verifies that untracked
+// files at the per-file cap boundary (just under
+// MaxPerFileBytes) are still rendered fully.
+//
+// ACT-LEAMAS-TARGETED-DIGEST-RECURSIVE-EVIDENCE-GUARD01:
+// untracked files exceeding MaxPerFileBytes (64 KiB) are now
+// rendered as bounded stubs, NOT in full. This test asserts
+// the new bounded semantics for files at/above the cap.
+//
+// Files under MaxPerFileBytes (the ~12 KB file in
+// TestDigest_UntrackedFile_IncludesFullContent) continue to
+// render fully.
 func TestDigest_UntrackedFile_LargeBytes(t *testing.T) {
 	tmpDir := t.TempDir()
 	initGit(t, tmpDir)
 
-	// Create a file larger than MaxPreviewBytes (16KB)
+	// Create a file larger than MaxFileSizeForFull (1 MiB)
+	// so the size gate fires.
 	file := filepath.Join(tmpDir, "large_bytes.txt")
 	var sb strings.Builder
 	sb.WriteString("START_MARKER\n")
-	// Write ~20KB of content
-	for i := 0; i < 200; i++ {
-		sb.WriteString("x")
-		sb.WriteString(strings.Repeat("ABCDEFGHIJ", 100)) // 1000 chars per line
+	for i := 0; i < 40_000; i++ {
+		sb.WriteString(strings.Repeat("ABCDEFGHIJ", 100))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("END_MARKER\n")
 	content := sb.String()
+	if int64(len(content)) <= MaxFileSizeForFull {
+		t.Fatalf("test setup wrong: content size %d must "+
+			"exceed MaxFileSizeForFull=%d",
+			len(content), MaxFileSizeForFull)
+	}
 
 	if err := os.WriteFile(file, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write file: %v", err)
@@ -99,17 +113,20 @@ func TestDigest_UntrackedFile_LargeBytes(t *testing.T) {
 		t.Fatalf("Generate failed: %v", err)
 	}
 
-	// Verify full content markers are present
-	if !strings.Contains(digest, "START_MARKER") {
-		t.Error("digest should contain start marker")
+	// The full body must NOT be embedded (file is > 1 MiB).
+	if strings.Contains(digest, content) {
+		t.Errorf("digest should NOT contain full %d-byte "+
+			"body", len(content))
 	}
-	if !strings.Contains(digest, "END_MARKER") {
-		t.Error("digest should contain end marker (proves file was not byte-truncated)")
+	// A bounded preview / metadata must be present.
+	if !strings.Contains(digest, "LARGE_FILE_EVIDENCE_BOUNDED") &&
+		!strings.Contains(digest, "Classification: BOUNDED_BODY") {
+		t.Errorf("digest should classify large untracked " +
+			"file as bounded")
 	}
-
-	// Verify no truncation
-	if strings.Contains(digest, "(truncated)") {
-		t.Error("digest should not contain truncation marker for untracked files")
+	// Identity (size) must be visible.
+	if !strings.Contains(digest, "Bytes: ") {
+		t.Errorf("digest should report file size in bounded stub")
 	}
 }
 

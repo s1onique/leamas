@@ -98,17 +98,35 @@ func isGeneratedFileAtPath(path string) bool {
 }
 
 // isGeneratedFileContent checks if content has the canonical generated-file marker.
+//
+// ACT-LEAMAS-TARGETED-DIGEST-RECURSIVE-EVIDENCE-GUARD01 (F6):
+// the canonical `generated_files` bucket also recognises the
+// Leamas digest artifact signature (current contract header or
+// legacy `# Targeted digest` heading). This way a recognised
+// digest in the change set shows up as a generated file in the
+// canonical CHANGESET_STATS / REVIEW_MAP / RISK_SIGNALS, instead
+// of being silently classified as ordinary source / doc.
 func isGeneratedFileContent(content string) bool {
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
+		// Canonical Go-generated marker.
 		if strings.HasPrefix(trimmed, "//") {
 			if generatedMarker.MatchString(trimmed) {
 				return true
 			}
 			continue
+		}
+		// Leamas digest artifact signatures (current
+		// contract header or legacy heading).
+		if strings.HasPrefix(trimmed,
+			"LEAMAS_TARGETED_DIGEST_CONTRACT_VERSION:") {
+			return true
+		}
+		if trimmed == "# Targeted digest" {
+			return true
 		}
 		return false
 	}

@@ -17,11 +17,24 @@ func RenderRangeDigest(repoRoot string, files []RangeFile, revRange string) (str
 		Range:  revRange,
 		Reason: "explicit range mode",
 	}
-	return RenderRangeDigestWithResolved(repoRoot, files, resolved)
+	return renderRangeDigestInternal(repoRoot, files, resolved, "")
 }
 
-// RenderRangeDigestWithResolved creates digest for commit range with resolved mode info.
-func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved *ResolvedMode) (string, error) {
+// RenderRangeDigestWithResolved creates digest for commit range with
+// resolved mode info. The bounded evidence renderer is always used;
+// the digest's own output path is excluded via Generate's
+// opts.Output. Callers that need to control the output path
+// explicitly use the internal variant.
+func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile,
+	resolved *ResolvedMode) (string, error) {
+	return renderRangeDigestInternal(repoRoot, files, resolved, "")
+}
+
+// renderRangeDigestInternal is the private output-aware variant.
+// `outputAbs` is the canonicalised absolute path of the digest's
+// own output file (empty when unknown).
+func renderRangeDigestInternal(repoRoot string, files []RangeFile,
+	resolved *ResolvedMode, outputAbs string) (string, error) {
 	var sb strings.Builder
 
 	v := version.Get()
@@ -96,7 +109,8 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 		dependencyDeltaSection = RenderDependencyDelta(delta)
 	}
 
-	fileEvidenceSection := RenderRangeFileEvidence(repoRoot, files, resolved.Range)
+	fileEvidenceSection := renderRangeFileEvidenceBoundedWithRunner(
+		realGitRunner{}, repoRoot, files, resolved.Range, outputAbs)
 
 	// GATE_SUMMARY section - use the shared adapter for all digest modes.
 	// The resolved digest mode is threaded into the binding classifier so
@@ -130,8 +144,18 @@ func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile, resolved 
 	return sb.String(), nil
 }
 
-// RenderDigestWithResolved creates digest with resolved mode information.
+// RenderDigestWithResolved creates digest with resolved mode
+// information. The bounded evidence renderer is always used; the
+// digest's own output path is excluded via Generate's opts.Output.
+// Callers that need to control the output path explicitly use the
+// internal variant.
 func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, resolved *ResolvedMode, explicit bool) (string, error) {
+	return renderDigestWithResolvedInternal(mode, repoRoot, files, resolved, explicit, "")
+}
+
+// renderDigestWithResolvedInternal is the private output-aware
+// variant of RenderDigestWithResolved.
+func renderDigestWithResolvedInternal(mode Mode, repoRoot string, files []ChangedFile, resolved *ResolvedMode, explicit bool, outputAbs string) (string, error) {
 	var sb strings.Builder
 
 	v := version.Get()
@@ -193,7 +217,7 @@ func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, r
 		dependencyDeltaSection = RenderDependencyDelta(delta)
 	}
 
-	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
+	fileEvidenceSection := renderChangedFilesAndDiffsBounded(repoRoot, files, outputAbs)
 
 	// GATE_SUMMARY section - use the shared adapter for all digest modes.
 	// The resolved digest mode is threaded into the binding classifier

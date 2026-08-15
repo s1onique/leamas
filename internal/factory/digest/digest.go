@@ -64,7 +64,8 @@ func Generate(opts Options) (string, error) {
 			if err != nil {
 				return "", fmt.Errorf("failed to get dirty files: %w", err)
 			}
-			return RenderDigestWithResolved(ModeDirty, repoRoot, files, resolved, false)
+			return renderDigestWithResolvedInternal(ModeDirty, repoRoot, files, resolved, false,
+				resolveAbsoluteOutputPath(opts.Output, repoRoot))
 		}
 
 		// Clean working tree: the authoritative range must come
@@ -79,7 +80,8 @@ func Generate(opts Options) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get range files: %w", err)
 		}
-		return RenderRangeDigestWithResolved(repoRoot, files, resolved)
+		return renderRangeDigestInternal(repoRoot, files, resolved,
+			resolveAbsoluteOutputPath(opts.Output, repoRoot))
 	}
 
 	// Handle explicit modes
@@ -89,13 +91,15 @@ func Generate(opts Options) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to get dirty files: %w", err)
 		}
-		return RenderDigest(mode, repoRoot, files)
+		return renderDigestInternal(mode, repoRoot, files,
+			resolveAbsoluteOutputPath(opts.Output, repoRoot))
 	case ModeStaged:
 		files, err := GetStagedFiles(repoRoot)
 		if err != nil {
 			return "", fmt.Errorf("failed to get staged files: %w", err)
 		}
-		return RenderDigest(mode, repoRoot, files)
+		return renderDigestInternal(mode, repoRoot, files,
+			resolveAbsoluteOutputPath(opts.Output, repoRoot))
 	case ModeRange:
 		if opts.Range == "" {
 			return "", fmt.Errorf("ModeRange requires --range option")
@@ -111,7 +115,8 @@ func Generate(opts Options) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to classify explicit range: %w", err)
 		}
-		return RenderRangeDigestWithResolved(repoRoot, files, resolved)
+		return renderRangeDigestInternal(repoRoot, files, resolved,
+			resolveAbsoluteOutputPath(opts.Output, repoRoot))
 	default:
 		return "", fmt.Errorf("unsupported mode: %s", mode)
 	}
@@ -169,7 +174,24 @@ func WriteWithWarnings(opts Options, content string) ([]SourceSecretWarning, err
 }
 
 // RenderDigest creates the markdown digest content.
+//
+// The bounded evidence renderer is always used; the digest's own
+// output path is excluded via opts.Output when set on the
+// upstream Generate call. This function preserves the original
+// exported signature; callers that need to control the output
+// path explicitly use Generate, which threads opts.Output into
+// the private renderDigestInternal.
 func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, error) {
+	return renderDigestInternal(mode, repoRoot, files, "")
+}
+
+// renderDigestInternal is the private output-aware variant.
+// `outputAbs` is the canonicalised absolute path of the digest's
+// own output file (empty when unknown). It is threaded through to
+// the bounded evidence renderer so the digest cannot ingest
+// itself or amplify recursively.
+func renderDigestInternal(mode Mode, repoRoot string, files []ChangedFile,
+	outputAbs string) (string, error) {
 	// Construct a minimal ResolvedMode so the gate-summary
 	// binding classifier receives the digest's mode intent.
 	// Dirty mode forces Dirty=true so the classifier
@@ -245,8 +267,12 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 		dependencyDeltaSection = RenderDependencyDelta(delta)
 	}
 
-	// File evidence section for hashing
-	fileEvidenceSection := RenderChangedFilesAndDiffs(repoRoot, files)
+	// File evidence section for hashing. We use the bounded
+	// renderer so pathological changed files cannot blow up the
+	// digest. The resolved output path is threaded through so the
+	// digest's own output is excluded from file evidence.
+	fileEvidenceSection := renderChangedFilesAndDiffsBounded(
+		repoRoot, files, outputAbs)
 
 	// GATE_SUMMARY section - compute before writing to include in evidence hashes
 	// Use the shared adapter for all digest modes. The resolved

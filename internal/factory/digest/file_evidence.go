@@ -11,6 +11,13 @@ import (
 // gitRunner is the interface for executing Git commands.
 type gitRunner interface {
 	Run(repoRoot string, args []string) (string, error)
+	// RunWithStdin is the F15 (CORRECTION02) batched primitive.
+	// The default implementation provided by realGitRunner feeds
+	// `input` to the git process on stdin and captures stdout. It
+	// is used by `git cat-file --batch-check` to look up N blob
+	// sizes in one process.
+	RunWithStdin(repoRoot string, args []string,
+		input string) (string, error)
 }
 
 // realGitRunner implements gitRunner using the actual git binary.
@@ -29,6 +36,22 @@ func (realGitRunner) Run(repoRoot string, args []string) (string, error) {
 	return string(output), nil
 }
 
+func (realGitRunner) RunWithStdin(repoRoot string, args []string,
+	input string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoRoot
+	cmd.Stdin = strings.NewReader(input)
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return string(output), fmt.Errorf("git %s failed: %s", strings.Join(args, " "), string(exitErr.Stderr))
+		}
+		return string(output), fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
+	}
+	return string(output), nil
+}
+
+// RenderChangedFilesAndDiffs renders the Changed files list and diff
 // RenderChangedFilesAndDiffs renders the Changed files list and diff
 // content for dirty/staged modes.
 //
@@ -149,41 +172,5 @@ func RenderRangeFileEvidence(repoRoot string, files []RangeFile, rangeSpec strin
 // renderRangeFileEvidenceWithRunner renders range file evidence using the provided runner.
 // This allows tests to inject a fake runner for controlled error injection.
 func renderRangeFileEvidenceWithRunner(runner gitRunner, repoRoot string, files []RangeFile, rangeSpec string) string {
-	var sb strings.Builder
-
-	sb.WriteString("## Changed files\n")
-	if len(files) == 0 {
-		sb.WriteString("No changed files found in range.\n")
-	} else {
-		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("%s  [%s]\n", PathEscape(f.Path), f.Status))
-		}
-	}
-	sb.WriteString("\n")
-
-	sb.WriteString("## Diffs\n")
-	if len(files) == 0 {
-		sb.WriteString("No diffs to show.\n")
-	} else {
-		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("\n=== %s ===\n", PathEscape(f.Path)))
-			sb.WriteString(fmt.Sprintf("Status: %s\n\n", f.Status))
-
-			diff, err := runner.Run(repoRoot, []string{"diff", "--unified=3", rangeSpec, "--", f.Path})
-			if err == nil && diff != "" {
-				sb.WriteString(diff)
-			} else if err != nil {
-				// The range diff failed. For a valid requested range, this
-				// indicates the path may not exist at one endpoint. Log the
-				// error context for diagnostics rather than silently falling
-				// back to an empty-tree comparison which would corrupt the
-				// evidence for existing files.
-				sb.WriteString(fmt.Sprintf("(range diff unavailable: %v)\n", err))
-			} else {
-				sb.WriteString("(no diff available)\n")
-			}
-		}
-	}
-
-	return sb.String()
+	return renderRangeFileEvidenceBoundedWithRunner(runner, repoRoot, files, rangeSpec, "")
 }
