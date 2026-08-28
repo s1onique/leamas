@@ -17,7 +17,7 @@ func RenderRangeDigest(repoRoot string, files []RangeFile, revRange string) (str
 		Range:  revRange,
 		Reason: "explicit range mode",
 	}
-	return renderRangeDigestInternal(repoRoot, files, resolved, "")
+	return renderRangeDigestInternal(repoRoot, files, resolved, "", nil)
 }
 
 // RenderRangeDigestWithResolved creates digest for commit range with
@@ -27,14 +27,16 @@ func RenderRangeDigest(repoRoot string, files []RangeFile, revRange string) (str
 // explicitly use the internal variant.
 func RenderRangeDigestWithResolved(repoRoot string, files []RangeFile,
 	resolved *ResolvedMode) (string, error) {
-	return renderRangeDigestInternal(repoRoot, files, resolved, "")
+	return renderRangeDigestInternal(repoRoot, files, resolved, "", nil)
 }
 
 // renderRangeDigestInternal is the private output-aware variant.
 // `outputAbs` is the canonicalised absolute path of the digest's
-// own output file (empty when unknown).
+// own output file (empty when unknown). The optional
+// `evidencePaths` slice, when non-empty, adds an EVIDENCE_OVERLAY
+// section after the file evidence.
 func renderRangeDigestInternal(repoRoot string, files []RangeFile,
-	resolved *ResolvedMode, outputAbs string) (string, error) {
+	resolved *ResolvedMode, outputAbs string, evidencePaths []string) (string, error) {
 	var sb strings.Builder
 
 	v := version.Get()
@@ -130,6 +132,25 @@ func renderRangeDigestInternal(repoRoot string, files []RangeFile,
 	sb.WriteString("\n")
 	sb.WriteString(dependencyDeltaSection)
 	sb.WriteString(fileEvidenceSection)
+
+	// EVIDENCE_OVERLAY section (experimental): appended AFTER
+	// the file evidence so v3 consumers can ignore it without
+	// losing the subject. The section is only included when
+	// the caller asked for --evidence-path roots; absence
+	// of the flag preserves the historical digest unchanged.
+	if len(evidencePaths) > 0 {
+		overlayRoots, vErr := ValidateEvidenceRoots(repoRoot, evidencePaths)
+		if vErr != nil {
+			return "", vErr
+		}
+		overlay, cErr := CollectEvidenceOverlay(repoRoot, overlayRoots)
+		if cErr != nil {
+			return "", cErr
+		}
+		sb.WriteString("\n")
+		sb.WriteString(RenderEvidenceOverlay(overlay))
+	}
+
 	sb.WriteString("\n")
 	sb.WriteString(RenderLifecycle(resolved))
 
@@ -150,12 +171,14 @@ func renderRangeDigestInternal(repoRoot string, files []RangeFile,
 // Callers that need to control the output path explicitly use the
 // internal variant.
 func RenderDigestWithResolved(mode Mode, repoRoot string, files []ChangedFile, resolved *ResolvedMode, explicit bool) (string, error) {
-	return renderDigestWithResolvedInternal(mode, repoRoot, files, resolved, explicit, "")
+	return renderDigestWithResolvedInternal(mode, repoRoot, files, resolved, explicit, "", nil)
 }
 
 // renderDigestWithResolvedInternal is the private output-aware
-// variant of RenderDigestWithResolved.
-func renderDigestWithResolvedInternal(mode Mode, repoRoot string, files []ChangedFile, resolved *ResolvedMode, explicit bool, outputAbs string) (string, error) {
+// variant of RenderDigestWithResolved. When evidencePaths is
+// non-empty an EVIDENCE_OVERLAY section is appended after the
+// file evidence.
+func renderDigestWithResolvedInternal(mode Mode, repoRoot string, files []ChangedFile, resolved *ResolvedMode, explicit bool, outputAbs string, evidencePaths []string) (string, error) {
 	var sb strings.Builder
 
 	v := version.Get()
@@ -237,6 +260,25 @@ func renderDigestWithResolvedInternal(mode Mode, repoRoot string, files []Change
 	sb.WriteString("\n")
 	sb.WriteString(dependencyDeltaSection)
 	sb.WriteString(fileEvidenceSection)
+
+	// EVIDENCE_OVERLAY section (experimental): appended AFTER
+	// the file evidence so v3 consumers can ignore it without
+	// losing the subject. The section is only included when
+	// the caller asked for --evidence-path roots; absence
+	// of the flag preserves the historical digest unchanged.
+	if len(evidencePaths) > 0 {
+		overlayRoots, vErr := ValidateEvidenceRoots(repoRoot, evidencePaths)
+		if vErr != nil {
+			return "", vErr
+		}
+		overlay, cErr := CollectEvidenceOverlay(repoRoot, overlayRoots)
+		if cErr != nil {
+			return "", cErr
+		}
+		sb.WriteString("\n")
+		sb.WriteString(RenderEvidenceOverlay(overlay))
+	}
+
 	if resolved != nil {
 		sb.WriteString("\n")
 		sb.WriteString(RenderLifecycle(resolved))

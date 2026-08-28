@@ -264,6 +264,62 @@ func TestDigestUsageText_ContainsRequiredFlags(t *testing.T) {
 	}
 }
 
+func TestDigestUsageText_ContainsEvidencePathFlag(t *testing.T) {
+	var buf bytes.Buffer
+	printDigestUsageTo(&buf)
+	text := buf.String()
+	if !strings.Contains(text, "--evidence-path") {
+		t.Errorf("usage text missing --evidence-path")
+	}
+	if !strings.Contains(text, "repeatable") {
+		t.Errorf("usage text should mark --evidence-path as repeatable")
+	}
+}
+
+func TestParseDigestArgs_EvidencePathRepeatable(t *testing.T) {
+	got, err := parseDigestArgs([]string{
+		"--dirty", "--output", "/tmp/d.md",
+		"--evidence-path", "ignored-a",
+		"--evidence-path", "ignored-b",
+	})
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got.mode != digest.ModeDirty {
+		t.Errorf("mode = %s, want dirty", got.mode)
+	}
+	if len(got.evidencePaths) != 2 {
+		t.Fatalf("evidencePaths = %v, want 2 entries", got.evidencePaths)
+	}
+	if got.evidencePaths[0] != "ignored-a" {
+		t.Errorf("evidencePaths[0] = %q", got.evidencePaths[0])
+	}
+	if got.evidencePaths[1] != "ignored-b" {
+		t.Errorf("evidencePaths[1] = %q", got.evidencePaths[1])
+	}
+}
+
+func TestParseDigestArgs_EvidencePathMissingArg(t *testing.T) {
+	_, err := parseDigestArgs([]string{
+		"--dirty", "--output", "/tmp/d.md", "--evidence-path"})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	if !strings.Contains(err.Error(), "--evidence-path") {
+		t.Errorf("error should mention --evidence-path: %v", err)
+	}
+}
+
+func TestParseDigestArgs_EvidencePathFlagAsValue(t *testing.T) {
+	_, err := parseDigestArgs([]string{
+		"--dirty", "--output", "/tmp/d.md",
+		"--evidence-path", "--output",
+	})
+	if err == nil {
+		t.Fatalf("expected error: --evidence-path value cannot be a flag")
+	}
+}
+
 func TestDigestUsageText_AllLinesEndWithNewline(t *testing.T) {
 	var buf bytes.Buffer
 	printDigestUsageTo(&buf)

@@ -28,6 +28,15 @@ type Options struct {
 	// to record SHA-256, declared version, and embedded VCS
 	// revision on every digest header.
 	ToolBinaryPath string
+
+	// EvidencePaths (optional, repeatable via
+	// --evidence-path on the CLI) restricts an explicit
+	// overlay of ignored-untracked local state the digest
+	// should additionally surface. Empty slice => no
+	// overlay. Each entry is treated as a repo-relative
+	// rootspec by the ValidateEvidenceRoots pre-flight; a
+	// failure there aborts digest generation.
+	EvidencePaths []string
 }
 
 // Generate creates a targeted digest and returns it as a string.
@@ -65,7 +74,8 @@ func Generate(opts Options) (string, error) {
 				return "", fmt.Errorf("failed to get dirty files: %w", err)
 			}
 			return renderDigestWithResolvedInternal(ModeDirty, repoRoot, files, resolved, false,
-				resolveAbsoluteOutputPath(opts.Output, repoRoot))
+				resolveAbsoluteOutputPath(opts.Output, repoRoot),
+				opts.EvidencePaths)
 		}
 
 		// Clean working tree: the authoritative range must come
@@ -81,7 +91,8 @@ func Generate(opts Options) (string, error) {
 			return "", fmt.Errorf("failed to get range files: %w", err)
 		}
 		return renderRangeDigestInternal(repoRoot, files, resolved,
-			resolveAbsoluteOutputPath(opts.Output, repoRoot))
+			resolveAbsoluteOutputPath(opts.Output, repoRoot),
+			opts.EvidencePaths)
 	}
 
 	// Handle explicit modes
@@ -92,14 +103,16 @@ func Generate(opts Options) (string, error) {
 			return "", fmt.Errorf("failed to get dirty files: %w", err)
 		}
 		return renderDigestInternal(mode, repoRoot, files,
-			resolveAbsoluteOutputPath(opts.Output, repoRoot))
+			resolveAbsoluteOutputPath(opts.Output, repoRoot),
+			opts.EvidencePaths)
 	case ModeStaged:
 		files, err := GetStagedFiles(repoRoot)
 		if err != nil {
 			return "", fmt.Errorf("failed to get staged files: %w", err)
 		}
 		return renderDigestInternal(mode, repoRoot, files,
-			resolveAbsoluteOutputPath(opts.Output, repoRoot))
+			resolveAbsoluteOutputPath(opts.Output, repoRoot),
+			opts.EvidencePaths)
 	case ModeRange:
 		if opts.Range == "" {
 			return "", fmt.Errorf("ModeRange requires --range option")
@@ -116,7 +129,8 @@ func Generate(opts Options) (string, error) {
 			return "", fmt.Errorf("failed to classify explicit range: %w", err)
 		}
 		return renderRangeDigestInternal(repoRoot, files, resolved,
-			resolveAbsoluteOutputPath(opts.Output, repoRoot))
+			resolveAbsoluteOutputPath(opts.Output, repoRoot),
+			opts.EvidencePaths)
 	default:
 		return "", fmt.Errorf("unsupported mode: %s", mode)
 	}
@@ -182,7 +196,23 @@ func WriteWithWarnings(opts Options, content string) ([]SourceSecretWarning, err
 // path explicitly use Generate, which threads opts.Output into
 // the private renderDigestInternal.
 func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, error) {
-	return renderDigestInternal(mode, repoRoot, files, "")
+	return renderDigestInternal(renderDigestInput{
+		mode:     mode,
+		repoRoot: repoRoot,
+		files:    files,
+	})
+}
+
+// renderDigestInput bundles the inputs threaded through the
+// private render entry points. The struct keeps the signature
+// stable as new generation-only knobs are added (e.g. the
+// MVP evidence overlay).
+type renderDigestInput struct {
+	mode          Mode
+	repoRoot      string
+	files         []ChangedFile
+	outputAbs     string
+	evidencePaths []string
 }
 
 // renderDigestInternal is the private output-aware variant.
@@ -191,7 +221,24 @@ func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, erro
 // the bounded evidence renderer so the digest cannot ingest
 // itself or amplify recursively.
 func renderDigestInternal(mode Mode, repoRoot string, files []ChangedFile,
-	outputAbs string) (string, error) {
+	outputAbs string, evidencePaths []string) (string, error) {
+	return renderDigestInternalV2(renderDigestInput{
+		mode:          mode,
+		repoRoot:      repoRoot,
+		files:         files,
+		outputAbs:     outputAbs,
+		evidencePaths: evidencePaths,
+	})
+}
+
+// renderDigestInternalV2 is the canonical internal entry point.
+// When opts.EvidencePaths is non-empty the rendered digest
+// appends an EVIDENCE_OVERLAY section after the file evidence.
+func renderDigestInternalV2(in renderDigestInput) (string, error) {
+	mode := in.mode
+	repoRoot := in.repoRoot
+	files := in.files
+	outputAbs := in.outputAbs
 	// Construct a minimal ResolvedMode so the gate-summary
 	// binding classifier receives the digest's mode intent.
 	// Dirty mode forces Dirty=true so the classifier
@@ -309,6 +356,24 @@ func renderDigestInternal(mode Mode, repoRoot string, files []ChangedFile,
 
 	// Write Changed files and Diffs sections
 	sb.WriteString(fileEvidenceSection)
+
+	// EVIDENCE_OVERLAY section (experimental): appended AFTER
+	// the file evidence so v3 consumers can ignore it without
+	// losing the subject. The section is only included when
+	// the caller asked for --evidence-path roots; absence of
+	// the flag preserves the historical digest unchanged.
+	if len(in.evidencePaths) > 0 {
+		overlayRoots, vErr := ValidateEvidenceRoots(repoRoot, in.evidencePaths)
+		if vErr != nil {
+			return "", vErr
+		}
+		overlay, cErr := CollectEvidenceOverlay(repoRoot, overlayRoots)
+		if cErr != nil {
+			return "", cErr
+		}
+		sb.WriteString("\n")
+		sb.WriteString(RenderEvidenceOverlay(overlay))
+	}
 
 	sb.WriteString("\n## Workflow anchors\n")
 

@@ -15,12 +15,13 @@ import (
 
 // digestArgs holds parsed arguments for the digest command.
 type digestArgs struct {
-	mode      digest.Mode
-	hasDirty  bool
-	hasStaged bool
-	hasRange  bool
-	output    string
-	rangeSpec string
+	mode          digest.Mode
+	hasDirty      bool
+	hasStaged     bool
+	hasRange      bool
+	output        string
+	rangeSpec     string
+	evidencePaths []string
 }
 
 // parseDigestArgs parses command-line arguments for the digest command.
@@ -51,6 +52,15 @@ func parseDigestArgs(args []string) (digestArgs, error) {
 				return digestArgs{}, errors.New("--output requires a path argument")
 			}
 			result.output = args[i+1]
+			i++
+		case "--evidence-path":
+			if i+1 >= len(args) {
+				return digestArgs{}, errors.New("--evidence-path requires a path argument")
+			}
+			if strings.HasPrefix(args[i+1], "-") && args[i+1] != "-" {
+				return digestArgs{}, errors.New("--evidence-path requires a path argument")
+			}
+			result.evidencePaths = append(result.evidencePaths, args[i+1])
 			i++
 		default:
 			return digestArgs{}, fmt.Errorf("unknown flag: %s", args[i])
@@ -121,6 +131,7 @@ func runFactoryDigestWithClock(
 		Mode:           parsed.mode,
 		Output:         parsed.output,
 		ToolBinaryPath: binaryPath,
+		EvidencePaths:  parsed.evidencePaths,
 	}
 	if parsed.hasRange {
 		opts.Range = parsed.rangeSpec
@@ -137,6 +148,9 @@ func runFactoryDigestWithClock(
 	result.SetOK()
 	result.AddField("output", opts.Output)
 	result.AddField("mode", string(parsed.mode))
+	if len(parsed.evidencePaths) > 0 {
+		result.AddField("evidence_paths", strings.Join(parsed.evidencePaths, ","))
+	}
 	result.AddField("time", formatElapsed(elapsed))
 	output.WriteLine(stdout, *result)
 	return 0
@@ -157,8 +171,9 @@ func printDigestUsageTo(w io.Writer) {
 	fmt.Fprintln(w, "Usage: leamas factory digest [flags]")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Flags:")
-	fmt.Fprintln(w, "  --dirty             Include unstaged, staged, and untracked changes")
-	fmt.Fprintln(w, "  --staged            Include only staged changes")
-	fmt.Fprintln(w, "  --range <rev-range> Include changes in revision range")
-	fmt.Fprintln(w, "  --output <path>     Output path (required)")
+	fmt.Fprintln(w, "  --dirty                       Include unstaged, staged, and untracked changes")
+	fmt.Fprintln(w, "  --staged                      Include only staged changes")
+	fmt.Fprintln(w, "  --range <rev-range>           Include changes in revision range")
+	fmt.Fprintln(w, "  --evidence-path <path>        Include ignored-untracked files under <path> as evidence overlay (repeatable)")
+	fmt.Fprintln(w, "  --output <path>               Output path (required)")
 }
