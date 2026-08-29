@@ -9,6 +9,7 @@ package digest
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -21,7 +22,9 @@ import (
 
 // TestEvidence_M09a_RootIsSymlink_Rejected covers the case
 // where the user-provided --evidence-path argument names a
-// symlink itself. The MVP refuses to follow it.
+// symlink itself. The MVP refuses to follow it. C2 establishes
+// the fail-closed whole-request contract: any rejected root
+// returns a non-nil error.
 func TestEvidence_M09a_RootIsSymlink_Rejected(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("symlink semantics differ on Windows")
@@ -41,11 +44,11 @@ func TestEvidence_M09a_RootIsSymlink_Rejected(t *testing.T) {
 		t.Fatalf("write .gitignore: %v", err)
 	}
 	roots, err := ValidateEvidenceRoots(dir, []string{"linked"})
-	if err != nil {
-		t.Fatalf("validate: %v", err)
+	if err == nil {
+		t.Fatalf("expected error (fail-closed); roots=%+v", roots)
 	}
 	if len(roots) == 0 || !roots[0].Rejected {
-		t.Fatalf("expected root to be rejected, got %+v", roots)
+		t.Fatalf("diagnostic slice should mark root rejected, got %+v", roots)
 	}
 }
 
@@ -91,8 +94,19 @@ func TestEvidence_M09b_SymlinkFileDropped(t *testing.T) {
 	}
 	for _, f := range overlay.Files {
 		if strings.HasSuffix(f.Path, "link") {
-			t.Errorf("M09b violation: symlink file appears in overlay")
+			t.Errorf("M09b violation: symlink file appears in Files")
 		}
+	}
+	// C3: the symlink is recorded as an omission rather than
+	// silently dropped, so reviewers can see what happened.
+	recorded := false
+	for _, om := range overlay.Omitted {
+		if strings.HasSuffix(om.Path, "link") && om.Reason == OmitSymlink {
+			recorded = true
+		}
+	}
+	if !recorded {
+		t.Errorf("M09b: symlink not recorded as OmitSymlink omission: %+v", overlay.Omitted)
 	}
 }
 

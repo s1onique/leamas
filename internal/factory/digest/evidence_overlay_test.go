@@ -189,11 +189,13 @@ func TestEvidence_Generate_M04_CleanRemainsClean(t *testing.T) {
 
 func TestEvidence_Render_M05_SeparateRepresentation(t *testing.T) {
 	out := RenderEvidenceOverlay(EvidenceOverlay{
-		Roots: []EvidenceRoot{{Path: "ignored-a"}},
-		Files: []EvidenceFile{{Path: "ignored-a/a.txt", Size: 11}},
+		RepoRoot: "/example/repo",
+		Roots:    []EvidenceRoot{{Path: "ignored-a"}},
+		Files:    []EvidenceFile{{Path: "ignored-a/a.txt", Size: 11}},
 	})
 	want := []string{
 		"## EVIDENCE_OVERLAY (experimental)",
+		"repo_root:",
 		"roots:",
 		"- ignored-a",
 		"### ignored-a/a.txt  size=11",
@@ -207,6 +209,9 @@ func TestEvidence_Render_M05_SeparateRepresentation(t *testing.T) {
 
 // ----- M06: .. escape rejected -------------------------------------
 
+// TestEvidence_Validate_M06_DotDotEscape covers C5: any path
+// segment equal to `..` is rejected, even when `filepath.Clean`
+// would normalize inside the repository.
 func TestEvidence_Validate_M06_DotDotEscape(t *testing.T) {
 	dir := makeEvidenceFixture(t)
 	cases := []string{"../foo", "a/../../etc", "..", "ignored-a/../etc"}
@@ -218,6 +223,43 @@ func TestEvidence_Validate_M06_DotDotEscape(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "evidence:") {
 			t.Errorf("error for %q missing prefix: %v", c, err)
+		}
+	}
+}
+
+// TestEvidence_Validate_C5_DotDotTableMatrix exhaustively
+// enumerates the C5 policy: ANY segment equal to `..` rejects;
+// filenames containing the literal `..` characters are
+// accepted.
+func TestEvidence_Validate_C5_DotDotTableMatrix(t *testing.T) {
+	dir := makeEvidenceFixture(t)
+	rejected := []string{
+		"..",
+		"../foo",
+		"a/../b",
+		"a/b/../../c",
+		"ignored-a/../etc",
+	}
+	accepted := []string{
+		"report..json",
+		"build..",
+		"..hidden",
+		"a/..report/b",
+		"..foo",
+	}
+	for _, c := range rejected {
+		if _, err := ValidateEvidenceRoots(dir, []string{c}); err == nil {
+			t.Errorf("C5: expected rejection for %q", c)
+		}
+	}
+	for _, c := range accepted {
+		roots, err := ValidateEvidenceRoots(dir, []string{c})
+		if err != nil {
+			t.Errorf("C5: unexpected rejection for %q: %v", c, err)
+			continue
+		}
+		if len(roots) != 1 || roots[0].Rejected {
+			t.Errorf("C5: filename rejected: %q -> %+v", c, roots)
 		}
 	}
 }
@@ -245,12 +287,28 @@ func TestEvidence_Validate_M07_AbsoluteEscape(t *testing.T) {
 
 // ----- M08: .git rejected -------------------------------------------
 
-func TestEvidence_Validate_M08_DotGit(t *testing.T) {
+// TestEvidence_Validate_M08_DotGitRejected covers C4: only the
+// `.git` metadata tree is rejected. `.gitignore` is an ordinary
+// working-tree file and must NOT be rejected.
+func TestEvidence_Validate_M08_DotGitRejected(t *testing.T) {
 	dir := makeEvidenceFixture(t)
-	for _, c := range []string{".git", ".git/", ".git/objects", ".gitignore", ".gitignore/foo"} {
+	for _, c := range []string{".git", ".git/", ".git/objects", ".git/config"} {
 		_, err := ValidateEvidenceRoots(dir, []string{c})
 		if err == nil {
 			t.Errorf("expected error for %q", c)
 		}
+	}
+}
+
+// TestEvidence_Validate_C4_DotGitIgnoreAccepted covers C4:
+// `.gitignore` is an ordinary repository path, not Git metadata.
+func TestEvidence_Validate_C4_DotGitIgnoreAccepted(t *testing.T) {
+	dir := makeEvidenceFixture(t)
+	roots, err := ValidateEvidenceRoots(dir, []string{".gitignore"})
+	if err != nil {
+		t.Fatalf("unexpected error for .gitignore: %v", err)
+	}
+	if len(roots) != 1 || roots[0].Rejected {
+		t.Fatalf(".gitignore must NOT be classified as Git metadata: %+v", roots)
 	}
 }

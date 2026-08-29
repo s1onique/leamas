@@ -57,13 +57,42 @@ type EvidenceFile struct {
 }
 
 // EvidenceOverlay is the rendered overlay: the surviving or
-// rejected roots, the sorted list of files, and the running
-// aggregate byte total used to enforce MaxEvidenceAggregateBytes.
+// rejected roots, the sorted list of files, the running
+// aggregate byte total used to enforce MaxEvidenceAggregateBytes,
+// and the canonical repository root that bound the collection.
+// RepoRoot MUST be populated by CollectEvidenceOverlay so the
+// renderer never reconstructs filesystem authority from the
+// process current working directory.
 type EvidenceOverlay struct {
+	RepoRoot   string
 	Roots      []EvidenceRoot
 	Files      []EvidenceFile
+	Omitted    []EvidenceOmission
+	Truncated  bool
 	Aggregated int64
 }
+
+// EvidenceOmission is one excluded path with a stable reason
+// code. The renderer uses Omitted to surface any file Git
+// classified as ignored-untracked under an authorized root but
+// refused at collection time. Safety caps, symlinks, special
+// files, and inspect failures all produce a row here; nothing is
+// silently dropped.
+type EvidenceOmission struct {
+	Path   string
+	Reason string
+}
+
+// Stable evidence-omission reason codes. These are the only
+// values a caller should rely on; the renderer emits them
+// verbatim so downstream reviewers can parse without prose.
+const (
+	OmitInspectFailed  = "inspect_failed"
+	OmitSymlink        = "symlink"
+	OmitNonRegular     = "non_regular"
+	OmitFileTooLarge   = "file_too_large"
+	OmitAggregateLimit = "aggregate_limit"
+)
 
 // evidenceRejectedPrefix prefixes a rejection reason so callers
 // can surface an actionable diagnostic without parsing prose.
@@ -83,24 +112,34 @@ func IsEvidenceRequested(opts Options) bool {
 
 // ValidateEvidenceRoots canonicalises each requested path, rejects
 // any root that violates path safety, and returns the surviving
-// roots plus per-root rejection reasons.
+// roots. The function is fail-closed: ANY rejection (absolute
+// path, `..` segment, `.git`, symlink chain) returns a non-nil
+// error so the digest cannot partially authorize.
 //
 // Rules enforced:
 //
 //   - empty / whitespace-only paths are rejected
 //   - absolute paths (POSIX and Windows forms) are rejected
-//   - filepath.Clean followed by lexical containment: `..`,
-//     leading `..`, and `.git` (or any descendant) are rejected
+//   - any segment equal to `..` is rejected, even when
+//     `filepath.Clean` would normalize inside the repository;
+//     the rejection is segment-aware and runs BEFORE Clean
+//   - `.git` and any descendant of it are rejected as
+//     Git metadata; ordinary working-tree files like
+//     `.gitignore` are NOT metadata and are accepted
 //   - each existing component of the path must be a non-symlink,
 //     regular directory or a non-existent leaf; symlinks anywhere
 //     along the existing chain fail closed
 //
+// Filenames that merely contain the `..` character sequence
+// (for example `report..json`) are NOT rejected; the rule only
+// applies to path segments that resolve to `..`.
+//
 // Duplicates are deduplicated; the surviving ordering follows the
 // first occurrence so command-line order is preserved.
 //
-// If ANY root is rejected the function returns a non-nil error
-// that aggregates each rejection reason. Callers that want
-// partial success must inspect the returned slice directly.
+// On ANY rejection the function returns a non-nil error that
+// aggregates every reason. The returned slice still lists the
+// offending roots (with Rejected=true) for diagnostic use.
 func ValidateEvidenceRoots(repoRoot string, requested []string) ([]EvidenceRoot, error) {
 	if repoRoot == "" {
 		return nil, fmt.Errorf("%s non-empty repoRoot required", evidenceRejectedPrefix)
@@ -134,17 +173,24 @@ func ValidateEvidenceRoots(repoRoot string, requested []string) ([]EvidenceRoot,
 			continue
 		}
 
-		// Lexical containment: refuse escapes and `.git` early so a
-		// pathological input never reaches a filesystem probe.
-		cleaned := filepath.Clean(r)
-		if cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		// C5: segment-aware `..` rejection. The check runs BEFORE
+		// `filepath.Clean` so `ignored-a/../etc` cannot sneak
+		// past the lexical containment guard by normalizing to
+		// `etc`. Filenames merely containing `..` as a literal
+		// sequence (for example `report..json`) are unaffected
+		// because their path segments never equal `..`.
+		if hasDotDotSegment(r) {
 			errs = append(errs, fmt.Sprintf(
 				"%s refusing escape %q", evidenceRejectedPrefix, raw))
-			roots = append(roots, EvidenceRoot{Path: cleaned, Rejected: true, Reason: "path traversal"})
+			roots = append(roots, EvidenceRoot{Path: r, Rejected: true, Reason: "path traversal"})
 			continue
 		}
-		if cleaned == ".git" || strings.HasPrefix(cleaned, ".git/") ||
-			cleaned == ".gitignore" || strings.HasPrefix(cleaned, ".gitignore/") {
+
+		// C4: `.git` and any descendant are Git metadata; reject
+		// them. `.gitignore` is an ordinary working-tree file
+		// (NOT metadata) and is therefore accepted.
+		cleaned := filepath.ToSlash(filepath.Clean(r))
+		if cleaned == ".git" || strings.HasPrefix(cleaned, ".git/") {
 			errs = append(errs, fmt.Sprintf(
 				"%s refusing Git metadata path %q", evidenceRejectedPrefix, raw))
 			roots = append(roots, EvidenceRoot{Path: cleaned, Rejected: true, Reason: "Git metadata"})
@@ -163,13 +209,11 @@ func ValidateEvidenceRoots(repoRoot string, requested []string) ([]EvidenceRoot,
 			continue
 		}
 
-		// Surviving roots are slash-canonicalised.
-		canon := filepath.ToSlash(cleaned)
-		if seenSet[canon] {
+		if seenSet[cleaned] {
 			continue
 		}
-		seenSet[canon] = true
-		roots = append(roots, EvidenceRoot{Path: canon})
+		seenSet[cleaned] = true
+		roots = append(roots, EvidenceRoot{Path: cleaned})
 	}
 
 	if len(errs) > 0 {
@@ -179,63 +223,17 @@ func ValidateEvidenceRoots(repoRoot string, requested []string) ([]EvidenceRoot,
 	return roots, nil
 }
 
-// rejectSymlinkChain walks every existing component of `target`
-// (interpreted relative to `canonicalRoot`) and rejects any that
-// resolves through a symlink. The walk stops at the first missing
-// component (the leaf may not exist yet).
-//
-// The chain check uses Lstat per segment; macOS users (where
-// `/var` is a symlink to `/private/var`) get the canonical form
-// because the repository root itself is resolved before the walk.
-func rejectSymlinkChain(canonicalRoot, target string) error {
-	rel, rerr := filepath.Rel(canonicalRoot, target)
-	if rerr != nil {
-		return fmt.Errorf("%s cannot resolve %q relative to repo root: %w",
-			evidenceRejectedPrefix, target, rerr)
-	}
-	if rel == "." {
-		// Targeting the repo root itself is allowed as a
-		// degenerate evidence root (collects the entire
-		// ignored tree under .gitignore / .git/info/exclude).
-		return nil
-	}
-	cursor := canonicalRoot
-	for _, seg := range splitPathSegments(rel) {
-		cursor = filepath.Join(cursor, seg)
-		lst, lerr := os.Lstat(cursor)
-		if lerr != nil {
-			if errors.Is(lerr, os.ErrNotExist) {
-				return nil
-			}
-			return fmt.Errorf("%s cannot inspect %q: %w",
-				evidenceRejectedPrefix, cursor, lerr)
-		}
-		if lst.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("%s refusing evidence path that traverses symlink %q",
-				evidenceRejectedPrefix, cursor)
-		}
-	}
-	return nil
-}
+// hasDotDotSegment is implemented in evidence_overlay_path.go.
+// It reports whether any slash-separated segment of `raw` is
+// exactly `..`, and is the segment-aware C5 rejector.
 
-// splitPathSegments splits a relative path into its slash-aware
-// segments without producing "." or "" entries; it tolerates the
-// platform separator so paths produced on Windows survive on Linux
-// during cross-platform test runs.
-func splitPathSegments(rel string) []string {
-	if rel == "" || rel == "." {
-		return nil
-	}
-	parts := strings.Split(filepath.ToSlash(rel), "/")
-	out := make([]string, 0, len(parts))
-	for _, p := range parts {
-		if p == "" || p == "." {
-			continue
-		}
-		out = append(out, p)
-	}
-	return out
-}
+// rejectSymlinkChain is implemented in evidence_overlay_path.go.
+// It walks every existing component of a target path and
+// rejects any segment that resolves through a symlink.
+
+// splitPathSegments is implemented in evidence_overlay_path.go.
+// It returns the slash-aware segments of a relative path
+// without "." or empty entries.
 
 // CollectEvidenceOverlay runs the per-root Git query and walks the
 // filesystem to confirm each reported file is a non-symlink,
@@ -244,11 +242,14 @@ func splitPathSegments(rel string) []string {
 // Rejected roots are reported in the overlay slice but
 // contribute no files; callers may surface them via rendering.
 //
-// Files larger than MaxEvidencePerFileBytes are skipped; once the
-// running aggregate hits MaxEvidenceAggregateBytes the per-root
-// walk stops adding files. The caps guarantee that a single
-// evidence overlay cannot accidentally ingest an unbounded
-// ignored namespace.
+// Files larger than MaxEvidencePerFileBytes are recorded as
+// EvidenceOmission{OmitFileTooLarge}. Inspection failures are
+// recorded with a stable reason code. Once the running aggregate
+// hits MaxEvidenceAggregateBytes the per-root walk stops adding
+// files and sets overlay.Truncated=true so the renderer can
+// surface incompleteness truthfully. The overlay.RepoRoot is
+// always populated so the renderer never reconstructs filesystem
+// authority from the caller's cwd.
 func CollectEvidenceOverlay(repoRoot string, roots []EvidenceRoot) (EvidenceOverlay, error) {
 	if repoRoot == "" {
 		return EvidenceOverlay{Roots: roots}, fmt.Errorf("%s non-empty repoRoot required", evidenceRejectedPrefix)
@@ -258,7 +259,7 @@ func CollectEvidenceOverlay(repoRoot string, roots []EvidenceRoot) (EvidenceOver
 		canonicalRoot = filepath.Clean(resolved)
 	}
 
-	overlay := EvidenceOverlay{Roots: roots}
+	overlay := EvidenceOverlay{RepoRoot: canonicalRoot, Roots: roots}
 	seen := make(map[string]bool)
 	for _, root := range roots {
 		if root.Rejected {
@@ -286,34 +287,54 @@ func CollectEvidenceOverlay(repoRoot string, roots []EvidenceRoot) (EvidenceOver
 			if root.Path != "." && !strings.HasPrefix(p, root.Path+"/") && p != root.Path {
 				continue
 			}
-			info, ierr := inspectEvidenceFile(canonicalRoot, p)
-			if ierr != nil {
-				// Skip un-inspectable entries (race,
-				// permission, special file). The
-				// remaining overlay is still truthful.
+			seen[p] = true
+			info, inspectErr := inspectEvidenceFile(canonicalRoot, p)
+			if inspectErr != nil {
+				// C3: never drop silently. Classify
+				// the failure into a stable reason
+				// code so reviewers can see exactly
+				// what happened.
+				reason := OmitInspectFailed
+				switch {
+				case strings.Contains(inspectErr.Error(), "symlink"):
+					reason = OmitSymlink
+				case strings.Contains(inspectErr.Error(), "non-regular"):
+					reason = OmitNonRegular
+				}
+				overlay.Omitted = append(overlay.Omitted, EvidenceOmission{
+					Path: p, Reason: reason,
+				})
 				continue
 			}
 			if info.Size > MaxEvidencePerFileBytes {
-				// Skip oversize: too large to safely
-				// preview under MVP budgets.
+				overlay.Omitted = append(overlay.Omitted, EvidenceOmission{
+					Path: p, Reason: OmitFileTooLarge,
+				})
 				continue
 			}
 			if overlay.Aggregated+info.Size > MaxEvidenceAggregateBytes {
-				// Hit the aggregate cap; stop adding
-				// more files to preserve the safety
-				// guarantee for this root.
-				break
+				// C3: aggregate cap reached.
+				// Record this file as omitted so the
+				// reviewer can see we stopped, and
+				// mark the overlay truncated.
+				overlay.Omitted = append(overlay.Omitted, EvidenceOmission{
+					Path: p, Reason: OmitAggregateLimit,
+				})
+				overlay.Truncated = true
+				continue
 			}
 			overlay.Files = append(overlay.Files, EvidenceFile{
 				Path: p,
 				Size: info.Size,
 			})
 			overlay.Aggregated += info.Size
-			seen[p] = true
 		}
 	}
 	sort.Slice(overlay.Files, func(i, j int) bool {
 		return overlay.Files[i].Path < overlay.Files[j].Path
+	})
+	sort.Slice(overlay.Omitted, func(i, j int) bool {
+		return overlay.Omitted[i].Path < overlay.Omitted[j].Path
 	})
 	return overlay, nil
 }
@@ -324,22 +345,6 @@ type evidenceEntry struct {
 	Size int64
 }
 
-// inspectEvidenceFile classifies a single relative path under
-// canonicalRoot. Only non-symlink, regular files survive;
-// symlinks, directories, FIFOs, sockets, device nodes, and
-// missing entries are silently dropped.
-func inspectEvidenceFile(canonicalRoot, relPath string) (evidenceEntry, error) {
-	full := filepath.Join(canonicalRoot, filepath.FromSlash(relPath))
-	lst, lerr := os.Lstat(full)
-	if lerr != nil {
-		return evidenceEntry{}, lerr
-	}
-	mode := lst.Mode()
-	if mode&os.ModeSymlink != 0 {
-		return evidenceEntry{}, fmt.Errorf("symlink: %s", relPath)
-	}
-	if !mode.IsRegular() {
-		return evidenceEntry{}, fmt.Errorf("non-regular: %s", relPath)
-	}
-	return evidenceEntry{Size: lst.Size()}, nil
-}
+// inspectEvidenceFile is declared in evidence_overlay_inspect.go.
+// It is the production-classify primitive used by the collector
+// to convert a relative path into a typed inspection result.

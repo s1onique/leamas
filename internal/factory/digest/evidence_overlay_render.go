@@ -4,9 +4,13 @@
 // half of the evidence overlay MVP. Splitting it from the
 // collector keeps each file LLM-friendly at <= 400 lines.
 //
-// The renderer is intentionally read-only and re-uses the
-// existing IsBinary detector and the PathEscape form so evidence
-// rendering is consistent with ordinary digest sections.
+// The renderer is read-only and re-uses the existing IsBinary
+// detector and the PathEscape form so evidence rendering is
+// consistent with ordinary digest sections. Critically, the
+// renderer reads files RELATIVE TO overlay.RepoRoot, never to
+// the process current working directory, and propagates read
+// failures so a successfully collected file whose contents
+// become unreadable can never masquerade as a zero-byte file.
 package digest
 
 import (
@@ -26,8 +30,17 @@ import (
 //	### root/path  size=N
 //	<preview>
 //
-// where preview comes from previewEvidenceFile and is content
-// bounded at 16 KiB.
+// or, when the preview cannot be read:
+//
+//	### root/path  size=N
+//	(read_failed: <reason>)
+//
+// File contents are read relative to overlay.RepoRoot so the
+// renderer is independent of the caller's cwd.
+//
+// The omissions section is always rendered when non-empty so
+// the overlay never silently claims completeness; truncation
+// is reported via a top-level "truncated: true" line.
 func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 	var sb strings.Builder
 	sb.WriteString("## EVIDENCE_OVERLAY (experimental)\n")
@@ -35,6 +48,9 @@ func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 		sb.WriteString("(no evidence roots requested)\n")
 		return sb.String()
 	}
+	sb.WriteString("repo_root: ")
+	sb.WriteString(PathEscape(overlay.RepoRoot))
+	sb.WriteString("\n")
 	sb.WriteString("roots:\n")
 	for _, r := range overlay.Roots {
 		if r.Rejected {
@@ -46,44 +62,57 @@ func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 	}
 	if len(overlay.Files) == 0 {
 		sb.WriteString("\nfiles: (none)\n")
-		return sb.String()
-	}
-	sb.WriteString("\nfiles:\n")
-	for _, f := range overlay.Files {
-		sb.WriteString(fmt.Sprintf("### %s  size=%d\n", PathEscape(f.Path), f.Size))
-		content, isBinary := previewEvidenceFile(f.Path)
-		if isBinary {
-			sb.WriteString("(binary file)\n")
-		} else if content != "" {
-			sb.WriteString(content)
-			if !strings.HasSuffix(content, "\n") {
-				sb.WriteString("\n")
+	} else {
+		sb.WriteString("\nfiles:\n")
+		for _, f := range overlay.Files {
+			sb.WriteString(fmt.Sprintf("### %s  size=%d\n", PathEscape(f.Path), f.Size))
+			content, isBinary, readErr := previewEvidenceFile(overlay.RepoRoot, f.Path)
+			switch {
+			case readErr != nil:
+				sb.WriteString(fmt.Sprintf("(read_failed: %s)\n", readErr.Error()))
+			case isBinary:
+				sb.WriteString("(binary file)\n")
+			case content != "":
+				sb.WriteString(content)
+				if !strings.HasSuffix(content, "\n") {
+					sb.WriteString("\n")
+				}
 			}
 		}
+	}
+	if len(overlay.Omitted) > 0 {
+		sb.WriteString("\nomissions:\n")
+		for _, om := range overlay.Omitted {
+			sb.WriteString(fmt.Sprintf("  - path: %s\n    reason: %s\n",
+				PathEscape(om.Path), om.Reason))
+		}
+	}
+	if overlay.Truncated {
+		sb.WriteString("\ntruncated: true\n")
 	}
 	return sb.String()
 }
 
 // previewEvidenceFile returns a small, content-bounded preview
-// for the rendered section. The function is read-only, never
-// follows symlinks (Lstat semantics), and re-uses the existing
-// IsBinary detector. Files larger than MaxEvidencePerFileBytes
-// are rejected at collection time, so this path never has to
-// defend against oversize content.
-func previewEvidenceFile(relPath string) (string, bool) {
+// for the rendered section. The function is read-only and never
+// follows symlinks (it operates on the RepoRoot-bound absolute
+// path returned by inspect). Read failures are propagated so a
+// missing or unreadable file renders as an explicit
+// (read_failed: ...) marker rather than as silent empty content.
+func previewEvidenceFile(repoRoot, relPath string) (string, bool, error) {
 	if relPath == "" {
-		return "", false
+		return "", false, fmt.Errorf("empty relative path")
 	}
-	full := relPath
-	if !filepath.IsAbs(full) {
-		full = filepath.Join(".", filepath.FromSlash(relPath))
+	if repoRoot == "" {
+		return "", false, fmt.Errorf("empty repoRoot; cannot bind read")
 	}
+	full := filepath.Join(repoRoot, filepath.FromSlash(relPath))
 	if IsBinary(full) {
-		return "", true
+		return "", true, nil
 	}
 	data, err := os.ReadFile(full)
 	if err != nil {
-		return "", false
+		return "", false, fmt.Errorf("read %s: %w", full, err)
 	}
 	const maxBytes = 16 * 1024 // 16 KiB preview cap
 	if len(data) > maxBytes {
@@ -93,5 +122,5 @@ func previewEvidenceFile(relPath string) (string, bool) {
 	if !strings.HasSuffix(out, "\n") {
 		out += "\n"
 	}
-	return out, false
+	return out, false, nil
 }
