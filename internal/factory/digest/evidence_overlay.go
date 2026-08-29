@@ -18,7 +18,6 @@
 package digest
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"

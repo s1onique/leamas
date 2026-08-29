@@ -18,11 +18,8 @@ package digest
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/s1onique/leamas/internal/factory/redact"
 )
 
 // makeEvidenceFixture builds a hermetic temporary repository that
@@ -79,7 +76,7 @@ func makeEvidenceFixture(t *testing.T) string {
 // `git init` on an empty dir).
 func mustGitNoErr(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	runGitForTest(dir, append([]string{}, args...))
+	RunGitForTest(dir, append([]string{}, args...))
 }
 
 // firstNLines returns the first n lines of s for diagnostic
@@ -188,8 +185,9 @@ func TestEvidence_Generate_M04_CleanRemainsClean(t *testing.T) {
 // ----- M05: evidence has its own representation -------------------
 
 func TestEvidence_Render_M05_SeparateRepresentation(t *testing.T) {
+	dir := makeEvidenceFixture(t)
 	out := RenderEvidenceOverlay(EvidenceOverlay{
-		RepoRoot: "/example/repo",
+		RepoRoot: dir,
 		Roots:    []EvidenceRoot{{Path: "ignored-a"}},
 		Files:    []EvidenceFile{{Path: "ignored-a/a.txt", Size: 11}},
 	})

@@ -9,7 +9,6 @@ package digest
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -198,10 +197,10 @@ func TestEvidence_NoFlag_M11_Compatibility(t *testing.T) {
 
 func TestEvidence_M12_GitImmutability(t *testing.T) {
 	dir := makeEvidenceFixture(t)
-	beforeHead := runGitForTest(dir, "rev-parse", "HEAD")
-	beforeTree := runGitForTest(dir, "rev-parse", "HEAD^{tree}")
-	beforePorcelain := runGitForTest(dir, "status", "--porcelain=v1",
-		"--untracked-files=all")
+	beforeHead := RunGitForTest(dir, []string{"rev-parse", "HEAD"})
+	beforeTree := RunGitForTest(dir, []string{"rev-parse", "HEAD^{tree}"})
+	beforePorcelain := RunGitForTest(dir, []string{"status", "--porcelain=v1",
+		"--untracked-files=all"})
 	roots, err := ValidateEvidenceRoots(dir, []string{"ignored-a"})
 	if err != nil {
 		t.Fatalf("validate: %v", err)
@@ -209,10 +208,10 @@ func TestEvidence_M12_GitImmutability(t *testing.T) {
 	if _, err := CollectEvidenceOverlay(dir, roots); err != nil {
 		t.Fatalf("collect: %v", err)
 	}
-	afterHead := runGitForTest(dir, "rev-parse", "HEAD")
-	afterTree := runGitForTest(dir, "rev-parse", "HEAD^{tree}")
-	afterPorcelain := runGitForTest(dir, "status", "--porcelain=v1",
-		"--untracked-files=all")
+	afterHead := RunGitForTest(dir, []string{"rev-parse", "HEAD"})
+	afterTree := RunGitForTest(dir, []string{"rev-parse", "HEAD^{tree}"})
+	afterPorcelain := RunGitForTest(dir, []string{"status", "--porcelain=v1",
+		"--untracked-files=all"})
 	if beforeHead != afterHead {
 		t.Errorf("M12: HEAD moved")
 	}

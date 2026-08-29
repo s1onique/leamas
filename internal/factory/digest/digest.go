@@ -195,12 +195,14 @@ func WriteWithWarnings(opts Options, content string) ([]SourceSecretWarning, err
 // exported signature; callers that need to control the output
 // path explicitly use Generate, which threads opts.Output into
 // the private renderDigestInternal.
+//
+// The legacy 3-argument shape predates --evidence-path. The MVP
+// overlay is only reachable through Generate(opts) with
+// opts.EvidencePaths; RenderDigest callers therefore cannot
+// trigger an evidence-overlay section. They still benefit from
+// the same file-evidence and gating logic.
 func RenderDigest(mode Mode, repoRoot string, files []ChangedFile) (string, error) {
-	return renderDigestInternal(renderDigestInput{
-		mode:     mode,
-		repoRoot: repoRoot,
-		files:    files,
-	})
+	return renderDigestInternal(mode, repoRoot, files, "", nil)
 }
 
 // renderDigestInput bundles the inputs threaded through the

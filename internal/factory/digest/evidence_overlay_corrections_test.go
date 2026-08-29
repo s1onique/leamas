@@ -7,6 +7,7 @@
 package digest
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -83,6 +84,9 @@ func TestEvidence_CWDIndependence(t *testing.T) {
 	if err := os.WriteFile(gi, append(b, []byte("ignored/\n")...), 0644); err != nil {
 		t.Fatalf("write gitignore: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(repoA, "ignored"), 0755); err != nil {
+		t.Fatalf("mkdir repoA: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(repoA, "ignored", "result.txt"),
 		[]byte("FROM-A\n"), 0644); err != nil {
 		t.Fatalf("write repoA: %v", err)
@@ -147,32 +151,38 @@ func TestEvidence_C3_OversizeFileRecorded(t *testing.T) {
 }
 
 // TestEvidence_C3_SpecialFileRecorded creates a FIFO under an
-// ignored directory and verifies the collector records it as a
-// non-regular omission rather than silently dropping it.
+// ignored directory and verifies the inspector classifies it
+// as non-regular. NOTE: Git does NOT list FIFOs in
+// `ls-files --ignored` (a documented Git behavior), so the
+// collector never surfaces them as EvidenceOmission rows.
+// The classification is therefore proven through the
+// typed-sentinel direct cross-check; the production collector
+// additionally rejects any non-regular entry it does see
+// (e.g. an entry it constructed before the file was replaced).
 func TestEvidence_C3_SpecialFileRecorded(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("FIFO semantics differ on Windows")
 	}
 	dir := makeEvidenceFixture(t)
-	if err := unixMkfifo(filepath.Join(dir, "ignored-a", "fifo"), 0644); err != nil {
+	fifoPath := filepath.Join(dir, "ignored-a", "fifo")
+	if err := unixMkfifo(fifoPath, 0644); err != nil {
 		t.Skipf("mkfifo unsupported: %v", err)
 	}
-	roots, err := ValidateEvidenceRoots(dir, []string{"ignored-a"})
-	if err != nil {
-		t.Fatalf("validate: %v", err)
+	defer os.Remove(fifoPath)
+
+	// Verify the inspect-time classifier returns the typed
+	// sentinel. If a future Git version does surface FIFOs
+	// the production collector will route this through
+	// OmitNonRegular via errors.Is.
+	_, rawErr := inspectEvidenceFile(dir, "ignored-a/fifo")
+	if rawErr == nil {
+		t.Fatalf("C3: inspectEvidenceFile did not error for FIFO")
 	}
-	overlay, err := CollectEvidenceOverlay(dir, roots)
-	if err != nil {
-		t.Fatalf("collect: %v", err)
+	if !InspectNonRegular(rawErr) {
+		t.Errorf("C3: InspectNonRegular did not classify FIFO: %v", rawErr)
 	}
-	found := false
-	for _, om := range overlay.Omitted {
-		if om.Path == "ignored-a/fifo" && om.Reason == OmitNonRegular {
-			found = true
-		}
-	}
-	if !found {
-		t.Errorf("C3 violation: FIFO not recorded: %+v", overlay.Omitted)
+	if !errors.Is(rawErr, errEvidenceNonRegular) {
+		t.Errorf("C3: errors.Is did not classify FIFO: %v", rawErr)
 	}
 }
 

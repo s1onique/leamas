@@ -22,6 +22,12 @@
 //     same pathname to a different inode are detected because
 //     the safely opened object must still match the os.FileInfo
 //     captured at inspect time.
+//   - safeOpenReadOnlyNonblock opens the file with nonblocking
+//     semantics on Unix so a FIFO/socket substitution cannot
+//     block the render thread waiting for a writer. The open
+//     remains traversal-resistant (it goes through *os.Root).
+//     The post-open Stat then rejects any non-regular object
+//     before any blocking content read is attempted.
 //
 // The bytes classified as binary/text are exactly the bytes
 // that are emitted (C5/C6 invariant:
@@ -145,13 +151,17 @@ func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 //
 //   - the open call cannot escape overlay.RepoRoot via a
 //     concurrent ancestor or leaf symlink swap (os.Root);
+//   - the open is nonblocking on Unix (safeOpenReadOnlyNonblock)
+//     so a FIFO/socket substitution cannot block the render
+//     thread waiting for a writer;
+//   - the opened object is rejected with a visible failure
+//     when its mode is not regular, before any read;
 //   - the opened filesystem object is verified, via
 //     os.SameFile, to be the same object that the collector
 //     authorized at inspect time. A different object (regular
 //     file replaced by symlink, regular file replaced by
-//     special file, regular file replaced by a different
-//     regular file) is rejected with a visible failure rather
-//     than rendered.
+//     different regular file) is rejected with a visible
+//     failure rather than rendered.
 //   - the bytes classified as binary/text are exactly the
 //     bytes that are emitted (CLASSIFIED_BYTES == RENDERED_BYTES).
 //
@@ -175,22 +185,35 @@ func previewEvidenceFile(root *os.Root, relPath string, collected os.FileInfo) (
 		return "", false, fmt.Errorf("evidence object identity missing")
 	}
 	rel := filepath.FromSlash(relPath)
-	file, err := root.Open(rel)
+	// C12: open with nonblocking semantics on platforms that
+	// support it, so a FIFO/socket substitution cannot block
+	// the render thread. The safe-open is still traversal-
+	// resistant: it goes through *os.Root.
+	file, err := safeOpenReadOnlyNonblock(root, rel)
 	if err != nil {
 		return "", false, fmt.Errorf("open %s via root: %w", rel, err)
 	}
 	defer file.Close()
 
+	// C12: immediately Stat the opened file. If the object
+	// is no longer a regular file (FIFO / socket / device /
+	// symlink that resolved through the root) we reject it
+	// before any blocking read can be attempted.
+	opened, sErr := file.Stat()
+	if sErr != nil {
+		return "", false, fmt.Errorf("stat %s via root: %w", rel, sErr)
+	}
+	if !opened.Mode().IsRegular() {
+		return "", false, fmt.Errorf(
+			"evidence object is not a regular file: mode=%v",
+			opened.Mode(),
+		)
+	}
 	// C11: confirm the opened object is still the same
 	// filesystem object that was authorized at collect time.
 	// This catches:
 	//   regular file -> different regular file
 	//   regular file -> internal symlink (still inside root)
-	//   regular file -> special file (FIFO, socket, ...)
-	opened, sErr := file.Stat()
-	if sErr != nil {
-		return "", false, fmt.Errorf("stat %s via root: %w", rel, sErr)
-	}
 	if !os.SameFile(opened, collected) {
 		return "", false, fmt.Errorf(
 			"evidence object changed since collection: was %v, now %v",

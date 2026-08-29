@@ -158,6 +158,9 @@ func TestEvidence_C7_CWDIndependencePreserved(t *testing.T) {
 		t.Fatalf("write repoB: %v", err)
 	}
 	ignorePath(t, repoA, "ignored/")
+	if err := os.MkdirAll(filepath.Join(repoA, "ignored"), 0755); err != nil {
+		t.Fatalf("mkdir repoA: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(repoA, "ignored", "result.txt"),
 		[]byte("FROM-A\n"), 0644); err != nil {
 		t.Fatalf("write repoA: %v", err)
