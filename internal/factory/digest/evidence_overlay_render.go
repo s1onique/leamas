@@ -6,13 +6,25 @@
 //
 // The renderer is read-only and re-uses the existing PathEscape
 // form so evidence rendering is consistent with ordinary digest
-// sections. Critically, every preview read is opened through
-// os.OpenRoot (when the Go runtime supports it) so a symlink
-// or ancestor swap between collection and render cannot
-// redirect the read outside the authorized repo root. The
-// classifier and renderer share the same open file descriptor
-// so the bytes classified as binary/text are exactly the
-// bytes that are then emitted to the digest (C5/C6 invariant:
+// sections.
+//
+// Security model (accurate, not aspirational):
+//
+//   - os.Root prevents the read from escaping overlay.RepoRoot
+//     but does not by itself prevent symlink substitution that
+//     stays inside the root.
+//   - the collector rejects symlink evidence at collection time
+//     so a leaf that was inspected as a regular file and later
+//     becomes a symlink is detected by os.SameFile on the
+//     opened file's Stat, not by os.Root itself.
+//   - opening one *os.Root does NOT freeze the filesystem
+//     contents beneath it; race-window substitutions of the
+//     same pathname to a different inode are detected because
+//     the safely opened object must still match the os.FileInfo
+//     captured at inspect time.
+//
+// The bytes classified as binary/text are exactly the bytes
+// that are emitted (C5/C6 invariant:
 // CLASSIFIED_BYTES == RENDERED_BYTES).
 package digest
 
@@ -98,7 +110,7 @@ func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 			sb.WriteString("\nfiles:\n")
 			for _, f := range overlay.Files {
 				sb.WriteString(fmt.Sprintf("### %s  size=%d\n", PathEscape(f.Path), f.Size))
-				content, isBinary, readErr := previewEvidenceFile(root, f.Path)
+				content, isBinary, readErr := previewEvidenceFile(root, f.Path, f.Identity)
 				switch {
 				case readErr != nil:
 					sb.WriteString(fmt.Sprintf("(read_failed: %s)\n", readErr.Error()))
@@ -132,19 +144,35 @@ func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 // be called with an *os.Root obtained from openRoot so that:
 //
 //   - the open call cannot escape overlay.RepoRoot via a
-//     concurrent ancestor or leaf symlink swap;
+//     concurrent ancestor or leaf symlink swap (os.Root);
+//   - the opened filesystem object is verified, via
+//     os.SameFile, to be the same object that the collector
+//     authorized at inspect time. A different object (regular
+//     file replaced by symlink, regular file replaced by
+//     special file, regular file replaced by a different
+//     regular file) is rejected with a visible failure rather
+//     than rendered.
 //   - the bytes classified as binary/text are exactly the
 //     bytes that are emitted (CLASSIFIED_BYTES == RENDERED_BYTES).
 //
-// Without a traversal-resistant root (root == nil) the
-// function returns an explicit failure so callers can never
-// silently fall back to pathname I/O.
-func previewEvidenceFile(root *os.Root, relPath string) (string, bool, error) {
+// Without a traversal-resistant root (root == nil) or a
+// collected-identity handle (collected == nil) the function
+// returns an explicit failure so callers can never silently
+// fall back to pathname I/O.
+//
+// In-place content mutation of the SAME inode is explicitly
+// deferred (IN_PLACE_CONTENT_MUTATION_ATOMICITY=DEFERRED); this
+// mechanism guarantees pathname / object substitution cannot
+// silently redirect the read, not byte-level atomicity.
+func previewEvidenceFile(root *os.Root, relPath string, collected os.FileInfo) (string, bool, error) {
 	if relPath == "" {
 		return "", false, fmt.Errorf("empty relative path")
 	}
 	if root == nil {
 		return "", false, errRootOpenUnavailable
+	}
+	if collected == nil {
+		return "", false, fmt.Errorf("evidence object identity missing")
 	}
 	rel := filepath.FromSlash(relPath)
 	file, err := root.Open(rel)
@@ -152,6 +180,23 @@ func previewEvidenceFile(root *os.Root, relPath string) (string, bool, error) {
 		return "", false, fmt.Errorf("open %s via root: %w", rel, err)
 	}
 	defer file.Close()
+
+	// C11: confirm the opened object is still the same
+	// filesystem object that was authorized at collect time.
+	// This catches:
+	//   regular file -> different regular file
+	//   regular file -> internal symlink (still inside root)
+	//   regular file -> special file (FIFO, socket, ...)
+	opened, sErr := file.Stat()
+	if sErr != nil {
+		return "", false, fmt.Errorf("stat %s via root: %w", rel, sErr)
+	}
+	if !os.SameFile(opened, collected) {
+		return "", false, fmt.Errorf(
+			"evidence object changed since collection: was %v, now %v",
+			collected.Name(), opened.Name(),
+		)
+	}
 
 	// boundedReader limits the read to MaxEvidencePreviewBytes
 	// and lets the binary classifier see exactly the bytes

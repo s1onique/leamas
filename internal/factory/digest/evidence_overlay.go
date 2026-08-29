@@ -51,9 +51,17 @@ type EvidenceRoot struct {
 
 // EvidenceFile is one ignored-untracked path surfaced under an
 // authorized root. Path is repo-relative, slash-separated.
+//
+// Identity is the os.FileInfo captured by the collector at
+// inspect time. It is internal package state used by the
+// renderer to verify that the filesystem object actually read
+// is the same object that was authorized at collect time.
+// It MUST NOT be exposed to the rendered digest or the
+// external contract.
 type EvidenceFile struct {
-	Path string
-	Size int64
+	Path     string
+	Size     int64
+	Identity os.FileInfo
 }
 
 // EvidenceOverlay is the rendered overlay: the surviving or
@@ -324,8 +332,9 @@ func CollectEvidenceOverlay(repoRoot string, roots []EvidenceRoot) (EvidenceOver
 				continue
 			}
 			overlay.Files = append(overlay.Files, EvidenceFile{
-				Path: p,
-				Size: info.Size,
+				Path:     p,
+				Size:     info.Size,
+				Identity: info.Info,
 			})
 			overlay.Aggregated += info.Size
 		}
@@ -341,8 +350,13 @@ func CollectEvidenceOverlay(repoRoot string, roots []EvidenceRoot) (EvidenceOver
 
 // evidenceEntry is the in-memory form of a single path Git listed
 // under an evidence root. Only regular files survive inspect.
+// Info carries the Lstat result so the collector can hand the
+// inode-bearing os.FileInfo to the renderer, which will use
+// os.SameFile to confirm the object actually opened is still
+// the same object that was authorized at collect time.
 type evidenceEntry struct {
 	Size int64
+	Info os.FileInfo
 }
 
 // inspectEvidenceFile is declared in evidence_overlay_inspect.go.

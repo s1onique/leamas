@@ -45,6 +45,12 @@ func InspectNonRegular(err error) bool { return errors.Is(err, errEvidenceNonReg
 // collector can pick a stable omission reason without parsing
 // strings. Any other I/O error is returned verbatim so the
 // collector records OmitInspectFailed.
+//
+// On success, the returned entry carries the Lstat os.FileInfo
+// so the collector can hand the inode-bearing identity to the
+// renderer, which will verify at read time (via os.SameFile)
+// that the filesystem object actually opened matches the one
+// authorized at collect time.
 func inspectEvidenceFile(canonicalRoot, relPath string) (evidenceEntry, error) {
 	full := filepath.Join(canonicalRoot, filepath.FromSlash(relPath))
 	lst, lerr := os.Lstat(full)
@@ -58,5 +64,5 @@ func inspectEvidenceFile(canonicalRoot, relPath string) (evidenceEntry, error) {
 	if !mode.IsRegular() {
 		return evidenceEntry{}, errEvidenceNonRegular
 	}
-	return evidenceEntry{Size: lst.Size()}, nil
+	return evidenceEntry{Size: lst.Size(), Info: lst}, nil
 }
