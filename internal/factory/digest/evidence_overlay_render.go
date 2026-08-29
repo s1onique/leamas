@@ -4,21 +4,43 @@
 // half of the evidence overlay MVP. Splitting it from the
 // collector keeps each file LLM-friendly at <= 400 lines.
 //
-// The renderer is read-only and re-uses the existing IsBinary
-// detector and the PathEscape form so evidence rendering is
-// consistent with ordinary digest sections. Critically, the
-// renderer reads files RELATIVE TO overlay.RepoRoot, never to
-// the process current working directory, and propagates read
-// failures so a successfully collected file whose contents
-// become unreadable can never masquerade as a zero-byte file.
+// The renderer is read-only and re-uses the existing PathEscape
+// form so evidence rendering is consistent with ordinary digest
+// sections. Critically, every preview read is opened through
+// os.OpenRoot (when the Go runtime supports it) so a symlink
+// or ancestor swap between collection and render cannot
+// redirect the read outside the authorized repo root. The
+// classifier and renderer share the same open file descriptor
+// so the bytes classified as binary/text are exactly the
+// bytes that are then emitted to the digest (C5/C6 invariant:
+// CLASSIFIED_BYTES == RENDERED_BYTES).
 package digest
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// rootOpenUnavailable is returned by previewEvidenceFile when
+// the runtime does not provide os.Root (the project would need
+// to be on a Go baseline older than 1.24 to hit this). The
+// caller MUST surface the failure rather than fall back to
+// unsafe openat-style pathname I/O.
+var errRootOpenUnavailable = errors.New("evidence: traversal-resistant open unavailable")
+
+// openRoot returns the *os.Root anchored at repoRoot when the
+// runtime supports os.OpenRoot. The package keeps the result
+// caller-owned so every read is a single safe-open.
+func openRoot(repoRoot string) (*os.Root, error) {
+	if repoRoot == "" {
+		return nil, fmt.Errorf("evidence: empty repoRoot")
+	}
+	return os.OpenRoot(repoRoot)
+}
 
 // RenderEvidenceOverlay renders the EVIDENCE_OVERLAY section as
 // a single deterministic block. The section is labeled
@@ -35,8 +57,9 @@ import (
 //	### root/path  size=N
 //	(read_failed: <reason>)
 //
-// File contents are read relative to overlay.RepoRoot so the
-// renderer is independent of the caller's cwd.
+// File contents are read through a traversal-resistant
+// os.Root handle so a concurrent symlink swap cannot redirect
+// the read outside overlay.RepoRoot.
 //
 // The omissions section is always rendered when non-empty so
 // the overlay never silently claims completeness; truncation
@@ -63,21 +86,32 @@ func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 	if len(overlay.Files) == 0 {
 		sb.WriteString("\nfiles: (none)\n")
 	} else {
-		sb.WriteString("\nfiles:\n")
-		for _, f := range overlay.Files {
-			sb.WriteString(fmt.Sprintf("### %s  size=%d\n", PathEscape(f.Path), f.Size))
-			content, isBinary, readErr := previewEvidenceFile(overlay.RepoRoot, f.Path)
-			switch {
-			case readErr != nil:
-				sb.WriteString(fmt.Sprintf("(read_failed: %s)\n", readErr.Error()))
-			case isBinary:
-				sb.WriteString("(binary file)\n")
-			case content != "":
-				sb.WriteString(content)
-				if !strings.HasSuffix(content, "\n") {
-					sb.WriteString("\n")
+		// Open the repository root ONCE so every preview
+		// read is bounded by the same traversal-resistant
+		// handle. Closing it at the end of the section
+		// keeps the resource scope tight and removes any
+		// TOCTOU window between successive previews.
+		root, rootErr := openRoot(overlay.RepoRoot)
+		if rootErr != nil {
+			sb.WriteString(fmt.Sprintf("\nfiles: (render_unavailable: %s)\n", rootErr.Error()))
+		} else {
+			sb.WriteString("\nfiles:\n")
+			for _, f := range overlay.Files {
+				sb.WriteString(fmt.Sprintf("### %s  size=%d\n", PathEscape(f.Path), f.Size))
+				content, isBinary, readErr := previewEvidenceFile(root, f.Path)
+				switch {
+				case readErr != nil:
+					sb.WriteString(fmt.Sprintf("(read_failed: %s)\n", readErr.Error()))
+				case isBinary:
+					sb.WriteString("(binary file)\n")
+				case content != "":
+					sb.WriteString(content)
+					if !strings.HasSuffix(content, "\n") {
+						sb.WriteString("\n")
+					}
 				}
 			}
+			_ = root.Close()
 		}
 	}
 	if len(overlay.Omitted) > 0 {
@@ -94,33 +128,68 @@ func RenderEvidenceOverlay(overlay EvidenceOverlay) string {
 }
 
 // previewEvidenceFile returns a small, content-bounded preview
-// for the rendered section. The function is read-only and never
-// follows symlinks (it operates on the RepoRoot-bound absolute
-// path returned by inspect). Read failures are propagated so a
-// missing or unreadable file renders as an explicit
-// (read_failed: ...) marker rather than as silent empty content.
-func previewEvidenceFile(repoRoot, relPath string) (string, bool, error) {
+// for the rendered section. The function is read-only and MUST
+// be called with an *os.Root obtained from openRoot so that:
+//
+//   - the open call cannot escape overlay.RepoRoot via a
+//     concurrent ancestor or leaf symlink swap;
+//   - the bytes classified as binary/text are exactly the
+//     bytes that are emitted (CLASSIFIED_BYTES == RENDERED_BYTES).
+//
+// Without a traversal-resistant root (root == nil) the
+// function returns an explicit failure so callers can never
+// silently fall back to pathname I/O.
+func previewEvidenceFile(root *os.Root, relPath string) (string, bool, error) {
 	if relPath == "" {
 		return "", false, fmt.Errorf("empty relative path")
 	}
-	if repoRoot == "" {
-		return "", false, fmt.Errorf("empty repoRoot; cannot bind read")
+	if root == nil {
+		return "", false, errRootOpenUnavailable
 	}
-	full := filepath.Join(repoRoot, filepath.FromSlash(relPath))
-	if IsBinary(full) {
-		return "", true, nil
-	}
-	data, err := os.ReadFile(full)
+	rel := filepath.FromSlash(relPath)
+	file, err := root.Open(rel)
 	if err != nil {
-		return "", false, fmt.Errorf("read %s: %w", full, err)
+		return "", false, fmt.Errorf("open %s via root: %w", rel, err)
 	}
-	const maxBytes = 16 * 1024 // 16 KiB preview cap
-	if len(data) > maxBytes {
-		data = data[:maxBytes]
+	defer file.Close()
+
+	// boundedReader limits the read to MaxEvidencePreviewBytes
+	// and lets the binary classifier see exactly the bytes
+	// that are returned to the renderer.
+	const previewCap = 16 * 1024 // 16 KiB preview cap
+	lr := &io.LimitedReader{R: file, N: previewCap + 1}
+	data, rerr := io.ReadAll(lr)
+	if rerr != nil {
+		return "", false, fmt.Errorf("read %s via root: %w", rel, rerr)
+	}
+	if int64(len(data)) > previewCap {
+		data = data[:previewCap]
+	}
+	if isBinaryBytes(data) {
+		return "", true, nil
 	}
 	out := string(data)
 	if !strings.HasSuffix(out, "\n") {
 		out += "\n"
 	}
 	return out, false, nil
+}
+
+// isBinaryBytes reports whether the supplied byte slice looks
+// like a binary artifact. The classifier reuses the same
+// heuristic as the package's IsBinary preview helper but
+// operates on already-read bytes so the caller's
+// CLASSIFIED_BYTES == RENDERED_BYTES invariant holds.
+func isBinaryBytes(data []byte) bool {
+	const scanWindow = 8 * 1024
+	end := len(data)
+	if end > scanWindow {
+		end = scanWindow
+	}
+	for _, b := range data[:end] {
+		if b == 0 {
+			return true
+		}
+	}
+	return false
 }

@@ -290,15 +290,15 @@ func CollectEvidenceOverlay(repoRoot string, roots []EvidenceRoot) (EvidenceOver
 			seen[p] = true
 			info, inspectErr := inspectEvidenceFile(canonicalRoot, p)
 			if inspectErr != nil {
-				// C3: never drop silently. Classify
-				// the failure into a stable reason
-				// code so reviewers can see exactly
-				// what happened.
+				// C3 + C8: never drop silently. The
+				// classifier uses typed sentinel
+				// errors so this decision is
+				// independent of error-string content.
 				reason := OmitInspectFailed
 				switch {
-				case strings.Contains(inspectErr.Error(), "symlink"):
+				case InspectSymlink(inspectErr):
 					reason = OmitSymlink
-				case strings.Contains(inspectErr.Error(), "non-regular"):
+				case InspectNonRegular(inspectErr):
 					reason = OmitNonRegular
 				}
 				overlay.Omitted = append(overlay.Omitted, EvidenceOmission{
