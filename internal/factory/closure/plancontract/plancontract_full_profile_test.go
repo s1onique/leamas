@@ -8,6 +8,7 @@
 package plancontract
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -208,4 +209,135 @@ func asDecodeError(err error, target **DecodeError) bool {
 		return true
 	}
 	return false
+}
+
+// TestPlanContractPolicyProfileStructuredContextMatrix
+// is the CORRECTION02 adversarial matrix. It proves that
+// the leaf's DecodeError.Profile and DecodeError.CheckID
+// structured fields carry the ORIGINAL typed values
+// even when those values contain characters that Go's
+// `%q`-formatted Message would escape. Before CORRECTION02
+// the closure adapter reconstructed ProfileName/CheckID
+// by scanning the leaf's display prose for quote
+// characters; an embedded `"` would corrupt the
+// reconstructed value. After CORRECTION02 the adapter
+// reads DecodeError.Profile/CheckID directly.
+//
+// Rows:
+//   - A1 unknown profile name with embedded "
+//   - A2 unknown profile name with backslash
+//   - A3 unknown profile name with non-ASCII (Unicode)
+//   - A4 unknown profile name with embedded tab/newline
+//   - A5 missing-check carries CheckID structurally
+//     (the Expert's required addition: the missing-check
+//     path is the second half of the original
+//     display-prose roundtrip; the test would catch a
+//     fix that handled Profile but left CheckID
+//     reconstructed from prose.)
+//   - A6 unknown profile name with path separator
+//   - A7 unknown profile name with mixed case
+func TestPlanContractPolicyProfileStructuredContextMatrix(t *testing.T) {
+	canonical := validPlanWithAllLeamasChecks(t)
+
+	// Each row substitutes a profile name containing
+	// tricky characters into a copy of the canonical
+	// payload. The leaf must report the original
+	// verbatim in DecodeError.Profile (no %q-escaping,
+	// no truncation, no sanitization).
+	//
+	// rawValue is the JSON-encoded string the helper will
+	// substitute into the payload. For values containing
+	// literal control characters (tab/newline) the JSON
+	// encoding is non-trivial, so we use json.Marshal for
+	// correctness.
+	cases := []struct {
+		name      string
+		wantValue string // expected DecodeError.Profile
+	}{
+		{
+			name:      "A1_unknown_profile_with_embedded_quote",
+			wantValue: `foo"bar`,
+		},
+		{
+			name:      "A2_unknown_profile_with_backslash",
+			wantValue: `foo\bar`,
+		},
+		{
+			name:      "A3_unknown_profile_with_unicode",
+			wantValue: `профиль-неизвестен`,
+		},
+		{
+			name:      "A4_unknown_profile_with_tab_and_newline",
+			wantValue: "foo\tbar\nbaz",
+		},
+		{
+			name:      "A6_unknown_profile_with_path_separator",
+			wantValue: "path/with/slashes",
+		},
+		{
+			name:      "A7_unknown_profile_with_mixed_case",
+			wantValue: "UPPER-lower-Mixed",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := json.Marshal(tc.wantValue)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			doc := canonicalWithPolicyProfile(canonical, string(raw))
+			_, err = DecodeAndValidateFull(doc)
+			if err == nil {
+				t.Fatalf("expected error for %s", tc.name)
+			}
+			var de *DecodeError
+			if !asDecodeError(err, &de) {
+				t.Fatalf("error is not *DecodeError: %v", err)
+			}
+			if de.Code != "unknown_policy_profile" {
+				t.Fatalf("code = %q, want unknown_policy_profile", de.Code)
+			}
+			if de.Profile != tc.wantValue {
+				t.Fatalf("Profile = %q (len=%d), want %q (len=%d)",
+					de.Profile, len(de.Profile),
+					tc.wantValue, len(tc.wantValue))
+			}
+		})
+	}
+
+	// A5: missing-check carries CheckID structurally.
+	// The Expert's required addition: the missing-check
+	// path is the second half of the original display-
+	// prose roundtrip. The test verifies that when the
+	// leaf rejects a plan for missing a required
+	// profile check, it carries the missing check ID
+	// in DecodeError.CheckID, not just embedded in the
+	// human-readable Message.
+	t.Run("A5_missing_check_carries_check_id_structurally", func(t *testing.T) {
+		// Strip every required check from the canonical
+		// payload; the leaf MUST report the FIRST missing
+		// check by ID. (Validation iterates required checks
+		// in declared order; "focused-count-1" is first.)
+		doc := canonicalWithSingleCheck(canonical, `"leamas-act-v1"`,
+			`{"id":"unrelated-check","mode":"run","argv":["echo","hi"],"working_directory":".","timeout_seconds":60,"environment":{}}`)
+		_, err := DecodeAndValidateFull(doc)
+		if err == nil {
+			t.Fatal("expected error for missing required profile check")
+		}
+		var de *DecodeError
+		if !asDecodeError(err, &de) {
+			t.Fatalf("error is not *DecodeError: %v", err)
+		}
+		if de.Code != "missing_policy_profile_check" {
+			t.Fatalf("code = %q, want missing_policy_profile_check", de.Code)
+		}
+		if de.CheckID != "focused-count-1" {
+			t.Fatalf("CheckID = %q, want focused-count-1", de.CheckID)
+		}
+		if de.Profile != "leamas-act-v1" {
+			t.Fatalf("Profile = %q, want leamas-act-v1", de.Profile)
+		}
+	})
 }

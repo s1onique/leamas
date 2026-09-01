@@ -120,6 +120,11 @@ func validatePolicyProfileOptional(obj map[string]any) error {
 	}
 	profile, ok := raw.(string)
 	if !ok {
+		// The supplied value is not a string, so the
+		// adapter cannot carry a structured Profile.
+		// Profile and CheckID remain zero-valued; the
+		// adapter must still produce a typed error with
+		// the canonical Kind=PolicyProfileErrorUnknown.
 		return &DecodeError{
 			Code:         "invalid_policy_profile_type",
 			Field:        "policy_profile",
@@ -134,6 +139,7 @@ func validatePolicyProfileOptional(obj map[string]any) error {
 			Field:        "policy_profile",
 			InstancePath: "/policy_profile",
 			Message:      fmt.Sprintf("policy_profile %q is unknown", profile),
+			Profile:      profile,
 		}
 	}
 	if !declared.Enabled {
@@ -142,6 +148,7 @@ func validatePolicyProfileOptional(obj map[string]any) error {
 			Field:        "policy_profile",
 			InstancePath: "/policy_profile",
 			Message:      fmt.Sprintf("policy_profile %q is not yet implemented for this repository", profile),
+			Profile:      profile,
 		}
 	}
 	checks, ok := obj["checks"].([]any)
@@ -162,6 +169,8 @@ func validatePolicyProfileOptional(obj map[string]any) error {
 				Message: fmt.Sprintf(
 					"plan does not satisfy policy profile %q: missing or non-matching check %q",
 					profile, required.ID),
+				Profile: profile,
+				CheckID: required.ID,
 			}
 		}
 	}

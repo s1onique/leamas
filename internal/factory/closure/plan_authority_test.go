@@ -3,6 +3,7 @@ package closure
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -179,3 +180,112 @@ func TestClosureTrustedCleanRunnerBindingAlwaysAccepts(t *testing.T) {
 var _ = sha256.New
 var _ = hex.EncodeToString
 var _ = fullCommitOIDForAuthority
+
+// TestClosurePolicyProfileTypedFieldsPreserveAdversarialValues
+// is the CORRECTION02 closure-side adversarial matrix.
+// It proves the closure adapter reads
+// plancontract.DecodeError.Profile/CheckID as typed
+// fields, not as parsed substrings of the human-readable
+// Message. Before CORRECTION02 the adapter reconstructed
+// ProfileName/CheckID by scanning the leaf's display
+// prose for quote characters; an embedded `"` would
+// corrupt the reconstructed value. After CORRECTION02 the
+// adapter passes the typed fields through verbatim.
+//
+// Rows:
+//   - A1 unknown profile name with embedded "
+//   - A2 unknown profile name with backslash
+//   - A3 unknown profile name with non-ASCII (Unicode)
+//   - A4 unknown profile name with embedded tab/newline
+//   - A5 missing-check carries CheckID structurally
+func TestClosurePolicyProfileTypedFieldsPreserveAdversarialValues(t *testing.T) {
+	cases := []struct {
+		name      string
+		rawValue  string
+		wantValue string
+	}{
+		{
+			name:      "A1_unknown_profile_with_embedded_quote",
+			rawValue:  `foo"bar`,
+			wantValue: `foo"bar`,
+		},
+		{
+			name:      "A2_unknown_profile_with_backslash",
+			rawValue:  `foo\bar`,
+			wantValue: `foo\bar`,
+		},
+		{
+			name:      "A3_unknown_profile_with_unicode",
+			rawValue:  `профиль-неизвестен`,
+			wantValue: `профиль-неизвестен`,
+		},
+		{
+			name:      "A4_unknown_profile_with_tab_and_newline",
+			rawValue:  "foo\tbar\nbaz",
+			wantValue: "foo\tbar\nbaz",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			plan := canonicalPlan()
+			plan.PolicyProfile = tc.rawValue
+			err := ValidatePlan(plan)
+			if err == nil {
+				t.Fatalf("expected error for profile %q", tc.rawValue)
+			}
+			var ppe *PolicyProfileError
+			if !errors.As(err, &ppe) {
+				t.Fatalf("error is not *PolicyProfileError: %v", err)
+			}
+			if ppe.Kind != PolicyProfileErrorUnknown {
+				t.Fatalf("Kind = %d, want PolicyProfileErrorUnknown", ppe.Kind)
+			}
+			if ppe.ProfileName != tc.wantValue {
+				t.Fatalf("ProfileName = %q (len=%d), want %q (len=%d)",
+					ppe.ProfileName, len(ppe.ProfileName),
+					tc.wantValue, len(tc.wantValue))
+			}
+		})
+	}
+
+	// A5: missing-check carries CheckID structurally.
+	// The Expert's required addition: the missing-check
+	// path is the second half of the original display-
+	// prose roundtrip. The test verifies the adapter
+	// reads decodeErr.CheckID directly.
+	t.Run("A5_missing_check_carries_check_id_structurally", func(t *testing.T) {
+		plan := canonicalPlan()
+		// Drop the diff-check (the canonical last check);
+		// the leaf must reject because leamas-act-v1
+		// requires it. The first missing required check
+		// is "focused-count-1" because the loop iterates
+		// in the declared order.
+		plan.PolicyProfile = PolicyProfileLeamasActV1
+		var kept []PlanCheck
+		for _, c := range plan.Checks {
+			if c.ID != "focused-count-1" {
+				kept = append(kept, c)
+			}
+		}
+		plan.Checks = kept
+		err := ValidatePlan(plan)
+		if err == nil {
+			t.Fatal("expected error for missing required check")
+		}
+		var ppe *PolicyProfileError
+		if !errors.As(err, &ppe) {
+			t.Fatalf("error is not *PolicyProfileError: %v", err)
+		}
+		if ppe.Kind != PolicyProfileErrorMissingCheck {
+			t.Fatalf("Kind = %d, want PolicyProfileErrorMissingCheck", ppe.Kind)
+		}
+		if ppe.CheckID != "focused-count-1" {
+			t.Fatalf("CheckID = %q, want focused-count-1", ppe.CheckID)
+		}
+		if ppe.ProfileName != PolicyProfileLeamasActV1 {
+			t.Fatalf("ProfileName = %q, want %q", ppe.ProfileName, PolicyProfileLeamasActV1)
+		}
+	})
+}

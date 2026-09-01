@@ -80,11 +80,24 @@ type DecodeResult struct {
 //	Field        canonical field name (e.g. "baseline.commit_oid")
 //	InstancePath JSON pointer (e.g. "/baseline/commit_oid")
 //	Message      human-readable description
+//	Profile      structured /policy_profile value when Code is one of
+//	             the policy_profile authority codes
+//	             (unknown_policy_profile, disabled_policy_profile,
+//	             missing_policy_profile_check). Zero for all other
+//	             codes. Carries the ORIGINAL typed profile name
+//	             (no %q escaping, no Display-prose roundtrip) so
+//	             adapter code can build typed errors without
+//	             re-parsing the human-readable Message.
+//	CheckID      structured missing-check ID when Code is
+//	             "missing_policy_profile_check". Zero for all
+//	             other codes. Same transport invariant as Profile.
 type DecodeError struct {
 	Code         string
 	Field        string
 	InstancePath string
 	Message      string
+	Profile      string
+	CheckID      string
 }
 
 func (e *DecodeError) Error() string {

@@ -158,77 +158,50 @@ func isPolicyProfileLeafCode(code string) bool {
 
 // adaptPolicyProfileDecodeError converts a leaf
 // plancontract.DecodeError with a policy_profile code into
-// the closure package's legacy PolicyProfileError. The
-// message is taken verbatim from the leaf so the substring
-// contracts (TestClosurePlanAuthorityRejects*) keep
-// matching without re-evaluation.
+// the closure package's legacy PolicyProfileError.
+//
+// CORRECTION02 invariant: the typed Profile / CheckID
+// values are read directly from the leaf's DecodeError
+// structured fields. The adapter MUST NOT inspect
+// decodeErr.Message to derive typed values; doing so
+// would re-introduce the display-prose roundtrip the
+// cleanup is meant to eliminate. The Message is preserved
+// verbatim on the leaf error and is reachable via the
+// returned PolicyProfileError.Cause, so any code that
+// wanted to surface the leaf's prose can still do so
+// without influencing the typed-field translation.
 func adaptPolicyProfileDecodeError(decodeErr *plancontract.DecodeError) error {
-	profileName, kind, checkID := profileFieldsFromLeafMessage(decodeErr.Message, decodeErr.Code)
+	kind := policyProfileKindForLeafCode(decodeErr.Code)
 	return &PolicyProfileError{
-		ProfileName: profileName,
-		CheckID:     checkID,
+		ProfileName: decodeErr.Profile,
+		CheckID:     decodeErr.CheckID,
 		Kind:        kind,
 		Cause:       decodeErr,
 	}
 }
 
-// profileFieldsFromLeafMessage extracts the profile name,
-// PolicyProfileErrorKind, and missing-check ID from a
-// leaf message. The kind is derived from the leaf code,
-// never from message parsing, so a future message-format
-// change cannot silently misclassify the error. The
-// profile name and check ID are pulled from the
-// canonical %q-quoted tokens the leaf always emits.
-func profileFieldsFromLeafMessage(message, code string) (string, PolicyProfileErrorKind, string) {
-	tokens := extractAllQuotedTokens(message)
-	var name, checkID string
-	switch len(tokens) {
-	case 0:
-		// No quoted tokens; leave profile/check empty.
-	case 1:
-		name = tokens[0]
-	default:
-		name = tokens[0]
-		checkID = tokens[1]
-	}
+// policyProfileKindForLeafCode maps a leaf policy_profile
+// code to the legacy PolicyProfileErrorKind. The mapping
+// is a stable, exhaustive switch; any new policy_profile
+// leaf code MUST be added here as part of the same change
+// that introduces it in plancontract. The mapping is
+// keyed off the leaf code (a stable contract token) and
+// not the human-readable Message.
+func policyProfileKindForLeafCode(code string) PolicyProfileErrorKind {
 	switch code {
-	case "unknown_policy_profile":
-		return name, PolicyProfileErrorUnknown, ""
+	case "unknown_policy_profile", "invalid_policy_profile_type":
+		// invalid_policy_profile_type: the supplied value
+		// was not even a string, so the adapter cannot
+		// carry a structured Profile. The legacy contract
+		// treats this as "unknown" because no profile name
+		// can be presented to the user.
+		return PolicyProfileErrorUnknown
 	case "disabled_policy_profile":
-		return name, PolicyProfileErrorUnimplemented, ""
+		return PolicyProfileErrorUnimplemented
 	case "missing_policy_profile_check":
-		return name, PolicyProfileErrorMissingCheck, checkID
+		return PolicyProfileErrorMissingCheck
 	}
-	return name, PolicyProfileErrorUnknown, ""
-}
-
-// extractAllQuotedTokens returns every %q-quoted substring
-// in the leaf message, in order. Used to recover the
-// profile name (first token) and the missing-check ID
-// (second token, when present) without parsing the
-// message format directly. Returning an empty slice when
-// the pattern is absent is fine — PolicyProfileError
-// treats ProfileName="" as "unknown" and the diagnostic
-// still surfaces the right InstancePath / Code / Keyword.
-func extractAllQuotedTokens(message string) []string {
-	tokens := []string{}
-	i := 0
-	for i < len(message) {
-		if message[i] != '"' {
-			i++
-			continue
-		}
-		j := i + 1
-		for j < len(message) && message[j] != '"' {
-			j++
-		}
-		if j >= len(message) {
-			break
-		}
-		tokens = append(tokens, message[i+1:j])
-		i = j + 1
-	}
-	return tokens
+	return PolicyProfileErrorUnknown
 }
 
 // planContractErrorToSemanticError builds the legacy
