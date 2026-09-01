@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -30,6 +31,15 @@ func TestCloseRunDoesNotRequireItsOwnOutputsAsInputs(t *testing.T) {
 }
 
 func TestCloseRunRefusesPartialPublicationSet(t *testing.T) {
+	// ACT-LEAMAS-CLOSURE-CANONICAL-VERIFICATION-DEFECTS-CORRECTION01
+	// §18: the partial-publication guard is a Linux same-
+	// filesystem transactional guarantee. Production
+	// refuses to publish on macOS by design; the test is
+	// platform-conditional so the guard itself stays
+	// exercised on Linux CI.
+	if runtime.GOOS != "linux" {
+		t.Skip("requires Linux same-filesystem transaction support")
+	}
 	destination := t.TempDir()
 	files := map[string][]byte{
 		"docs/closure-manifests/ACT-LEAMAS-TEST01.json": []byte("{\"act_id\":\"ACT-LEAMAS-TEST01\"}\n"),

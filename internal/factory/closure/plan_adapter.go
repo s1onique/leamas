@@ -89,6 +89,12 @@ var planContractCodeMap = map[string]PlanValidationCode{
 	"invalid_policy_constraint": PlanCodeInvalidType,
 	"policy_required_true":      PlanCodeSemanticConstraintFailed,
 
+	// Policy profile.
+	"invalid_policy_profile_type":  PlanCodeInvalidType,
+	"unknown_policy_profile":       PlanCodeSemanticConstraintFailed,
+	"disabled_policy_profile":      PlanCodeSemanticConstraintFailed,
+	"missing_policy_profile_check": PlanCodeSemanticConstraintFailed,
+
 	// Runner authority.
 	"runner_authority_required":     PlanCodeRequiredPropertyMissing,
 	"invalid_runner_authority_mode": PlanCodeInvalidEnum,
@@ -121,7 +127,108 @@ func adaptPlanContractError(err error) error {
 		// unchanged so the caller sees the raw cause.
 		return err
 	}
+	// B2-R7-CORRECTION01: policy_profile leaf codes must be
+	// routed to the legacy PolicyProfileError typed error
+	// so the closure-side test surface (which asserts on
+	// "is unknown", "is not yet implemented", and "policy
+	// profile" substrings via planDiagnosticSource.PlanDiagnostics)
+	// continues to work. The adapter is a pure translator
+	// — it inspects only the leaf's typed fields.
+	if isPolicyProfileLeafCode(decodeErr.Code) {
+		return adaptPolicyProfileDecodeError(decodeErr)
+	}
 	return planContractErrorToSemanticError(decodeErr)
+}
+
+// isPolicyProfileLeafCode reports whether the leaf code is
+// one of the policy_profile authority codes introduced in
+// B2-R7-CORRECTION01. The check is a stable string compare
+// against the canonical leaf codes the plancontract
+// plancontract_full_profile.go file emits.
+func isPolicyProfileLeafCode(code string) bool {
+	switch code {
+	case "unknown_policy_profile",
+		"disabled_policy_profile",
+		"missing_policy_profile_check",
+		"invalid_policy_profile_type":
+		return true
+	}
+	return false
+}
+
+// adaptPolicyProfileDecodeError converts a leaf
+// plancontract.DecodeError with a policy_profile code into
+// the closure package's legacy PolicyProfileError. The
+// message is taken verbatim from the leaf so the substring
+// contracts (TestClosurePlanAuthorityRejects*) keep
+// matching without re-evaluation.
+func adaptPolicyProfileDecodeError(decodeErr *plancontract.DecodeError) error {
+	profileName, kind, checkID := profileFieldsFromLeafMessage(decodeErr.Message, decodeErr.Code)
+	return &PolicyProfileError{
+		ProfileName: profileName,
+		CheckID:     checkID,
+		Kind:        kind,
+		Cause:       decodeErr,
+	}
+}
+
+// profileFieldsFromLeafMessage extracts the profile name,
+// PolicyProfileErrorKind, and missing-check ID from a
+// leaf message. The kind is derived from the leaf code,
+// never from message parsing, so a future message-format
+// change cannot silently misclassify the error. The
+// profile name and check ID are pulled from the
+// canonical %q-quoted tokens the leaf always emits.
+func profileFieldsFromLeafMessage(message, code string) (string, PolicyProfileErrorKind, string) {
+	tokens := extractAllQuotedTokens(message)
+	var name, checkID string
+	switch len(tokens) {
+	case 0:
+		// No quoted tokens; leave profile/check empty.
+	case 1:
+		name = tokens[0]
+	default:
+		name = tokens[0]
+		checkID = tokens[1]
+	}
+	switch code {
+	case "unknown_policy_profile":
+		return name, PolicyProfileErrorUnknown, ""
+	case "disabled_policy_profile":
+		return name, PolicyProfileErrorUnimplemented, ""
+	case "missing_policy_profile_check":
+		return name, PolicyProfileErrorMissingCheck, checkID
+	}
+	return name, PolicyProfileErrorUnknown, ""
+}
+
+// extractAllQuotedTokens returns every %q-quoted substring
+// in the leaf message, in order. Used to recover the
+// profile name (first token) and the missing-check ID
+// (second token, when present) without parsing the
+// message format directly. Returning an empty slice when
+// the pattern is absent is fine — PolicyProfileError
+// treats ProfileName="" as "unknown" and the diagnostic
+// still surfaces the right InstancePath / Code / Keyword.
+func extractAllQuotedTokens(message string) []string {
+	tokens := []string{}
+	i := 0
+	for i < len(message) {
+		if message[i] != '"' {
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(message) && message[j] != '"' {
+			j++
+		}
+		if j >= len(message) {
+			break
+		}
+		tokens = append(tokens, message[i+1:j])
+		i = j + 1
+	}
+	return tokens
 }
 
 // planContractErrorToSemanticError builds the legacy

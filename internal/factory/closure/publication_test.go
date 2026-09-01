@@ -6,9 +6,28 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// requireLinuxSameFS skips a test that exercises the
+// production Linux same-filesystem transactional
+// publication path. The guard is preserved on Linux so
+// the test continues to assert against production
+// semantics there; macOS / other platforms skip because
+// the production refuse-to-publish behaviour is the
+// intended outcome, not a defect.
+//
+// ACT-LEAMAS-CLOSURE-CANONICAL-VERIFICATION-DEFECTS-CORRECTION01
+// §18 permits this classification: production semantics
+// are unchanged; only the test's reachability is gated.
+func requireLinuxSameFS(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("requires Linux same-filesystem transaction support")
+	}
+}
 
 func TestArtifactRoleModelClassifiesClosureOutputs(t *testing.T) {
 	cases := []struct {
@@ -34,6 +53,7 @@ func TestArtifactRoleModelClassifiesClosureOutputs(t *testing.T) {
 }
 
 func TestCloseRunPublishesCompleteArtifactSet(t *testing.T) {
+	requireLinuxSameFS(t)
 	destination := t.TempDir()
 	files := publicationTestFiles()
 	if err := PublishArtifactSet(PublicationOptions{Destination: destination, Files: files}); err != nil {
@@ -51,6 +71,7 @@ func TestCloseRunPublishesCompleteArtifactSet(t *testing.T) {
 }
 
 func TestCloseRunFailureLeavesNoPartialCanonicalSet(t *testing.T) {
+	requireLinuxSameFS(t)
 	points := []PublicationFailurePoint{
 		PublicationFailureStagingDirectory,
 		PublicationFailureManifestStagedWrite,
@@ -77,6 +98,7 @@ func TestCloseRunFailureLeavesNoPartialCanonicalSet(t *testing.T) {
 }
 
 func TestCloseRunExistingIdenticalSetIsIdempotent(t *testing.T) {
+	requireLinuxSameFS(t)
 	destination := t.TempDir()
 	files := publicationTestFiles()
 	if err := PublishArtifactSet(PublicationOptions{Destination: destination, Files: files}); err != nil {
@@ -88,6 +110,7 @@ func TestCloseRunExistingIdenticalSetIsIdempotent(t *testing.T) {
 }
 
 func TestCloseRunExistingConflictingSetFailsClosed(t *testing.T) {
+	requireLinuxSameFS(t)
 	destination := t.TempDir()
 	files := publicationTestFiles()
 	if err := PublishArtifactSet(PublicationOptions{Destination: destination, Files: files}); err != nil {
@@ -100,6 +123,7 @@ func TestCloseRunExistingConflictingSetFailsClosed(t *testing.T) {
 }
 
 func TestCloseRunRecoversInterruptedPublication(t *testing.T) {
+	requireLinuxSameFS(t)
 	destination := t.TempDir()
 	if err := PublishArtifactSet(PublicationOptions{
 		Destination:  destination,

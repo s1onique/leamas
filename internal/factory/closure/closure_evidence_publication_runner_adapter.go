@@ -775,29 +775,44 @@ func sha256OfBytes(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// sha256OfWorktreeInventory hashes the canonical (Path, HEAD)
-// representation of the runner's worktree registrations.
-// The (Path, HEAD) pair is the R6-A canonical identity each
-// registration records; using it directly preserves the
-// authority the R6-A executor observed. Two registrations
-// with the same path but different HEAD OIDs produce
-// different hashes. Entries are sorted by (Path, HEAD) so
-// different insertion orders produce the same hash.
+// sha256OfWorktreeInventory hashes the canonical path set
+// of the runner's worktree registrations. The encoding is
+// domain-separated by the "worktree-inventory-v1\n" prefix
+// and uses NUL (0x00) as the delimiter between paths. The
+// canonical protocol is v1 for both empty and non-empty
+// inventories, so a single coherent hash protocol covers
+// every legal state.
+//
+// B2-R7-CORRECTION01 motivation: prior to this commit, the
+// non-empty branch wrote "worktree-inventory-v2\n" and
+// included the HEAD OID in the encoded form, while the
+// empty branch wrote "worktree-inventory-v1\n". Two
+// protocols for one observable is an authority bug. The
+// test oracle (TestClosureWorktreeInventoryHashCanonical)
+// has always specified v1 + Path-only; production was the
+// drifted copy.
+//
+// B2-R7-CORRECTION01 restores the production encoding to
+// the v1 oracle. Domain separation is preserved (the
+// prefix is still there), and the hash is deterministic
+// across insertion order because entries are sorted by
+// path before hashing.
 func sha256OfWorktreeInventory(invs v2WorktreeRegistrationSet) string {
+	const prefix = "worktree-inventory-v1\n"
 	if len(invs) == 0 {
 		// Empty observation is a valid empty registration
 		// set; the canonical authority hash is the SHA-256
 		// of the versioned empty-payload marker.
-		sum := sha256.Sum256([]byte("worktree-inventory-v1\n"))
+		sum := sha256.Sum256([]byte(prefix))
 		return hex.EncodeToString(sum[:])
 	}
 	entries := make([]string, 0, len(invs))
 	for _, e := range invs {
-		entries = append(entries, e.Path+"\x00"+e.Hash)
+		entries = append(entries, e.Path)
 	}
 	sort.Strings(entries)
 	var buf strings.Builder
-	buf.WriteString("worktree-inventory-v2\n")
+	buf.WriteString(prefix)
 	for _, e := range entries {
 		buf.WriteString(e)
 		buf.WriteByte(0)

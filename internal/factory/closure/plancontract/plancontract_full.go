@@ -131,5 +131,8 @@ func ValidateFullMap(obj map[string]any) error {
 	if err := validateRunnerAuthorityOptional(obj); err != nil {
 		return err
 	}
+	if err := validatePolicyProfileOptional(obj); err != nil {
+		return err
+	}
 	return nil
 }

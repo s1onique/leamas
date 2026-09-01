@@ -9,7 +9,6 @@ import (
 func validSemanticPlanFixture(t *testing.T) Plan {
 	t.Helper()
 	trueVal := true
-	falseVal := false
 	return Plan{
 		ContractVersion: ContractVersionV1,
 		ActID:           "ACT-LEAMAS-FACTORY-CLOSURE01",
@@ -48,7 +47,7 @@ func validSemanticPlanFixture(t *testing.T) Plan {
 		Policy: PlanPolicy{
 			RequireCleanBefore:       &trueVal,
 			RequireCleanAfter:        &trueVal,
-			ForbidTrackedFullDigests: &falseVal,
+			ForbidTrackedFullDigests: &trueVal,
 			RequireDiffCheck:         &trueVal,
 		},
 		PolicyProfile: "", // Empty is valid - no policy profile required

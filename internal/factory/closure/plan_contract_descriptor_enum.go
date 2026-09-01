@@ -1,11 +1,13 @@
 package closure
 
-import "sort"
+import (
+	"github.com/s1onique/leamas/internal/factory/closure/plancontract"
+)
 
 // plan_contract_descriptor_enum.go centralises every closed-set enum
 // authority the v1 descriptor depends on. Each helper reads its
 // authoritative runtime source (supportedExecutionModes,
-// policyProfiles, the ArtifactRole / CheckMode /
+// the ArtifactRole / CheckMode /
 // RunnerAuthorityMode constants) so the descriptor and the runtime
 // can never disagree.
 // enumAuthorityExecutionMode is the closed, ordered enum authority
@@ -42,21 +44,14 @@ func enumAuthorityArtifactRole() []string {
 
 // enumAuthorityPolicyProfile is the closed, ordered enum authority
 // for policy profiles. It enumerates every enabled profile; the
-// descriptor is the single source of truth and is kept in lock-step
-// with policyProfiles.
+// descriptor is the single source of truth.
+//
+// B2-R7-CORRECTION01: the descriptor delegates to the
+// plancontract leaf's EnabledPolicyProfileNames so the
+// closure-side descriptor and the canonical validator can
+// never disagree on which profile names are accepted.
 func enumAuthorityPolicyProfile() []string {
-	out := []string{}
-	names := make([]string, 0, len(policyProfiles))
-	for name := range policyProfiles {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		if profile, ok := policyProfiles[name]; ok && profile.Enabled {
-			out = append(out, profile.Name)
-		}
-	}
-	return out
+	return plancontract.EnabledPolicyProfileNames()
 }
 
 // enumAuthorityRunnerBinding is the closed, ordered enum authority

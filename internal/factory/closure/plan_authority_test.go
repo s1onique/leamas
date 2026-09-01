@@ -113,6 +113,45 @@ func TestClosurePlanAuthorityAcceptsExactPlan(t *testing.T) {
 	}
 }
 
+// TestClosurePlanAuthorityAcceptsOmittedPolicyProfile
+// is the F1.5 positive control: a structurally valid plan
+// without any policy_profile claim must still pass the
+// leaf's authority pass. The closure package historically
+// treated omitted as "no profile enforced", and
+// B2-R7-CORRECTION01 preserves that legacy contract.
+func TestClosurePlanAuthorityAcceptsOmittedPolicyProfile(t *testing.T) {
+	plan := canonicalPlan()
+	plan.PolicyProfile = ""
+	if err := ValidatePlan(plan); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+// TestClosurePlanAuthorityRejectsOmittedRequiredCheck is
+// the F1.3 canonical authority row: the candidate plan
+// claims an enabled profile but is missing one of its
+// required checks. The leaf's missing_policy_profile_check
+// code must surface as a non-nil error.
+func TestClosurePlanAuthorityRejectsOmittedRequiredCheck(t *testing.T) {
+	plan := canonicalPlan()
+	// Drop the diff-check (the canonical last check); the
+	// leaf must reject because leamas-act-v1 requires it.
+	var kept []PlanCheck
+	for _, c := range plan.Checks {
+		if c.ID != "diff-check" {
+			kept = append(kept, c)
+		}
+	}
+	plan.Checks = kept
+	err := ValidatePlan(plan)
+	if err == nil {
+		t.Fatal("expected error for omitted required check")
+	}
+	if !strings.Contains(err.Error(), "policy profile") {
+		t.Fatalf("error = %v, want substring 'policy profile'", err)
+	}
+}
+
 func TestClosureSubjectExactRunnerBindingRejectsMismatchedRevision(t *testing.T) {
 	manifest := passingManifest()
 	manifest.Runner.VCSRevision = strings.Repeat("a", 40)
