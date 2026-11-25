@@ -1,0 +1,111 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Package digest: evidence_budget_render_range_disposition.go holds
+// the two range-mode disposition renderers used by
+// evidence_budget_render_range.go.
+//
+// They were split into their own file by
+// ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01 to keep every file
+// within the LLM-friendly 400-line limit.
+//
+// Both dispositions preserve the base/head Git blob identities and the
+// F16 blob-status contract. Neither ever presents a truncated patch
+// as if it were complete.
+package digest
+
+import "path/filepath"
+
+// renderRangeIdentityDisposition renders the range-mode block for a
+// CONTENT-DRIVEN disposition: the digest's own output path, a
+// recognised digest artifact, or a structurally recursive artifact.
+//
+// F17 (CORRECTION04): the decision is rendered directly rather than
+// through boundedFileBlock, because boundedFileBlock would
+// reclassify against the worktree path (deleted = size=0, small
+// replacement = NORMAL) and would drop the historical OID.
+//
+// F21 (CORRECTION05): the SELF_OUTPUT_EXCLUDED diagnostic is
+// preserved in range mode; it was contract-drifted to the generic
+// LARGE_FILE_EVIDENCE_BOUNDED.
+func renderRangeIdentityDisposition(
+	bw *boundedWriter, repoRoot string, f RangeFile,
+	class EvidenceClass, blobSize int64,
+	rangeBlobOIDMap map[string]RangeBlobResult,
+	left, right string,
+) {
+	baseRes := rangeBlobOIDMap[left+":"+f.Path]
+	headRes := rangeBlobOIDMap[right+":"+f.Path]
+	appendBlock(bw, "\n=== %s ===\n", PathEscape(f.Path))
+	appendBlock(bw, "Status: %s\n\n", f.Status)
+	warningCode := WarningCodeLargeFileBounded
+	bodyNote := "Body: suppressed (historical diff " +
+		"size exceeds per-file budget)"
+	switch class {
+	case ClassBoundedSelfOutput:
+		warningCode = WarningCodeSelfOutput
+		bodyNote = "Body: suppressed (SELF_OUTPUT_EXCLUDED)"
+	case ClassBoundedRecursive:
+		warningCode = WarningCodeDigestRecursion
+		bodyNote = "Body: suppressed (DIGEST_RECURSION)"
+	case ClassBoundedDerivedDigest:
+		warningCode = WarningCodeDerivedDigestBounded
+		bodyNote = "Body: suppressed (DERIVED_DIGEST_BODY_BOUNDED)"
+	}
+	// SHA256 for digest-artifact classes: the G6 matrix needs it;
+	// worktree identity and Git blob OID are complementary.
+	sha256Line := ""
+	if class == ClassBoundedRecursive ||
+		class == ClassBoundedDerivedDigest {
+		sha256Line = "SHA256: " +
+			sha256HexFile(filepath.Join(repoRoot, f.Path)) + "\n"
+	}
+	appendBlock(bw,
+		"Classification: %s\n"+
+			"EffectiveSize: %d\n"+
+			sha256Line+
+			"RangeBaseBlobOID: %s\n"+
+			"RangeBaseBlobStatus: %s\n"+
+			"RangeHeadBlobOID: %s\n"+
+			"RangeHeadBlobStatus: %s\n"+
+			"WarningCode: %s\n"+
+			"%s\n",
+		class, blobSize, baseRes.OID,
+		baseRes.Status.String(), headRes.OID,
+		headRes.Status.String(), warningCode, bodyNote)
+}
+
+// renderRangeIncompleteDisposition renders the range-mode block for a
+// file whose ACTUAL unified patch exceeds the per-file evidence
+// budget.
+//
+// ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01: the disposition is
+// explicitly INCOMPLETE and carries a deterministic retrieval path.
+// The patch body is never emitted, so it can never be mistaken for a
+// complete body.
+func renderRangeIncompleteDisposition(
+	bw *boundedWriter, f RangeFile, blobSize int64, patchBytes int,
+	rangeBlobOIDMap map[string]RangeBlobResult,
+	left, right, rangeSpec string,
+) {
+	baseRes := rangeBlobOIDMap[left+":"+f.Path]
+	headRes := rangeBlobOIDMap[right+":"+f.Path]
+	appendBlock(bw, "\n=== %s ===\n", PathEscape(f.Path))
+	appendBlock(bw, "Status: %s\n\n", f.Status)
+	appendBlock(bw,
+		"Classification: BOUNDED_BODY\n"+
+			"EvidenceCompleteness: INCOMPLETE\n"+
+			"SuppressionReason: PATCH_BYTES_EXCEED_PER_FILE_BUDGET\n"+
+			"PatchBytes: %d\n"+
+			"BlobSize: %d\n"+
+			"RangeBaseBlobOID: %s\n"+
+			"RangeBaseBlobStatus: %s\n"+
+			"RangeHeadBlobOID: %s\n"+
+			"RangeHeadBlobStatus: %s\n"+
+			"WarningCode: %s\n"+
+			"RetrievalPath: git diff --unified=3 %s -- %s\n",
+		patchBytes, blobSize,
+		baseRes.OID, baseRes.Status.String(),
+		headRes.OID, headRes.Status.String(),
+		WarningCodeLargeFileBounded, rangeSpec,
+		PathEscape(f.Path))
+}
