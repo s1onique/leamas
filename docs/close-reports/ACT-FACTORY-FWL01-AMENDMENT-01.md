@@ -361,13 +361,20 @@ the resulting commit. See "Exact-Head Receipt" below.
 The whole-repository lane has exactly one pre-existing failure class that
 is unrelated to this amendment, plus the dirty-worktree dogfood class:
 
-| Failing test | Classification |
-|---------------|----------------|
-| `cmd/leamas` `TestClosureCLIV2R2CRExactTipDogfood` | DIRTY-WORKTREE dogfood precondition. It asserts the CALLER's worktree is clean. It PASSES on the clean committed source. |
-| `cmd/leamas` `TestClosureCLIV2VerifierMacHandoffCorrection02A` | DIRTY-WORKTREE dogfood precondition, same class. |
-| `cmd/leamas` `TestClosureCLIV2VerifierMacHandoffCorrection01` | DIRTY-WORKTREE dogfood precondition, same class. |
-| `cmd/leamas` `TestClosureCLIV2VerifierMacHandoff` | DIRTY-WORKTREE dogfood precondition, same class. |
+| Failing test | Baseline result at `0b385166` | Classification |
+|---------------|------------------------------|----------------|
+| `cmd/leamas` `TestClosureCLIV2R2CRExactTipDogfood` | **PASS on the clean baseline** | DIRTY-WORKTREE dogfood precondition. It asserts the CALLER's worktree is clean. It PASSES on the clean committed source — re-verified below. |
+| `cmd/leamas` `TestClosureCLIV2VerifierMacHandoffCorrection02A` | **PASS on the clean baseline** | DIRTY-WORKTREE dogfood precondition, same class. |
+| `cmd/leamas` `TestClosureCLIV2VerifierMacHandoffCorrection01` | **PASS on the clean baseline** | DIRTY-WORKTREE dogfood precondition, same class. |
+| `cmd/leamas` `TestClosureCLIV2VerifierMacHandoff` | **PASS on the clean baseline** | DIRTY-WORKTREE dogfood precondition, same class. |
+| `internal/execution` `TestValidateRetainedPipeTopology` (2 subtests) | **FAIL on the clean baseline** | PRE-EXISTING, unrelated. A Linux pipe-topology contract running on macOS. Not repaired: the addendum forbids repairing unrelated packages. |
+| `cmd/leamas` `TestBoundedSubprocessV2_TimeoutWithPartialBoundedOutput` | **PASS on the clean baseline** | LOAD-SENSITIVE FLAKE. It failed only in runs that were concurrently executing several long jobs. Not caused by the amendment. |
+| `internal/factory/closure` (19 tests, e.g. `TestValidatePlanSemanticMatrixFull_Part1..4`, `TestContractAllMissingPolicyFieldsNamed`, `TestSourceStructureNoLongLines`) | **FAIL with the IDENTICAL test names on the clean baseline** | PRE-EXISTING, unrelated. The baseline worktree reproduces the same 19 failures. The `internal/factory/closure` package is NOT touched by this amendment. |
 | `cmd/leamas` `TestRuntimeSmokeCockpitHelp` | PRE-EXISTING, unrelated to the ledger. It is a cockpit process smoke test, outside the amendment scope. |
+
+The baseline comparison was executed, not assumed: the baseline was
+checked out into a detached worktree and the same packages were tested
+there.
 
 The four dogfood tests fail ONLY because the amendment is present and
 uncommitted. They pass on the clean committed source; this is verified
