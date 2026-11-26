@@ -412,10 +412,62 @@ Commit authority is explicitly delegated by this completion addendum:
 
 No push was performed and no tag was created.
 
-`SUBJECT_HEAD` and `FINAL_HEAD` are discovered dynamically from the commit
-that the addendum produced. The exact-head digest is produced with an
-appropriately built Leamas binary over the authority-sensitive source
-changes.
+### The commit
+
+```text
+SUBJECT_HEAD  cbce4495e822733834f846131fd3897786de0496
+FINAL_HEAD    cbce4495e822733834f846131fd3897786de0496
+parent        0b385166d97ed0835f9af7e5cd931914785868d4
+subject       factory: complete the FWL01 amendment acceptance and transaction authority
+staged paths  59 (every path is amendment-owned; no protected state)
+worktree      clean after the commit
+```
+
+`SUBJECT_HEAD` and `FINAL_HEAD` were discovered dynamically from the commit
+that the addendum produced.
+
+The staged set was verified to contain no protected state: nothing under
+`.factory/`, `.leamas/`, `bin/`, `docs/closure-plans/` or
+`docs/closure-manifests/`.
+
+### The exact-head digest
+
+The digest was produced with a Leamas binary built from the EXACT head:
+
+```text
+CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
+./bin/leamas --version
+  version:         0.1.0+dev.cbce4495e822.20261126T232018Z
+  declared_version: dev
+  commit:          cbce4495e822733834f846131fd3897786de0496
+
+./bin/leamas factory digest \
+  --range 0b385166d97ed0835f9af7e5cd931914785868d4..cbce4495e822733834f846131fd3897786de0496 \
+  --output build/fwl01-amendment-01-digest.txt
+  digest: mode=range output=build/fwl01-amendment-01-digest.txt time=3.16s OK
+```
+
+The digest records `LEAMAS_COMMIT: cbce4495e822733834f846131fd3897786de0496`
+and covers the complete authority-sensitive source change set:
+
+```text
+internal/ledger/domain/acceptance.go       the single acceptance authority
+internal/ledger/domain/compare.go           the content-equality helpers
+internal/ledger/domain/ready.go             CurrentlyAuthorized
+internal/ledger/domain/validate_records.go  the thin validator adapter
+internal/ledger/importer/compare.go         the import conservation comparison
+internal/ledger/importer/original.go        the versioned original adapter
+internal/ledger/importer/plan.go            the deterministic import plan
+internal/ledger/importer/source.go          the source board model
+internal/ledger/service/archive.go          obligation conservation and reopen
+internal/ledger/service/lifecycle.go        the explicit acceptance and claim
+internal/ledger/service/service.go          the revision and lifecycle guards
+internal/ledger/store/lock.go               the advisory-lock exclusion
+internal/ledger/store/publish.go            the partial-publication witness
+internal/ledger/store/txn.go                the explicit transaction ownership
+```
+
+270 ledger content entries are covered by the digest.
 
 ## Exit Criteria
 
