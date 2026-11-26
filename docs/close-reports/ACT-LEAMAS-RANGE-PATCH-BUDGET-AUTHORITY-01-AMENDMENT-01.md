@@ -37,7 +37,8 @@ GENERATOR_IDENTITY=073527e6072a6e2a84f1ab849e18b675741957c0
 OPERATIONAL_ACTIVATION=BLOCKED (permission: /usr/local/bin is not writable
 by the agent process; the previous executable is INTACT and unchanged)
 BASELINE_GATE_STATUS=NOT RUN (not authorized by this ACT)
-FINAL_HEAD=073527e6072a6e2a84f1ab849e18b675741957c0
+FINAL_HEAD=see the exit observations (the report commit advances HEAD,
+so an embedded head value would be stale by construction)
 TRACKED_DIRT=false
 
 ## SUMMARY
@@ -412,7 +413,7 @@ architectural task and was NOT performed by this ACT.
 
 The original C4 witness is the REAL ClineMM commit
 `2b7fccbbfa26a8221e7ed608d98b453598e5c925`. It was regenerated with
-the executable built from the FINAL commit `073527e`.
+the executable built from the PRODUCTION CORRECTION commit `073527e`.
 
 ```
 cd <ClineMM repo>
@@ -441,7 +442,8 @@ conservation of the original C4. The result above is the original
 C4, regenerated.
 
 The witness was regenerated with BOTH the previously installed
-executable (`c84761f`) and the final executable (`073527e`). The two
+executable (`c84761f`) and the production-correction executable
+(`073527e`). The two
 digests agree on every observable above, so the authority corrections
 conserved the original C4 evidence rather than changing it.
 
@@ -481,7 +483,7 @@ with write access to `/usr/local/bin`:
 ```
 cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/leamas
 make install
-leamas --version    # must report commit 073527e6072a6e2a84f1ab849e18b675741957c0
+leamas --version    # must report the production-correction commit
 ```
 
 Then regenerate the C4 witness through the normal invocation path
@@ -688,8 +690,8 @@ package PASSES on the clean tracked worktree at the final head.
 
 - Operational activation remains PENDING one operator command, because
   `/usr/local/bin` is not writable by the agent process. The qualified
-  executable is built at `bin/leamas` from the final commit `073527e`
-  and reports `GENERATOR_COMMIT:
+  executable is built at `bin/leamas` from the production-correction
+  commit `073527e` and reports `GENERATOR_COMMIT:
   073527e6072a6e2a84f1ab849e18b675741957c0`. The exact command is in
   the OPERATIONAL ACTIVATION section.
 - Migrating the digest's Git execution onto the bounded
