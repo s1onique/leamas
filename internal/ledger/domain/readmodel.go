@@ -139,6 +139,12 @@ func statsFor(items []WorkItem) BoardStats {
 //
 // A blocker is a blocking dependency that is not yet satisfied, or a
 // declared acceptance criterion that has no supporting evidence.
+//
+// The dependency check consults the SAME acceptance authority as the
+// canonical validator and the ready-work projection (CurrentlyAuthorized).
+// An accepted dependency whose evidence was invalidated therefore no longer
+// satisfies the prerequisite: the blocker report and the readiness
+// projection can never disagree.
 func BlockersFor(l Ledger, it WorkItem) []string {
 	var blockers []string
 	for _, dep := range it.Dependencies {
@@ -150,16 +156,21 @@ func BlockersFor(l Ledger, it WorkItem) []string {
 			blockers = append(blockers, fmt.Sprintf("unresolved dependency %s", dep.Ref.String()))
 			continue
 		}
-		if other.Acceptance != AcceptanceAccepted {
+		if !CurrentlyAuthorized(l, other) {
 			blockers = append(blockers, fmt.Sprintf(
 				"dependency %s is %s", other.Scoped().String(), string(other.Acceptance)))
 		}
 	}
-	if len(it.AcceptanceCriteria) > 0 && it.Quality == EvidenceQualityNone {
-		blockers = append(blockers, "acceptance criteria declared without evidence")
-	}
-	if it.RequiresLiveGate && it.Quality != EvidenceQualityVerified {
-		blockers = append(blockers, "live qualification gate not satisfied by structural evidence")
+	// Unmet acceptance criteria with no evidence is NORMAL work, not a
+	// blocker: the item must be able to acquire its own evidence. It is
+	// therefore not reported as a blocker.
+	//
+	// A live qualification obligation is likewise executable before the
+	// live qualification evidence exists. It is reported as a blocker
+	// only when the item has no evidence at all AND requires a live
+	// gate, because in that case the qualification has not been run.
+	if it.RequiresLiveGate && it.Quality == EvidenceQualityNone {
+		blockers = append(blockers, "live qualification has not produced evidence yet")
 	}
 	sort.Strings(blockers)
 	return blockers

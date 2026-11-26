@@ -15,12 +15,25 @@ type Finding struct {
 }
 
 // ValidationResult carries every finding produced by a validation pass.
+//
+// Findings are REJECTIONS: a candidate state that carries any finding is not
+// an acceptable canonical state.
+//
+// Advisories are REPORTS: they describe a state that is legitimate but
+// noteworthy, and they never reject the candidate. An advisory exists so
+// that a preserved historical fact can be reported without blocking the
+// transaction that records it.
 type ValidationResult struct {
 	Findings []Finding
+	// Advisories are reported observations. They never reject a candidate.
+	Advisories []Finding
 }
 
 // OK reports whether the validation passed.
 func (r ValidationResult) OK() bool { return len(r.Findings) == 0 }
+
+// HasAdvisories reports whether the validation produced advisories.
+func (r ValidationResult) HasAdvisories() bool { return len(r.Advisories) > 0 }
 
 // Codes emitted by the ledger semantic validator.
 const (
@@ -39,6 +52,12 @@ const (
 	CodeSelfDependency       = "self_dependency"
 	CodeAmbiguousImport      = "ambiguous_import"
 	CodeUnresolvedReference  = "unresolved_reference"
+	// CodeAcceptanceAuthorityInvalid is an ADVISORY code. It reports that
+	// an accepted work item is no longer backed by admissible evidence,
+	// typically because the evidence artifact was invalidated after the
+	// acceptance was recorded. The historical acceptance is preserved; the
+	// report keeps the invalidation visible.
+	CodeAcceptanceAuthorityInvalid = "acceptance_authority_invalid"
 )
 
 // Error renders the first finding as an error message, or "" when OK.
@@ -62,6 +81,12 @@ func (r ValidationResult) Errors() []error {
 // add appends a finding.
 func (r *ValidationResult) add(path, code, message string) {
 	r.Findings = append(r.Findings, Finding{Path: path, Code: code, Message: message})
+}
+
+// advise appends an advisory. An advisory reports a noteworthy state and
+// never rejects the candidate.
+func (r *ValidationResult) advise(path, code, message string) {
+	r.Advisories = append(r.Advisories, Finding{Path: path, Code: code, Message: message})
 }
 
 // ValidateLedger validates the whole canonical ledger state.
@@ -92,6 +117,7 @@ func ValidateLedger(l Ledger) ValidationResult {
 	validateAcceptanceAuthority(l, &res)
 
 	sortFindings(res.Findings)
+	sortFindings(res.Advisories)
 	return res
 }
 
@@ -193,6 +219,12 @@ func validateItemLinks(l Ledger, it WorkItem, path string, res *ValidationResult
 		}
 		seenDeps[dep.Ref] = true
 		if _, ok := l.ItemByScoped(dep.Ref); !ok {
+			if !dep.Kind.IsResolvable() {
+				// A durable blocker is ALLOWED to dangle: the
+				// dangling reference is exactly what keeps the
+				// dependent item non-executable.
+				continue
+			}
 			res.add(dpath+".ref", CodeUnknownReference,
 				fmt.Sprintf("dangling dependency reference %q", dep.Ref.String()))
 		}

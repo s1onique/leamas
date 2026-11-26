@@ -240,29 +240,43 @@ func sortedItemIDs(l Ledger) []ScopedItemID {
 
 // validateAcceptanceAuthority enforces the evidence/acceptance separation.
 //
-// The rules are:
+// It is a THIN ADAPTER over the single acceptance authority
+// (EvaluateAcceptance). It does not restate any acceptance rule: it maps
+// the authority's verdict onto canonical diagnostic codes.
 //
-//   - an accepted item must carry at least "referenced" evidence quality
-//     when it declares acceptance criteria;
-//   - an accepted item that requires a live qualification gate must carry
-//     "verified" evidence quality, because a structural pass is not a live
-//     qualification;
+// Two concerns are handled here and nowhere else:
+//
+//   - an accepted item must be backed by the SAME authority that the
+//     explicit acceptance operation consults;
 //   - a terminal ACT verdict never retires an unfinished obligation.
+//
+// HISTORICAL ACCEPTANCE PRESERVATION: an accepted item whose evidence was
+// later invalidated is PRESERVED, not rejected. The historical acceptance
+// record is a fact about the past; withdrawing it would erase the record
+// that the obligation was ever met. The invalidation is not silent either:
+// the item is reported through the invalidation code, so the operator sees
+// that the accepted state is no longer backed by currently valid evidence.
+//
+// The invalidated authority therefore never SILENTLY satisfies a current
+// downstream prerequisite: the ready-work projection and the dependency
+// projection require CURRENTLY VALID authority, which they determine from
+// the same authority predicate.
 func validateAcceptanceAuthority(l Ledger, res *ValidationResult) {
 	for i, it := range l.Items {
 		path := fmt.Sprintf("items[%d]", i)
 		if it.Acceptance != AcceptanceAccepted {
 			continue
 		}
-		if len(it.AcceptanceCriteria) > 0 && it.Quality != EvidenceQualityReferenced &&
-			it.Quality != EvidenceQualityVerified {
-			res.add(path+".evidence_quality", CodeInsufficientEvidence,
-				"accepted work item with acceptance criteria requires at least 'referenced' evidence quality")
+		authority := EvaluateAcceptance(l, it)
+		if authority.Admissible {
+			continue
 		}
-		if it.RequiresLiveGate && it.Quality != EvidenceQualityVerified {
-			res.add(path+".evidence_quality", CodeLiveGateUnsatisfied,
-				"accepted work item requiring a live qualification gate requires 'verified' evidence quality")
-		}
+		// The acceptance is not backed by admissible evidence. The
+		// historical acceptance is preserved, but the state is reported
+		// so the invalidation is never silent.
+		res.advise(path+".acceptance", CodeAcceptanceAuthorityInvalid,
+			fmt.Sprintf("accepted work item %q is not backed by admissible evidence: %s",
+				it.Scoped().String(), authority.Reason))
 	}
 
 	for i, a := range l.Acts {

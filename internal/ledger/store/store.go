@@ -40,6 +40,9 @@ var (
 	ErrDuplicateRecord = errors.New("duplicate record identity")
 	ErrStaleRevision   = errors.New("stale revision")
 	ErrTransactionOpen = errors.New("transaction already open")
+	// ErrOwnershipMismatch is returned when an explicit lock ownership does
+	// not cover the ledger root of the operation.
+	ErrOwnershipMismatch = errors.New("lock ownership mismatch")
 )
 
 // DefaultRoot is the repository-relative ledger root.
@@ -112,11 +115,39 @@ func itemFileName(id domain.ScopedItemID) string {
 }
 
 // Load reads the whole canonical ledger state.
+//
+// The read holds the shared lock, so a reader never observes a partially
+// published multi-record transaction.
+//
+// The pending journal state is checked UNDER the acquired lock. A canonical
+// read is not admitted while an interrupted publication is pending: the
+// visible state would be a partial transaction, and it must not be read as
+// if it were an accepted state. The recovery operation must run first.
 func (s Store) Load() (domain.Ledger, error) {
 	var l domain.Ledger
 	if !s.Exists() {
 		return l, fmt.Errorf("%w: %s", ErrLedgerNotFound, s.Root)
 	}
+	lock, err := AcquireRead(s.Root)
+	if err != nil {
+		return l, err
+	}
+	defer lock.Release()
+	if pending, err := s.PendingJournal(); err != nil {
+		return l, err
+	} else if pending {
+		return l, fmt.Errorf("%w: %s has an interrupted transaction; run recovery before reading the canonical state",
+			ErrTransactionOpen, s.Root)
+	}
+	return s.loadUnlocked()
+}
+
+// loadUnlocked reads the canonical state WITHOUT taking the lock.
+//
+// It is used by a writer that already holds the exclusive lock: taking
+// the shared lock again inside the exclusive lock would deadlock.
+func (s Store) loadUnlocked() (domain.Ledger, error) {
+	var l domain.Ledger
 	l.SchemaVersion = domain.LedgerSchemaVersion
 
 	epics, err := loadEpics(filepath.Join(s.Root, "epics"))

@@ -23,6 +23,10 @@ func runLedgerEvidence(args []string) int {
 	switch args[0] {
 	case "add":
 		return runLedgerEvidenceAdd(args[1:])
+	case "lookup":
+		return runLedgerEvidenceLookup(args[1:])
+	case "revalidate":
+		return runLedgerEvidenceRevalidate(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown ledger evidence subcommand: %s\n", args[0])
 		return 1
@@ -40,13 +44,24 @@ func runLedgerEvidenceAdd(args []string) int {
 	digest := fs.String("sha256", "", "artifact SHA-256 digest")
 	item := fs.String("item", "", "work item to bind the evidence to")
 	quality := fs.String("quality", string(domain.EvidenceQualityDeclared), "evidence quality")
-	expectedRev := fs.Int("expect-revision", 0, "expected revision of the bound work item")
+	class := fs.String("class", string(domain.EvidenceClassStructural), "evidence class (structural, live_qualification, review)")
+	criterion := fs.String("criterion", "", "acceptance criterion this evidence supports")
+	byteSize := fs.Int64("byte-size", 0, "declared artifact size in bytes")
+	sourceHead := fs.String("source-head", "", "repository/source HEAD the evidence was produced against")
+	expectedRev := fs.Int("expect-revision", 0, "expected revision of the bound work item (required and positive when --item is given)")
 	jsonOut := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
 	if *id == "" || *title == "" {
 		fmt.Fprintln(os.Stderr, "ERROR: evidence add requires --id and --title")
+		return 1
+	}
+	// Binding evidence to an existing work item is an externally initiated
+	// mutation of that record: the caller must state the revision it
+	// observed.
+	if *item != "" && *expectedRev <= 0 {
+		fmt.Fprintln(os.Stderr, "ERROR: evidence add requires a positive --expect-revision when --item is given")
 		return 1
 	}
 	created, err := ledgerService(*root).AddEvidence("ledger-evidence", service.AddEvidenceOptions{
@@ -57,6 +72,10 @@ func runLedgerEvidenceAdd(args []string) int {
 		SHA256:       *digest,
 		ItemID:       domain.ScopedItemID(*item),
 		Quality:      domain.EvidenceQuality(*quality),
+		Class:        domain.EvidenceClass(*class),
+		Criterion:    *criterion,
+		ByteSize:     *byteSize,
+		SourceHead:   *sourceHead,
 		ExpectedRev:  *expectedRev,
 	})
 	if err != nil {
@@ -111,6 +130,7 @@ func runLedgerClose(args []string) int {
 	root := fs.String("root", store.DefaultRoot, "ledger root directory")
 	actID := fs.String("act", "", "ACT execution record identity (required)")
 	item := fs.String("item", "", "work item the ACT is bound to")
+	alsoItem := fs.String("also-item", "", "additional work item the ACT addresses (repeatable)")
 	title := fs.String("title", "", "ACT title")
 	verdict := fs.String("verdict", string(domain.ActVerdictClosed), "terminal ACT verdict")
 	note := fs.String("note", "", "operator note")
@@ -123,9 +143,14 @@ func runLedgerClose(args []string) int {
 		fmt.Fprintln(os.Stderr, "ERROR: close requires --act")
 		return 1
 	}
+	var itemIDs []domain.ScopedItemID
+	for _, extra := range stringList(*alsoItem) {
+		itemIDs = append(itemIDs, domain.ScopedItemID(extra))
+	}
 	closed, err := ledgerService(*root).CloseAct("ledger-close", service.CloseActOptions{
 		ActID:               domain.ActID(*actID),
 		ItemID:              domain.ScopedItemID(*item),
+		ItemIDs:             itemIDs,
 		Title:               *title,
 		Verdict:             domain.ActVerdict(*verdict),
 		Note:                *note,
@@ -149,6 +174,7 @@ func runLedgerArchive(args []string) int {
 	root := fs.String("root", store.DefaultRoot, "ledger root directory")
 	id := fs.String("id", "", "work item identity (required)")
 	reopen := fs.String("reopen-condition", "", "reopen condition (repeatable)")
+	transfer := fs.String("transfer-to", "", "work item that conserves the obligation of an unfinished record")
 	expectedRev := fs.Int("expect-revision", 0, "expected revision (optimistic concurrency)")
 	jsonOut := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(args); err != nil {
@@ -166,6 +192,7 @@ func runLedgerArchive(args []string) int {
 		ScopedID:         domain.ScopedItemID(*id),
 		ExpectedRev:      *expectedRev,
 		ReopenConditions: conditions,
+		TransferTo:       domain.ScopedItemID(*transfer),
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)

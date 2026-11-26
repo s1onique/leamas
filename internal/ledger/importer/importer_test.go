@@ -183,6 +183,10 @@ func TestImportIsIdempotent(t *testing.T) {
 // TestConflictingHistoricalStatusesRemainUnresolved witnesses adversarial
 // row 12: conflicting historical statuses remain unresolved rather than
 // being silently promoted.
+//
+// The FWL01 amendment corrects this row: a conflicting source identity
+// group is QUARANTINED as a complete group. Input order must never select
+// a winner, so no record of the group is imported at all.
 func TestConflictingHistoricalStatusesRemainUnresolved(t *testing.T) {
 	board := SourceBoard{
 		Source: "conversation-log",
@@ -195,12 +199,25 @@ func TestConflictingHistoricalStatusesRemainUnresolved(t *testing.T) {
 	if len(plan.Ambiguities) == 0 {
 		t.Fatal("expected the conflicting statuses to be reported")
 	}
-	if len(plan.Items) != 1 {
-		t.Fatalf("expected exactly one imported record, got %d", len(plan.Items))
+	if len(plan.Quarantined) == 0 {
+		t.Fatal("expected the conflicting identity group to be quarantined")
 	}
-	// The single surviving record must not be accepted.
-	if plan.Items[0].Acceptance == domain.AcceptanceAccepted {
-		t.Fatal("conflicting historical status was silently promoted")
+	if len(plan.Items) != 0 {
+		t.Fatalf("a conflicting identity group acquired authority: %d records imported", len(plan.Items))
+	}
+
+	// The order of the conflicting records must not matter: neither
+	// ordering may select a winner.
+	reversed := SourceBoard{
+		Source: "conversation-log",
+		Items: []SourceItem{
+			{SourceID: "W-01", EpicID: "WS-ALPHA", Title: "One", Status: SourceStatusUnfinished},
+			{SourceID: "W-01", EpicID: "WS-ALPHA", Title: "One", Status: SourceStatusClosed},
+		},
+	}
+	reversedPlan := BuildPlan(reversed, domain.Ledger{})
+	if len(reversedPlan.Items) != 0 {
+		t.Fatalf("input order selected a winner: %d records imported", len(reversedPlan.Items))
 	}
 }
 

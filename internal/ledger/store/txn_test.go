@@ -49,7 +49,9 @@ func TestTransactionRecoveryRestoresPreTransactionState(t *testing.T) {
 		t.Fatalf("journal: %v", err)
 	}
 
-	status, err := s.Recover()
+	// The recovery runs under the EXPLICIT ownership of the lock the open
+	// transaction already holds: the lock is never re-entered implicitly.
+	status, err := s.RecoverWithOwnership(txn.Ownership())
 	if err != nil {
 		t.Fatalf("recover: %v", err)
 	}
@@ -95,13 +97,18 @@ func TestTransactionRecoveryIsIdempotent(t *testing.T) {
 		t.Fatalf("journal: %v", err)
 	}
 
-	if _, err := s.Recover(); err != nil {
+	// The first recovery runs under the EXPLICIT ownership of the lock the
+	// open transaction holds.
+	if _, err := s.RecoverWithOwnership(txn.Ownership()); err != nil {
 		t.Fatalf("first recover: %v", err)
 	}
 	afterFirst, err := os.ReadFile(filepath.Join(s.Root, "items", "A.json"))
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
+	// The transaction is abandoned, so the lock is released. The repeated
+	// recovery then acquires the exclusive lock itself and is idempotent.
+	txn.Release()
 	status, err := s.Recover()
 	if err != nil {
 		t.Fatalf("second recover: %v", err)

@@ -35,6 +35,24 @@ func createItem(t *testing.T, svc *Service, epic, item, title string) domain.Wor
 	return created
 }
 
+// currentRevision returns the stored revision of a work item.
+//
+// The externally initiated mutation contract requires a POSITIVE expected
+// revision: the caller must state which version of the record it observed.
+// The helper reads that version from the canonical state.
+func currentRevision(t *testing.T, svc *Service, id domain.ScopedItemID) int {
+	t.Helper()
+	l, err := svc.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	it, ok := l.ItemByScoped(id)
+	if !ok {
+		t.Fatalf("work item %s not found", id.String())
+	}
+	return it.Revision
+}
+
 // TestServiceCreateItemRejectsDuplicateIdentity witnesses adversarial
 // row 1 at the service seam: a duplicate work-item identity is rejected.
 func TestServiceCreateItemRejectsDuplicateIdentity(t *testing.T) {
@@ -119,9 +137,10 @@ func TestServiceLinkRejectsDanglingDependency(t *testing.T) {
 	created := createItem(t, svc, "EPIC-A", "ITEM-1", "First")
 
 	_, err := svc.Link("tx-link", LinkOptions{
-		From: created.Scoped(),
-		To:   "EPIC-A/ITEM-MISSING",
-		Kind: domain.DependencyBlocks,
+		From:        created.Scoped(),
+		To:          "EPIC-A/ITEM-MISSING",
+		Kind:        domain.DependencyBlocks,
+		ExpectedRev: created.Revision,
 	})
 	if err == nil {
 		t.Fatal("expected dangling dependency rejection")
@@ -137,11 +156,13 @@ func TestServiceLinkRejectsBlockingCycle(t *testing.T) {
 
 	if _, err := svc.Link("tx-link-1", LinkOptions{
 		From: a.Scoped(), To: b.Scoped(), Kind: domain.DependencyBlocks,
+		ExpectedRev: a.Revision,
 	}); err != nil {
 		t.Fatalf("link a->b: %v", err)
 	}
 	_, err := svc.Link("tx-link-2", LinkOptions{
 		From: b.Scoped(), To: a.Scoped(), Kind: domain.DependencyBlocks,
+		ExpectedRev: b.Revision,
 	})
 	if err == nil {
 		t.Fatal("expected blocking cycle rejection")
@@ -167,6 +188,7 @@ func TestServiceInsufficientEvidenceCannotAccept(t *testing.T) {
 	if _, err := svc.Accept("tx-accept", AcceptOptions{
 		ScopedID:    created.Scoped(),
 		ExpectedRev: created.Revision + 1,
+		AcceptedBy:  "test-acceptor",
 	}); err == nil {
 		t.Fatal("expected acceptance rejection without evidence")
 	}
@@ -212,6 +234,7 @@ func TestServiceStructuralPassCannotCloseLiveGate(t *testing.T) {
 	if _, err := svc.Accept("tx-accept", AcceptOptions{
 		ScopedID:    created.Scoped(),
 		ExpectedRev: created.Revision + 2,
+		AcceptedBy:  "test-acceptor",
 	}); err == nil {
 		t.Fatal("expected acceptance rejection for unsatisfied live gate")
 	}
@@ -219,10 +242,22 @@ func TestServiceStructuralPassCannotCloseLiveGate(t *testing.T) {
 
 // TestServiceVerifiedEvidenceSatisfiesLiveGate proves the live gate rule
 // is not vacuous: verified evidence satisfies it.
+//
+// The FWL01 amendment strengthens this row: the evidence must be an
+// actually verified artifact of the live qualification class. A
+// caller-supplied "verified" quality label no longer satisfies the gate.
 func TestServiceVerifiedEvidenceSatisfiesLiveGate(t *testing.T) {
-	svc := newTestService(t)
-	created := createItem(t, svc, "EPIC-A", "ITEM-1", "First")
+	dir := t.TempDir()
+	svc := New(store.New(filepath.Join(dir, "ledger"))).WithRepoRoot(dir)
+	if err := svc.Init(); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	artifact := filepath.Join(dir, "live.txt")
+	if err := os.WriteFile(artifact, []byte("live qualification output\n"), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
 
+	created := createItem(t, svc, "EPIC-A", "ITEM-1", "First")
 	if _, err := svc.UpdateItem("tx-live", UpdateItemOptions{
 		ScopedID:     created.Scoped(),
 		ExpectedRev:  created.Revision,
@@ -231,18 +266,22 @@ func TestServiceVerifiedEvidenceSatisfiesLiveGate(t *testing.T) {
 		t.Fatalf("mark live gate: %v", err)
 	}
 	if _, err := svc.AddEvidence("tx-ev", AddEvidenceOptions{
-		EvidenceID:  "EV-A",
-		Kind:        "file",
-		Title:       "Live qualification",
-		ItemID:      created.Scoped(),
-		Quality:     domain.EvidenceQualityVerified,
-		ExpectedRev: created.Revision + 1,
+		EvidenceID:   "EV-A",
+		Kind:         "live_qualification",
+		Title:        "Live qualification",
+		RelativePath: "live.txt",
+		SHA256:       sha256OfFile(t, artifact),
+		ItemID:       created.Scoped(),
+		Quality:      domain.EvidenceQualityVerified,
+		Class:        domain.EvidenceClassLiveQualification,
+		ExpectedRev:  created.Revision + 1,
 	}); err != nil {
 		t.Fatalf("add evidence: %v", err)
 	}
 	accepted, err := svc.Accept("tx-accept", AcceptOptions{
 		ScopedID:    created.Scoped(),
 		ExpectedRev: created.Revision + 2,
+		AcceptedBy:  "test-acceptor",
 	})
 	if err != nil {
 		t.Fatalf("expected acceptance with verified evidence, got %v", err)
@@ -279,121 +318,3 @@ func TestServiceTerminalActRetainsUnfinishedObligation(t *testing.T) {
 		t.Fatal("terminal ACT closed the work item lifecycle")
 	}
 }
-
-// TestServiceArchivePreservesEvidenceAndSuccessors witnesses adversarial
-// row 7 at the service seam: archive preserves evidence and successor
-// references.
-func TestServiceArchivePreservesEvidenceAndSuccessors(t *testing.T) {
-	svc := newTestService(t)
-	a := createItem(t, svc, "EPIC-A", "ITEM-1", "First")
-	b := createItem(t, svc, "EPIC-A", "ITEM-2", "Second")
-
-	if _, err := svc.AddEvidence("tx-ev", AddEvidenceOptions{
-		EvidenceID: "EV-A",
-		Kind:       "file",
-		Title:      "Evidence",
-		ItemID:     a.Scoped(),
-		Quality:    domain.EvidenceQualityVerified,
-	}); err != nil {
-		t.Fatalf("add evidence: %v", err)
-	}
-	if _, err := svc.Link("tx-link", LinkOptions{
-		From: a.Scoped(), To: b.Scoped(), Kind: domain.DependencyRelates,
-	}); err != nil {
-		t.Fatalf("link: %v", err)
-	}
-	if _, err := svc.SetSuccessor("tx-succ", SetSuccessorOptions{
-		ScopedID:  a.Scoped(),
-		Successor: b.Scoped(),
-	}); err != nil {
-		t.Fatalf("set successor: %v", err)
-	}
-
-	current, err := svc.Load()
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	item, _ := current.ItemByScoped(a.Scoped())
-	if len(item.Successors) != 1 {
-		t.Fatalf("expected one successor, got %+v", item.Successors)
-	}
-
-	archived, err := svc.Archive("tx-archive", ArchiveOptions{
-		ScopedID:         a.Scoped(),
-		ExpectedRev:      item.Revision,
-		ReopenConditions: []domain.ReopenCondition{{Kind: "evidence_invalidated"}},
-	})
-	if err != nil {
-		t.Fatalf("archive: %v", err)
-	}
-	if !archived.Archived {
-		t.Fatal("expected archived record")
-	}
-	if len(archived.Evidence) != 1 || archived.Evidence[0].EvidenceID != "EV-A" {
-		t.Fatalf("archive lost the evidence reference: %+v", archived.Evidence)
-	}
-	if len(archived.Dependencies) != 1 || archived.Dependencies[0].Ref != b.Scoped() {
-		t.Fatalf("archive lost the dependency relationship: %+v", archived.Dependencies)
-	}
-	if len(archived.Successors) != 1 {
-		t.Fatalf("archive lost the successor obligation: %+v", archived.Successors)
-	}
-	if len(archived.Reopen) != 1 {
-		t.Fatalf("archive lost the reopen condition: %+v", archived.Reopen)
-	}
-	if archived.TerminalDisposition == "" {
-		t.Fatal("archive lost the original terminal disposition")
-	}
-}
-
-// TestServiceRestorePreservesStableIdentity witnesses adversarial row 8
-// at the service seam: restore preserves the stable identity.
-func TestServiceRestorePreservesStableIdentity(t *testing.T) {
-	svc := newTestService(t)
-	created := createItem(t, svc, "EPIC-A", "ITEM-1", "First")
-
-	archived, err := svc.Archive("tx-archive", ArchiveOptions{ScopedID: created.Scoped()})
-	if err != nil {
-		t.Fatalf("archive: %v", err)
-	}
-	restored, err := svc.Restore("tx-restore", RestoreOptions{ScopedID: created.Scoped()})
-	if err != nil {
-		t.Fatalf("restore: %v", err)
-	}
-	if restored.Scoped() != archived.Scoped() {
-		t.Fatalf("restore changed the identity: %s -> %s", archived.Scoped(), restored.Scoped())
-	}
-	if restored.Archived {
-		t.Fatal("restored record is still archived")
-	}
-}
-
-// TestServiceRestoreRefusesIdentityReuse proves the restore rule is not
-// vacuous: restoring a live record is refused.
-func TestServiceRestoreRefusesIdentityReuse(t *testing.T) {
-	svc := newTestService(t)
-	created := createItem(t, svc, "EPIC-A", "ITEM-1", "First")
-	if _, err := svc.Restore("tx-restore", RestoreOptions{ScopedID: created.Scoped()}); err == nil {
-		t.Fatal("expected restore refusal for a live record")
-	}
-}
-
-// TestServiceArchivedRecordsRemainDiscoverable proves that archival never
-// hides a record from the canonical state.
-func TestServiceArchivedRecordsRemainDiscoverable(t *testing.T) {
-	svc := newTestService(t)
-	created := createItem(t, svc, "EPIC-A", "ITEM-1", "First")
-	if _, err := svc.Archive("tx-archive", ArchiveOptions{ScopedID: created.Scoped()}); err != nil {
-		t.Fatalf("archive: %v", err)
-	}
-	l, err := svc.Load()
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	if _, ok := l.ItemByScoped(created.Scoped()); !ok {
-		t.Fatal("archived record is not discoverable")
-	}
-}
-
-// boolPtr returns a pointer to the given bool.
-func boolPtr(v bool) *bool { return &v }

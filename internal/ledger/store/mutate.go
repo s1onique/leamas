@@ -63,6 +63,15 @@ func (s Store) BeginMutation(txID string) (*Mutation, error) {
 	return &Mutation{store: s, txn: txn, writes: map[string][]byte{}, deletes: map[string]bool{}}, nil
 }
 
+// LoadCurrent reads the canonical state while the caller holds the
+// exclusive transaction lock.
+//
+// It is the writer-side counterpart of Load. It never takes the shared
+// lock: the caller already holds the exclusive one.
+func (m *Mutation) LoadCurrent() (domain.Ledger, error) {
+	return m.store.loadUnlocked()
+}
+
 // stage encodes and stages one record write.
 func (m *Mutation) stage(kind recordKind, name string, v any) error {
 	data, err := encodeRecord(v)
@@ -121,7 +130,7 @@ func (m *Mutation) RemoveAct(id domain.ActID) {
 // Candidate returns the candidate ledger state implied by the staged
 // writes, so the caller can validate it before committing.
 func (m *Mutation) Candidate() (domain.Ledger, error) {
-	l, err := m.store.Load()
+	l, err := m.store.loadUnlocked()
 	if err != nil {
 		return l, err
 	}
@@ -255,17 +264,40 @@ func (m *Mutation) Candidate() (domain.Ledger, error) {
 	return l, nil
 }
 
+// Release abandons the mutation and releases the transaction lock.
+//
+// It is used when the candidate is rejected before the publication: the
+// lock must not stay held, otherwise the ledger would be permanently
+// locked.
+func (m *Mutation) Release() {
+	if m == nil || m.txn == nil {
+		return
+	}
+	m.txn.Release()
+}
+
 // Commit validates the candidate state and publishes the transaction.
 //
 // The candidate is validated BEFORE any destination is touched. A failing
 // candidate leaves the ledger untouched.
+//
+// The publication is guarded by an optimistic revision check: a staged
+// record may not overwrite a stored record whose revision is newer than the
+// staged one. Two writers that both believe they hold the same expected
+// revision cannot both publish: the second one is rejected instead of
+// silently overwriting the first.
 func (m *Mutation) Commit() error {
+	defer m.Release()
+
 	candidate, err := m.Candidate()
 	if err != nil {
 		return err
 	}
 	if res := domain.ValidateLedger(candidate); !res.OK() {
 		return fmt.Errorf("candidate state rejected: %w", res)
+	}
+	if err := m.checkRevisionGuards(candidate); err != nil {
+		return err
 	}
 
 	rels := make([]string, 0, len(m.writes))
@@ -285,6 +317,71 @@ func (m *Mutation) Commit() error {
 		m.txn.Delete(rel)
 	}
 	return m.txn.Commit()
+}
+
+// checkRevisionGuards rejects a staged write that would overwrite a newer
+// stored revision.
+//
+// The guard compares the stored revision against the staged revision.
+//
+//   - a staged revision LOWER than the stored revision is a stale write
+//     and is always rejected;
+//   - a staged revision EQUAL to the stored revision is rejected only when
+//     the staged content differs from the stored content. An identical
+//     replay is idempotent and is allowed through.
+//
+// This is what makes two writers that share an expected revision safe:
+// the first writer advances the stored revision, and the second writer's
+// equal-but-different content is rejected as a stale write.
+func (m *Mutation) checkRevisionGuards(candidate domain.Ledger) error {
+	stored, err := m.store.loadUnlocked()
+	if err != nil {
+		return err
+	}
+	for _, staged := range candidate.Items {
+		prior, ok := stored.ItemByScoped(staged.Scoped())
+		if !ok {
+			continue
+		}
+		if staged.Revision < prior.Revision {
+			return fmt.Errorf("%w: %s has stored revision %d, staged revision %d",
+				ErrStaleRevision, staged.Scoped().String(), prior.Revision, staged.Revision)
+		}
+		if staged.Revision == prior.Revision &&
+			!domain.SameWorkItemContent(prior, staged) {
+			return fmt.Errorf("%w: %s has stored revision %d, staged revision %d with different content",
+				ErrStaleRevision, staged.Scoped().String(), prior.Revision, staged.Revision)
+		}
+	}
+	for _, staged := range candidate.Evidence {
+		prior, ok := stored.EvidenceByID(staged.EvidenceID)
+		if !ok {
+			continue
+		}
+		if staged.Revision < prior.Revision {
+			return fmt.Errorf("%w: evidence %s has stored revision %d, staged revision %d",
+				ErrStaleRevision, string(staged.EvidenceID), prior.Revision, staged.Revision)
+		}
+		if staged.Revision == prior.Revision && !domain.SameEvidenceContent(prior, staged) {
+			return fmt.Errorf("%w: evidence %s has stored revision %d, staged revision %d with different content",
+				ErrStaleRevision, string(staged.EvidenceID), prior.Revision, staged.Revision)
+		}
+	}
+	for _, staged := range candidate.Acts {
+		prior, ok := stored.ActByID(staged.ActID)
+		if !ok {
+			continue
+		}
+		if staged.Revision < prior.Revision {
+			return fmt.Errorf("%w: act %s has stored revision %d, staged revision %d",
+				ErrStaleRevision, string(staged.ActID), prior.Revision, staged.Revision)
+		}
+		if staged.Revision == prior.Revision && !domain.SameActContent(prior, staged) {
+			return fmt.Errorf("%w: act %s has stored revision %d, staged revision %d with different content",
+				ErrStaleRevision, string(staged.ActID), prior.Revision, staged.Revision)
+		}
+	}
+	return nil
 }
 
 func sortStrings(s []string) {

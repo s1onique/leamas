@@ -87,6 +87,19 @@ type AddEvidenceOptions struct {
 	Quality      domain.EvidenceQuality
 	ExpectedRev  int
 	Provenance   *domain.Provenance
+	// Class is the explicit evidence class. It determines which kind of
+	// claim the artifact may support. It is required for an artifact that
+	// is to establish a live qualification.
+	Class domain.EvidenceClass
+	// Criterion is the acceptance criterion this evidence supports. It is
+	// the explicit criterion/scope association.
+	Criterion string
+	// ByteSize is the declared artifact size. When it is zero the size is
+	// taken from the verified artifact.
+	ByteSize int64
+	// SourceHead binds the evidence to the repository/source HEAD it was
+	// produced against.
+	SourceHead string
 }
 
 // AddEvidence creates an evidence reference and binds it to a work item.
@@ -94,6 +107,15 @@ type AddEvidenceOptions struct {
 // The evidence reference records the artifact identity (path and digest)
 // and its quality. It never decides acceptance: the acceptance state of
 // the bound work item is not changed by this operation.
+//
+// When the reference declares a relative path and a digest, the artifact
+// identity is ACTUALLY VERIFIED against the repository: the file must
+// exist at the declared relative path, its byte size must match and its
+// SHA-256 must match. A missing, incorrect or unavailable artifact never
+// acquires verified integrity.
+//
+// The caller-supplied quality is a request. It never establishes
+// verification on its own: only a successful artifact verification does.
 func (s *Service) AddEvidence(txID string, opts AddEvidenceOptions) (domain.EvidenceRefRecord, error) {
 	var created domain.EvidenceRefRecord
 	err := s.mutate(txID, func(l domain.Ledger, m *store.Mutation) error {
@@ -120,6 +142,13 @@ func (s *Service) AddEvidence(txID string, opts AddEvidenceOptions) (domain.Evid
 		if !domain.IsValidEvidenceQuality(quality) {
 			return fmt.Errorf("invalid evidence quality %q", string(quality))
 		}
+		class := opts.Class
+		if class == "" {
+			class = domain.EvidenceClassStructural
+		}
+		if !domain.IsValidEvidenceClass(class) {
+			return fmt.Errorf("invalid evidence class %q", string(class))
+		}
 
 		itemID := opts.ItemID
 		if itemID != "" {
@@ -132,7 +161,7 @@ func (s *Service) AddEvidence(txID string, opts AddEvidenceOptions) (domain.Evid
 			}
 		}
 
-		created = domain.EvidenceRefRecord{
+		record := domain.EvidenceRefRecord{
 			SchemaVersion: domain.LedgerSchemaVersion,
 			EvidenceID:    opts.EvidenceID,
 			Kind:          opts.Kind,
@@ -143,10 +172,35 @@ func (s *Service) AddEvidence(txID string, opts AddEvidenceOptions) (domain.Evid
 			Quality:       quality,
 			Revision:      1,
 			Provenance:    opts.Provenance,
+			Class:         class,
+			Criterion:     opts.Criterion,
+			ByteSize:      opts.ByteSize,
+			SourceHead:    opts.SourceHead,
 		}
-		if err := m.PutEvidence(created); err != nil {
+
+		// The artifact identity is verified against the repository. A
+		// failure here rejects the registration entirely: a missing or
+		// incorrect artifact never acquires verified integrity.
+		if opts.RelativePath != "" && opts.SHA256 != "" {
+			identity, err := domain.VerifyArtifact(
+				s.RepoRoot(), opts.RelativePath, opts.SHA256, opts.ByteSize)
+			if err != nil {
+				return fmt.Errorf("%w: evidence %s: %v",
+					ErrEvidenceVerificationFailed, string(opts.EvidenceID), err)
+			}
+			record.ByteSize = identity.ByteSize
+			record.SHA256 = identity.SHA256
+			record.Verified = true
+			// A verified artifact carries verified quality. The
+			// caller cannot claim a weaker or a stronger quality than
+			// the verification establishes.
+			record.Quality = domain.EvidenceQualityVerified
+		}
+
+		if err := m.PutEvidence(record); err != nil {
 			return err
 		}
+		created = record
 		if itemID == "" {
 			return nil
 		}
@@ -160,9 +214,11 @@ func (s *Service) AddEvidence(txID string, opts AddEvidenceOptions) (domain.Evid
 		}
 		item.Evidence = append(item.Evidence, domain.EvidenceRef{
 			EvidenceID: opts.EvidenceID,
-			Quality:    quality,
+			Quality:    record.Quality,
+			Class:      record.Class,
+			Criterion:  record.Criterion,
 		})
-		item.Quality = promoteQuality(item.Quality, quality)
+		item.Quality = promoteQuality(item.Quality, record.Quality)
 		item.Revision++
 		return m.PutItem(item)
 	})
@@ -219,23 +275,62 @@ func (s *Service) SetSuccessor(txID string, opts SetSuccessorOptions) (domain.Wo
 	return updated, nil
 }
 
-// promoteQuality returns the stronger of two evidence qualities.
-func promoteQuality(current, added domain.EvidenceQuality) domain.EvidenceQuality {
-	rank := func(q domain.EvidenceQuality) int {
-		switch q {
-		case domain.EvidenceQualityVerified:
-			return 3
-		case domain.EvidenceQualityReferenced:
-			return 2
-		case domain.EvidenceQualityDeclared:
-			return 1
-		case domain.EvidenceQualityNone:
-			return 0
+// RevalidateEvidenceOptions describes an evidence re-verification.
+type RevalidateEvidenceOptions struct {
+	// EvidenceID is the evidence record to re-verify. When it is empty,
+	// every evidence record is re-verified.
+	EvidenceID domain.EvidenceID
+}
+
+// RevalidateEvidence re-checks the artifact identity of the evidence
+// records against the repository.
+//
+// An evidence record whose artifact changed, was removed or was replaced
+// loses its verified integrity. The record is demoted to the declared
+// quality: it never keeps a verified status it can no longer prove.
+//
+// A demoted evidence record can no longer support an acceptance.
+func (s *Service) RevalidateEvidence(txID string, opts RevalidateEvidenceOptions) ([]domain.EvidenceValidation, error) {
+	var out []domain.EvidenceValidation
+	err := s.mutate(txID, func(l domain.Ledger, m *store.Mutation) error {
+		for _, rec := range l.Evidence {
+			if opts.EvidenceID != "" && rec.EvidenceID != opts.EvidenceID {
+				continue
+			}
+			if !rec.Verified {
+				continue
+			}
+			validation := domain.RevalidateEvidence(s.RepoRoot(), rec)
+			out = append(out, validation)
+			if validation.Valid {
+				continue
+			}
+			// The artifact no longer carries the declared identity: the
+			// verified status is withdrawn.
+			updated := rec
+			updated.Verified = false
+			updated.Quality = domain.EvidenceQualityReferenced
+			updated.Revision++
+			if err := m.PutEvidence(updated); err != nil {
+				return err
+			}
+			// The bound work item loses the promoted quality as well.
+			if updated.ItemID != "" {
+				item, ok := l.ItemByScoped(updated.ItemID)
+				if !ok {
+					continue
+				}
+				item.Quality = domain.EvidenceQualityNone
+				item.Revision++
+				if err := m.PutItem(item); err != nil {
+					return err
+				}
+			}
 		}
-		return 0
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	if rank(added) > rank(current) {
-		return added
-	}
-	return current
+	return out, nil
 }

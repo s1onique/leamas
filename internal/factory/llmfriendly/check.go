@@ -124,15 +124,45 @@ func runGitCommand(root string, args ...string) ([]string, error) {
 	return lines, scanner.Err()
 }
 
+// isInIgnoredDir reports whether the relative path lies inside one of the
+// structurally ignored directories, at ANY depth.
+//
+// The ignored directories hold VENDORED, GENERATED or TEST DATA. Their
+// content is not authored source, so the LLM-friendliness budgets do not
+// apply to it. The match is on a PATH SEGMENT, so "internal/ledger/
+// importer/testdata/x.json" is exempt exactly like "testdata/x.json".
+//
+// The list is a fixed set of directory NAMES. It is not an allowlist of
+// individual files, and it cannot exempt a source file.
+func isInIgnoredDir(relativePath string) bool {
+	ignoredDirs := map[string]bool{
+		".git":     true,
+		"build":    true,
+		"bin":      true,
+		"vendor":   true,
+		"testdata": true,
+	}
+	normalized := filepath.ToSlash(relativePath)
+	for _, segment := range strings.Split(normalized, "/") {
+		if ignoredDirs[segment] {
+			return true
+		}
+	}
+	return false
+}
+
 // checkFile checks a single file for LLM-friendliness violations.
 // absolutePath is used for file operations; relativePath is used for classification.
 func checkFile(absolutePath, relativePath string, cfg Config) ([]Finding, error) {
-	// Check structural ignores using relative path
-	ignoredDirs := []string{".git", "build", "bin", "vendor", "testdata"}
-	for _, dir := range ignoredDirs {
-		if strings.HasPrefix(relativePath, dir+"/") || relativePath == dir {
-			return nil, nil
-		}
+	// Check structural ignores using relative path.
+	//
+	// The ignored directories are exempt at ANY depth: a "testdata"
+	// directory is a test-data directory wherever it lives. A root-relative
+	// prefix match alone would exempt "testdata/..." but flag
+	// "internal/ledger/importer/testdata/...", which is the same kind of
+	// directory with the same purpose.
+	if isInIgnoredDir(relativePath) {
+		return nil, nil
 	}
 
 	// Check path-based ignores for large data files that are inherently large

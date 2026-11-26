@@ -1,0 +1,563 @@
+{
+  "fixture_version": 1,
+  "classification": "CONVERSATIONAL_IMPORT_UNVERIFIED",
+  "source": {
+    "filename": "Pasted text(20261126-195716).txt",
+    "sha256": "b3c6f489e7e5c124dc36e804a800bb0445ac57db239a2526c45f6e8045f74495",
+    "bytes": 21023,
+    "board_revision": "2026-11-26"
+  },
+  "counts": {
+    "BLOCKED": 6,
+    "CLOSED": 10,
+    "CLOSED_INSUFFICIENT": 1,
+    "DEFERRED": 2,
+    "FINAL_PREFLIGHT": 1,
+    "HYPOTHESIS": 1,
+    "INVESTIGATE": 3,
+    "LIVE_WITNESS": 4,
+    "PARTIAL": 6,
+    "QUEUED": 10
+  },
+  "items": [
+    {
+      "local_id": "RC-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "Signed reasoning preservation",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "Accepted at 8b929059e",
+      "source_line": 57,
+      "source_row": "RC-01\tSigned reasoning preservation CLOSED Accepted at 8b929059e\t—"
+    },
+    {
+      "local_id": "RC-02",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "Reasoning identity and origin-aware replay",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "Accepted at 0524b32",
+      "source_line": 58,
+      "source_row": "RC-02\tReasoning identity and origin-aware replay CLOSED Accepted at 0524b32\t—"
+    },
+    {
+      "local_id": "RC-03",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "MiniMax Low effort serialization",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "Historical tested scope",
+      "source_line": 59,
+      "source_row": "RC-03\tMiniMax Low effort serialization CLOSED Historical tested scope\t—"
+    },
+    {
+      "local_id": "RC-04",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "Runtime reasoning/tool projection",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "Accepted at 4b634a589",
+      "source_line": 60,
+      "source_row": "RC-04\tRuntime reasoning/tool projection CLOSED Accepted at 4b634a589\t—"
+    },
+    {
+      "local_id": "RC-05",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "Live provider HTTP-wire fidelity",
+      "source_status": "PARTIAL",
+      "source_priority": "P2",
+      "source_detail": "Raw wire evidence incomplete",
+      "source_line": 61,
+      "source_row": "RC-05\tLive provider HTTP-wire fidelity PARTIAL Raw wire evidence incomplete\tP2"
+    },
+    {
+      "local_id": "RC-06",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "Redacted reasoning compatibility",
+      "source_status": "DEFERRED",
+      "source_priority": "P2",
+      "source_detail": "No current blocking witness",
+      "source_line": 62,
+      "source_row": "RC-06\tRedacted reasoning compatibility DEFERRED No current blocking witness\tP2"
+    },
+    {
+      "local_id": "RC-07",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "MiniMax native tool-protocol leakage",
+      "source_status": "INVESTIGATE",
+      "source_priority": "P0?",
+      "source_detail": "Four W2 messages; origin unknown",
+      "source_line": 63,
+      "source_row": "RC-07\tMiniMax native tool-protocol leakage INVESTIGATE Four W2 messages; origin unknown\tP0?"
+    },
+    {
+      "local_id": "RC-08",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "Model/reasoning hot reconfiguration",
+      "source_status": "INVESTIGATE",
+      "source_priority": "P1",
+      "source_detail": "Window reopen required, operator observation",
+      "source_line": 64,
+      "source_row": "RC-08\tModel/reasoning hot reconfiguration INVESTIGATE Window reopen required, operator observation\tP1"
+    },
+    {
+      "local_id": "RC-09",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "RC",
+      "title": "DeepSeek reasoning/tool continuity",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "Depends on OBS-06",
+      "source_line": 65,
+      "source_row": "RC-09\tDeepSeek reasoning/tool continuity QUEUED Depends on OBS-06\tP1"
+    },
+    {
+      "local_id": "CMP-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CMP",
+      "title": "CMP-09 integrated authority and accounting",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "Accepted at a47349f816",
+      "source_line": 70,
+      "source_row": "CMP-01\tCMP-09 integrated authority and accounting CLOSED Accepted at a47349f816\t—"
+    },
+    {
+      "local_id": "CMP-02",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CMP",
+      "title": "Live compaction/accounting qualification",
+      "source_status": "PARTIAL",
+      "source_priority": "P1",
+      "source_detail": "Multi-attempt live proof outstanding",
+      "source_line": 71,
+      "source_row": "CMP-02\tLive compaction/accounting qualification PARTIAL Multi-attempt live proof outstanding\tP1"
+    },
+    {
+      "local_id": "CMP-03",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CMP",
+      "title": "Semantic and counterevidence conservation",
+      "source_status": "LIVE_WITNESS",
+      "source_priority": "P1",
+      "source_detail": "W2 weak fallback, stronger later summary",
+      "source_line": 72,
+      "source_row": "CMP-03\tSemantic and counterevidence conservation LIVE_WITNESS W2 weak fallback, stronger later summary\tP1"
+    },
+    {
+      "local_id": "CMP-04",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CMP",
+      "title": "Historical W1 PCK attribution",
+      "source_status": "CLOSED_INSUFFICIENT",
+      "source_priority": "P2",
+      "source_detail": "Historical request not positively identified",
+      "source_line": 73,
+      "source_row": "CMP-04\tHistorical W1 PCK attribution CLOSED_INSUFFICIENT Historical request not positively identified\tP2"
+    },
+    {
+      "local_id": "CPA-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CPA",
+      "title": "Cache-preserving auxiliary inference recon",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "Accepted at 9e20409e6 and successor recon",
+      "source_line": 78,
+      "source_row": "CPA-01\tCache-preserving auxiliary inference recon CLOSED Accepted at 9e20409e6 and successor recon\t—"
+    },
+    {
+      "local_id": "CPA-02",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CPA",
+      "title": "B′ production implementation",
+      "source_status": "FINAL_PREFLIGHT",
+      "source_priority": "P1 / P0?",
+      "source_detail": "Original P0 closed; final block-authority discriminator pending",
+      "source_line": 79,
+      "source_row": "CPA-02\tB′ production implementation FINAL_PREFLIGHT Original P0 closed; final block-authority discriminator pending\tP1 / P0?"
+    },
+    {
+      "local_id": "CPA-03",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CPA",
+      "title": "Fair B′/C′ comparison",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "B′ selected; C′ archived",
+      "source_line": 80,
+      "source_row": "CPA-03\tFair B′/C′ comparison CLOSED B′ selected; C′ archived\t—"
+    },
+    {
+      "local_id": "CPA-04",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CPA",
+      "title": "Live P40 prefix/cache qualification",
+      "source_status": "BLOCKED",
+      "source_priority": "P1",
+      "source_detail": "CPA-02, capture readiness and source acceptance",
+      "source_line": 81,
+      "source_row": "CPA-04\tLive P40 prefix/cache qualification BLOCKED CPA-02, capture readiness and source acceptance\tP1"
+    },
+    {
+      "local_id": "CPA-05",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CPA",
+      "title": "PCK knowledge utility qualification",
+      "source_status": "BLOCKED",
+      "source_priority": "P1",
+      "source_detail": "W1 + W2 acceptance oracles",
+      "source_line": 82,
+      "source_row": "CPA-05\tPCK knowledge utility qualification BLOCKED W1 + W2 acceptance oracles\tP1"
+    },
+    {
+      "local_id": "CPA-06",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CPA",
+      "title": "R2 cache-preserving auxiliary route",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "After PCK live evidence",
+      "source_line": 83,
+      "source_row": "CPA-06\tR2 cache-preserving auxiliary route QUEUED After PCK live evidence\tP1"
+    },
+    {
+      "local_id": "CPA-07",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "CPA",
+      "title": "Compaction auxiliary cache preservation",
+      "source_status": "DEFERRED",
+      "source_priority": "P1",
+      "source_detail": "Separate from intentional context replacement",
+      "source_line": 84,
+      "source_row": "CPA-07\tCompaction auxiliary cache preservation DEFERRED Separate from intentional context replacement\tP1"
+    },
+    {
+      "local_id": "OBS-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "OBS",
+      "title": "Arm A ordinary usage reconciliation",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "138/138 single-attempt scope",
+      "source_line": 89,
+      "source_row": "OBS-01\tArm A ordinary usage reconciliation CLOSED 138/138 single-attempt scope\t—"
+    },
+    {
+      "local_id": "OBS-02",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "OBS",
+      "title": "Orphan auxiliary request attribution",
+      "source_status": "PARTIAL",
+      "source_priority": "P1",
+      "source_detail": "Historical orphan plus PCK capture joins",
+      "source_line": 90,
+      "source_row": "OBS-02\tOrphan auxiliary request attribution PARTIAL Historical orphan plus PCK capture joins\tP1"
+    },
+    {
+      "local_id": "OBS-03",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "OBS",
+      "title": "Multi-attempt and retry accounting",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "Physical attempt cardinality",
+      "source_line": 91,
+      "source_row": "OBS-03\tMulti-attempt and retry accounting QUEUED Physical attempt cardinality\tP1"
+    },
+    {
+      "local_id": "OBS-04",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "OBS",
+      "title": "Reasoning-exhaustion usage accounting",
+      "source_status": "INVESTIGATE",
+      "source_priority": "P1",
+      "source_detail": "Zero output despite thinking blocks",
+      "source_line": 92,
+      "source_row": "OBS-04\tReasoning-exhaustion usage accounting INVESTIGATE Zero output despite thinking blocks\tP1"
+    },
+    {
+      "local_id": "OBS-05",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "OBS",
+      "title": "Active execution versus waiting clocks",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "Historical timestamps insufficient",
+      "source_line": 93,
+      "source_row": "OBS-05\tActive execution versus waiting clocks QUEUED Historical timestamps insufficient\tP1"
+    },
+    {
+      "local_id": "OBS-06",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "OBS",
+      "title": "DeepSeek telemetry fidelity",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "Historical structural gaps identified",
+      "source_line": 94,
+      "source_row": "OBS-06\tDeepSeek telemetry fidelity QUEUED Historical structural gaps identified\tP1"
+    },
+    {
+      "local_id": "REC-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "R1 instruction delivery and retention",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "Delivery, not behavioral efficacy",
+      "source_line": 99,
+      "source_row": "REC-01\tR1 instruction delivery and retention CLOSED Delivery, not behavioral efficacy\t—"
+    },
+    {
+      "local_id": "REC-02",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "R1 productivity classification and effectiveness",
+      "source_status": "LIVE_WITNESS",
+      "source_priority": "P1",
+      "source_detail": "Edit-centric classifier unsuitable for SRE",
+      "source_line": 100,
+      "source_row": "REC-02\tR1 productivity classification and effectiveness LIVE_WITNESS Edit-centric classifier unsuitable for SRE\tP1"
+    },
+    {
+      "local_id": "REC-03",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "Output-exhaustion recovery lifecycle",
+      "source_status": "PARTIAL",
+      "source_priority": "P1",
+      "source_detail": "Structural pass; manual recovery observed",
+      "source_line": 101,
+      "source_row": "REC-03\tOutput-exhaustion recovery lifecycle PARTIAL Structural pass; manual recovery observed\tP1"
+    },
+    {
+      "local_id": "REC-04",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "D4 one-shot output-budget escalation",
+      "source_status": "PARTIAL",
+      "source_priority": "P1",
+      "source_detail": "Structural pass; live qualification pending",
+      "source_line": 102,
+      "source_row": "REC-04\tD4 one-shot output-budget escalation PARTIAL Structural pass; live qualification pending\tP1"
+    },
+    {
+      "local_id": "REC-05",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "R2 bounded-objective selection",
+      "source_status": "PARTIAL",
+      "source_priority": "P1",
+      "source_detail": "Selection works structurally; stale objective observed",
+      "source_line": 103,
+      "source_row": "REC-05\tR2 bounded-objective selection PARTIAL Selection works structurally; stale objective observed\tP1"
+    },
+    {
+      "local_id": "REC-06",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "R2 objective freshness and adherence",
+      "source_status": "LIVE_WITNESS",
+      "source_priority": "P1",
+      "source_detail": "W2/W3 looping and unfinished objectives",
+      "source_line": 104,
+      "source_row": "REC-06\tR2 objective freshness and adherence LIVE_WITNESS W2/W3 looping and unfinished objectives\tP1"
+    },
+    {
+      "local_id": "REC-07",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "Arm B controlled live recovery",
+      "source_status": "BLOCKED",
+      "source_priority": "P1",
+      "source_detail": "Freshness, accounting and artifact gates",
+      "source_line": 105,
+      "source_row": "REC-07\tArm B controlled live recovery BLOCKED Freshness, accounting and artifact gates\tP1"
+    },
+    {
+      "local_id": "REC-08",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "Bounded automatic output-exhaustion retry",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "B → B → 2B policy",
+      "source_line": 106,
+      "source_row": "REC-08\tBounded automatic output-exhaustion retry QUEUED B → B → 2B policy\tP1"
+    },
+    {
+      "local_id": "REC-09",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "Progress-aware R2 round budget",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "8+8 proposed, not selected",
+      "source_line": 107,
+      "source_row": "REC-09\tProgress-aware R2 round budget QUEUED 8+8 proposed, not selected\tP1"
+    },
+    {
+      "local_id": "REC-10",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "Repeated recovery episode suppression",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "Recurrence discriminator required",
+      "source_line": 108,
+      "source_row": "REC-10\tRepeated recovery episode suppression QUEUED Recurrence discriminator required\tP1"
+    },
+    {
+      "local_id": "REC-11",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "REC",
+      "title": "Adaptive runtime reasoning allocation",
+      "source_status": "HYPOTHESIS",
+      "source_priority": "P1",
+      "source_detail": "Depends on controlled model comparisons",
+      "source_line": 109,
+      "source_row": "REC-11\tAdaptive runtime reasoning allocation HYPOTHESIS Depends on controlled model comparisons\tP1"
+    },
+    {
+      "local_id": "BEH-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "BEH",
+      "title": "Repeated tool failure classification",
+      "source_status": "LIVE_WITNESS",
+      "source_priority": "P1",
+      "source_detail": "Repeated zsh equals-expansion errors",
+      "source_line": 114,
+      "source_row": "BEH-01\tRepeated tool failure classification LIVE_WITNESS Repeated zsh equals-expansion errors\tP1"
+    },
+    {
+      "local_id": "DOG-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "DOG",
+      "title": "Round C′ P40 baseline",
+      "source_status": "CLOSED",
+      "source_priority": "—",
+      "source_detail": "101 requests, 95.94% cache-read",
+      "source_line": 119,
+      "source_row": "DOG-01\tRound C′ P40 baseline CLOSED 101 requests, 95.94% cache-read\t—"
+    },
+    {
+      "local_id": "DOG-02",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "DOG",
+      "title": "Credential and task-contract compliance",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "Operational safety and obligation conservation",
+      "source_line": 120,
+      "source_row": "DOG-02\tCredential and task-contract compliance QUEUED Operational safety and obligation conservation\tP1"
+    },
+    {
+      "local_id": "DOG-03",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "DOG",
+      "title": "MiniMax controlled comparative qualification",
+      "source_status": "BLOCKED",
+      "source_priority": "P1",
+      "source_detail": "Recovery and telemetry fidelity",
+      "source_line": 121,
+      "source_row": "DOG-03\tMiniMax controlled comparative qualification BLOCKED Recovery and telemetry fidelity\tP1"
+    },
+    {
+      "local_id": "DOG-04",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "DOG",
+      "title": "Thinking versus non-thinking execution",
+      "source_status": "QUEUED",
+      "source_priority": "P1",
+      "source_detail": "Natural experiment available; controlled comparison needed",
+      "source_line": 122,
+      "source_row": "DOG-04\tThinking versus non-thinking execution QUEUED Natural experiment available; controlled comparison needed\tP1"
+    },
+    {
+      "local_id": "DOG-05",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "DOG",
+      "title": "DeepSeek None versus Low trajectories",
+      "source_status": "BLOCKED",
+      "source_priority": "P1",
+      "source_detail": "OBS-06 and RC-09",
+      "source_line": 123,
+      "source_row": "DOG-05\tDeepSeek None versus Low trajectories BLOCKED OBS-06 and RC-09\tP1"
+    },
+    {
+      "local_id": "INT-01",
+      "epic": "EPIC-CLINEMM-IECR",
+      "workstream": "INT",
+      "title": "Final integration and exact-head artifact qualification",
+      "source_status": "BLOCKED",
+      "source_priority": "P1",
+      "source_detail": "Required implementation and live gates",
+      "source_line": 128,
+      "source_row": "INT-01\tFinal integration and exact-head artifact qualification BLOCKED Required implementation and live gates\tP1"
+    }
+  ],
+  "exit_criteria": [
+    {
+      "source_line": 517,
+      "text": "Reasoning and tool continuity qualified across required provider routes"
+    },
+    {
+      "source_line": 518,
+      "text": "Explicit thinking configuration reaches the actual provider request"
+    },
+    {
+      "source_line": 519,
+      "text": "Provider usage, reasoning and physical-attempt accounting reconciled"
+    },
+    {
+      "source_line": 520,
+      "text": "Active execution time separated from operator waiting"
+    },
+    {
+      "source_line": 521,
+      "text": "PCK cache improvement established through live engine evidence"
+    },
+    {
+      "source_line": 522,
+      "text": "Engineering knowledge and counterevidence conserved across compaction"
+    },
+    {
+      "source_line": 523,
+      "text": "Bounded output-exhaustion recovery qualified live"
+    },
+    {
+      "source_line": 524,
+      "text": "R1 recognizes meaningful non-edit engineering progress"
+    },
+    {
+      "source_line": 525,
+      "text": "R2 selects fresh objectives and avoids unproductive recurrence"
+    },
+    {
+      "source_line": 526,
+      "text": "Comparative model trajectories evaluated against identical correctness oracles"
+    },
+    {
+      "source_line": 527,
+      "text": "Operational safety and task-contract compliance conserved"
+    },
+    {
+      "source_line": 528,
+      "text": "Exact-head release artifact qualified; temporary forensic instrumentation removed or explicitly retained"
+    }
+  ],
+  "notes": [
+    "Not canonical repository state. No evidence or commit verification performed.",
+    "Rows preserve source status and priority; no closure or readiness inferred.",
+    "Other sections must be reconciled separately against the original source and repository."
+  ]
+}

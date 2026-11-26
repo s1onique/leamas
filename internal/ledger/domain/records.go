@@ -40,6 +40,46 @@ type WorkItem struct {
 	// TerminalDisposition preserves the original terminal disposition
 	// when the record is archived.
 	TerminalDisposition string `json:"terminal_disposition,omitempty"`
+
+	// SourceStatus preserves the EXACT source status the record was
+	// imported from. It is conserved verbatim: an unknown source status
+	// stays unknown instead of being coerced into a known lifecycle
+	// state.
+	SourceStatus string `json:"source_status,omitempty"`
+
+	// SourceRow preserves the original row provenance of the imported
+	// record: the identity it carried in the source and the row it came
+	// from.
+	SourceRow string `json:"source_row,omitempty"`
+
+	// SourceLine preserves the original line locator of the imported
+	// record. It is zero when the source carried no locator.
+	SourceLine int `json:"source_line,omitempty"`
+
+	// SourceDetail preserves the original free-form source detail of the
+	// imported record.
+	SourceDetail string `json:"source_detail,omitempty"`
+
+	// AcceptedBy records the explicit engineering acceptance decision: who
+	// accepted the item and on what basis. It is the scoped, explicit act
+	// that the mechanical artifact verification alone can never perform.
+	//
+	// It is EMPTY for a non-accepted item. A mechanically verified
+	// artifact never fills it: only the explicit acceptance operation does.
+	AcceptedBy string `json:"accepted_by,omitempty"`
+
+	// AcceptanceBasis records the engineering justification of the
+	// acceptance decision. It is never authority on its own.
+	AcceptanceBasis string `json:"acceptance_basis,omitempty"`
+
+	// AcceptanceSourceHead binds the acceptance decision to the
+	// repository/source revision it was made against. It is empty only
+	// when the acceptance is not bound to a source revision.
+	//
+	// It is the source-identity binding of the CLAIM: an acceptance that
+	// requires source binding must name the source revision it was made
+	// against, so a later source change is detectable.
+	AcceptanceSourceHead string `json:"acceptance_source_head,omitempty"`
 }
 
 // Scoped returns the scoped identity of the work item.
@@ -52,10 +92,14 @@ type ActExecution struct {
 	SchemaVersion int          `json:"schema_version"`
 	ActID         ActID        `json:"act_id"`
 	ItemID        ScopedItemID `json:"item_id,omitempty"`
-	Title         string       `json:"title,omitempty"`
-	Verdict       ActVerdict   `json:"verdict"`
-	Revision      int          `json:"revision"`
-	Archived      bool         `json:"archived,omitempty"`
+	// ItemIDs are all work items the ACT addresses. An ACT may address
+	// several work items; each keeps its own acceptance state and its own
+	// retained obligation.
+	ItemIDs  []ScopedItemID `json:"item_ids,omitempty"`
+	Title    string         `json:"title,omitempty"`
+	Verdict  ActVerdict     `json:"verdict"`
+	Revision int            `json:"revision"`
+	Archived bool           `json:"archived,omitempty"`
 
 	// TerminalDisposition preserves the original terminal disposition.
 	TerminalDisposition string `json:"terminal_disposition,omitempty"`
@@ -93,6 +137,32 @@ type EvidenceRefRecord struct {
 	Revision      int             `json:"revision"`
 	Archived      bool            `json:"archived,omitempty"`
 	Provenance    *Provenance     `json:"provenance,omitempty"`
+
+	// Class is the explicit evidence class. It separates artifact
+	// integrity from claim binding: a verified artifact of the structural
+	// class can never establish a live qualification.
+	Class EvidenceClass `json:"class,omitempty"`
+
+	// Criterion is the acceptance criterion this evidence supports. It is
+	// the explicit criterion/scope association.
+	Criterion string `json:"criterion,omitempty"`
+
+	// ByteSize is the verified size of the artifact in bytes. It is
+	// recorded by the verification pass, never by the caller.
+	ByteSize int64 `json:"byte_size,omitempty"`
+
+	// SourceHead binds the evidence to the repository/source HEAD it was
+	// produced against. It is empty only when the evidence is not bound to
+	// a source revision.
+	SourceHead string `json:"source_head,omitempty"`
+
+	// Verified records that the artifact identity was actually checked
+	// against the repository: the file exists at the declared relative
+	// path, its byte size matches and its SHA-256 matches.
+	Verified bool `json:"verified,omitempty"`
+
+	// VerifiedAt is the verification timestamp. It is never authority.
+	VerifiedAt string `json:"verified_at,omitempty"`
 }
 
 // Decision is a durable recorded decision.

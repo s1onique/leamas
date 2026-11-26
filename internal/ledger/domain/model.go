@@ -168,6 +168,48 @@ func IsValidEvidenceQuality(q EvidenceQuality) bool {
 	return false
 }
 
+// EvidenceClass enumerates WHAT KIND of claim an artifact supports.
+//
+// Evidence quality answers "how strongly is this artifact bound?". The
+// evidence class answers "what kind of claim may this artifact support?".
+// The two are independent: a perfectly verified structural artifact is
+// still not a live qualification.
+type EvidenceClass string
+
+// Evidence classes.
+const (
+	// EvidenceClassStructural is a structural or synthetic artifact. It can
+	// support a structural criterion but never a live qualification.
+	EvidenceClassStructural EvidenceClass = "structural"
+	// EvidenceClassLiveQualification is the output of an actual live
+	// qualification run. Only this class can satisfy a live qualification
+	// criterion.
+	EvidenceClassLiveQualification EvidenceClass = "live_qualification"
+	// EvidenceClassReview is a human or agent review record.
+	EvidenceClassReview EvidenceClass = "review"
+)
+
+// IsValidEvidenceClass reports whether c is a known evidence class.
+func IsValidEvidenceClass(c EvidenceClass) bool {
+	switch c {
+	case EvidenceClassStructural, EvidenceClassLiveQualification,
+		EvidenceClassReview:
+		return true
+	}
+	return false
+}
+
+// SatisfiesLiveQualification reports whether the class may establish a
+// live qualification.
+//
+// This is the mechanical form of the "structural evidence is not live
+// qualification" rule. Mechanical artifact verification is NOT autonomous
+// verification of an engineering claim: only an explicitly classified live
+// qualification artifact can support a live qualification criterion.
+func (c EvidenceClass) SatisfiesLiveQualification() bool {
+	return c == EvidenceClassLiveQualification
+}
+
 // ActVerdict enumerates the terminal verdict of an ACT execution record.
 type ActVerdict string
 
@@ -208,12 +250,18 @@ const (
 	DependencyBlocks   DependencyKind = "blocks"
 	DependencyRequires DependencyKind = "requires"
 	DependencyRelates  DependencyKind = "relates"
+	// DependencyBlocker is a durable unresolved blocker. It points at an
+	// identity that does not exist yet. It is allowed to dangle precisely
+	// because the dangling reference is what keeps the dependent item
+	// non-executable.
+	DependencyBlocker DependencyKind = "blocker"
 )
 
 // IsValidDependencyKind reports whether k is a known dependency kind.
 func IsValidDependencyKind(k DependencyKind) bool {
 	switch k {
-	case DependencyBlocks, DependencyRequires, DependencyRelates:
+	case DependencyBlocks, DependencyRequires, DependencyRelates,
+		DependencyBlocker:
 		return true
 	}
 	return false
@@ -221,7 +269,16 @@ func IsValidDependencyKind(k DependencyKind) bool {
 
 // IsBlocking reports whether the dependency kind blocks progress.
 func (k DependencyKind) IsBlocking() bool {
-	return k == DependencyBlocks || k == DependencyRequires
+	return k == DependencyBlocks || k == DependencyRequires || k == DependencyBlocker
+}
+
+// IsResolvable reports whether the dependency reference must resolve to an
+// existing work item.
+//
+// A durable blocker is the explicit exception: an unresolved blocker is a
+// conserved obligation, not a dangling mistake.
+func (k DependencyKind) IsResolvable() bool {
+	return k != DependencyBlocker
 }
 
 // Dependency is a typed reference from one work item to another.
@@ -267,6 +324,13 @@ type EvidenceRef struct {
 	EvidenceID EvidenceID      `json:"evidence_id"`
 	Quality    EvidenceQuality `json:"quality"`
 	Note       string          `json:"note,omitempty"`
+	// Class is the explicit evidence class of the referenced artifact. It
+	// determines which kind of claim the artifact may support.
+	Class EvidenceClass `json:"class,omitempty"`
+	// Criterion is the acceptance criterion this evidence supports. It is
+	// the explicit criterion/scope association: evidence that names no
+	// criterion supports no criterion.
+	Criterion string `json:"criterion,omitempty"`
 }
 
 // ReopenCondition records an applicable condition that permits reopening

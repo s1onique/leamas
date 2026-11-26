@@ -18,9 +18,11 @@ type ReadyItem struct {
 
 // ReadyOptions bounds the ready-work selection.
 type ReadyOptions struct {
-	// Epic restricts the selection to a single epic scope.
+	// Epic restricts the selection to a single epic scope. It is a
+	// selection control, never an authorization.
 	Epic EpicID
-	// Owner restricts the selection to one owner.
+	// Owner restricts the selection to one owner. It is a selection
+	// control, never an authorization.
 	Owner string
 	// IncludeLiveGate includes items that still need a live qualification
 	// run. It is off by default: an item whose acceptance requires a live
@@ -32,16 +34,26 @@ type ReadyOptions struct {
 
 // SelectReady returns the deterministic ready-work selection.
 //
-// Readiness is a strict gate: an item is ready only when
+// Readiness is an EXECUTION readiness gate. It answers "may this work be
+// started?", not "is this work accepted?" and never "is this work
+// authorized to execute?".
 //
-//   - it is not archived and its lifecycle is not blocked;
-//   - its acceptance is not already terminal;
-//   - every blocking dependency is accepted;
-//   - its declared acceptance criteria have at least referenced evidence;
-//   - it does not require an unsatisfied live qualification gate.
+// The rules are:
 //
-// The selection respects the authorization boundary implied by the epic
-// scope and the owner filter.
+//   - the item is not archived and its lifecycle is not blocked or closed;
+//   - the item's acceptance is not already terminal;
+//   - the item is not explicitly deferred;
+//   - every blocking dependency is resolved AND accepted.
+//
+// A work item with unmet acceptance criteria IS ready: it is precisely the
+// work that still has to be done, and it must be able to acquire its own
+// evidence. Excluding it would make the obligation unreachable.
+//
+// A live qualification obligation is executable before the live
+// qualification evidence exists: running the qualification is the work.
+//
+// The epic and owner filters are selection controls. They narrow the result
+// set; they never authorize execution.
 func SelectReady(l Ledger, opts ReadyOptions) []ReadyItem {
 	candidates := make([]WorkItem, 0, len(l.Items))
 	for _, it := range l.Items {
@@ -79,7 +91,26 @@ func SelectReady(l Ledger, opts ReadyOptions) []ReadyItem {
 	return out
 }
 
+// CurrentlyAuthorized reports whether the item's acceptance is a CURRENTLY
+// VALID authority that may satisfy a downstream prerequisite.
+//
+// It is the acceptance authority (EvaluateAcceptance) applied to the
+// downstream-prerequisite question. An accepted item whose evidence was
+// invalidated keeps its historical acceptance record, but it no longer
+// satisfies a current prerequisite: the invalidation is therefore never
+// silent.
+//
+// An item that is not accepted never authorizes a downstream prerequisite.
+func CurrentlyAuthorized(l Ledger, it WorkItem) bool {
+	if it.Acceptance != AcceptanceAccepted {
+		return false
+	}
+	return EvaluateAcceptance(l, it).Admissible
+}
+
 // IsReady reports whether a work item is ready to be worked on.
+//
+// See SelectReady for the full contract.
 func IsReady(l Ledger, it WorkItem, includeLiveGate bool) bool {
 	if it.Archived {
 		return false
@@ -90,23 +121,25 @@ func IsReady(l Ledger, it WorkItem, includeLiveGate bool) bool {
 	if IsTerminalAcceptance(it.Acceptance) {
 		return false
 	}
+	// Deferred work is explicitly not selected: the deferral decision is
+	// an exclusion, not a priority.
+	if it.Acceptance == AcceptanceDeferred {
+		return false
+	}
 	for _, dep := range it.Dependencies {
 		if !dep.Kind.IsBlocking() {
 			continue
 		}
 		other, ok := l.ItemByScoped(dep.Ref)
 		if !ok {
+			// An unresolved blocking dependency keeps the item
+			// non-executable. It is a durable blocker, not a satisfied
+			// precondition.
 			return false
 		}
-		if other.Acceptance != AcceptanceAccepted {
+		if !CurrentlyAuthorized(l, other) {
 			return false
 		}
-	}
-	if len(it.AcceptanceCriteria) > 0 && it.Quality == EvidenceQualityNone {
-		return false
-	}
-	if it.RequiresLiveGate && it.Quality != EvidenceQualityVerified && !includeLiveGate {
-		return false
 	}
 	return true
 }

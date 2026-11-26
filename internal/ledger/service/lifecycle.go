@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/s1onique/leamas/internal/ledger/domain"
 	"github.com/s1onique/leamas/internal/ledger/store"
@@ -62,6 +63,11 @@ type ClaimOptions struct {
 }
 
 // Claim assigns an owner to a work item.
+//
+// A claim NEVER replaces an existing owner. Replacing an owner is an
+// explicit, bounded release or transfer operation (see
+// TransferOwnership). A claim that names a different owner than the stored
+// one is rejected.
 func (s *Service) Claim(txID string, opts ClaimOptions) (domain.WorkItem, error) {
 	var updated domain.WorkItem
 	err := s.mutate(txID, func(l domain.Ledger, m *store.Mutation) error {
@@ -74,6 +80,10 @@ func (s *Service) Claim(txID string, opts ClaimOptions) (domain.WorkItem, error)
 		}
 		if opts.Owner == "" {
 			return fmt.Errorf("claim requires a non-empty owner")
+		}
+		if item.Owner != "" && item.Owner != opts.Owner {
+			return fmt.Errorf("%w: %s is owned by %q; use an explicit ownership transfer",
+				ErrOwnershipTransferRequired, opts.ScopedID.String(), item.Owner)
 		}
 		item.Owner = opts.Owner
 		if item.Lifecycle == domain.LifecycleOpen {
@@ -94,14 +104,36 @@ type AcceptOptions struct {
 	ScopedID    domain.ScopedItemID
 	ExpectedRev int
 	// EvidenceQuality is the quality of the evidence backing the decision.
+	// It is a REQUEST, never authority: it cannot establish verification.
 	EvidenceQuality domain.EvidenceQuality
+	// AcceptedBy is the explicit engineering acceptance: the scoped actor
+	// that accepts the work item. It is REQUIRED. Leamas never
+	// autonomously determines whether a live experiment actually
+	// occurred: the engineering judgment is the caller's.
+	AcceptedBy string
+	// Basis records the engineering justification of the decision.
+	Basis string
+	// SourceHead binds the acceptance decision to the repository/source
+	// revision it was made against. It is REQUIRED when the item declares
+	// that its acceptance requires a source binding.
+	SourceHead string
 }
 
 // Accept records an engineering acceptance decision on a work item.
 //
-// The acceptance is only permitted when the recorded evidence quality is
-// sufficient. Insufficient evidence never becomes successful acceptance:
-// the candidate state is rejected by the validator before it is published.
+// The acceptance is only permitted when the linked evidence is admissible:
+// the artifact identity was actually verified, the evidence is explicitly
+// classified, and the evidence is associated with the criterion it claims
+// to support. A caller-supplied quality label never establishes
+// verification.
+//
+// The decision is checked against the SINGLE acceptance authority
+// (domain.EvaluateAcceptance). The canonical validator consults the same
+// authority: there is no second, competing acceptance rule.
+//
+// A mechanical artifact verification is not autonomous verification of an
+// engineering claim: the acceptance decision remains an explicit, scoped
+// act of the caller, and the caller must name itself.
 func (s *Service) Accept(txID string, opts AcceptOptions) (domain.WorkItem, error) {
 	var updated domain.WorkItem
 	err := s.mutate(txID, func(l domain.Ledger, m *store.Mutation) error {
@@ -112,13 +144,23 @@ func (s *Service) Accept(txID string, opts AcceptOptions) (domain.WorkItem, erro
 		if err := checkRevision(opts.ExpectedRev, item.Revision); err != nil {
 			return err
 		}
-		quality := opts.EvidenceQuality
-		if quality == "" {
-			quality = item.Quality
+		if strings.TrimSpace(opts.AcceptedBy) == "" {
+			return fmt.Errorf("%w: an explicit acceptance requires the accepting actor",
+				ErrAcceptanceRejected)
 		}
-		item.Quality = quality
+		authority := domain.EvaluateAcceptance(l, item)
+		if !authority.Admissible {
+			return fmt.Errorf("%w: %s: %s",
+				ErrAcceptanceRejected, opts.ScopedID.String(), authority.Reason)
+		}
+		if opts.EvidenceQuality != "" {
+			item.Quality = opts.EvidenceQuality
+		}
 		item.Acceptance = domain.AcceptanceAccepted
 		item.Lifecycle = domain.LifecycleClosed
+		item.AcceptedBy = strings.TrimSpace(opts.AcceptedBy)
+		item.AcceptanceBasis = opts.Basis
+		item.AcceptanceSourceHead = opts.SourceHead
 		item.Revision++
 		updated = item
 		return m.PutItem(item)

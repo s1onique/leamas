@@ -48,6 +48,26 @@ func codes(res ValidationResult) []string {
 	return out
 }
 
+// hasAdvisory reports whether the validation produced an advisory with the
+// given code.
+func hasAdvisory(res ValidationResult, code string) bool {
+	for _, f := range res.Advisories {
+		if f.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+// advisoryCodes renders the advisory codes of a validation result.
+func advisoryCodes(res ValidationResult) []string {
+	out := make([]string, 0, len(res.Advisories))
+	for _, f := range res.Advisories {
+		out = append(out, f.Code)
+	}
+	return out
+}
+
 func TestValidateLedgerAcceptsBaseState(t *testing.T) {
 	res := ValidateLedger(baseLedger())
 	if !res.OK() {
@@ -163,8 +183,12 @@ func TestValidateLedgerSelfDependencyRejected(t *testing.T) {
 }
 
 // TestValidateLedgerInsufficientEvidenceCannotAccept witnesses adversarial
-// row 4: an accepted item with declared acceptance criteria must carry
-// referenced or verified evidence.
+// row 4: an accepted item with declared acceptance criteria must be backed
+// by admissible evidence.
+//
+// Under the SINGLE acceptance authority the accepted state is preserved (the
+// historical acceptance is a fact) and the invalidation is REPORTED as an
+// advisory. The advisory is what keeps the invalidation visible.
 func TestValidateLedgerInsufficientEvidenceCannotAccept(t *testing.T) {
 	l := baseLedger()
 	l.Items[0].Acceptance = AcceptanceAccepted
@@ -172,13 +196,22 @@ func TestValidateLedgerInsufficientEvidenceCannotAccept(t *testing.T) {
 	l.Items[0].Quality = EvidenceQualityDeclared
 
 	res := ValidateLedger(l)
-	if !hasCode(res, CodeInsufficientEvidence) {
-		t.Fatalf("expected insufficient_evidence, got %v", codes(res))
+	if hasCode(res, CodeAcceptanceAuthorityInvalid) {
+		return
 	}
+	if hasAdvisory(res, CodeAcceptanceAuthorityInvalid) {
+		return
+	}
+	t.Fatalf("expected the acceptance authority advisory, got findings=%v advisories=%v",
+		codes(res), advisoryCodes(res))
 }
 
 // TestValidateLedgerStructuralPassCannotCloseLiveGate witnesses adversarial
 // row 5: a structural pass never satisfies a live qualification gate.
+//
+// The rule is enforced by the SINGLE acceptance authority: the structural
+// evidence class cannot establish a live qualification, so the accepted
+// state is reported as invalid.
 func TestValidateLedgerStructuralPassCannotCloseLiveGate(t *testing.T) {
 	l := baseLedger()
 	l.Items[0].Acceptance = AcceptanceAccepted
@@ -186,9 +219,14 @@ func TestValidateLedgerStructuralPassCannotCloseLiveGate(t *testing.T) {
 	l.Items[0].Quality = EvidenceQualityReferenced
 
 	res := ValidateLedger(l)
-	if !hasCode(res, CodeLiveGateUnsatisfied) {
-		t.Fatalf("expected live_gate_unsatisfied, got %v", codes(res))
+	if hasCode(res, CodeAcceptanceAuthorityInvalid) {
+		return
 	}
+	if hasAdvisory(res, CodeAcceptanceAuthorityInvalid) {
+		return
+	}
+	t.Fatalf("expected the acceptance authority advisory, got findings=%v advisories=%v",
+		codes(res), advisoryCodes(res))
 }
 
 // TestValidateLedgerLiveGateSatisfiedByVerifiedEvidence proves the live

@@ -53,16 +53,83 @@ type Transaction struct {
 	backups []JournalEntry
 	backed  map[string][]byte
 	txID    string
+	lock    *Lock
 }
 
+// Ownership is the EXPLICIT proof that a caller already holds the
+// exclusive lock of a ledger root.
+//
+// It exists so that an internal operation which must run under the
+// exclusive lock can be given the ownership EXPLICITLY, instead of
+// inferring it from a process-wide reentrancy flag. The inference was
+// wrong: a process-wide flag cannot distinguish "this goroutine owns the
+// lock" from "another goroutine of the same process owns the lock", so it
+// silently admitted a second writer.
+//
+// An Ownership is only constructible inside this package, and only by the
+// code path that actually holds the lock.
+type Ownership struct {
+	// root is the ledger root the ownership refers to.
+	root string
+	// lock is the held exclusive lock.
+	lock *Lock
+}
+
+// Root returns the ledger root the ownership refers to.
+func (o Ownership) Root() string { return o.root }
+
+// Owns reports whether the ownership refers to the given root.
+func (o Ownership) Owns(root string) bool { return o != Ownership{} && o.root == root }
+
 // Begin starts a transaction.
+//
+// The exclusive lock is acquired for the whole publication, so a reader
+// never observes a partially published transaction and a second writer
+// cannot publish concurrently.
+//
+// The pending journal state is checked UNDER the acquired lock: a
+// transaction is never admitted on top of an interrupted publication.
 func (s Store) Begin(txID string) (*Transaction, error) {
+	lock, err := AcquireWrite(s.Root)
+	if err != nil {
+		return nil, err
+	}
 	if s.Exists() {
 		if _, err := os.Stat(journalPath(s.Root)); err == nil {
+			lock.Release()
 			return nil, fmt.Errorf("%w: %s", ErrTransactionOpen, s.Root)
 		}
 	}
-	return &Transaction{store: s, backed: map[string][]byte{}, txID: txID}, nil
+	return &Transaction{
+		store:  s,
+		backed: map[string][]byte{},
+		txID:   txID,
+		lock:   lock,
+	}, nil
+}
+
+// Ownership returns the EXPLICIT ownership of the exclusive lock this
+// transaction holds.
+//
+// A caller that must run another operation under the same lock passes this
+// value explicitly. The lock is never re-entered implicitly.
+func (t *Transaction) Ownership() Ownership {
+	if t == nil || t.lock == nil {
+		return Ownership{}
+	}
+	return Ownership{root: t.store.Root, lock: t.lock}
+}
+
+// Release releases the transaction lock without publishing anything.
+//
+// It is used when a transaction is abandoned: the lock must not stay
+// held, otherwise the ledger would be permanently locked.
+func (t *Transaction) Release() {
+	if t == nil {
+		return
+	}
+	t.lock.Release()
+	t.lock = nil
 }
 
 // Write stages a record write.
@@ -91,6 +158,10 @@ func (t *Transaction) EntryCount() int { return len(t.entries) }
 // then restores the snapshots, so the visible state is never an accepted
 // partial transaction.
 func (t *Transaction) Commit() error {
+	// The exclusive lock is released on every exit path: a failed
+	// publication must not leave the ledger permanently locked.
+	defer t.Release()
+
 	root := t.store.Root
 	if err := os.MkdirAll(filepath.Join(root, JournalDir), 0o755); err != nil {
 		return fmt.Errorf("create journal dir: %w", err)
@@ -169,8 +240,48 @@ type RecoveryStatus struct {
 // The repair is deterministic and idempotent: it restores every snapshot
 // recorded in the journal and removes the journal. Running Recover twice
 // is safe and reports the same terminal state.
+//
+// The recovery takes the SAME exclusive authority as a writer: it cannot
+// roll back an ACTIVE foreign transaction, because an active writer holds
+// the exclusive lock for the whole publication.
+//
+// The journal presence is checked UNDER the acquired lock, so a recovery
+// never races a publication that is in flight.
+//
+// When the caller ALREADY holds the exclusive lock of the same root, it
+// must use RecoverWithOwnership and pass the explicit ownership. The lock
+// is never re-entered implicitly.
 func (s Store) Recover() (RecoveryStatus, error) {
+	lock, err := AcquireWrite(s.Root)
+	if err != nil {
+		return RecoveryStatus{}, err
+	}
+	defer lock.Release()
+	return s.recoverUnderLock()
+}
+
+// RecoverWithOwnership repairs an interrupted transaction under an
+// EXPLICITLY supplied ownership of the exclusive lock.
+//
+// It is the form an internal rollback uses: the caller already holds the
+// exclusive lock of the same root and passes that ownership explicitly,
+// instead of the lock inferring reentrancy from a process-wide flag.
+//
+// The ownership is checked against the root: an ownership of a DIFFERENT
+// root is rejected, and an empty ownership is rejected.
+func (s Store) RecoverWithOwnership(own Ownership) (RecoveryStatus, error) {
+	if !own.Owns(s.Root) {
+		return RecoveryStatus{}, fmt.Errorf("%w: the supplied ownership does not cover %s",
+			ErrOwnershipMismatch, s.Root)
+	}
+	return s.recoverUnderLock()
+}
+
+// recoverUnderLock performs the rollback. The caller must hold the
+// exclusive lock of the root.
+func (s Store) recoverUnderLock() (RecoveryStatus, error) {
 	var status RecoveryStatus
+
 	path := journalPath(s.Root)
 	data, err := os.ReadFile(path)
 	if err != nil {

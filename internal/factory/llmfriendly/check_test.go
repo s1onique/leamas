@@ -77,6 +77,46 @@ func TestCheckRepo_IgnoredDirs(t *testing.T) {
 	}
 }
 
+// TestCheckRepo_IgnoredDirsAtAnyDepth proves that the structurally ignored
+// directories are exempt at ANY depth.
+//
+// A "testdata" directory is a test-data directory wherever it lives. The
+// root-relative prefix match alone would exempt "testdata/..." but flag
+// "internal/ledger/importer/testdata/...", which is the same kind of
+// directory with the same purpose.
+func TestCheckRepo_IgnoredDirsAtAnyDepth(t *testing.T) {
+	tmpDir := t.TempDir()
+	nested := []string{
+		"internal/ledger/importer/testdata/fixture.json",
+		"pkg/vendor/x.txt",
+		"cmd/app/build/x.txt",
+	}
+	for _, name := range nested {
+		writeLongFile(tmpDir, name, 300)
+	}
+	// A source file that is NOT inside an ignored directory must still be
+	// checked.
+	writeLongFile(tmpDir, "internal/ledger/importer/plan.go", 300)
+	gitInit(tmpDir)
+	findings, _ := CheckRepo(tmpDir, DefaultConfig())
+	for _, f := range findings {
+		for _, name := range nested {
+			if f.Path == name {
+				t.Errorf("ignored dir file at depth should not appear: %v", f)
+			}
+		}
+	}
+	found := false
+	for _, f := range findings {
+		if f.Path == "internal/ledger/importer/plan.go" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("the non-ignored source file was not checked")
+	}
+}
+
 func TestCheckRepo_LongLineAllowedInCanonicalClosurePlan(t *testing.T) {
 	tmpDir := t.TempDir()
 	writePlan(tmpDir, "docs/closure-plans/p.json", `{"cmd":"`+strings.Repeat("x", 300)+`"}`)

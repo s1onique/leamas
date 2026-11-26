@@ -54,13 +54,26 @@ func ledgerCLI(t *testing.T, root string, args ...string) (int, string, string) 
 }
 
 // newLedgerRoot creates an initialized ledger in a temporary directory.
+//
+// The working directory is switched to the repository root that contains
+// the ledger, exactly as an operator would run the command from the
+// repository root. The evidence artifacts are resolved against it.
 func newLedgerRoot(t *testing.T) string {
 	t.Helper()
-	root := filepath.Join(t.TempDir(), "ledger")
+	repoRoot := t.TempDir()
+	root := filepath.Join(repoRoot, "ledger")
 	code, _, stderr := ledgerCLI(t, root, "init")
 	if code != 0 {
 		t.Fatalf("init failed: %d %s", code, stderr)
 	}
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(repoRoot); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldWd) })
 	return root
 }
 
