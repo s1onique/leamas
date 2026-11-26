@@ -107,8 +107,21 @@ func renderRangeFileEvidenceBoundedWithRunner(
 	// Publishing a retrieval path for every included file would add
 	// roughly 200 bytes per file to the digest and would materially
 	// weaken the aggregate render budget for large ranges.
-	appendBlock(bw, "RangeRetrievalPath: %s\n",
-		formatRangeRetrieval(immutableBase, immutableHead, dotDot))
+	//
+	// FINAL AUTHORITY CORRECTION (G3): the retrieval path is published
+	// ONLY when the comparison authority is available. A retrieval
+	// command WITHOUT comparison endpoints would compare the mutable
+	// worktree against the index and succeed, so publishing it would
+	// hand the reviewer a command that reproduces the WRONG evidence.
+	if immutableBase != "" && immutableHead != "" {
+		appendBlock(bw, "RangeRetrievalPath: %s\n",
+			formatRangeRetrieval(immutableBase, immutableHead, dotDot))
+	} else {
+		appendBlock(bw,
+			"RangeRetrievalPath: unavailable\n"+
+				"RangeRetrievalUnavailableReason: %s\n",
+			WarningCodeComparisonEndpointsUnavailable)
+	}
 
 	// F13+F15: batch-lookup range blob OIDs in one Git
 	// process so the F13 historical-identity emission
@@ -215,17 +228,14 @@ func renderRangeFileEvidenceBoundedWithRunner(
 		//      disposition is degraded explicitly instead.
 		hist := historicalClassifier[f.Path]
 		baseHist := baseHistoricalClassifier[rangeBaseIdentityPath(f)]
-		prefix, body, historicalEvidenceAvailable, evidenceSource :=
-			selectHistoricalClassifierEvidence(hist, baseHist)
-		class := classifyFileEvidence(classifierInput{
-			repoRoot:  repoRoot,
-			relPath:   f.Path,
-			fullPath:  fullPath,
-			size:      blobSize,
-			rawPrefix: prefix,
-			outputAbs: outputAbs,
-			bodyBytes: body,
-		})
+
+		// FINAL AUTHORITY CORRECTION (G1): the artifact-exclusion
+		// policy is applied to BOTH relevant endpoints, and the
+		// classification is CONSERVED across them.
+		class, evidenceSource, historicalEvidenceAvailable :=
+			classifyHistoricalRangeFile(repoRoot, f, fullPath, blobSize,
+				outputAbs, hist, baseHist)
+
 		if !historicalEvidenceAvailable {
 			// The historical evidence could not be recovered.
 			// The disposition MUST say so instead of silently
@@ -260,6 +270,20 @@ func renderRangeFileEvidenceBoundedWithRunner(
 		// drift apart.
 		spec := newPatchSpec(immutableBase, immutableHead,
 			"", "", dotDot, f)
+
+		// FINAL AUTHORITY CORRECTION (G3): the comparison authority
+		// MUST be resolved BEFORE the patch is executed.
+		//
+		// A `git diff` WITHOUT comparison endpoints does not fail: it
+		// compares the mutable WORKTREE against the index and exits
+		// 0. Such a "successful" comparison is against the WRONG
+		// authority, so it is refused here and reported as explicit
+		// unavailable evidence.
+		if !spec.HasComparison() {
+			renderRangeEndpointUnavailableDisposition(bw, f)
+			continue
+		}
+
 		patch, patchErr := runner.Run(repoRoot, spec.Args())
 		patchBytes := len(patch)
 

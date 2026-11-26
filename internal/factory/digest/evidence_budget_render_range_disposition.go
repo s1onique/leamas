@@ -91,6 +91,37 @@ func sha256Line2(evidenceSource string) string {
 	return evidenceSource
 }
 
+// renderRangeEndpointUnavailableDisposition renders the range-mode
+// block for a file whose HISTORICAL COMPARISON ENDPOINTS could not be
+// resolved.
+//
+// ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01 FINAL AUTHORITY
+// CORRECTION (G3): a `git diff` WITHOUT comparison endpoints does not
+// fail. It compares the mutable WORKTREE against the index and exits
+// 0, so it produces a SUCCESSFUL comparison against the WRONG
+// authority.
+//
+// The disposition therefore states explicitly that the evidence is
+// UNAVAILABLE, and it never presents a comparison against mutable
+// state as if it were the historical range.
+func renderRangeEndpointUnavailableDisposition(
+	bw *boundedWriter, f RangeFile) {
+	appendBlock(bw, "\n=== %s ===\n", PathEscape(f.Path))
+	appendBlock(bw, "Status: %s\n\n", f.Status)
+	appendBlock(bw,
+		"EvidenceCompleteness: UNAVAILABLE\n"+
+			"SuppressionReason: COMPARISON_ENDPOINTS_UNAVAILABLE\n"+
+			"WarningCode: %s\n"+
+			"Note: the historical comparison endpoints of "+
+			"this range could not be resolved, so no "+
+			"patch was executed. A diff without "+
+			"comparison endpoints would compare the "+
+			"mutable working tree against the index "+
+			"and succeed, which is NOT the historical "+
+			"range this evidence describes.\n",
+		WarningCodeComparisonEndpointsUnavailable)
+}
+
 // renderRangeIncompleteDisposition renders the range-mode block for a
 // file whose ACTUAL unified patch exceeds the per-file evidence
 // budget.

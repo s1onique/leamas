@@ -129,12 +129,55 @@ func (s PatchSpec) comparison() string {
 	return base + ".." + head
 }
 
+// Comparison returns the revision expression Git compares, or the empty
+// string when the comparison endpoints could NOT be resolved.
+//
+// FINAL AUTHORITY CORRECTION (G3): the expression is EXPORTED so the
+// caller can decide whether the comparison authority is available
+// BEFORE it executes a diff. An empty comparison means the comparison
+// endpoints are unavailable; it must never be silently replaced by a
+// comparison against mutable worktree state.
+func (s PatchSpec) Comparison() string { return s.comparison() }
+
+// HasComparison reports whether the specification carries a resolved
+// comparison authority.
+//
+// FINAL AUTHORITY CORRECTION (G3): a specification without a
+// comparison MUST NOT be executed, because `git diff` without
+// comparison endpoints succeeds against the mutable WORKTREE and the
+// index. Such a "successful" comparison is against the WRONG
+// authority, so it is refused instead.
+func (s PatchSpec) HasComparison() bool { return s.comparison() != "" }
+
+// canonicalDiffOptions are the diff options the canonical
+// specification ALWAYS carries.
+//
+// FINAL AUTHORITY CORRECTION (G3): Git honours `diff.external` and the
+// `diff` textconv attribute by DEFAULT. With an external driver
+// configured, Git emits the DRIVER'S OUTPUT INSTEAD of the patch, so
+// the published "PatchBytes" would describe bytes that are not a
+// unified diff at all, and the published retrieval command would
+// reproduce different bytes than the ones the digest embedded.
+//
+// The two options below make the patch bytes a property of the
+// resolved objects alone, not of the environment the digest happens to
+// run in.
+func canonicalDiffOptions() []string {
+	return []string{
+		"diff",
+		"--unified=3",
+		"--no-ext-diff",
+		"--no-textconv",
+	}
+}
+
 // Args returns the canonical Git argument vector that produces the
 // patch.
 //
 // The vector is:
 //
-//	git diff --unified=3 --find-renames=<n>% --find-copies=<n>% \
+//	git diff --unified=3 --no-ext-diff --no-textconv \
+//	    --find-renames=<n>% --find-copies=<n>% \
 //	    <comparison> -- :(literal)<path> [:(literal)<from>]
 //
 // The literal pathspec magic is REQUIRED, not cosmetic: without it
@@ -142,8 +185,15 @@ func (s PatchSpec) comparison() string {
 // "literal*.ts" also matches "literal-other.ts". The per-file
 // evidence budget would then be applied to a patch that belongs to
 // several files.
+//
+// FINAL AUTHORITY CORRECTION (G3): the comparison argument is NOT
+// OPTIONAL. A specification without resolved comparison endpoints
+// yields an argument vector with NO comparison, and the caller MUST
+// refuse to execute it (see HasComparison). The predecessor emitted
+// the vector anyway, so Git compared the mutable worktree against the
+// index and SUCCEEDED.
 func (s PatchSpec) Args() []string {
-	args := []string{"diff", "--unified=3"}
+	args := canonicalDiffOptions()
 	args = append(args, detectArgs()...)
 	if cmp := s.comparison(); cmp != "" {
 		args = append(args, cmp)
@@ -217,50 +267,6 @@ func rangePatchSpec(runner gitRunner, repoRoot, rangeSpec string,
 		dotDot, f)
 }
 
-// resolvePatchEndpoints determines the immutable comparison endpoints
-// and the fallback endpoints for a range expression.
-//
-// Precedence:
-//
-//  1. The already-resolved left/right supplied by the caller (the
-//     renderer resolves them once per range).
-//  2. A fresh resolution of the caller's revision expression, when a
-//     runner is available.
-//  3. The literal endpoints of the revision expression as a fallback.
-//
-// The three-dot form "A...B" is reported with DotDot=true so the
-// canonical comparison keeps the merge-base semantics Git defines for
-// it.
-func resolvePatchEndpoints(runner gitRunner, repoRoot, rangeSpec,
-	left, right string) (base, head, baseFallback, headFallback string,
-	dotDot bool) {
-	baseFallback, headFallback, ok := splitRangeSpec(rangeSpec)
-	if !ok {
-		baseFallback, headFallback = left, right
-	}
-	dotDot = strings.Contains(rangeSpec, "...")
-
-	resolvedLeft, resolvedRight := left, right
-	if resolvedLeft == "" || resolvedRight == "" {
-		if runner != nil && repoRoot != "" && rangeSpec != "" {
-			if l, r, resolved := resolveRangeEndpoints(runner, repoRoot,
-				rangeSpec); resolved {
-				resolvedLeft, resolvedRight = l, r
-			}
-		}
-	}
-	if resolvedLeft == "" || resolvedRight == "" {
-		return "", "", baseFallback, headFallback, dotDot
-	}
-
-	// AMENDMENT-01 (A2): pin the endpoints to IMMUTABLE object IDs
-	// so the published retrieval command keeps describing the same
-	// historical range after HEAD advances.
-	return resolveImmutableOID(runner, repoRoot, resolvedLeft),
-		resolveImmutableOID(runner, repoRoot, resolvedRight),
-		baseFallback, headFallback, dotDot
-}
-
 // formatRangeRetrieval returns the canonical retrieval serialization
 // for the WHOLE range.
 //
@@ -284,7 +290,11 @@ func formatRangeRetrieval(base, head string, dotDot bool) string {
 			cmp = base + ".." + head
 		}
 	}
-	args := []string{"diff", "--unified=3"}
+	// FINAL AUTHORITY CORRECTION (G3): the range-level retrieval command
+	// carries the SAME canonical diff options as the per-file
+	// specification, so the two cannot drift apart and the external
+	// diff driver and the textconv filters are disabled in both.
+	args := canonicalDiffOptions()
 	args = append(args, detectArgs()...)
 	if cmp != "" {
 		args = append(args, cmp)
@@ -307,34 +317,6 @@ const literalPathspecMagic = ":(literal)"
 // interpretation for the remainder of the pathspec.
 func literalPathspec(path string) string {
 	return literalPathspecMagic + path
-}
-
-// resolveImmutableOID resolves a revision expression to its
-// immutable object ID.
-//
-// AMENDMENT-01 (A2): the published retrieval command must keep
-// describing the SAME historical range after HEAD advances. A
-// symbolic endpoint such as "HEAD~1" silently starts describing a
-// DIFFERENT range once the next commit lands, so the canonical
-// specification pins the resolved OID instead.
-//
-// The resolver returns the input unchanged when Git cannot resolve it
-// (an unborn branch, a malformed expression); the caller then falls
-// back to the literal expression.
-func resolveImmutableOID(runner gitRunner, repoRoot, rev string) string {
-	if runner == nil || repoRoot == "" || rev == "" {
-		return rev
-	}
-	out, err := runner.Run(repoRoot, []string{
-		"rev-parse", "--verify", rev + "^{commit}"})
-	if err != nil {
-		return rev
-	}
-	oid := strings.TrimSpace(out)
-	if !isHexOID(oid) {
-		return rev
-	}
-	return oid
 }
 
 // isShellSafeWord reports whether `a` can be rendered as a bare shell

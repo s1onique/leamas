@@ -121,21 +121,10 @@ const (
 )
 
 // WarningCode values rendered into the digest for bounded files.
-const (
-	WarningCodeLargeFileBounded     = "LARGE_FILE_EVIDENCE_BOUNDED"
-	WarningCodeLineTooLong          = "PHYSICAL_LINE_BOUNDED"
-	WarningCodeSelfOutput           = "SELF_OUTPUT_EXCLUDED"
-	WarningCodeDerivedDigestBounded = "DERIVED_DIGEST_BODY_BOUNDED"
-	WarningCodeDigestRecursion      = "DIGEST_RECURSION"
-	// WarningCodeHistoricalEvidenceUnavailable is reported when the
-	// historical blob of a file could not be recovered at either
-	// endpoint of the range, so no content-driven classification was
-	// possible.
-	//
-	// AMENDMENT-01 FINALIZATION (F1).
-	WarningCodeHistoricalEvidenceUnavailable = "HISTORICAL_EVIDENCE_UNAVAILABLE"
-)
-
+//
+// The companion file evidence_budget_warning_codes.go holds the
+// warning code constants.
+//
 // classifierInput bundles the inputs needed to classify a single
 // changed file.
 // classifierPrefixBytes is the size of the head-byte prefix that

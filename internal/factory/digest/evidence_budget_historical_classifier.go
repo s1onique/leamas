@@ -23,7 +23,6 @@
 package digest
 
 import (
-	"strconv"
 	"strings"
 )
 
@@ -166,7 +165,18 @@ func loadHistoricalClassifierDataBatch(runner gitRunner, repoRoot,
 	//
 	// The capture limit is NOT raised. The loading stays bounded.
 	sizes := historicalBlobSizesBatch(runner, repoRoot, ref, paths)
-	chunks := chunkPathsBySize(paths, sizes, historicalBatchContentBudget)
+	chunks, oversized := chunkPathsBySize(paths, sizes,
+		historicalBatchContentBudget)
+
+	// FINAL AUTHORITY CORRECTION (G2): a blob whose KNOWN size exceeds
+	// the batch content budget can never be read by the batch, and the
+	// per-object fallback would attempt a REDUNDANT full read of an
+	// object already known to exceed the limit. Such a blob is
+	// reported as unavailable directly, without any content read.
+	for _, p := range oversized {
+		out[p] = HistoricalClassifierData{}
+	}
+
 	for _, chunk := range chunks {
 		chunkQueries := make([]string, 0, len(chunk))
 		for _, p := range chunk {
@@ -175,9 +185,8 @@ func loadHistoricalClassifierDataBatch(runner gitRunner, repoRoot,
 		raw, err := runner.RunWithStdin(repoRoot, []string{
 			"cat-file", "--batch"}, strings.Join(chunkQueries, "\n"))
 		if err != nil {
-			// The chunk exceeded the capture limit anyway (a
-			// blob larger than the budget). Fall back to the
-			// per-object loader for THIS chunk, which reports
+			// The chunk exceeded the capture limit anyway. Fall back
+			// to the per-object loader for THIS chunk, which reports
 			// the blob as unavailable when it is too large.
 			for _, p := range chunk {
 				prefix, body, ok := loadHistoricalClassifierData(
@@ -239,22 +248,29 @@ func historicalBlobSizesBatch(runner gitRunner, repoRoot, ref string,
 // budget forms a chunk of its own. The per-object loader then reports
 // it as unavailable, which is the honest outcome: the blob is larger
 // than the bounded evidence may read.
+//
+// FINAL AUTHORITY CORRECTION (G2): such an oversized path is returned
+// SEPARATELY, in the second result, so the caller can report it as
+// unavailable WITHOUT a redundant content read. The oversized path is
+// NOT part of any chunk.
 func chunkPathsBySize(paths []string, sizes map[string]int64,
-	budget int64) [][]string {
+	budget int64) ([][]string, []string) {
 	chunks := make([][]string, 0, 1)
+	oversized := make([]string, 0, 1)
 	current := make([]string, 0, len(paths))
 	currentSize := int64(0)
 	for _, p := range paths {
 		size := sizes[p]
 		if size > budget {
-			// A single oversized blob. Emit the current chunk and
-			// the oversized path as its own chunk.
+			// A single oversized blob. It is reported separately:
+			// no chunk can ever carry it, and reading it would
+			// exceed the capture limit by construction.
 			if len(current) > 0 {
 				chunks = append(chunks, current)
 				current = make([]string, 0, len(paths))
 				currentSize = 0
 			}
-			chunks = append(chunks, []string{p})
+			oversized = append(oversized, p)
 			continue
 		}
 		if currentSize+size > budget && len(current) > 0 {
@@ -271,71 +287,22 @@ func chunkPathsBySize(paths []string, sizes map[string]int64,
 	if len(chunks) == 0 {
 		chunks = append(chunks, []string{})
 	}
-	return chunks
+	return chunks, oversized
 }
 
 // parseHistoricalBatch splits the `git cat-file --batch` output into
 // the per-path classifier inputs.
 //
-// The wire format for a resolved object is:
+// The companion file evidence_budget_historical_batch_parse.go holds
+// the parser itself.
 //
-//	<oid> blob <size>\n
-//	<content bytes>\n
-//
-// and for an unresolved one:
-//
-//	<obj> missing\n
-//
-// The content length is taken from the header, so a blob whose
-// content contains newlines is framed correctly.
+// FINAL AUTHORITY CORRECTION (G2): the parser consumes the full
+// declared content and the trailing delimiter of EVERY resolved
+// object, whatever its type, and classifies only the blob records. It
+// is FAIL-CLOSED on framing defects.
 func parseHistoricalBatch(raw string, paths []string,
 	out map[string]HistoricalClassifierData) {
-	data := []byte(raw)
-	pos := 0
-	for _, p := range paths {
-		if pos >= len(data) {
-			return
-		}
-		nl := indexByteFrom(data, '\n', pos)
-		if nl < 0 {
-			return
-		}
-		header := string(data[pos:nl])
-		pos = nl + 1
-		fields := strings.Fields(header)
-		if len(fields) != 3 || fields[1] != "blob" {
-			// Unresolved object: "<obj> missing" and friends.
-			continue
-		}
-		size, err := strconv.Atoi(fields[2])
-		if err != nil || size < 0 {
-			continue
-		}
-		end := pos + size
-		if end > len(data) {
-			end = len(data)
-		}
-		content := data[pos:end]
-		pos = end
-		// Skip the trailing newline Git appends after the content.
-		if pos < len(data) && data[pos] == '\n' {
-			pos++
-		}
-		scan := len(content)
-		if scan > classifierScanCap {
-			scan = classifierScanCap
-		}
-		body := content[:scan]
-		prefixBytes := len(body)
-		if prefixBytes > classifierPrefixBytes {
-			prefixBytes = classifierPrefixBytes
-		}
-		out[p] = HistoricalClassifierData{
-			Prefix: string(body[:prefixBytes]),
-			Body:   body,
-			OK:     true,
-		}
-	}
+	parseHistoricalBatchRecords([]byte(raw), paths, out)
 }
 
 // indexByteFrom returns the index of the first occurrence of b at or
@@ -383,4 +350,22 @@ func selectHistoricalClassifierEvidence(
 	}
 	// NO historical evidence. The worktree is NOT a substitute.
 	return "", nil, false, "NONE"
+}
+
+// isArtifactExclusionClass reports whether `class` is one of the
+// content-driven ARTIFACT-EXCLUSION classifications.
+//
+// FINAL AUTHORITY CORRECTION (G1): the artifact-exclusion policy
+// describes the artifact's IDENTITY, not the size of the bytes that
+// happen to sit at the path today. The policy therefore applies to
+// BOTH relevant endpoints of the range.
+//
+// The companion file evidence_budget_historical_classification.go holds
+// the conservation selector.
+func isArtifactExclusionClass(class EvidenceClass) bool {
+	switch class {
+	case ClassBoundedDerivedDigest, ClassBoundedRecursive:
+		return true
+	}
+	return false
 }

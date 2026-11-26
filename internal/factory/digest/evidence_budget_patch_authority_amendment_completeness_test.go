@@ -46,7 +46,23 @@ import (
 // is written.
 //
 // POSTCONDITION: the disposition is nevertheless present in the
-// rendered output.
+// rendered output, AND the total render budget remains conserved.
+//
+// FINAL AUTHORITY CORRECTION (G4): the predecessor witness asserted
+// only that the disposition SURVIVED. The reservation that guarantees
+// the survival could have been satisfied by a writer that simply
+// IGNORED the total budget, so the witness was not sufficient to
+// establish the budget authority.
+//
+// The strengthened witness therefore asserts BOTH properties at once:
+//
+//  1. the published patch section carries a TRUTHFUL completeness
+//     disposition (a partial publication is never presented as
+//     complete); and
+//  2. the TOTAL RENDER BUDGET REMAINS CONSERVED: the writer never
+//     emits more than the declared total budget, and the reserved
+//     slice is the ONLY thing that was allowed to exceed the
+//     exhausted ordinary budget.
 func TestAmendment_F2_CompletenessDispositionSurvivesAggregateExhaustion(t *testing.T) {
 	bw := newBoundedWriter(MaxTotalRenderBytes, MaxPerFileBytes)
 	bw.reserveTail(terminationRecordBudget)
@@ -69,6 +85,8 @@ func TestAmendment_F2_CompletenessDispositionSurvivesAggregateExhaustion(t *test
 			"for this witness to be a discriminator. used=%d",
 			bw.Used())
 	}
+	// The budget consumed BEFORE the disposition was reserved.
+	usedBeforeDisposition := bw.Used()
 
 	// Now write the completeness disposition for the interrupted
 	// file. The reservation must guarantee its publication.
@@ -90,6 +108,40 @@ func TestAmendment_F2_CompletenessDispositionSurvivesAggregateExhaustion(t *test
 		t.Fatalf("aggregate completeness violated: the "+
 			"suppression reason was dropped together with the "+
 			"disposition. Writer used=%d", bw.Used())
+	}
+
+	// PROPERTY 1 (truthful completeness disposition): the section
+	// must NOT claim COMPLETE. A partial publication that claims
+	// COMPLETE is exactly the defect the disposition exists to
+	// prevent.
+	if strings.Contains(out, "EvidenceCompleteness: COMPLETE") {
+		t.Fatalf("aggregate completeness violated: a partial "+
+			"publication claimed COMPLETE. The disposition must be "+
+			"truthful. Writer used=%d", bw.Used())
+	}
+
+	// PROPERTY 2 (total render budget conserved): the writer never
+	// emits more than the declared total budget. The ONLY bytes
+	// admitted past the exhausted ordinary budget are the reserved
+	// completeness slice, and the reserved slice is bounded.
+	dispositionCost := bw.Used() - usedBeforeDisposition
+	if dispositionCost > completenessDispositionBudget {
+		t.Fatalf("hard-cap conservation violated: the completeness "+
+			"disposition consumed %d bytes, which exceeds its "+
+			"reserved slice of %d bytes",
+			dispositionCost, completenessDispositionBudget)
+	}
+	if bw.Used() > MaxTotalRenderBytes {
+		t.Fatalf("hard-cap conservation violated: the writer emitted "+
+			"%d bytes, which exceeds the total render budget of %d "+
+			"bytes", bw.Used(), MaxTotalRenderBytes)
+	}
+	// The reserved slice must have been released again, so the
+	// budget is not permanently weakened.
+	if bw.completenessRes != 0 {
+		t.Fatalf("hard-cap conservation violated: the completeness "+
+			"reservation was not released, %d bytes are still "+
+			"reserved", bw.completenessRes)
 	}
 }
 
