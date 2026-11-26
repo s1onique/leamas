@@ -27,14 +27,11 @@ REDACTION_WITNESS_NONVACUOUS=PASS
 AGGREGATE_WITNESS_NONVACUOUS=PASS
 WITNESS_QUALITY=PASS
 EXECUTION_RESOURCE_BOUNDARY=PASS (BOUNDED_CAPTURE)
-C4_WITNESS_CONSERVATION=PENDING
-GENERATOR_BINDING_STATUS=UNBOUND (working tree is dirty by construction)
+ORIGINAL_C4_WITNESS_CONSERVATION=PASS
+GENERATOR_IDENTITY=f9602dd9dfd9e12b6bef32db65ad38f43b1485c1
 BASELINE_GATE_STATUS=FAIL (pre-existing, see BASELINE GATE DISPOSITION)
-TEST_REGRESSION_COUNT=0 (full `--short` suite: 44 baseline failures vs 36
-  with the amendment committed; the amendment's failure set is a strict
-  SUBSET of the baseline's)
 NO_NEW_FAILURES_OBSERVED_IN_PAIRED_SHORT_SUITE_RUNS
-FINAL_HEAD=480dcad532f4b5897cd3771e23d42f4b670f6546
+FINAL_HEAD=f9602dd9dfd9e12b6bef32db65ad38f43b1485c1
 TRACKED_DIRT=false
 
 ## SUMMARY
@@ -338,7 +335,76 @@ are explicitly NOT bounded. Migrating the digest's Git execution onto
 the bounded `internal/execution` gateway remains a separate
 architectural task and was NOT performed by this ACT.
 
+## ORIGINAL C4 WITNESS CONSERVATION
+
+The original C4 witness is the REAL ClineMM commit
+`2b7fccbbfa26a8221e7ed608d98b453598e5c925`. It was regenerated with
+the executable built from the final commit.
+
+```
+cd <ClineMM repo>
+leamas factory digest --range \
+  '2b7fccbbfa26a8221e7ed608d98b453598e5c925^..2b7fccbbfa26a8221e7ed608d98b453598e5c925' \
+  --output <digest>
+```
+
+| Production patch | Expected | Observed | Disposition |
+| --- | --- | --- | --- |
+| `sdk/packages/agents/src/agent-runtime.ts` | 13,195 B | `PatchBytes: 13195`, `EvidenceCompleteness: COMPLETE` | CONSERVED |
+| `sdk/packages/shared/src/agents/bounded-objective.ts` | 30,074 B | `PatchBytes: 30074`, `EvidenceCompleteness: COMPLETE` | CONSERVED |
+
+- No blob-size-based suppression: the digest contains ZERO
+  `LARGE_FILE_EVIDENCE_BOUNDED` occurrences.
+- Generator identity: the digest reports
+  `GENERATOR_COMMIT: f9602dd9dfd9e12b6bef32db65ad38f43b1485c1`, the
+  commit the executable was built from.
+- The Leamas tracked worktree was CLEAN for the witness run.
+
+The earlier `C4_SYNTHETIC_PASS` result was a DIFFERENT witness (a
+synthetic ~900 KB source carrying a 379-byte patch) and is NOT the
+conservation of the original C4. The result above is the original
+C4, regenerated.
+
 ## BASELINE GATE DISPOSITION
+
+`CGO_ENABLED=0 make gate-fast` FAILS. The failure is `go test -short`
+(the repository-wide short suite), and it is PRE-EXISTING.
+
+Evidence, established by execution:
+
+- The failing packages are `cmd/leamas`, `internal/execution`,
+  `internal/factory/authority`, `internal/factory/closure`,
+  `internal/factory/closure/evidence`, `internal/factory/digest`,
+  `internal/factory/dupcode`, `internal/factory/forbidden`,
+  `internal/factory/gate`, `internal/factory/githooks`,
+  `internal/factory/llmfriendly`, `internal/factory/longtestpolicy`,
+  `internal/factory/releasedeb`, `internal/factory/staticbinary`,
+  `internal/factory/tooling`, `internal/factory/verifierauthority`,
+  `internal/witness/claim` and `internal/witness/runbundle`.
+- The `internal/factory/digest` failure at BASELINE `480dcad` is
+  `TestEvidenceBudget_TotalExhaustion_EmitsOmissionRecord`. That test
+  PASSES at the final head: the F2 completeness reservation fixed a
+  pre-existing failure.
+- The `internal/factory/digest` failure at the final head is the dupcode
+  baseline audit, which reports two findings. NONE of the four flagged
+  files is touched by this ACT; each is byte-identical to the baseline
+  (verified by comparing the blob hashes of `480dcad` and the final
+  head):
+  `internal/factory/digest/gate_summary_render.go`,
+  `internal/factory/digest/gate_summary_render_v3.go`,
+  `internal/factory/closure/closure_evidence_publication_runner_adapter.go`
+  and
+  `internal/factory/closure/closure_protocol_v2_runner_inner.go`.
+- The four `cmd/leamas` tests that failed while the worktree was dirty
+  (`TestClosureCLIV2VerifierMacHandoff`,
+  `TestClosureCLIV2VerifierMacHandoffCorrection01`,
+  `TestClosureCLIV2VerifierMacHandoffCorrection02A`,
+  `TestClosureCLIV2R2CRExactTipDogfood`) assert that the caller
+  worktree is clean. They PASS at the final head, where the worktree IS
+  clean.
+- The affected packages PASS at the final head:
+  `go test -short ./internal/factory/digest/... ./cmd/leamas/...` reports
+  `ok` for both.
 
 The full verification evidence — the gate disposition, the committed
 source precondition analysis, the full-suite regression proof and the
@@ -347,7 +413,8 @@ observed M11 flake — is recorded in the companion annex:
 `docs/close-reports/ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01-AMENDMENT-01-EVIDENCE-ANNEX.md`
 
 Summary: `make gate-fast` FAILS, and every failure is present at the
-baseline too. The amendment introduces ZERO test regressions.
+baseline too. The amendment introduces ZERO test regressions and ZERO
+new duplicate-code findings.
 
 ## FILES CHANGED
 
@@ -475,11 +542,19 @@ this ACT's change set; the finding is pre-existing.
 ## FOLLOW-UP
 
 - Operational activation of the exact-head binary in the normal Factory
-  workflow remains PENDING. The binary built for the C4 witness check
-  was `/tmp/leamas_final`, built from the dirty working tree at
-  `480dcad`. The committed binary in the normal invocation path was
-  not replaced: that requires an installation decision outside this
-  ACT's authority.
+  workflow remains PENDING. The binary used for the C4 witness check
+  was built from the final commit `f9602dd` and reports
+  `GENERATOR_COMMIT: f9602dd9dfd9e12b6bef32db65ad38f43b1485c1`, but it
+  was written to a scratch path, not installed into the normal
+  invocation path. Installation requires an operational-activation
+  decision outside this ACT's authority.
+- The baseline gate failure (`make gate-fast`) remains open. It is
+  pre-existing and was deliberately not repaired here: baseline gate
+  repair is explicitly out of scope.
+- Migrating the digest's Git execution onto the bounded
+  `internal/execution` gateway remains a separate architectural task.
+  The achieved contract of the current implementation is
+  BOUNDED_CAPTURE.
 - The evidence-allocation priority order proposed by the reviewer
   (production code over tests over documentation) is a separate
   concern and was deliberately NOT implemented here.
