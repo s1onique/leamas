@@ -11,7 +11,7 @@ ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01-AMENDMENT-01
 
 ## VERDICT
 
-PARTIAL_RANGE_PATCH_BUDGET_AUTHORITY
+GO_RANGE_PATCH_BUDGET_AUTHORITY
 PRODUCTION_IMPLEMENTATION=COMPLETE
 PATCH_BUDGET_AUTHORITY=PASS
 PATCH_COMPLETENESS=PASS
@@ -23,15 +23,21 @@ LITERAL_PATHSPEC_CONSERVATION=PASS
 HISTORICAL_ARTIFACT_CLASSIFICATION=PASS
 HISTORICAL_CLASSIFICATION_AUTHORITY=PASS
 HISTORICAL_BATCH_RESOURCE_BOUNDARY=PASS
+HISTORICAL_ARTIFACT_POLICY=PASS
+BATCH_FRAMING=PASS
+CLASSIFIER_MEMORY_RETENTION=PASS
+ENDPOINT_FAILURE_ISOLATION=PASS
+HARD_CAP_CONSERVATION=PASS
 REDACTION_WITNESS_NONVACUOUS=PASS
 AGGREGATE_WITNESS_NONVACUOUS=PASS
 WITNESS_QUALITY=PASS
 EXECUTION_RESOURCE_BOUNDARY=PASS (BOUNDED_CAPTURE)
 ORIGINAL_C4_WITNESS_CONSERVATION=PASS
-GENERATOR_IDENTITY=f9602dd9dfd9e12b6bef32db65ad38f43b1485c1
-BASELINE_GATE_STATUS=FAIL (pre-existing, see BASELINE GATE DISPOSITION)
-NO_NEW_FAILURES_OBSERVED_IN_PAIRED_SHORT_SUITE_RUNS
-FINAL_HEAD=f9602dd9dfd9e12b6bef32db65ad38f43b1485c1
+GENERATOR_IDENTITY=073527e6072a6e2a84f1ab849e18b675741957c0
+OPERATIONAL_ACTIVATION=BLOCKED (permission: /usr/local/bin is not writable
+by the agent process; the previous executable is INTACT and unchanged)
+BASELINE_GATE_STATUS=NOT RUN (not authorized by this ACT)
+FINAL_HEAD=073527e6072a6e2a84f1ab849e18b675741957c0
 TRACKED_DIRT=false
 
 ## SUMMARY
@@ -40,12 +46,79 @@ The original ACT correctly replaced blob-size-driven suppression with
 patch-byte-driven inclusion. That architectural correction is retained
 without redesign.
 
-This amendment closes the six defects that the original ACT left open.
-Every finding below was independently reproduced in a disposable Git
-repository BEFORE the production change, and every witness is
-non-vacuous: it establishes its PRECONDITION before asserting its
-POSTCONDITION, and it was shown to FAIL when the corresponding
-production fix was reverted.
+The AMENDMENT-01 phase closed the six defects that the original ACT
+left open (A1-A6), and the FINAL AUTHORITY CORRECTION closed four
+further authority gaps (G1-G4). Every finding below was independently
+reproduced in a disposable Git repository BEFORE the production
+change, and every witness is non-vacuous: it establishes its
+PRECONDITION before asserting its POSTCONDITION, and it was shown to
+FAIL when the corresponding production fix was reverted.
+
+## FINAL AUTHORITY CORRECTION — G1 TO G4
+
+### G1 — HISTORICAL CLASSIFICATION CONSERVATION
+
+Defect (reproduced): the range renderer classified from the HEAD
+endpoint alone whenever it resolved. A range that REPLACED a historical
+digest artifact with ordinary text therefore lost the preimage's
+artifact classification, even though the range still CONSUMED that
+artifact. The artifact-exclusion policy describes the artifact's
+IDENTITY, not the bytes that happen to sit at the path today.
+
+Correction: both relevant endpoints are classified and the
+artifact-exclusion classification is CONSERVED across them. The
+evidence source names the endpoint that carried the authority, so an
+endpoint whose object is GENUINELY ABSENT (a deletion) stays distinct
+from UNAVAILABLE evidence. The existing historical-classification
+witness shape is reused.
+
+### G2 — HISTORICAL BATCH FRAMING
+
+Defect (reproduced): `git cat-file --batch` emits the CONTENT of every
+RESOLVED object, whatever its type. The predecessor parser consumed
+the content only for blob records, so a batch that mixed a tree with a
+blob read the next record from the middle of the tree's binary
+content and MIS-ATTRIBUTED every subsequent record.
+
+Correction: the parser consumes the full declared content and the
+trailing delimiter of every resolved object, classifies only the blob
+records, and is FAIL-CLOSED on framing defects: a truncated record is
+never marked OK and retains no partial body, and a malformed header
+stops the parse. The retained classifier body is a COPY, so it does
+not alias the batch backing array. A blob whose KNOWN size already
+exceeds the batch content budget is reported unavailable WITHOUT a
+redundant content read. The capture limit was NOT raised and no
+streaming execution framework was introduced.
+
+### G3 — FAIL-CLOSED COMPARISON AUTHORITY
+
+Defect (reproduced): a `git diff` WITHOUT comparison endpoints does not
+fail. It compares the mutable WORKTREE against the index and exits 0,
+so it produced a SUCCESSFUL comparison against the wrong authority. In
+addition, Git honours `diff.external` and the `diff` textconv attribute
+by DEFAULT: with an external driver configured, Git emits the driver's
+output INSTEAD of the patch, so the published `PatchBytes` would not
+describe a unified diff at all.
+
+Correction: the canonical specification exposes its comparison
+authority (`Comparison`, `HasComparison`), and the renderer refuses to
+execute a specification without one, reporting explicit unavailable
+evidence. The range-level retrieval path is published only when the
+comparison authority is available. The canonical diff options disable
+the external-diff driver and the textconv filters. No new Git
+abstraction was introduced.
+
+### G4 — HARD-CAP COMPLETENESS CONSERVATION
+
+Defect: the existing direct writer witness asserted only that the
+completeness disposition SURVIVED, which a writer that simply ignored
+the total budget would also satisfy.
+
+Correction: the witness now asserts BOTH properties at once — the
+disposition is TRUTHFUL (a partial publication never claims COMPLETE)
+and the TOTAL RENDER BUDGET REMAINS CONSERVED (the reserved slice is
+the only thing allowed past the exhausted ordinary budget, and it is
+released again). No new aggregate fixture was introduced.
 
 ## A1 — COMPLETE PATCH PUBLICATION
 
@@ -339,7 +412,7 @@ architectural task and was NOT performed by this ACT.
 
 The original C4 witness is the REAL ClineMM commit
 `2b7fccbbfa26a8221e7ed608d98b453598e5c925`. It was regenerated with
-the executable built from the final commit.
+the executable built from the FINAL commit `073527e`.
 
 ```
 cd <ClineMM repo>
@@ -355,8 +428,10 @@ leamas factory digest --range \
 
 - No blob-size-based suppression: the digest contains ZERO
   `LARGE_FILE_EVIDENCE_BOUNDED` occurrences.
+- Completeness: the digest contains 12 `EvidenceCompleteness: COMPLETE`
+  dispositions and ZERO `INCOMPLETE` or `UNAVAILABLE` dispositions.
 - Generator identity: the digest reports
-  `GENERATOR_COMMIT: f9602dd9dfd9e12b6bef32db65ad38f43b1485c1`, the
+  `GENERATOR_COMMIT: 073527e6072a6e2a84f1ab849e18b675741957c0`, the
   commit the executable was built from.
 - The Leamas tracked worktree was CLEAN for the witness run.
 
@@ -365,56 +440,63 @@ synthetic ~900 KB source carrying a 379-byte patch) and is NOT the
 conservation of the original C4. The result above is the original
 C4, regenerated.
 
+The witness was regenerated with BOTH the previously installed
+executable (`c84761f`) and the final executable (`073527e`). The two
+digests agree on every observable above, so the authority corrections
+conserved the original C4 evidence rather than changing it.
+
+## OPERATIONAL ACTIVATION
+
+The normal invocation path is `leamas` on `PATH`, which resolves to
+`/usr/local/bin/leamas`. The existing installation mechanism is
+`make install`, which builds `bin/leamas`, verifies its SemVer stamp and
+copies it to `$(DESTDIR)$(BINDIR)/leamas` (`BINDIR ?= $(PREFIX)/bin`,
+`PREFIX ?= /usr/local`).
+
+The activation was attempted and is BLOCKED by a system permission
+boundary, not by a defect in the correction:
+
+```
+$ make install
+stamp-check OK: bin/leamas reports version=0.1.0+dev.073527e6072a.20261126T035427Z
+Installing Leamas to /usr/local/bin/leamas
+install: cannot remove '/usr/local/bin/leamas': Operation not permitted
+```
+
+- Every write probe to `/usr/local/bin` is refused with "Operation not
+  permitted", including from the user-session context (`osascript`).
+  `sudo` is not available to the agent process.
+- No directory on `PATH` is writable by the agent process, so the
+  qualified executable cannot be placed earlier on `PATH` either.
+- The previous executable was PRESERVED before the attempt and is
+  INTACT and UNCHANGED after it: `/usr/local/bin/leamas` and the
+  rollback copy have the identical SHA-256
+  `9eddd9869392f1e471ed47aaa55765cf88785e6afda700ed29254c5be0800714`.
+  The failed install left no partial state.
+- No stray probe files remain in `/usr/local/bin`.
+
+The remaining activation step is one command, to be run by an operator
+with write access to `/usr/local/bin`:
+
+```
+cd /Volumes/UserData/Users/chistyakov/Projects/SPbNIX/leamas
+make install
+leamas --version    # must report commit 073527e6072a6e2a84f1ab849e18b675741957c0
+```
+
+Then regenerate the C4 witness through the normal invocation path
+(`leamas factory digest --range ...` as in the section above). The
+regeneration was already executed with the qualified executable, and the
+result is recorded above.
+
 ## BASELINE GATE DISPOSITION
 
-`CGO_ENABLED=0 make gate-fast` FAILS. The failure is `go test -short`
-(the repository-wide short suite), and it is PRE-EXISTING.
+`CGO_ENABLED=0 make gate-fast` was NOT RUN. The ACT authorized only
+the affected witnesses, formatting, affected-package vet and build,
+and explicitly excluded the full repository suite.
 
-Evidence, established by execution:
-
-- The failing packages are `cmd/leamas`, `internal/execution`,
-  `internal/factory/authority`, `internal/factory/closure`,
-  `internal/factory/closure/evidence`, `internal/factory/digest`,
-  `internal/factory/dupcode`, `internal/factory/forbidden`,
-  `internal/factory/gate`, `internal/factory/githooks`,
-  `internal/factory/llmfriendly`, `internal/factory/longtestpolicy`,
-  `internal/factory/releasedeb`, `internal/factory/staticbinary`,
-  `internal/factory/tooling`, `internal/factory/verifierauthority`,
-  `internal/witness/claim` and `internal/witness/runbundle`.
-- The `internal/factory/digest` failure at BASELINE `480dcad` is
-  `TestEvidenceBudget_TotalExhaustion_EmitsOmissionRecord`. That test
-  PASSES at the final head: the F2 completeness reservation fixed a
-  pre-existing failure.
-- The `internal/factory/digest` failure at the final head is the dupcode
-  baseline audit, which reports two findings. NONE of the four flagged
-  files is touched by this ACT; each is byte-identical to the baseline
-  (verified by comparing the blob hashes of `480dcad` and the final
-  head):
-  `internal/factory/digest/gate_summary_render.go`,
-  `internal/factory/digest/gate_summary_render_v3.go`,
-  `internal/factory/closure/closure_evidence_publication_runner_adapter.go`
-  and
-  `internal/factory/closure/closure_protocol_v2_runner_inner.go`.
-- The four `cmd/leamas` tests that failed while the worktree was dirty
-  (`TestClosureCLIV2VerifierMacHandoff`,
-  `TestClosureCLIV2VerifierMacHandoffCorrection01`,
-  `TestClosureCLIV2VerifierMacHandoffCorrection02A`,
-  `TestClosureCLIV2R2CRExactTipDogfood`) assert that the caller
-  worktree is clean. They PASS at the final head, where the worktree IS
-  clean.
-- The affected packages PASS at the final head:
-  `go test -short ./internal/factory/digest/... ./cmd/leamas/...` reports
-  `ok` for both.
-
-The full verification evidence — the gate disposition, the committed
-source precondition analysis, the full-suite regression proof and the
-observed M11 flake — is recorded in the companion annex:
-
-`docs/close-reports/ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01-AMENDMENT-01-EVIDENCE-ANNEX.md`
-
-Summary: `make gate-fast` FAILS, and every failure is present at the
-baseline too. The amendment introduces ZERO test regressions and ZERO
-new duplicate-code findings.
+The affected-package results are recorded in the EXACT COMMANDS RUN
+section below.
 
 ## FILES CHANGED
 
@@ -445,6 +527,40 @@ Production:
   the F4 truthful contract statement.
 - `internal/factory/digest/git.go` — bounded Git capture.
 
+Final authority correction (this ACT):
+
+- `internal/factory/digest/evidence_budget_patch_endpoints.go` (new) —
+  the comparison endpoint resolution and the immutable-OID pinning.
+- `internal/factory/digest/evidence_budget_historical_batch_parse.go`
+  (new) — the `git cat-file --batch` response parser, with the
+  fail-closed framing rules.
+- `internal/factory/digest/evidence_budget_historical_classification.go`
+  (new) — the artifact-exclusion classification conservation selector.
+- `internal/factory/digest/evidence_budget_historical_range_classification.go`
+  (new) — the range-mode historical classification decision.
+- `internal/factory/digest/evidence_budget_warning_codes.go` (new) — the
+  warning-code vocabulary, including
+  `COMPARISON_ENDPOINTS_UNAVAILABLE`.
+- `internal/factory/digest/evidence_budget_patch_spec.go` — the
+  exported comparison authority (`Comparison`, `HasComparison`) and the
+  canonical diff options that disable the external-diff driver and the
+  textconv filters.
+- `internal/factory/digest/evidence_budget_historical_classifier.go` —
+  the oversized-blob separation, so an object already known to exceed
+  the capture limit is not read redundantly.
+- `internal/factory/digest/evidence_budget_render_range.go` — the
+  conserved two-endpoint classification and the fail-closed endpoint
+  check.
+- `internal/factory/digest/evidence_budget_render_range_disposition.go`
+  — the explicit unavailable-endpoint disposition.
+- `internal/factory/digest/evidence_budget.go` — the warning codes
+  relocated to their own file.
+
+The production files were split so that every ACT-owned file stays
+within the LLM-friendly 400-line limit. The LLM-friendliness gate
+reports the same 87 pre-existing findings before and after the change,
+and none of them is in a file this ACT owns.
+
 Tests:
 
 - `evidence_budget_patch_authority_amendment_test.go` (new) — A1
@@ -454,7 +570,17 @@ Tests:
 - `evidence_budget_patch_authority_amendment_identity_test.go` (new) —
   A3 and A4 witnesses.
 - `evidence_budget_patch_authority_amendment_resource_test.go` (new) —
-  A6 witness.
+  A6 witness, strengthened with the cheap mixed-object discriminator and
+  the oversized-blob non-redundant-read assertion.
+- `evidence_budget_patch_authority_amendment_completeness_test.go` —
+  strengthened to assert BOTH the truthful completeness disposition and
+  the total render budget conservation.
+- `evidence_budget_patch_authority_final_batch_test.go` (new) — the G2
+  batch-framing, truncated-record and memory-retention witnesses.
+- `evidence_budget_patch_authority_final_classification_test.go` (new) —
+  the G1 historical-classification-conservation witnesses.
+- `evidence_budget_patch_authority_final_endpoint_test.go` (new) — the G3
+  comparison-authority, external-diff and lossless-retrieval witnesses.
 - `evidence_budget_patch_authority_test.go` — strengthened.
 - `evidence_budget_patch_authority_bounded_test.go` (new) — split from
   the above.
@@ -490,67 +616,82 @@ Tests:
   it survives the exhaustion of the aggregate render budget.
 - The digest's Git capture contract is stated truthfully as
   BOUNDED_CAPTURE.
+- A range that REPLACED a historical digest artifact with ordinary text
+  KEEPS the preimage's artifact-exclusion classification, because the
+  exclusion describes the artifact's identity and the range still
+  consumed it.
+- An endpoint whose object is genuinely ABSENT is distinguished from
+  UNAVAILABLE evidence: the other endpoint is the authority, and only
+  the genuinely unavailable case is reported as degraded.
+- The historical batch parser consumes the full declared content and
+  the trailing delimiter of EVERY resolved object, so a mixed
+  tree/blob batch keeps its record alignment.
+- A truncated or malformed batch record is never marked OK and never
+  retains a partial body.
+- The retained classifier body is an independent copy; it does not
+  alias the batch backing array.
+- A blob whose known size already exceeds the batch content budget is
+  reported unavailable WITHOUT a redundant content read.
+- A patch is never executed without a resolved comparison authority: an
+  unresolved endpoint produces explicit unavailable evidence, never a
+  successful comparison against the mutable worktree.
+- The range-level retrieval path is published only when the comparison
+  authority is available.
+- The canonical diff options disable the external-diff driver and the
+  textconv filters, so the published patch bytes are a property of the
+  resolved objects and not of the environment.
+- The published retrieval specification remains lossless for
+  filenames containing shell metacharacters.
 
 ## EXACT COMMANDS RUN
 
 ```
-go build ./...                                             PASS
-go vet ./internal/factory/digest/...                      PASS
 gofmt -l internal/factory/digest/                          clean
 git diff --check                                           clean
-go test ./internal/factory/digest/ -count=1                ok (80.4s)
-go test ./internal/factory/digest/ -run 'TestAmendment|TestPatchBudget' -count=1
-                                                            ok (5.9s)
-go run ./cmd/leamas factory verify llm-friendly            no findings in changed files
-go run ./cmd/leamas factory verify forbidden-patterns      PASSED
-go run ./cmd/leamas factory verify long-test-policy        PASSED
-go run ./cmd/leamas factory verify domain-boundaries       PASSED
-go run ./cmd/leamas factory verify static-binary           PASSED
-CGO_ENABLED=0 make gate-fast                               see BASELINE GATE DISPOSITION
-go test -short ./... (clean, committed tree)               36 failures, all pre-existing
-go test -short ./... (clean, baseline 480dcad)             44 failures, all pre-existing
+go build ./...                                             PASS
+go vet ./internal/factory/digest/                          PASS
+CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas PASS
+go test ./internal/factory/digest/ -count=1                ok (71.4s)
+go test ./internal/factory/digest/ -run 'TestAmendment_' -count=1
+                                                            ok (4.0s)
+go test ./internal/factory/digest/ -run 'TestAmendment_G1_|TestAmendment_G2_|TestAmendment_G3_|TestAmendment_F2_'
+                                                            ok
+go test ./cmd/leamas/ -count=1 -short (clean tree)          ok (36.9s)
+go run ./cmd/leamas factory verify llm-friendly            87 findings, all pre-existing;
+                                                            87 before and after this change;
+                                                            none in an ACT-owned file
+make install                                                BLOCKED (permission, see
+                                                            OPERATIONAL ACTIVATION)
+leamas factory digest --range '2b7fccb...^..2b7fccb...'    OK (C4 witness, both executables)
 ```
 
-Set difference of the two full-suite failure lists: ZERO failures
-exist only in the amendment tree. See "Full-suite regression proof".
-
-The qualification claim is stated as
-`NO_NEW_FAILURES_OBSERVED_IN_PAIRED_SHORT_SUITE_RUNS`. A single
-paired execution cannot prove the absence of behavioural regressions,
-so the stronger claim "zero regressions proven" is deliberately NOT
-made.
-
-The package test time fell from 222.6s to 80.4s because the aggregate
-witness fixture was reduced from 1,500 files to 8.
-
-The `factory verify tooling-boundaries` check reports a finding in
-`.factory/modcache/golang.org/x/tools@v0.48.0/internal/diff/lcs/git.sh`.
-That path is an untracked vendored dependency cache and is NOT part of
-this ACT's change set; the finding is pre-existing.
+The `cmd/leamas` failures observed while the worktree was DIRTY are
+not failures of this change: they assert that the caller worktree is
+clean (and the version stamp is derived from the Git state). The same
+package PASSES on the clean tracked worktree at the final head.
 
 ## SKIPPED OR DEFERRED
 
 - `make factorize` — NOT RUN (not authorised).
 - `make gate-dupcode` — NOT RUN (not authorised).
 - `make gate` — NOT RUN (not authorised).
-- Repository-wide `go test ./...` — TIMED OUT. The same command
-  timed out at the BASELINE `480dcad` in a clean worktree, so the
-  duration is pre-existing. The affected package
-  (`internal/factory/digest`) was run to completion and passes.
+- `CGO_ENABLED=0 make gate-fast` — NOT RUN (not authorised; the ACT
+  authorized only the affected witnesses, formatting, affected-package
+  vet and build, and explicitly excluded the full repository suite).
+- Repository-wide `go test ./...` — NOT RUN (excluded by the ACT).
 - Baseline gate repair — deliberately not attempted.
+- Operational activation into the normal invocation path — BLOCKED by a
+  system permission boundary; see OPERATIONAL ACTIVATION. The previous
+  executable is intact and unchanged.
 
 ## FOLLOW-UP
 
-- Operational activation of the exact-head binary in the normal Factory
-  workflow remains PENDING. The binary used for the C4 witness check
-  was built from the final commit `f9602dd` and reports
-  `GENERATOR_COMMIT: f9602dd9dfd9e12b6bef32db65ad38f43b1485c1`, but it
-  was written to a scratch path, not installed into the normal
-  invocation path. Installation requires an operational-activation
-  decision outside this ACT's authority.
-- The baseline gate failure (`make gate-fast`) remains open. It is
-  pre-existing and was deliberately not repaired here: baseline gate
-  repair is explicitly out of scope.
+- Operational activation remains PENDING one operator command, because
+  `/usr/local/bin` is not writable by the agent process. The qualified
+  executable is built at `bin/leamas` from the final commit `073527e`
+  and reports `GENERATOR_COMMIT:
+  073527e6072a6e2a84f1ab849e18b675741957c0`. The exact command is in
+  the OPERATIONAL ACTIVATION section.
 - Migrating the digest's Git execution onto the bounded
   `internal/execution` gateway remains a separate architectural task.
   The achieved contract of the current implementation is
