@@ -14,6 +14,18 @@ migration primitives are implemented and qualified.
 Target repositories own the canonical work records. Leamas owns the
 implementation, the schema and the deterministic read models.
 
+## Final Head
+
+```text
+FINAL_HEAD  6f0ff6cd81769a47bf55fbb0690fe963a413f54e
+parent      4bca64c2c5762b8c58184d558e9b014bbcb5590d
+subject     factory: implement the deterministic Factory Work Ledger
+tree        clean after the subject commit
+```
+
+The FINAL_HEAD is recorded dynamically from the committed repository
+state. It is not embedded in any other committed artifact.
+
 ## Actual Implementation Paths
 
 ### Domain core (pure, no I/O)
