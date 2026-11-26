@@ -47,6 +47,8 @@ func main() {
 		handleCockpit()
 	case "witness":
 		handleWitness()
+	case "ledger":
+		os.Exit(runLedger(os.Args[2:]))
 	case "gate-summary":
 		os.Exit(runGateSummary(os.Args[2:]))
 	default:
@@ -248,6 +250,7 @@ Commands:
   leamas factory close        Closure Protocol v1
   leamas cockpit              Local web cockpit
   leamas witness              Witness proxy commands
+  leamas ledger               Factory Work Ledger commands
   leamas gate-summary         Gate Summary wire format introspection
 `
 }
