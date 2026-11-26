@@ -178,8 +178,14 @@ internal/factory/closure/evidence               FAIL        FAIL
 internal/factory/digest                         FAIL        FAIL
 internal/factory/dupcode                        FAIL        FAIL
 internal/factory/forbidden                      FAIL        FAIL
+internal/factory/gate                           FAIL        FAIL
 internal/factory/verifierauthority              FAIL        FAIL
 ```
+
+Both runs completed: the clean-tree baseline reported `ok packages: 37
+/ 53` with the ten packages above failing, and the ACT tree reported
+`ok packages: 45 / 53` with the same ten packages failing (the ACT tree
+adds the five new ledger packages to the passing set).
 
 ALL five ACT-owned ledger packages pass in BOTH runs:
 
