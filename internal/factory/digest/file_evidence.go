@@ -20,35 +20,128 @@ type gitRunner interface {
 		input string) (string, error)
 }
 
+// MaxGitCaptureBytes bounds how much stdout a single Git invocation
+// may materialise.
+//
+// ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01 AMENDMENT-01 (A6):
+// moving patch generation AHEAD of the size suppression means a
+// subprocess now runs before the per-file budget is applied. A
+// pathological range (for example the deletion of a 500 MB text
+// file) would otherwise materialise the whole patch in memory
+// before the 64 KiB evidence limit ever applied.
+//
+// The digest package executes Git through raw os/exec rather than the
+// bounded internal/execution gateway, so the bound is applied HERE,
+// at the digest's own runner boundary. No new generic execution
+// framework is introduced.
+//
+// The limit is deliberately far above the per-file evidence budget
+// (64 KiB) so an ordinary patch is never affected, while a patch that
+// is already known to be unusable is refused instead of materialised.
+//
+// A capture that hits the limit is reported as an ERROR, never as a
+// truncated patch. A partial patch must never be mistaken for the
+// complete one.
+const MaxGitCaptureBytes = 16 * 1024 * 1024
+
 // realGitRunner implements gitRunner using the actual git binary.
 type realGitRunner struct{}
 
-func (realGitRunner) Run(repoRoot string, args []string) (string, error) {
+// runGitBounded executes git with a bounded stdout capture.
+//
+// ACHIEVED CONTRACT: BOUNDED_CAPTURE.
+//
+// The RETAINED stdout payload is bounded by MaxGitCaptureBytes and the
+// RETAINED stderr payload is bounded by 1 MiB. An oversized result is
+// detected and reported as an ERROR, never as a truncated success.
+//
+// NOT BOUNDED (deliberately out of scope for this ACT):
+//
+//   - the subprocess OUTPUT GENERATION is not bounded: after the limit
+//     is reached the writer keeps draining and discarding the
+//     remainder, so Git still produces its full output;
+//   - the subprocess EXECUTION TIME is not bounded by this code: there
+//     is no deadline and no cancellation;
+//   - the subprocess is NOT terminated on overflow.
+//
+// The predecessor's comment claimed that an oversized result causes
+// the process to be terminated. That was never true of this
+// implementation and was corrected here.
+//
+// Migrating the digest's Git execution onto the bounded
+// internal/execution gateway is a separate architectural task and is
+// NOT performed by this ACT.
+func runGitBounded(repoRoot string, args []string,
+	stdin string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = repoRoot
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return string(output), fmt.Errorf("git %s failed: %s", strings.Join(args, " "), string(exitErr.Stderr))
-		}
-		return string(output), fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
 	}
-	return string(output), nil
+	var out limitedBuffer
+	out.limit = MaxGitCaptureBytes
+	cmd.Stdout = &out
+	var errBuf limitedBuffer
+	errBuf.limit = 1 * 1024 * 1024
+	cmd.Stderr = &errBuf
+	err := cmd.Run()
+	if out.exceeded {
+		return "", fmt.Errorf(
+			"git %s exceeded the %d byte capture limit; "+
+				"the output is NOT a complete result",
+			strings.Join(args, " "), MaxGitCaptureBytes)
+	}
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); ok {
+			return out.String(), fmt.Errorf("git %s failed: %s",
+				strings.Join(args, " "), errBuf.String())
+		}
+		return out.String(), fmt.Errorf("git %s failed: %w",
+			strings.Join(args, " "), err)
+	}
+	return out.String(), nil
+}
+
+// limitedBuffer is a bounded stdout/stderr sink.
+//
+// It records whether the limit was exceeded so the caller can report
+// an overflow instead of a truncated success.
+type limitedBuffer struct {
+	sb       strings.Builder
+	limit    int
+	exceeded bool
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	if b.exceeded {
+		// Discard the remainder, but keep reporting success so the
+		// process is not killed by a broken pipe. The overflow flag
+		// is what the caller acts on.
+		return len(p), nil
+	}
+	remaining := b.limit - b.sb.Len()
+	if remaining <= 0 {
+		b.exceeded = true
+		return len(p), nil
+	}
+	if len(p) > remaining {
+		b.sb.Write(p[:remaining])
+		b.exceeded = true
+		return len(p), nil
+	}
+	b.sb.Write(p)
+	return len(p), nil
+}
+
+func (b *limitedBuffer) String() string { return b.sb.String() }
+
+func (realGitRunner) Run(repoRoot string, args []string) (string, error) {
+	return runGitBounded(repoRoot, args, "")
 }
 
 func (realGitRunner) RunWithStdin(repoRoot string, args []string,
 	input string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = repoRoot
-	cmd.Stdin = strings.NewReader(input)
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return string(output), fmt.Errorf("git %s failed: %s", strings.Join(args, " "), string(exitErr.Stderr))
-		}
-		return string(output), fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
-	}
-	return string(output), nil
+	return runGitBounded(repoRoot, args, input)
 }
 
 // RenderChangedFilesAndDiffs renders the Changed files list and diff

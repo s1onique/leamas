@@ -8,13 +8,15 @@
 //   - evidence_budget_render.go  (boundedWriter, boundedFileBlock,
 //     renderChangedFilesAndDiffsBounded,
 //     renderRangeFileEvidenceBoundedWithRunner)
+//   - evidence_budget_patch_spec.go (canonical PatchSpec, retrieval
+//     serialization, literal pathspec, historical classifier loader)
 //
 // This file contains the smaller helpers used by the renderer:
 //   - computeRangeMaxBytes       (F3 protection: range-stat pre-check)
 //   - parseNumstatInt64          (helper for --numstat parsing)
 //   - truncateLongLines          (per-line cap helper)
 //
-// Splitting across three files keeps each file within the LLM-friendly
+// Splitting across these files keeps each file within the LLM-friendly
 // 400-line limit.
 package digest
 
@@ -22,33 +24,6 @@ import (
 	"fmt"
 	"strings"
 )
-
-// rangeDiffArgs builds the argument vector for the path-scoped
-// unified diff that backs the range-mode evidence budget.
-//
-// ACT-LEAMAS-RANGE-PATCH-BUDGET-AUTHORITY-01: the per-file budget
-// applies to the ACTUAL unified patch. To measure the ACTUAL patch
-// of a RENAME, the diff must be able to see BOTH the old and the
-// new path. Scoping the diff to the new path alone makes Git
-// synthesise a "new file" patch whose size is the whole blob, not
-// the small rename patch that actually happened.
-//
-// Rename/copy detection is enabled at the digest's existing
-// similarity threshold so the emitted patch matches the
-// name-status classification the manifest already uses.
-func rangeDiffArgs(rangeSpec string, f RangeFile) []string {
-	args := []string{"diff", "--unified=3"}
-	args = append(args, detectArgs()...)
-	args = append(args, rangeSpec, "--")
-	// Scope to the new path (the current name of the file).
-	args = append(args, f.Path)
-	// For a rename/copy, also scope to the source path so Git can
-	// pair the two sides and emit the true rename patch.
-	if f.From != "" && f.From != f.Path {
-		args = append(args, f.From)
-	}
-	return args
-}
 
 // computeRangeMaxBytes returns a per-path map of the larger
 // blob size (in bytes) observed at either endpoint of the

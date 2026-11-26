@@ -31,9 +31,12 @@ func renderRangeIdentityDisposition(
 	bw *boundedWriter, repoRoot string, f RangeFile,
 	class EvidenceClass, blobSize int64,
 	rangeBlobOIDMap map[string]RangeBlobResult,
-	left, right string,
+	left, right string, evidenceSource string,
 ) {
-	baseRes := rangeBlobOIDMap[left+":"+f.Path]
+	// AMENDMENT-01 (A3): the base blob identity for a rename or
+	// copy is resolved through the SOURCE path, because the
+	// preimage lives there.
+	baseRes := rangeBlobOIDMap[left+":"+rangeBaseIdentityPath(f)]
 	headRes := rangeBlobOIDMap[right+":"+f.Path]
 	appendBlock(bw, "\n=== %s ===\n", PathEscape(f.Path))
 	appendBlock(bw, "Status: %s\n\n", f.Status)
@@ -63,15 +66,29 @@ func renderRangeIdentityDisposition(
 		"Classification: %s\n"+
 			"EffectiveSize: %d\n"+
 			sha256Line+
+			"HistoricalEvidenceSource: %s\n"+
 			"RangeBaseBlobOID: %s\n"+
 			"RangeBaseBlobStatus: %s\n"+
 			"RangeHeadBlobOID: %s\n"+
 			"RangeHeadBlobStatus: %s\n"+
 			"WarningCode: %s\n"+
 			"%s\n",
-		class, blobSize, baseRes.OID,
+		class, blobSize, sha256Line2(evidenceSource), baseRes.OID,
 		baseRes.Status.String(), headRes.OID,
 		headRes.Status.String(), warningCode, bodyNote)
+}
+
+// sha256Line2 is a tiny helper that keeps the disposition's format
+// arguments aligned.
+//
+// AMENDMENT-01 FINALIZATION (F1): the historical evidence source is
+// rendered alongside the classification so the reviewer can tell WHICH
+// endpoint carried the classification authority.
+func sha256Line2(evidenceSource string) string {
+	if evidenceSource == "" {
+		return "NONE"
+	}
+	return evidenceSource
 }
 
 // renderRangeIncompleteDisposition renders the range-mode block for a
@@ -82,12 +99,17 @@ func renderRangeIdentityDisposition(
 // explicitly INCOMPLETE and carries a deterministic retrieval path.
 // The patch body is never emitted, so it can never be mistaken for a
 // complete body.
+//
+// AMENDMENT-01 (A2/A3): the retrieval path is the serialization of
+// the SAME canonical PatchSpec that produced the measured patch, so
+// executing it reproduces the exact patch. The base blob identity is
+// resolved through the RENAME SOURCE path.
 func renderRangeIncompleteDisposition(
 	bw *boundedWriter, f RangeFile, blobSize int64, patchBytes int,
 	rangeBlobOIDMap map[string]RangeBlobResult,
-	left, right, rangeSpec string,
+	left, right string, spec PatchSpec,
 ) {
-	baseRes := rangeBlobOIDMap[left+":"+f.Path]
+	baseRes := rangeBlobOIDMap[left+":"+rangeBaseIdentityPath(f)]
 	headRes := rangeBlobOIDMap[right+":"+f.Path]
 	appendBlock(bw, "\n=== %s ===\n", PathEscape(f.Path))
 	appendBlock(bw, "Status: %s\n\n", f.Status)
@@ -102,10 +124,10 @@ func renderRangeIncompleteDisposition(
 			"RangeHeadBlobOID: %s\n"+
 			"RangeHeadBlobStatus: %s\n"+
 			"WarningCode: %s\n"+
-			"RetrievalPath: git diff --unified=3 %s -- %s\n",
+			"RetrievalPath: %s\n",
 		patchBytes, blobSize,
 		baseRes.OID, baseRes.Status.String(),
 		headRes.OID, headRes.Status.String(),
-		WarningCodeLargeFileBounded, rangeSpec,
-		PathEscape(f.Path))
+		WarningCodeLargeFileBounded,
+		spec.RetrievalPathspecEscaped())
 }

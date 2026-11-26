@@ -52,6 +52,21 @@ type boundedWriter struct {
 	exhausted             bool // true once totalCap exceeded
 	maxMarker             int  // bytes reserved for per-file truncation marker
 	perFileMarkerReserved bool // true after the marker has been written
+	// completenessRes is the total-budget slice RESERVED for the
+	// completeness disposition of the CURRENT file.
+	//
+	// AMENDMENT-01 FINALIZATION (F2): a file whose patch was cut
+	// short by the aggregate budget must still publish its
+	// "EvidenceCompleteness: INCOMPLETE" disposition. Without this
+	// reservation the disposition was written into the SAME writer
+	// whose budget the patch had just exhausted, so appendBlock
+	// silently dropped it and the digest reported a partial
+	// publication with NO completeness statement at all.
+	//
+	// The reservation is taken from the total budget BEFORE the
+	// patch body is written, so the disposition is guaranteed
+	// publication independently of the patch's consumption.
+	completenessRes int
 }
 
 func newBoundedWriter(totalCap, perFileCap int) *boundedWriter {
@@ -101,7 +116,7 @@ func (w *boundedWriter) appendString(s string) int {
 	if w.exhausted || s == "" {
 		return 0
 	}
-	budget := w.totalCap - w.tailRes - w.used
+	budget := w.totalCap - w.tailRes - w.used - w.completenessRes
 	if budget <= 0 {
 		w.exhausted = true
 		return 0

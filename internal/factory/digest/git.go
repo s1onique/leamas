@@ -8,17 +8,15 @@ import (
 )
 
 // RunGit executes a git command in the repository root and returns its output.
+//
+// AMENDMENT-01 (A6): the capture is BOUNDED by MaxGitCaptureBytes.
+// The digest package executes Git through raw os/exec rather than the
+// bounded internal/execution gateway, so the bound is applied at this
+// boundary. An output that exceeds the limit is reported as an error
+// and NEVER as a truncated success: a partial result must never be
+// mistaken for a complete one.
 func RunGit(repoRoot string, args []string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = repoRoot
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return string(output), fmt.Errorf("git %s failed: %s", strings.Join(args, " "), string(exitErr.Stderr))
-		}
-		return string(output), fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
-	}
-	return string(output), nil
+	return runGitBounded(repoRoot, args, "")
 }
 
 // RunGitWithExitCode executes a git command and returns output and exit code.

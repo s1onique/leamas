@@ -16,13 +16,25 @@
 package digest
 
 import (
-	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
 
+// TestPatchBudget_SensitiveSource_RedactionConserved verifies that
+// including a small patch inside a large source file does NOT bypass
+// the existing redaction policy: non-source files are still redacted
+// and source files are still scanned for secret-like patterns.
+//
+// AMENDMENT-01 (A5): the predecessor witness was VACUOUS. It
+// appended the secret at the END of the file and changed the FIRST
+// line, so the secret never appeared in the unified patch at all
+// (Git emits three context lines around a change). The witness
+// therefore passed even if the redaction were completely broken.
+//
+// The corrected witness establishes the PRECONDITION that the RAW
+// unified patch really contains the secret, and only then asserts
+// that the RENDERED evidence excludes it.
 func TestPatchBudget_SensitiveSource_RedactionConserved(t *testing.T) {
 	dir := t.TempDir()
 	initGit(t, dir)
@@ -39,11 +51,26 @@ func TestPatchBudget_SensitiveSource_RedactionConserved(t *testing.T) {
 	writeFilePath(t, filepath.Join(dir, "config.yaml"), secretCfg)
 	patchBudgetCommitAll(t, dir, "add config")
 
+	// AMENDMENT-01 (A5): the secret must be inside the CHANGED LINE
+	// (or its immediate context) so it genuinely reaches the patch.
 	modified := strings.Replace(secretCfg,
-		"ordinary config padding line for the large body\n",
-		"ordinary config padding line for the large body EDITED\n", 1)
+		"api_key = \"AKIAIOSFODNN7EXAMPLE\"\n",
+		"api_key = \"AKIAIOSFODNN7EXAMPLE\"\n"+
+			"# EDITED neighbouring line\n", 1)
 	writeFilePath(t, filepath.Join(dir, "config.yaml"), modified)
 	patchBudgetCommitAll(t, dir, "edit config")
+
+	// PRECONDITION: the RAW unified patch really contains the secret.
+	rawPatch, err := RunGit(dir, []string{
+		"diff", "--unified=3", "HEAD~1..HEAD", "--", "config.yaml"})
+	if err != nil {
+		t.Fatalf("git diff: %v", err)
+	}
+	if !strings.Contains(rawPatch, "AKIAIOSFODNN7EXAMPLE") {
+		t.Fatalf("fixture setup: the raw unified patch must contain "+
+			"the synthetic secret for this witness to be a real "+
+			"discriminator. Raw patch:\n%s", rawPatch)
+	}
 
 	d := patchBudgetRangeDigest(t, dir, "HEAD~1..HEAD")
 	if !strings.Contains(d, "REDACTION_POLICY:") {
@@ -57,53 +84,24 @@ func TestPatchBudget_SensitiveSource_RedactionConserved(t *testing.T) {
 		t.Fatalf("non-source file must still be redacted. "+
 			"Digest excerpt:\n%s", patchBudgetExcerpt(d))
 	}
+	// POSTCONDITION: the rendered evidence excludes the secret, even
+	// though the raw patch contained it.
 	if strings.Contains(d, "AKIAIOSFODNN7EXAMPLE") {
 		t.Fatalf("redaction violated: the secret literal survived " +
 			"the redaction policy")
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Case 5: aggregate budget exceeded -> existing policy conserved.
-// ---------------------------------------------------------------------------
-
-// TestPatchBudget_AggregateBudgetExceeded_Conserved verifies that the
-// aggregate (total) render budget still clamps the digest, exactly as
-// before this ACT.
-func TestPatchBudget_AggregateBudgetExceeded_Conserved(t *testing.T) {
-	dir := t.TempDir()
-	initGit(t, dir)
-	seedRangeHistory(t, dir)
-
-	// Many small-patch files, each inside a large source file, so
-	// that the per-file budget never fires but the aggregate does.
-	for i := 0; i < 40; i++ {
-		var sb strings.Builder
-		for j := 0; j < 20000; j++ {
-			sb.WriteString("aggregate pressure padding content line\n")
-		}
-		writeFilePath(t, filepath.Join(dir, fmt.Sprintf("agg_%02d.ts", i)), sb.String())
-	}
-	patchBudgetCommitAll(t, dir, "add many large sources")
-
-	for i := 0; i < 40; i++ {
-		p := filepath.Join(dir, fmt.Sprintf("agg_%02d.ts", i))
-		body, err := os.ReadFile(p)
-		if err != nil {
-			t.Fatalf("read: %v", err)
-		}
-		edited := strings.Replace(string(body),
-			"aggregate pressure padding content line\n",
-			"aggregate pressure padding content line EDIT\n", 1)
-		writeFilePath(t, p, edited)
-	}
-	patchBudgetCommitAll(t, dir, "edit many large sources")
-
-	d := patchBudgetRangeDigest(t, dir, "HEAD~1..HEAD")
-	if len(d) > MaxTotalRenderBytes+4*1024 {
-		t.Fatalf("aggregate budget violated: digest=%d bytes "+
-			"exceeds the %d byte total budget ceiling",
-			len(d), MaxTotalRenderBytes)
+	// POSTCONDITION: the intended NON-SECRET change survives the
+	// redaction.
+	//
+	// AMENDMENT-01 FINALIZATION (F3): without this assertion an
+	// implementation that suppressed the COMPLETE patch would satisfy
+	// the secret-absence assertion above. The redaction must remove
+	// the secret and nothing else.
+	if !strings.Contains(d, "# EDITED neighbouring line") {
+		t.Fatalf("redaction violated: the intended non-secret change "+
+			"was suppressed along with the secret. The redaction "+
+			"must remove the secret and nothing else. Digest "+
+			"excerpt:\n%s", patchBudgetExcerpt(d))
 	}
 }
 

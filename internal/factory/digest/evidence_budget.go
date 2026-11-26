@@ -104,6 +104,20 @@ const (
 	// same path). Emit identity, hashes, and a DIGEST_RECURSION
 	// diagnostic; do not embed the body.
 	ClassBoundedRecursive EvidenceClass = "BOUNDED_RECURSIVE"
+
+	// ClassHistoricalEvidenceUnavailable: the historical blob of
+	// the file could not be recovered at EITHER endpoint of the
+	// range.
+	//
+	// AMENDMENT-01 FINALIZATION (F1): this class exists so that a
+	// missing historical artifact is reported EXPLICITLY instead
+	// of being silently classified from the CURRENT WORKTREE. The
+	// worktree is mutable state and must never become the
+	// classification authority of an immutable historical range.
+	//
+	// The disposition is degraded: the identity of the file is
+	// reported, but no content-driven classification is claimed.
+	ClassHistoricalEvidenceUnavailable EvidenceClass = "HISTORICAL_EVIDENCE_UNAVAILABLE"
 )
 
 // WarningCode values rendered into the digest for bounded files.
@@ -113,6 +127,13 @@ const (
 	WarningCodeSelfOutput           = "SELF_OUTPUT_EXCLUDED"
 	WarningCodeDerivedDigestBounded = "DERIVED_DIGEST_BODY_BOUNDED"
 	WarningCodeDigestRecursion      = "DIGEST_RECURSION"
+	// WarningCodeHistoricalEvidenceUnavailable is reported when the
+	// historical blob of a file could not be recovered at either
+	// endpoint of the range, so no content-driven classification was
+	// possible.
+	//
+	// AMENDMENT-01 FINALIZATION (F1).
+	WarningCodeHistoricalEvidenceUnavailable = "HISTORICAL_EVIDENCE_UNAVAILABLE"
 )
 
 // classifierInput bundles the inputs needed to classify a single

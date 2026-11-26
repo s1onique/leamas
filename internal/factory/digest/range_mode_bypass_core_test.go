@@ -185,8 +185,11 @@ func TestRangeDiffErrorBranch_EmptyTreeFallbackForbidden(t *testing.T) {
 	}
 
 	// Use fake runner that fails diff for file1.txt
+	// AMENDMENT-01 (A2): the canonical patch specification scopes
+	// the diff with Git's literal pathspec magic, so the path
+	// argument is now ":(literal)file1.txt".
 	fake := &fakeGitRunner{
-		FailPatterns: []string{"diff --unified=3 file1.txt"},
+		FailPatterns: []string{"diff --unified=3"},
 	}
 
 	// Call the internal renderer with the fake runner
@@ -210,10 +213,15 @@ func TestRangeDiffErrorBranch_EmptyTreeFallbackForbidden(t *testing.T) {
 		}
 	}
 
-	// Normal diff should have been attempted for file2
+	// Normal diff should have been attempted for file2.
+	//
+	// AMENDMENT-01 (A2): the canonical specification scopes the
+	// diff with Git's literal pathspec magic, so the path argument
+	// is ":(literal)file2.txt".
 	hasFile2Diff := false
 	for _, cmd := range fake.Commands {
-		if len(cmd) >= 4 && cmd[0] == "diff" && cmd[len(cmd)-1] == "file2.txt" {
+		if len(cmd) >= 4 && cmd[0] == "diff" &&
+			cmd[len(cmd)-1] == ":(literal)file2.txt" {
 			hasFile2Diff = true
 			break
 		}

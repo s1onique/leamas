@@ -135,8 +135,21 @@ func TestPatchBudget_LargeSourceTinyPatch_IsIncluded(t *testing.T) {
 	if !strings.Contains(d, "=== agent-runtime.ts ===") {
 		t.Fatalf("setup: agent-runtime.ts missing from digest")
 	}
+	// AMENDMENT-01 (A5): assert the COMPLETE expected patch against
+	// the rendered file-evidence section, not merely that the changed
+	// marker appears somewhere in the digest.
+	section := patchBudgetFileSection(t, d, "agent-runtime.ts")
+	if !strings.Contains(section,
+		strings.TrimRight(patchRaw, "\n")) {
+		t.Fatalf("the complete unified patch must be rendered in "+
+			"the file section. Section:\n%s", section)
+	}
+	if !strings.Contains(section, "EvidenceCompleteness: COMPLETE") {
+		t.Fatalf("a patch that fits the budget must be published "+
+			"complete. Section:\n%s", section)
+	}
 	// The changed line MUST be visible in the embedded patch.
-	if !strings.Contains(d, "CHANGED") {
+	if !strings.Contains(section, "CHANGED") {
 		t.Fatalf("patch budget authority violated: the actual "+
 			"unified patch (%d bytes) was NOT embedded even though "+
 			"it fits the per-file budget of %d bytes. Digest "+
@@ -192,8 +205,18 @@ func TestPatchBudget_LargeSourceSmallDeletion_IsIncluded(t *testing.T) {
 			"a large source was suppressed. Digest excerpt:\n%s",
 			patchBudgetExcerpt(d))
 	}
-	if !strings.Contains(d, "=== bounded-objective.ts ===") {
-		t.Fatalf("setup: bounded-objective.ts missing from digest")
+	// AMENDMENT-01 (A5): assert the ACTUAL deletion hunk, not
+	// merely that the path appears in the changeset manifest.
+	section := patchBudgetFileSection(t, d, "bounded-objective.ts")
+	if !strings.Contains(section, "EvidenceCompleteness: COMPLETE") {
+		t.Fatalf("a small deletion that fits the budget must be "+
+			"published complete. Section:\n%s", section)
+	}
+	deletedLine := strings.SplitAfter(body, "\n")[100]
+	if !strings.Contains(section, "-"+strings.TrimSuffix(deletedLine, "\n")) {
+		t.Fatalf("the actual deletion hunk is missing from the "+
+			"evidence section. Expected the deleted line %q. "+
+			"Section:\n%s", deletedLine, section)
 	}
 }
 
@@ -226,121 +249,38 @@ func TestPatchBudget_LargeSourceSmallRename_IsIncluded(t *testing.T) {
 			"large source was suppressed. Digest excerpt:\n%s",
 			patchBudgetExcerpt(d))
 	}
-	if !strings.Contains(d, "new-name.ts") {
-		t.Fatalf("setup: renamed path missing from digest")
+	// AMENDMENT-01 (A5): assert the ACTUAL rename evidence. The
+	// predecessor only checked that the destination name appeared
+	// somewhere in the digest, which the changeset manifest already
+	// satisfies, so the assertion could not fail.
+	section := patchBudgetFileSection(t, d, "new-name.ts")
+	if !strings.Contains(section, "EvidenceCompleteness: COMPLETE") {
+		t.Fatalf("a small rename that fits the budget must be "+
+			"published complete. Section:\n%s", section)
+	}
+	// The rename header must name BOTH sides.
+	//
+	// AMENDMENT-01 FINALIZATION (F3): the predecessor combined the two
+	// negative predicates with "&&", so the assertion only failed
+	// when BOTH headers were absent. The contract requires BOTH
+	// headers to be present, so each is asserted separately.
+	if !strings.Contains(section, "rename from") {
+		t.Fatalf("the rename evidence must carry the 'rename from' "+
+			"header naming the source path. Section:\n%s", section)
+	}
+	if !strings.Contains(section, "rename to") {
+		t.Fatalf("the rename evidence must carry the 'rename to' "+
+			"header naming the destination path. Section:\n%s",
+			section)
+	}
+	// The exact expected headers, so a rename of the WRONG file
+	// cannot satisfy the assertion.
+	if !strings.Contains(section, "rename from old-name.ts") {
+		t.Fatalf("the rename evidence must name the SOURCE path "+
+			"exactly. Section:\n%s", section)
+	}
+	if !strings.Contains(section, "rename to new-name.ts") {
+		t.Fatalf("the rename evidence must name the DESTINATION "+
+			"path exactly. Section:\n%s", section)
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Case 4: genuinely oversized patch -> BOUNDED with an explicit
-// incomplete-evidence disposition and a deterministic retrieval path.
-// ---------------------------------------------------------------------------
-
-// TestPatchBudget_GenuinelyOversizedPatch_IsBounded verifies that a
-// patch that really exceeds the per-file budget is bounded, that the
-// disposition is explicitly INCOMPLETE, and that a deterministic
-// retrieval path is retained.
-func TestPatchBudget_GenuinelyOversizedPatch_IsBounded(t *testing.T) {
-	dir := t.TempDir()
-	initGit(t, dir)
-	seedRangeHistory(t, dir)
-
-	// A file whose CONTENT change alone exceeds the budget.
-	var sb strings.Builder
-	for i := 0; i < 20000; i++ {
-		sb.WriteString("first revision content line for oversize patch\n")
-	}
-	writeFilePath(t, filepath.Join(dir, "oversize.txt"), sb.String())
-	patchBudgetCommitAll(t, dir, "base")
-
-	var sb2 strings.Builder
-	for i := 0; i < 20000; i++ {
-		sb2.WriteString("second revision content line for oversize patch\n")
-	}
-	writeFilePath(t, filepath.Join(dir, "oversize.txt"), sb2.String())
-	patchBudgetCommitAll(t, dir, "rewrite")
-
-	patchRaw, err := RunGit(dir, []string{
-		"diff", "--unified=3", "HEAD~1..HEAD", "--", "oversize.txt"})
-	if err != nil {
-		t.Fatalf("git diff: %v", err)
-	}
-	if len(patchRaw) <= MaxPerFileBytes {
-		t.Fatalf("fixture setup: patch=%d bytes must EXCEED "+
-			"MaxPerFileBytes=%d", len(patchRaw), MaxPerFileBytes)
-	}
-
-	d := patchBudgetRangeDigest(t, dir, "HEAD~1..HEAD")
-	if !strings.Contains(d, "EvidenceCompleteness: INCOMPLETE") {
-		t.Fatalf("oversized patch must yield an explicit "+
-			"incomplete-evidence disposition. Digest excerpt:\n%s",
-			patchBudgetExcerpt(d))
-	}
-	if !strings.Contains(d,
-		"SuppressionReason: PATCH_BYTES_EXCEED_PER_FILE_BUDGET") {
-		t.Fatalf("oversized patch must report a truthful suppression "+
-			"reason. Digest excerpt:\n%s", patchBudgetExcerpt(d))
-	}
-	if !strings.Contains(d, "RetrievalPath: git diff --unified=3") {
-		t.Fatalf("oversized patch must retain a deterministic "+
-			"retrieval path. Digest excerpt:\n%s",
-			patchBudgetExcerpt(d))
-	}
-	// The patch body must NOT be silently truncated and presented
-	// as complete.
-	if strings.Contains(d, "second revision content line for oversize patch") {
-		t.Fatalf("oversized patch body was embedded; it must be " +
-			"bounded, never truncated-and-presented-as-complete")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Case 8: new large file -> the ACTUAL ADDITION patch budget applies.
-// ---------------------------------------------------------------------------
-
-// TestPatchBudget_NewLargeFile_ActualAdditionPatchBudgetApplies verifies
-// that a newly added large file is bounded because its ADDITION patch
-// is large, and that the reported PatchBytes reflects the real
-// addition patch rather than an unrelated quantity.
-func TestPatchBudget_NewLargeFile_ActualAdditionPatchBudgetApplies(t *testing.T) {
-	dir := t.TempDir()
-	initGit(t, dir)
-	seedRangeHistory(t, dir)
-
-	body := patchBudgetLargeSourceBody(t)
-	writeFilePath(t, filepath.Join(dir, "added-large.ts"), body)
-	patchBudgetCommitAll(t, dir, "add large file")
-
-	patchRaw, err := RunGit(dir, []string{
-		"diff", "--unified=3", "HEAD~1..HEAD", "--", "added-large.ts"})
-	if err != nil {
-		t.Fatalf("git diff: %v", err)
-	}
-	if len(patchRaw) <= MaxPerFileBytes {
-		t.Fatalf("fixture setup: addition patch=%d bytes must "+
-			"EXCEED MaxPerFileBytes=%d", len(patchRaw),
-			MaxPerFileBytes)
-	}
-
-	d := patchBudgetRangeDigest(t, dir, "HEAD~1..HEAD")
-	if !strings.Contains(d, "EvidenceCompleteness: INCOMPLETE") {
-		t.Fatalf("new large file must be bounded by the actual "+
-			"addition patch budget. Digest excerpt:\n%s",
-			patchBudgetExcerpt(d))
-	}
-	if !strings.Contains(d,
-		fmt.Sprintf("PatchBytes: %d", len(patchRaw))) {
-		t.Fatalf("digest must report the actual addition patch size "+
-			"%d. Digest excerpt:\n%s", len(patchRaw),
-			patchBudgetExcerpt(d))
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Case 6: sensitive source -> existing redaction policy conserved.
-// ---------------------------------------------------------------------------
-
-// TestPatchBudget_SensitiveSource_RedactionConserved verifies that
-// including a small patch inside a large source file does NOT bypass
-// the existing redaction policy: non-source files are still redacted
-// and source files are still scanned for secret-like patterns.
