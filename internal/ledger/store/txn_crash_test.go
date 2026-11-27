@@ -6,8 +6,21 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+)
+
+// The exit codes of the tracked subprocess fixtures. They mirror the
+// constants of the fixture helpers and distinguish an EXPECTED outcome from
+// an UNEXPECTED failure.
+const (
+	// helperExitStartMissing means the helper never observed the shared
+	// start marker.
+	helperExitStartMissing = 7
+	// helperExitConflict means the helper was rejected by the revision
+	// guard, which is the EXPECTED outcome of the losing writer.
+	helperExitConflict = 8
 )
 
 // buildFixture compiles a tracked helper fixture into a unique temporary
@@ -71,8 +84,14 @@ func TestWitnessConcurrentSubprocessWritersAreMutuallyExclusive(t *testing.T) {
 	ready := []string{filepath.Join(dir, "ready-a"), filepath.Join(dir, "ready-b")}
 	titles := []string{"writer-a", "writer-b"}
 	cmds := make([]*exec.Cmd, len(titles))
+	// The output destinations are configured BEFORE Start: a nil Stdout or
+	// Stderr sends the subprocess output to the null device, and assigning
+	// the destination afterwards cannot recover it.
+	outputs := make([]bytes.Buffer, len(titles))
 	for i := range titles {
 		cmd := exec.Command(bin, root, titles[i], ready[i], start)
+		cmd.Stdout = &outputs[i]
+		cmd.Stderr = &outputs[i]
 		if err := cmd.Start(); err != nil {
 			t.Fatalf("start helper %s: %v", titles[i], err)
 		}
@@ -88,11 +107,8 @@ func TestWitnessConcurrentSubprocessWritersAreMutuallyExclusive(t *testing.T) {
 	results := make([]string, len(cmds))
 	codes := make([]int, len(cmds))
 	for i := range cmds {
-		var buf bytes.Buffer
-		cmds[i].Stdout = &buf
-		cmds[i].Stderr = &buf
 		err := cmds[i].Wait()
-		results[i] = buf.String()
+		results[i] = outputs[i].String()
 		switch {
 		case err == nil:
 			codes[i] = 0
@@ -103,20 +119,38 @@ func TestWitnessConcurrentSubprocessWritersAreMutuallyExclusive(t *testing.T) {
 		}
 	}
 	for i := range codes {
-		if codes[i] == 7 {
+		if codes[i] == helperExitStartMissing {
 			t.Fatalf("helper %s never observed the start marker: %q", titles[i], results[i])
 		}
 	}
 
+	// The witness requires EXACTLY ONE successful publication and EXACTLY
+	// ONE expected revision conflict. An arbitrary process failure must not
+	// satisfy the witness: it would prove nothing about the exclusion.
 	committed := 0
-	for i := range results {
-		if codes[i] == 0 {
+	conflicted := 0
+	for i := range codes {
+		switch codes[i] {
+		case 0:
 			committed++
+		case helperExitConflict:
+			conflicted++
+			if !strings.Contains(results[i], "CONFLICT") {
+				t.Fatalf("helper %s reported a conflict without the conflict receipt: %q",
+					titles[i], results[i])
+			}
+		default:
+			t.Fatalf("helper %s failed unexpectedly with code %d: %q",
+				titles[i], codes[i], results[i])
 		}
 	}
 	if committed != 1 {
 		t.Fatalf("expected exactly one subprocess writer to publish, got %d (results: %v codes: %v)",
 			committed, results, codes)
+	}
+	if conflicted != 1 {
+		t.Fatalf("expected exactly one subprocess writer to be rejected by the revision guard, got %d (results: %v codes: %v)",
+			conflicted, results, codes)
 	}
 
 	// The published state is one of the two conflicting updates, not a mix.
