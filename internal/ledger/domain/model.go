@@ -286,6 +286,17 @@ type Dependency struct {
 	Kind DependencyKind `json:"kind"`
 	Ref  ScopedItemID   `json:"ref"`
 	Note string         `json:"note,omitempty"`
+
+	// RequiredOutcome states WHAT the relationship requires, when the
+	// source declared it.
+	//
+	// It is conserved verbatim: the outcome a relationship demands is
+	// load-bearing content of the edge, not a comment.
+	RequiredOutcome string `json:"required_outcome,omitempty"`
+
+	// SourceRefs are the byte-exact source locations the relationship was
+	// derived from.
+	SourceRefs []SourceRef `json:"source_refs,omitempty"`
 }
 
 // ProvenanceConfidence enumerates how authoritative a source record is.
@@ -359,6 +370,25 @@ type Epic struct {
 	// conserved verbatim: their exact content survives normalization,
 	// planning, persistence and an independent reload.
 	ExitCriteria []string `json:"exit_criteria,omitempty"`
+
+	// SourceRefs are the byte-exact source locations the epic record was
+	// derived from.
+	SourceRefs []SourceRef `json:"source_refs,omitempty"`
+
+	// SourceLifecycle is the NORMALIZED lifecycle the source asserted for
+	// the epic. It is conserved distinctly from the canonical state.
+	SourceLifecycle string `json:"source_lifecycle,omitempty"`
+
+	// SourceFingerprint is the immutable normalized fingerprint of the
+	// SOURCE epic record.
+	//
+	// It covers the declared metadata, the exit criteria and the source
+	// provenance of the scope. It is what lets an import distinguish an
+	// exact historical replay from a changed historical epic source
+	// without comparing the canonical record: a legitimate canonical
+	// evolution of the scope does not change the fingerprint, a changed
+	// source does.
+	SourceFingerprint string `json:"source_fingerprint,omitempty"`
 }
 
 // ItemKind enumerates the kinds of work item.

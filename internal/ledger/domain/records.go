@@ -2,6 +2,21 @@ package domain
 
 import "sort"
 
+// SourceRef is a byte-exact reference to a source location.
+//
+// It binds a claim to an exact byte range of an exact source revision. The
+// line range is one-based and inclusive. The digest covers the exact
+// original bytes of that range, including the newline bytes.
+type SourceRef struct {
+	Path      string `json:"path"`
+	StartLine int    `json:"start_line"`
+	EndLine   int    `json:"end_line"`
+	SHA256    string `json:"sha256"`
+	// SourceHead binds the reference to a source revision when it differs
+	// from the parent source manifest head.
+	SourceHead string `json:"source_head,omitempty"`
+}
+
 // WorkItem is a typed engineering obligation.
 type WorkItem struct {
 	SchemaVersion int      `json:"schema_version"`
@@ -61,6 +76,36 @@ type WorkItem struct {
 	Provenance   *Provenance       `json:"provenance,omitempty"`
 	Reopen       []ReopenCondition `json:"reopen_conditions,omitempty"`
 
+	// SourceBlockers are the EXPLICIT blockers the source declared for the
+	// record.
+	//
+	// They are conserved verbatim: a blocker the source stated is a
+	// load-bearing fact about the obligation. It is NOT a dependency edge:
+	// an explicit blocker prevents readiness even when every dependency
+	// resolves.
+	SourceBlockers []string `json:"source_blockers,omitempty"`
+
+	// SourceCurrentACT is the ACT identity the source associated with the
+	// record as the CURRENT execution.
+	//
+	// It is conserved as a historical association. It never asserts that
+	// the ACT is still running and never authorizes execution.
+	SourceCurrentACT string `json:"source_current_act,omitempty"`
+
+	// SourceRelatedACTs are the historical ACT identities the source
+	// associated with the record.
+	//
+	// They are conserved verbatim: a historical association stays
+	// discoverable without ever re-entering the live execution history.
+	SourceRelatedACTs []string `json:"source_related_acts,omitempty"`
+
+	// SourceEvidenceLocators are the source locators of the historical
+	// evidence of the record.
+	//
+	// They are LOCATORS, not registered evidence records: they never
+	// satisfy an acceptance criterion.
+	SourceEvidenceLocators []string `json:"source_evidence_locators,omitempty"`
+
 	// TerminalDisposition preserves the original terminal disposition
 	// when the record is archived.
 	TerminalDisposition string `json:"terminal_disposition,omitempty"`
@@ -83,6 +128,35 @@ type WorkItem struct {
 	// SourceDetail preserves the original free-form source detail of the
 	// imported record.
 	SourceDetail string `json:"source_detail,omitempty"`
+
+	// SourceRefs are the byte-exact source locations the imported record
+	// was derived from. They preserve the provenance of the interpretation.
+	SourceRefs []SourceRef `json:"source_refs,omitempty"`
+
+	// SourceQualification preserves the QUALIFICATION ASSERTION the source
+	// made about the obligation.
+	//
+	// It is a historical assertion, never an acceptance decision: the
+	// canonical acceptance state is established by the acceptance authority
+	// alone. A source assertion of ACCEPTED never sets the acceptance state.
+	SourceQualification string `json:"source_qualification,omitempty"`
+
+	// SourceLifecycle preserves the NORMALIZED lifecycle the source
+	// asserted for the record.
+	//
+	// It is distinct from the canonical lifecycle state: an UNRESOLVED
+	// source lifecycle stays distinguishable from an intentional DEFERRED
+	// one after the import.
+	SourceLifecycle string `json:"source_lifecycle,omitempty"`
+
+	// CriteriaCoverage records whether the acceptance criteria of the
+	// source were recovered completely. It distinguishes "there are none"
+	// from "they were not recovered".
+	CriteriaCoverage string `json:"criteria_coverage,omitempty"`
+
+	// DependencyCoverage records whether the dependencies of the source
+	// were recovered completely.
+	DependencyCoverage string `json:"dependency_coverage,omitempty"`
 
 	// AcceptedBy records the explicit engineering acceptance decision: who
 	// accepted the item and on what basis. It is the scoped, explicit act
@@ -119,11 +193,20 @@ type ActExecution struct {
 	// ItemIDs are all work items the ACT addresses. An ACT may address
 	// several work items; each keeps its own acceptance state and its own
 	// retained obligation.
-	ItemIDs  []ScopedItemID `json:"item_ids,omitempty"`
-	Title    string         `json:"title,omitempty"`
-	Verdict  ActVerdict     `json:"verdict"`
-	Revision int            `json:"revision"`
-	Archived bool           `json:"archived,omitempty"`
+	ItemIDs []ScopedItemID `json:"item_ids,omitempty"`
+
+	// UnresolvedItemIDs are the work-item associations of the ACT that did
+	// NOT resolve to a known work item.
+	//
+	// They are conserved EXPLICITLY: an association the historical index
+	// carried is never silently dropped because its target is unknown.
+	// They are not work-item obligations: they are the preserved,
+	// unresolved association.
+	UnresolvedItemIDs []string   `json:"unresolved_item_ids,omitempty"`
+	Title             string     `json:"title,omitempty"`
+	Verdict           ActVerdict `json:"verdict"`
+	Revision          int        `json:"revision"`
+	Archived          bool       `json:"archived,omitempty"`
 
 	// TerminalDisposition preserves the original terminal disposition.
 	TerminalDisposition string `json:"terminal_disposition,omitempty"`
@@ -139,6 +222,26 @@ type ActExecution struct {
 
 	// Note is a free-form operator note. It is never authority.
 	Note string `json:"note,omitempty"`
+
+	// OriginalVerdict preserves the ORIGINAL verdict of the historical
+	// execution attempt.
+	//
+	// It is conserved verbatim. It is never an acceptance decision about
+	// the engineering obligation the ACT touched.
+	OriginalVerdict string `json:"original_verdict,omitempty"`
+
+	// EvidenceLocators are the source locators of the historical evidence
+	// of the execution attempt. They are locators, not registered evidence
+	// records: they never satisfy an acceptance criterion.
+	EvidenceLocators []string `json:"evidence_locators,omitempty"`
+
+	// SourceRefs are the byte-exact source locations the historical record
+	// was indexed from.
+	SourceRefs []SourceRef `json:"source_refs,omitempty"`
+
+	// Reconciliation records how confidently the historical identity was
+	// reconciled with the source.
+	Reconciliation string `json:"reconciliation,omitempty"`
 
 	Provenance *Provenance `json:"provenance,omitempty"`
 }
@@ -236,6 +339,13 @@ type MigrationRecord struct {
 	SourceLine int `json:"source_line,omitempty"`
 	// SourceDigest is the content digest of the source record.
 	SourceDigest string `json:"source_digest,omitempty"`
+	// SourceRefs are ALL the byte-exact source locations the record was
+	// derived from.
+	//
+	// The single source path, line and digest above are the FIRST
+	// reference. The complete set is conserved here: a reconciliation
+	// record that cites several locations loses none of them.
+	SourceRefs []SourceRef `json:"source_refs,omitempty"`
 	// ScopedID is the canonical identity the record concerns.
 	ScopedID string `json:"scoped_id,omitempty"`
 	// Outcome is the reconciliation outcome.

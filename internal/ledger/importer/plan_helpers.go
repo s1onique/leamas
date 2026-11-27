@@ -6,6 +6,43 @@ import (
 	"github.com/s1onique/leamas/internal/ledger/domain"
 )
 
+// CoverageComplete is the source coverage that declares a COMPLETE recovery
+// of a collection.
+const CoverageComplete = "COMPLETE"
+
+// incompleteCoverage reports whether a source coverage declares an
+// INCOMPLETE recovery of a collection.
+//
+// A COMPLETE coverage is a verified account of the collection: an empty
+// collection with a COMPLETE coverage is a VERIFIED ABSENCE of members. Any
+// other declared coverage means the collection was NOT fully recovered, and
+// the importer reports it instead of treating it as an absence.
+//
+// An EMPTY coverage means the source declared no coverage at all: the source
+// made no statement, and the importer does not make one either.
+func incompleteCoverage(coverage string) bool {
+	return coverage != "" && coverage != CoverageComplete
+}
+
+// reopenConditionsOf returns the reopen conditions of a source record.
+//
+// The conditions are conserved verbatim: the exact text the source stated
+// survives the import, and the KIND records that the condition came from the
+// source rather than from a canonical decision.
+func reopenConditionsOf(item SourceItem) []domain.ReopenCondition {
+	if len(item.ReopenConditions) == 0 {
+		return nil
+	}
+	out := make([]domain.ReopenCondition, 0, len(item.ReopenConditions))
+	for _, condition := range item.ReopenConditions {
+		out = append(out, domain.ReopenCondition{
+			Kind:   "source_reopen_condition",
+			Detail: condition,
+		})
+	}
+	return out
+}
+
 // epicExitCriteriaOf returns the exit criteria that belong to the epic
 // scope.
 //

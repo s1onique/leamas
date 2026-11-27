@@ -46,6 +46,46 @@ func groupConflicts(group []SourceItem) bool {
 	return false
 }
 
+// sameACTContent reports whether an indexed historical ACT record carries
+// the same content as the preserved canonical record.
+//
+// The comparison covers every conserved SEMANTIC field of the historical
+// index entry: the original verdict, the evidence locators, the source
+// references and the reconciliation state.
+func sameACTContent(a, b domain.ActExecution) bool {
+	if a.OriginalVerdict != b.OriginalVerdict ||
+		a.Reconciliation != b.Reconciliation ||
+		a.Archived != b.Archived ||
+		!equalStringSlices(a.EvidenceLocators, b.EvidenceLocators) {
+		return false
+	}
+	if len(a.SourceRefs) != len(b.SourceRefs) {
+		return false
+	}
+	for i := range a.SourceRefs {
+		if a.SourceRefs[i] != b.SourceRefs[i] {
+			return false
+		}
+	}
+	if len(a.ItemIDs) != len(b.ItemIDs) {
+		return false
+	}
+	for i := range a.ItemIDs {
+		if a.ItemIDs[i] != b.ItemIDs[i] {
+			return false
+		}
+	}
+	if len(a.UnresolvedItemIDs) != len(b.UnresolvedItemIDs) {
+		return false
+	}
+	for i := range a.UnresolvedItemIDs {
+		if a.UnresolvedItemIDs[i] != b.UnresolvedItemIDs[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // equalStringSlices reports whether two string slices are identical.
 func equalStringSlices(a, b []string) bool {
 	if len(a) != len(b) {

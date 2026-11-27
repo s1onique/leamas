@@ -76,12 +76,15 @@ func TestF3CheckpointCannotArchiveAPendingObligation(t *testing.T) {
 	}
 }
 
-// TestF3CheckpointConservesAHistoricalDisposition witnesses F3.
+// TestF3CheckpointDoesNotRetireAnUnfinishedObligationWithAHistoricalDisposition
+// witnesses F3.
 //
-// The contract: a legitimate historical disposition is NOT rejected
-// solely because its qualification remains unknown. The record already
-// carries a conserved terminal disposition: the checkpoint conserves it.
-func TestF3CheckpointConservesAHistoricalDisposition(t *testing.T) {
+// The contract: a preserved HISTORICAL terminal disposition is HISTORICAL
+// FACT, never an authority. It stays conserved on the record and it stays
+// visible there, but it may NOT retire the current unfinished obligation:
+// the checkpoint may not move the record into a terminal state while its
+// acceptance obligation is still outstanding.
+func TestF3CheckpointDoesNotRetireAnUnfinishedObligationWithAHistoricalDisposition(t *testing.T) {
 	svc := newTestService(t)
 	created := createItem(t, svc, "EPIC-A", "ITEM-1", "historical record")
 
@@ -106,15 +109,28 @@ func TestF3CheckpointConservesAHistoricalDisposition(t *testing.T) {
 	}
 
 	closed := domain.LifecycleClosed
-	updated, err := svc.Checkpoint("tx-f3-hist-cp", CheckpointOptions{
+	_, err = svc.Checkpoint("tx-f3-hist-cp", CheckpointOptions{
 		ScopedID: created.Scoped(), ExpectedRev: historical.Revision,
 		Lifecycle: closed, Summary: "the historical disposition is conserved",
 	})
-	if err != nil {
-		t.Fatalf("the historical disposition checkpoint was rejected: %v", err)
+	if err == nil {
+		t.Fatal("the historical disposition retired an unfinished obligation")
 	}
-	if updated.TerminalDisposition != "CLOSED_INSUFFICIENT" {
-		t.Fatalf("the historical disposition was lost: %q", updated.TerminalDisposition)
+	if !errors.Is(err, ErrUnfinishedObligation) {
+		t.Fatalf("expected ErrUnfinishedObligation, got %v", err)
+	}
+
+	// The historical disposition remains conserved as historical fact.
+	after, err := svc.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	stored, _ := after.ItemByScoped(created.Scoped())
+	if stored.TerminalDisposition != "CLOSED_INSUFFICIENT" {
+		t.Fatalf("the historical disposition was lost: %q", stored.TerminalDisposition)
+	}
+	if stored.Lifecycle == domain.LifecycleClosed {
+		t.Fatal("the unfinished obligation was retired")
 	}
 }
 

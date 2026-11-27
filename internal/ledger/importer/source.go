@@ -136,6 +136,102 @@ type SourceItem struct {
 	SourceLine int `json:"source_line,omitempty"`
 	// SourceDetail preserves the original free-form source detail.
 	SourceDetail string `json:"source_detail,omitempty"`
+	// Description is the engineering description of the obligation.
+	Description string `json:"description,omitempty"`
+	// SourceRefs are the byte-exact source locations the record was
+	// derived from.
+	SourceRefs []domain.SourceRef `json:"source_refs,omitempty"`
+	// SourceLifecycle is the NORMALIZED lifecycle the source asserted.
+	//
+	// It is conserved distinctly from the canonical lifecycle state: an
+	// UNRESOLVED source lifecycle stays distinguishable from an intentional
+	// DEFERRED one.
+	SourceLifecycle string `json:"source_lifecycle,omitempty"`
+	// SourceQualification is the QUALIFICATION ASSERTION the source made.
+	//
+	// It is a historical assertion, never an acceptance decision.
+	SourceQualification string `json:"source_qualification,omitempty"`
+	// CriteriaCoverage records whether the acceptance criteria were
+	// recovered completely.
+	CriteriaCoverage string `json:"criteria_coverage,omitempty"`
+	// DependencyCoverage records whether the dependencies were recovered
+	// completely.
+	DependencyCoverage string `json:"dependency_coverage,omitempty"`
+	// Relations are the NON-BLOCKING known relationships of the record.
+	//
+	// Only DEPENDS_ON represents a local execution prerequisite. Every
+	// other relationship kind is a cross-link or an external fact and never
+	// blocks execution.
+	Relations []SourceRelation `json:"relations,omitempty"`
+
+	// DependsOnRelations are the BLOCKING dependency edges of the record
+	// with their full load-bearing content: the outcome they require and
+	// the byte-exact source locations they were derived from.
+	//
+	// They carry the same targets as DependsOn. The plain list is kept for
+	// the simple case; the relations carry the content that the plain
+	// list cannot express.
+	DependsOnRelations []SourceRelation `json:"depends_on_relations,omitempty"`
+
+	// Blockers are the EXPLICIT blockers the source declared.
+	//
+	// They are conserved verbatim and they PREVENT READINESS: a source
+	// that stated "blocked" said something load-bearing about the
+	// obligation. They are not dependency edges.
+	Blockers []string `json:"blockers,omitempty"`
+
+	// CurrentACT is the ACT the source associated as the current
+	// execution of the record. It is a historical association, never
+	// execution authority.
+	CurrentACT string `json:"current_act,omitempty"`
+
+	// RelatedACTs are the historical ACT associations of the record.
+	RelatedACTs []string `json:"related_acts,omitempty"`
+
+	// EvidenceLocators are the source locators of the historical evidence
+	// of the record. They are locators, never registered evidence.
+	EvidenceLocators []string `json:"evidence_locators,omitempty"`
+
+	// ReopenConditions are the conditions under which the source allowed
+	// the record to be reopened.
+	ReopenConditions []string `json:"reopen_conditions,omitempty"`
+}
+
+// SourceRelation is one known non-blocking relationship of a source record.
+type SourceRelation struct {
+	// Kind classifies the relationship.
+	Kind string `json:"kind"`
+	// Target is the identity the relationship points at.
+	Target string `json:"target"`
+	// RequiredOutcome states WHAT the relationship requires, when the
+	// source declared it. It is conserved verbatim.
+	RequiredOutcome string `json:"required_outcome,omitempty"`
+	// SourceRefs are the byte-exact source locations the relationship was
+	// derived from.
+	SourceRefs []domain.SourceRef `json:"source_refs,omitempty"`
+}
+
+// SourceEpic is one DECLARED epic record of the source board.
+//
+// The epic INVENTORY is built from the declared epic records, not from the
+// observed work items: a source epic that has no outstanding work item is
+// still a scope of the board and must stay discoverable.
+type SourceEpic struct {
+	// EpicID is the identity of the scope.
+	EpicID string `json:"epic_id"`
+	// Title is the declared title of the scope.
+	Title string `json:"title,omitempty"`
+	// Lifecycle is the NORMALIZED lifecycle the source asserted.
+	Lifecycle string `json:"lifecycle,omitempty"`
+	// Priority is the declared priority of the scope.
+	Priority string `json:"priority,omitempty"`
+	// OriginalStatus is the EXACT original disposition of the scope.
+	OriginalStatus string `json:"original_status,omitempty"`
+	// ExitCriteria are the declared exit criteria of the scope.
+	ExitCriteria []string `json:"exit_criteria,omitempty"`
+	// SourceRefs are the byte-exact source locations the scope was
+	// derived from.
+	SourceRefs []domain.SourceRef `json:"source_refs,omitempty"`
 }
 
 // SourceBoard is the parsed source board.
@@ -156,6 +252,59 @@ type SourceBoard struct {
 	// verbatim on the canonical epic record: their exact content survives
 	// normalization, planning, persistence and an independent reload.
 	EpicExitCriteria map[string][]string `json:"epic_exit_criteria,omitempty"`
+	// EpicMeta maps an epic scope to the additional source metadata of the
+	// scope: the normalized lifecycle the source asserted and the
+	// byte-exact source locations the scope was derived from.
+	EpicMeta map[string]EpicMeta `json:"epic_meta,omitempty"`
+	// Acts are the indexed historical ACT executions of the source.
+	//
+	// A historical execution attempt is NOT a work-item obligation. It is
+	// indexed with its original disposition and its source provenance.
+	Acts []SourceACT `json:"acts,omitempty"`
+	// Epics are the DECLARED epic records of the source board.
+	//
+	// They are the epic INVENTORY: a scope the source declared is
+	// discoverable even when it carries no outstanding work item.
+	Epics []SourceEpic `json:"epics,omitempty"`
+	// Migrations are the durable reconciliation records the SOURCE itself
+	// carries: the unresolved cross-links and conflicts of a migration
+	// interchange package.
+	//
+	// They participate in the PLAN: a record that the canonical state
+	// already carries is a no-op, a CHANGED record is preserved and
+	// reported, and a new record is created.
+	Migrations []domain.MigrationRecord `json:"migrations,omitempty"`
+}
+
+// EpicMeta is the additional source metadata of one epic scope.
+type EpicMeta struct {
+	// Lifecycle is the NORMALIZED lifecycle the source asserted.
+	Lifecycle string `json:"lifecycle,omitempty"`
+	// SourceRefs are the byte-exact source locations the scope was derived
+	// from.
+	SourceRefs []domain.SourceRef `json:"source_refs,omitempty"`
+}
+
+// SourceACT is one indexed historical ACT execution of the source.
+type SourceACT struct {
+	// SourceID is the ACT identity.
+	SourceID string `json:"source_id"`
+	// OriginalVerdict is the EXACT original verdict of the execution
+	// attempt. It is conserved verbatim and never becomes an acceptance
+	// decision.
+	OriginalVerdict string `json:"original_verdict,omitempty"`
+	// EpicID is the known epic association of the attempt.
+	EpicID string `json:"epic_id,omitempty"`
+	// WorkItemIDs are the known work-item associations of the attempt.
+	WorkItemIDs []string `json:"work_item_ids,omitempty"`
+	// EvidenceLocators are the source locators of the historical evidence.
+	EvidenceLocators []string `json:"evidence_locators,omitempty"`
+	// SourceRefs are the byte-exact source locations the attempt was
+	// indexed from.
+	SourceRefs []domain.SourceRef `json:"source_refs,omitempty"`
+	// Reconciliation records how confidently the historical identity was
+	// reconciled with the source.
+	Reconciliation string `json:"reconciliation,omitempty"`
 }
 
 // Ambiguity is an unresolved source ambiguity.
@@ -181,6 +330,17 @@ type UnresolvedReference struct {
 	Ref string `json:"ref"`
 	// Kind classifies the reference.
 	Kind string `json:"kind"`
+	// RelationshipKind classifies the unresolved RELATIONSHIP, when the
+	// unresolved reference is a relationship edge.
+	//
+	// It is conserved: an unresolved relationship is never reduced to a
+	// bare target identity.
+	RelationshipKind string `json:"relationship_kind,omitempty"`
+	// RequiredOutcome states what the unresolved relationship required.
+	RequiredOutcome string `json:"required_outcome,omitempty"`
+	// SourceRefs are the byte-exact source locations of the unresolved
+	// relationship.
+	SourceRefs []domain.SourceRef `json:"source_refs,omitempty"`
 }
 
 // Reconciliation outcomes.
@@ -223,6 +383,12 @@ type Plan struct {
 	Epics []domain.Epic `json:"epics"`
 	// Items are the work-item records to create.
 	Items []domain.WorkItem `json:"items"`
+	// Acts are the indexed historical ACT execution records to create.
+	//
+	// They are ARCHIVED records: a historical execution attempt is
+	// discoverable with its original disposition, but it never re-enters
+	// the live execution history.
+	Acts []domain.ActExecution `json:"acts,omitempty"`
 	// Ambiguities are the explicit ambiguity reports.
 	Ambiguities []Ambiguity `json:"ambiguities"`
 	// Unresolved are the explicit unresolved-reference reports.
@@ -242,6 +408,13 @@ type Plan struct {
 	// outcomes. Every source identity is accounted for in exactly one
 	// reconciliation record.
 	Reconciliations []Reconciliation `json:"reconciliations,omitempty"`
+	// AdditionalMigrations are the durable migration records the SOURCE
+	// itself carries: the unresolved cross-links and conflicts of a
+	// migration interchange package.
+	//
+	// They are persisted unchanged: an ambiguity the source reported is
+	// never silently resolved by the importer.
+	AdditionalMigrations []domain.MigrationRecord `json:"additional_migrations,omitempty"`
 }
 
 // Quarantine is a complete source identity group that was withheld from

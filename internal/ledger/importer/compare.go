@@ -3,6 +3,7 @@ package importer
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -40,6 +41,7 @@ func sourceFingerprint(item SourceItem) string {
 		"epic_id=" + item.EpicID,
 		"workstream=" + item.Workstream,
 		"title=" + item.Title,
+		"description=" + item.Description,
 		"status=" + string(item.Status),
 		"priority=" + item.Priority,
 		"owner=" + item.Owner,
@@ -47,6 +49,41 @@ func sourceFingerprint(item SourceItem) string {
 		"acceptance_criteria=" + strings.Join(item.AcceptanceCriteria, "\x1f"),
 		"exit_criteria=" + strings.Join(item.ExitCriteria, "\x1f"),
 		"depends_on=" + strings.Join(normalizedSourceRefs(item), "\x1f"),
+		"relations=" + strings.Join(normalizedSourceRelations(item), "\x1f"),
+		"source_lifecycle=" + item.SourceLifecycle,
+		"source_qualification=" + item.SourceQualification,
+		"criteria_coverage=" + item.CriteriaCoverage,
+		"dependency_coverage=" + item.DependencyCoverage,
+		"blockers=" + strings.Join(item.Blockers, "\x1f"),
+		"current_act=" + item.CurrentACT,
+		"related_acts=" + strings.Join(item.RelatedACTs, "\x1f"),
+		"evidence_locators=" + strings.Join(item.EvidenceLocators, "\x1f"),
+		"reopen_conditions=" + strings.Join(item.ReopenConditions, "\x1f"),
+		"source_refs=" + strings.Join(normalizedSourceProvenance(item), "\x1f"),
+	}
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x1e")))
+	return hex.EncodeToString(sum[:])
+}
+
+// epicSourceFingerprint computes the immutable normalized fingerprint of a
+// declared source epic record.
+//
+// The fingerprint covers the declared metadata, the exit criteria and the
+// byte-exact source provenance of the scope. It describes the SOURCE, never
+// the canonical record: a legitimate canonical evolution of the scope never
+// changes it, a changed historical source always does.
+func epicSourceFingerprint(epic SourceEpic) string {
+	parts := []string{
+		"epic_id=" + epic.EpicID,
+		"title=" + epic.Title,
+		"lifecycle=" + epic.Lifecycle,
+		"priority=" + epic.Priority,
+		"original_status=" + epic.OriginalStatus,
+		"exit_criteria=" + strings.Join(epic.ExitCriteria, "\x1f"),
+	}
+	for _, ref := range epic.SourceRefs {
+		parts = append(parts, "source_ref="+fmt.Sprintf("%s:%d-%d:%s:%s",
+			ref.Path, ref.StartLine, ref.EndLine, ref.SHA256, ref.SourceHead))
 	}
 	sum := sha256.Sum256([]byte(strings.Join(parts, "\x1e")))
 	return hex.EncodeToString(sum[:])
@@ -61,16 +98,72 @@ func sourceFingerprint(item SourceItem) string {
 func normalizedSourceRefs(item SourceItem) []string {
 	seen := map[string]bool{}
 	out := []string{}
-	for _, ref := range item.DependsOn {
-		normalized := ref
+	for _, dep := range dependencyEdgesOf(item) {
+		normalized := dep.Target
 		if !strings.Contains(normalized, "/") && item.EpicID != "" {
 			normalized = item.EpicID + "/" + normalized
 		}
-		if seen[normalized] {
+		key := normalized + "|" + dep.RequiredOutcome + "|" +
+			strings.Join(normalizedRefProvenance(dep.SourceRefs), "\x1f")
+		if seen[key] {
 			continue
 		}
-		seen[normalized] = true
-		out = append(out, normalized)
+		seen[key] = true
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// normalizedRefProvenance returns the normalized byte-exact provenance of a
+// set of source references.
+func normalizedRefProvenance(refs []domain.SourceRef) []string {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, fmt.Sprintf("%s:%d-%d:%s:%s",
+			ref.Path, ref.StartLine, ref.EndLine, ref.SHA256, ref.SourceHead))
+	}
+	sort.Strings(out)
+	return out
+}
+
+// normalizedSourceRelations returns the normalized non-blocking relationship
+// references of a source record.
+//
+// A reference that names a local identity is expanded to its scoped
+// identity. The expanded set is sorted and deduplicated so the order of the
+// source rows never changes the fingerprint.
+func normalizedSourceRelations(item SourceItem) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, rel := range item.Relations {
+		normalized := rel.Target
+		if !strings.Contains(normalized, "/") && item.EpicID != "" {
+			normalized = item.EpicID + "/" + normalized
+		}
+		key := rel.Kind + ":" + normalized + "|" + rel.RequiredOutcome + "|" +
+			strings.Join(normalizedRefProvenance(rel.SourceRefs), "\x1f")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// normalizedSourceProvenance returns the normalized byte-exact source
+// provenance of a source record.
+//
+// The EFFECTIVE source HEAD of every reference participates: a reference that
+// names its own revision is a different binding than one that inherits the
+// manifest head.
+func normalizedSourceProvenance(item SourceItem) []string {
+	out := make([]string, 0, len(item.SourceRefs))
+	for _, ref := range item.SourceRefs {
+		out = append(out, fmt.Sprintf("%s:%d-%d:%s:%s",
+			ref.Path, ref.StartLine, ref.EndLine, ref.SHA256, ref.SourceHead))
 	}
 	sort.Strings(out)
 	return out

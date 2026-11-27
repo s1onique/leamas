@@ -40,7 +40,17 @@ func Apply(s store.Store, p Plan, txID string) (ApplyResult, error) {
 			return res, err
 		}
 	}
+	for _, act := range p.Acts {
+		if err := txn.PutAct(act); err != nil {
+			return res, err
+		}
+	}
 	for _, rec := range p.MigrationRecords() {
+		if err := txn.PutMigration(rec); err != nil {
+			return res, err
+		}
+	}
+	for _, rec := range p.AdditionalMigrations {
 		if err := txn.PutMigration(rec); err != nil {
 			return res, err
 		}
@@ -50,6 +60,7 @@ func Apply(s store.Store, p Plan, txID string) (ApplyResult, error) {
 	}
 	res.CreatedEpics = len(p.Epics)
 	res.CreatedItems = len(p.Items)
+	res.CreatedActs = len(p.Acts)
 	res.Skipped = len(p.Skipped)
 	res.Ambiguities = len(p.Ambiguities)
 	res.Unresolved = len(p.Unresolved)
@@ -91,7 +102,17 @@ func ApplyIsolated(s store.Store, p Plan, txID string) (ApplyResult, error) {
 			return res, err
 		}
 	}
+	for _, act := range p.Acts {
+		if err := txn.PutAct(act); err != nil {
+			return res, err
+		}
+	}
 	for _, rec := range p.MigrationRecords() {
+		if err := txn.PutMigration(rec); err != nil {
+			return res, err
+		}
+	}
+	for _, rec := range p.AdditionalMigrations {
 		if err := txn.PutMigration(rec); err != nil {
 			return res, err
 		}
@@ -101,6 +122,7 @@ func ApplyIsolated(s store.Store, p Plan, txID string) (ApplyResult, error) {
 	}
 	res.CreatedEpics = len(p.Epics)
 	res.CreatedItems = len(p.Items)
+	res.CreatedActs = len(p.Acts)
 	res.Skipped = len(p.Skipped)
 	res.Ambiguities = len(p.Ambiguities)
 	res.Unresolved = len(p.Unresolved)
@@ -191,7 +213,7 @@ func itemContentChanged(a, b domain.WorkItem) bool {
 		return true
 	}
 	for i := range a.Dependencies {
-		if a.Dependencies[i] != b.Dependencies[i] {
+		if !domain.SameDependencyContent(a.Dependencies[i], b.Dependencies[i]) {
 			return true
 		}
 	}

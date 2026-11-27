@@ -143,6 +143,7 @@ func validateEpics(l Ledger, res *ValidationResult) {
 			res.add(path+".priority", CodeInvalidEnum,
 				fmt.Sprintf("invalid priority %q", string(e.Priority)))
 		}
+		validateSourceRefs(res, path+".source_refs", e.SourceRefs)
 	}
 }
 
@@ -192,7 +193,37 @@ func validateItems(l Ledger, res *ValidationResult) {
 			res.add(path+".lifecycle", CodeInvalidEnum,
 				"archived work item must carry lifecycle state 'archived'")
 		}
+		validateSourceRefs(res, path+".source_refs", it.SourceRefs)
 		validateItemLinks(l, it, path, res)
+	}
+}
+
+// validateSourceRefs validates the byte-exact source references of a record.
+//
+// A source reference binds a claim to an exact byte range of an exact
+// source revision. A reference without a one-based range or without a
+// digest does not bind anything.
+func validateSourceRefs(res *ValidationResult, path string, refs []SourceRef) {
+	for j, ref := range refs {
+		rpath := fmt.Sprintf("%s[%d]", path, j)
+		if ref.Path == "" {
+			res.add(rpath+".path", CodeMissingField,
+				"the source reference must name the source path")
+		}
+		if ref.StartLine < 1 {
+			res.add(rpath+".start_line", CodeInvalidEnum,
+				fmt.Sprintf("the source reference start line %d is not a one-based line", ref.StartLine))
+		}
+		if ref.EndLine < ref.StartLine {
+			res.add(rpath+".end_line", CodeInvalidEnum,
+				fmt.Sprintf("the source reference end line %d precedes its start line %d",
+					ref.EndLine, ref.StartLine))
+		}
+		if ref.SHA256 != "" {
+			if err := ValidateSHA256(ref.SHA256); err != nil {
+				res.add(rpath+".sha256", CodeInvalidDigest, err.Error())
+			}
+		}
 	}
 }
 

@@ -45,11 +45,11 @@ func (s *Service) Checkpoint(txID string, opts CheckpointOptions) (domain.WorkIt
 		// authority as the generic update path: a terminal transition may
 		// not conceal an unfinished engineering obligation.
 		//
-		// A record that already carries a preserved historical terminal
-		// disposition is tolerated: its qualification may be unknown, but
-		// the disposition is historical fact and is conserved by the
-		// transition.
-		if err := checkLifecycleTransition(item, opts.Lifecycle, true); err != nil {
+		// A preserved HISTORICAL disposition is conserved on the record,
+		// but it is never an authority for a new terminal transition: the
+		// historical fact stays visible and the current obligation stays
+		// open.
+		if err := checkLifecycleTransition(item, opts.Lifecycle); err != nil {
 			return err
 		}
 		if opts.Summary != "" {

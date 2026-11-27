@@ -383,6 +383,11 @@ The historical board migration, the persisted conservation contract and the
 command surface are documented in
 [work-ledger-migration.md](./work-ledger-migration.md).
 
+The migration interchange contract (FWMI v1) — the source-bound interchange
+package a separate agent produces for a legacy board, and the deterministic
+adapter that imports it — is documented in
+[work-ledger-interchange.md](./work-ledger-interchange.md).
+
 ## References
 
 - `internal/ledger/` - implementation

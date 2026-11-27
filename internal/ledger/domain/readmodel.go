@@ -36,6 +36,14 @@ type BoardItem struct {
 	Owner      string          `json:"owner,omitempty"`
 	Blockers   []string        `json:"blockers,omitempty"`
 	Evidence   int             `json:"evidence_count"`
+	// SourceLifecycle is the NORMALIZED lifecycle the source asserted for
+	// the record.
+	//
+	// It keeps an UNRESOLVED source lifecycle distinguishable from an
+	// intentional DEFERRED one in the operational projection: the
+	// acceptance state of an unknown source status is DEFERRED, and the
+	// source lifecycle is what says the deferral was not a decision.
+	SourceLifecycle string `json:"source_lifecycle,omitempty"`
 }
 
 // BoardStats counts the lifecycle distribution of a scope.
@@ -103,6 +111,10 @@ func BuildBoard(l Ledger) Board {
 				Owner:      it.Owner,
 				Blockers:   BlockersFor(l, it),
 				Evidence:   len(it.Evidence),
+				// The NORMALIZED source lifecycle keeps an unresolved
+				// source status distinguishable from an intentional
+				// deferral in the operational projection.
+				SourceLifecycle: it.SourceLifecycle,
 			})
 		}
 		section.Stats = statsFor(items)
@@ -147,6 +159,12 @@ func statsFor(items []WorkItem) BoardStats {
 // projection can never disagree.
 func BlockersFor(l Ledger, it WorkItem) []string {
 	var blockers []string
+	// The EXPLICIT blockers the source declared are conserved verbatim and
+	// reported here: a blocker the source stated is visible in the
+	// operational projection, exactly like an unresolved dependency.
+	for _, blocker := range it.SourceBlockers {
+		blockers = append(blockers, blocker)
+	}
 	for _, dep := range it.Dependencies {
 		if !dep.Kind.IsBlocking() {
 			continue

@@ -44,6 +44,10 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 		known[it.Scoped().String()] = true
 		existingByScoped[it.Scoped().String()] = it
 	}
+	existingByAct := map[string]domain.ActExecution{}
+	for _, a := range existing.Acts {
+		existingByAct[string(a.ActID)] = a
+	}
 
 	// Resolve the source identity of every record. A source identity that
 	// appears more than once is an explicit ambiguity: the COMPLETE identity
@@ -111,70 +115,7 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 	}
 
 	// Build the epic set from the observed workstreams.
-	//
-	// An epic that already exists in the canonical state is NOT
-	// overwritten: the existing metadata wins and the import does not
-	// plan a write for it.
-	existingEpics := map[domain.EpicID]bool{}
-	for _, e := range existing.Epics {
-		existingEpics[e.EpicID] = true
-	}
-	epicIDs := map[string]bool{}
-	for _, item := range source.Items {
-		if item.EpicID == "" {
-			p.Ambiguities = append(p.Ambiguities, Ambiguity{
-				SourceID: item.SourceID,
-				Kind:     "missing_workstream",
-				Detail:   "source record has no workstream identity",
-			})
-			continue
-		}
-		epicIDs[item.EpicID] = true
-	}
-	epicNames := make([]string, 0, len(epicIDs))
-	for id := range epicIDs {
-		epicNames = append(epicNames, id)
-	}
-	sort.Strings(epicNames)
-	for _, id := range epicNames {
-		if existingEpics[domain.EpicID(id)] {
-			// The epic already exists. Its canonical metadata is not
-			// silently overwritten.
-			p.SkippedEpics = append(p.SkippedEpics, id)
-			// The exit criteria of an EXISTING epic are never lost
-			// silently: a scope that declares criteria the canonical
-			// epic does not carry is reported explicitly.
-			criteria := epicExitCriteriaOf(source, id)
-			if len(criteria) > 0 && !epicCarriesCriteria(existing, domain.EpicID(id), criteria) {
-				p.Ambiguities = append(p.Ambiguities, Ambiguity{
-					SourceID: id,
-					Kind:     "epic_exit_criteria_not_applied",
-					Detail: "the canonical epic does not carry the source exit criteria; " +
-						"they require an explicit reconciliation",
-				})
-			}
-			continue
-		}
-		title := source.EpicTitles[id]
-		if title == "" {
-			title = id
-		}
-		p.Epics = append(p.Epics, domain.Epic{
-			SchemaVersion: domain.LedgerSchemaVersion,
-			EpicID:        domain.EpicID(id),
-			Title:         title,
-			Priority:      domain.PriorityP2,
-			Revision:      1,
-			// The epic-scoped exit criteria are conserved verbatim:
-			// their exact content survives normalization, planning,
-			// persistence and an independent reload.
-			ExitCriteria: epicExitCriteriaOf(source, id),
-			Provenance: &domain.Provenance{
-				Source:     sourceName,
-				Confidence: string(domain.ProvenanceImported),
-			},
-		})
-	}
+	buildEpics(&p, source, existing, sourceName)
 
 	// Build the work-item records.
 	importedIDs := map[string]bool{}
@@ -252,6 +193,21 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 			priority = domain.PriorityP2
 		}
 
+		// PREREQUISITE COVERAGE. A source that declares an INCOMPLETE
+		// dependency coverage has NOT recovered the prerequisites of the
+		// record. The importer never treats that as a verified absence of
+		// prerequisites: the incomplete coverage is reported explicitly and
+		// stays distinguishable from a COMPLETE coverage over an empty
+		// dependency collection.
+		if incompleteCoverage(item.DependencyCoverage) {
+			p.Unresolved = append(p.Unresolved, UnresolvedReference{
+				SourceID: item.SourceID,
+				ScopedID: scoped.String(),
+				Ref:      item.DependencyCoverage,
+				Kind:     "incomplete_dependency_coverage",
+			})
+		}
+
 		record := domain.WorkItem{
 			SchemaVersion: domain.LedgerSchemaVersion,
 			EpicID:        domain.EpicID(item.EpicID),
@@ -279,6 +235,24 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 			SourceRow:    sourceRowOf(item),
 			SourceLine:   item.SourceLine,
 			SourceDetail: item.SourceDetail,
+			// The description and the source provenance of the record
+			// are conserved: the source-bound interpretation must not
+			// lose its meaning on the way into the canonical state.
+			Summary:             item.Description,
+			SourceRefs:          item.SourceRefs,
+			SourceLifecycle:     item.SourceLifecycle,
+			SourceQualification: item.SourceQualification,
+			CriteriaCoverage:    item.CriteriaCoverage,
+			DependencyCoverage:  item.DependencyCoverage,
+			// The EXPLICIT source blockers, the historical ACT
+			// associations, the historical evidence locators and the
+			// reopen conditions are conserved verbatim: they are
+			// load-bearing facts about the obligation.
+			SourceBlockers:         append([]string{}, item.Blockers...),
+			SourceCurrentACT:       item.CurrentACT,
+			SourceRelatedACTs:      append([]string{}, item.RelatedACTs...),
+			SourceEvidenceLocators: append([]string{}, item.EvidenceLocators...),
+			Reopen:                 reopenConditionsOf(item),
 			Provenance: &domain.Provenance{
 				Source:     sourceName,
 				SourceID:   item.SourceID,
@@ -350,6 +324,15 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 		itemIndex[item.Scoped().String()] = i
 	}
 	resolveDependencies(&p, source, imported, known, conflicting, itemIndex)
+	resolveRelations(&p, source, imported, known, itemIndex)
+
+	// Build the indexed historical ACT execution records.
+	buildHistoricalActs(&p, source, existingByAct, imported, known, sourceName)
+
+	// Reconcile the durable migration records the SOURCE carries with the
+	// canonical migration state. A changed record never overwrites the
+	// prior durable state.
+	reconcileMigrations(&p, existing, source.Migrations)
 
 	// Sort the dependency edges of every imported record deterministically.
 	for i := range p.Items {

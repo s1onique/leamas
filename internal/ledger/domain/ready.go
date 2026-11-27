@@ -126,6 +126,13 @@ func IsReady(l Ledger, it WorkItem, includeLiveGate bool) bool {
 	if it.Acceptance == AcceptanceDeferred {
 		return false
 	}
+	// An EXPLICIT source blocker is a load-bearing statement about the
+	// obligation: the source said the work is blocked. It prevents
+	// readiness even when every dependency resolves, and it stays visible
+	// in the blocker projection.
+	if len(it.SourceBlockers) > 0 {
+		return false
+	}
 	for _, dep := range it.Dependencies {
 		if !dep.Kind.IsBlocking() {
 			continue

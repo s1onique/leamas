@@ -13,6 +13,8 @@ type ApplyResult struct {
 	CreatedEpics int `json:"created_epics"`
 	// CreatedItems is the number of work-item records created.
 	CreatedItems int `json:"created_items"`
+	// CreatedActs is the number of indexed historical ACT records created.
+	CreatedActs int `json:"created_acts"`
 	// Skipped is the number of source records that already existed.
 	Skipped int `json:"skipped"`
 	// Ambiguities is the number of ambiguity reports.
@@ -100,6 +102,9 @@ func BuildReceipt(before domain.Ledger, p Plan) Receipt {
 		r.OriginalDispositions++
 		r.Criteria += len(item.AcceptanceCriteria)
 		r.ExitCriteria += len(item.ExitCriteria)
+		// The EXPLICIT source blockers are durable blockers too: they
+		// prevent readiness and they are reported.
+		r.Blockers += len(item.SourceBlockers)
 		for _, dep := range item.Dependencies {
 			if dep.Kind == domain.DependencyBlocker {
 				r.Blockers++
@@ -117,112 +122,8 @@ func BuildReceipt(before domain.Ledger, p Plan) Receipt {
 	return r
 }
 
-// BuildPersistedReceipt computes the conservation receipt of an applied
-// import AGAINST THE ACTUAL PERSISTED STATE.
-//
-// The planned records are NOT the proof of conservation: the state that
-// was actually written to disk is. The receipt compares the planned
-// records with the persisted records SEMANTICALLY — identity, criteria,
-// dispositions and the relationship graph — and reports every load-bearing
-// difference as an explicit discrepancy.
-//
-// A persisted state that lost an obligation, a relationship, a criterion or
-// a disposition reports Conserved=false.
-func BuildPersistedReceipt(before domain.Ledger, p Plan, persisted domain.Ledger) Receipt {
-	r := BuildReceipt(before, p)
-	r.Conserved = true
-	r.Discrepancies = []string{}
-	for _, planned := range p.Items {
-		stored, ok := persisted.ItemByScoped(planned.Scoped())
-		if !ok {
-			r.Conserved = false
-			r.Discrepancies = append(r.Discrepancies,
-				"the persisted state lost the work item "+planned.Scoped().String())
-			continue
-		}
-		r.Discrepancies = append(r.Discrepancies, comparePersistedItem(planned, stored)...)
-	}
-	for _, planned := range p.Epics {
-		found := false
-		for _, stored := range persisted.Epics {
-			if stored.EpicID != planned.EpicID {
-				continue
-			}
-			found = true
-			for _, want := range planned.ExitCriteria {
-				carried := false
-				for _, have := range stored.ExitCriteria {
-					if have == want {
-						carried = true
-						break
-					}
-				}
-				if !carried {
-					r.Conserved = false
-					r.Discrepancies = append(r.Discrepancies,
-						"the persisted epic "+string(planned.EpicID)+" lost the exit criterion "+want)
-				}
-			}
-		}
-		if !found {
-			r.Conserved = false
-			r.Discrepancies = append(r.Discrepancies,
-				"the persisted state lost the epic "+string(planned.EpicID))
-		}
-	}
-	if len(r.Discrepancies) > 0 {
-		r.Conserved = false
-	}
-	return r
-}
-
-// comparePersistedItem compares a planned work item with the persisted one.
-//
-// The comparison is SEMANTIC: the identity, the criteria, the exit
-// criteria, the conserved disposition, the workstream identity and the
-// relationship graph. The revision is excluded: it is bookkeeping.
-func comparePersistedItem(planned, stored domain.WorkItem) []string {
-	var out []string
-	id := planned.Scoped().String()
-	if planned.Title != stored.Title {
-		out = append(out, "the persisted work item "+id+" changed its title")
-	}
-	if planned.TerminalDisposition != stored.TerminalDisposition {
-		out = append(out, "the persisted work item "+id+" changed its terminal disposition")
-	}
-	if planned.Workstream != stored.Workstream {
-		out = append(out, "the persisted work item "+id+" changed its workstream identity")
-	}
-	if planned.SourceStatus != stored.SourceStatus {
-		out = append(out, "the persisted work item "+id+" changed its source status")
-	}
-	if planned.SourceFingerprint != stored.SourceFingerprint {
-		out = append(out, "the persisted work item "+id+" changed its source fingerprint")
-	}
-	for _, want := range planned.AcceptanceCriteria {
-		if !containsString(stored.AcceptanceCriteria, want) {
-			out = append(out, "the persisted work item "+id+" lost the acceptance criterion "+want)
-		}
-	}
-	for _, want := range planned.ExitCriteria {
-		if !containsString(stored.ExitCriteria, want) {
-			out = append(out, "the persisted work item "+id+" lost the exit criterion "+want)
-		}
-	}
-	for _, want := range planned.Dependencies {
-		found := false
-		for _, have := range stored.Dependencies {
-			if have.Kind == want.Kind && have.Ref == want.Ref {
-				found = true
-				break
-			}
-		}
-		if !found {
-			out = append(out, "the persisted work item "+id+" lost the dependency edge "+want.Ref.String())
-		}
-	}
-	return out
-}
+// BuildPersistedReceipt and the complete expected-versus-persisted
+// comparison live in receipt_conservation.go.
 
 // containsString reports whether the slice contains the value.
 func containsString(slice []string, value string) bool {

@@ -28,7 +28,17 @@ func SameWorkItemContent(a, b WorkItem) bool {
 		a.SourceDetail != b.SourceDetail ||
 		a.Workstream != b.Workstream ||
 		a.SourceFingerprint != b.SourceFingerprint ||
+		a.SourceCurrentACT != b.SourceCurrentACT ||
 		a.EpicID != b.EpicID || a.ItemID != b.ItemID {
+		return false
+	}
+	if !equalStringSlices(a.SourceBlockers, b.SourceBlockers) {
+		return false
+	}
+	if !equalStringSlices(a.SourceRelatedACTs, b.SourceRelatedACTs) {
+		return false
+	}
+	if !equalStringSlices(a.SourceEvidenceLocators, b.SourceEvidenceLocators) {
 		return false
 	}
 	if !equalStringSlices(a.AcceptanceCriteria, b.AcceptanceCriteria) {
@@ -41,7 +51,7 @@ func SameWorkItemContent(a, b WorkItem) bool {
 		return false
 	}
 	for i := range a.Dependencies {
-		if a.Dependencies[i] != b.Dependencies[i] {
+		if !SameDependencyContent(a.Dependencies[i], b.Dependencies[i]) {
 			return false
 		}
 	}
@@ -66,6 +76,30 @@ func SameWorkItemContent(a, b WorkItem) bool {
 	}
 	for i := range a.Reopen {
 		if a.Reopen[i] != b.Reopen[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// SameDependencyContent reports whether two dependency edges carry the same
+// semantic content.
+//
+// The comparison covers EVERY load-bearing part of the edge: its kind, its
+// target, its note, the outcome it requires and the byte-exact source
+// locations it was derived from. An edge that demands a different outcome is
+// a DIFFERENT edge: comparing only the target would let a materially
+// different relationship compare as identical.
+func SameDependencyContent(a, b Dependency) bool {
+	if a.Kind != b.Kind || a.Ref != b.Ref || a.Note != b.Note ||
+		a.RequiredOutcome != b.RequiredOutcome {
+		return false
+	}
+	if len(a.SourceRefs) != len(b.SourceRefs) {
+		return false
+	}
+	for i := range a.SourceRefs {
+		if a.SourceRefs[i] != b.SourceRefs[i] {
 			return false
 		}
 	}
