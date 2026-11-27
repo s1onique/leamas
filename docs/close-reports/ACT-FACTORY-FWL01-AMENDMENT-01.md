@@ -452,14 +452,14 @@ No push was performed and no tag was created.
 ```text
 SUBJECT_HEAD  cbce4495e822733834f846131fd3897786de0496
               factory: complete the FWL01 amendment acceptance and transaction authority
-FINAL_HEAD    1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4
-              factory: record the verified baseline comparison of the FWL01 amendment
+FINAL_HEAD    d50c7d57cec3efd284bfef79dd1181aa71255b71
+              factory: record the executed gate-fast baseline comparison of the FWL01 amendment
 parent        0b385166d97ed0835f9af7e5cd931914785868d4
 staged paths  59 (every path is amendment-owned; no protected state)
 worktree      clean after each commit
 ```
 
-Three forward commits were produced. No history was rewritten and no force
+Four forward commits were produced. No history was rewritten and no force
 push occurred.
 
 `SUBJECT_HEAD` and `FINAL_HEAD` were discovered dynamically from the commit
@@ -476,17 +476,17 @@ The digest was produced with a Leamas binary built from the EXACT head:
 ```text
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 ./bin/leamas --version
-  version:         0.1.0+dev.1cc8d9b51eab.20261126T234849Z
+  version:         0.1.0+dev.d50c7d57cec3.20261127T001142Z
   declared_version: dev
-  commit:          1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4
+  commit:          d50c7d57cec3efd284bfef79dd1181aa71255b71
 
 ./bin/leamas factory digest \
-  --range 0b385166d97ed0835f9af7e5cd931914785868d4..1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4 \
+  --range 0b385166d97ed0835f9af7e5cd931914785868d4..d50c7d57cec3efd284bfef79dd1181aa71255b71 \
   --output build/fwl01-amendment-01-digest.txt
-  digest: mode=range output=build/fwl01-amendment-01-digest.txt time=1.26s OK
+  digest: mode=range output=build/fwl01-amendment-01-digest.txt time=1.06s OK
 ```
 
-The digest records `LEAMAS_COMMIT: 1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4`
+The digest records `LEAMAS_COMMIT: d50c7d57cec3efd284bfef79dd1181aa71255b71`
 and covers the complete authority-sensitive source change set:
 
 ```text
@@ -506,7 +506,7 @@ internal/ledger/store/publish.go            the partial-publication witness
 internal/ledger/store/txn.go                the explicit transaction ownership
 ```
 
-270 ledger content entries are covered by the digest.
+284 ledger content entries are covered by the digest.
 
 ## Exit Criteria
 
