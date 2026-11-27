@@ -125,27 +125,6 @@ func checkRevision(expected, actual int) error {
 	return nil
 }
 
-// checkLifecycleDoesNotHideObligation rejects a generic lifecycle update
-// that would move unfinished work into a terminal state.
-//
-// A work item whose acceptance obligation is still outstanding must not be
-// hidden behind the closed or archived lifecycle state through a generic
-// update. The obligation stays visible on the board only while the item
-// remains live work.
-//
-// A work item that IS accepted carries no outstanding obligation, so the
-// generic update may move it.
-func checkLifecycleDoesNotHideObligation(it domain.WorkItem, next domain.LifecycleState) error {
-	if next != domain.LifecycleClosed && next != domain.LifecycleArchived {
-		return nil
-	}
-	if domain.IsTerminalAcceptance(it.Acceptance) {
-		return nil
-	}
-	return fmt.Errorf("%w: %s has acceptance state %q; a generic lifecycle update may not hide an unresolved obligation",
-		ErrUnfinishedObligation, it.Scoped().String(), string(it.Acceptance))
-}
-
 // mutate applies a mutation to the canonical state under one transaction.
 func (s *Service) mutate(txID string, apply func(l domain.Ledger, m *store.Mutation) error) error {
 	txn, err := s.Store.BeginMutation(txID)

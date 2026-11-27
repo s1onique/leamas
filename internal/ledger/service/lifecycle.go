@@ -41,6 +41,17 @@ func (s *Service) Checkpoint(txID string, opts CheckpointOptions) (domain.WorkIt
 		if opts.Lifecycle == domain.LifecycleArchived {
 			return fmt.Errorf("use archive to move a work item into the archived state")
 		}
+		// The checkpoint path reuses the SAME lifecycle-transition
+		// authority as the generic update path: a terminal transition may
+		// not conceal an unfinished engineering obligation.
+		//
+		// A record that already carries a preserved historical terminal
+		// disposition is tolerated: its qualification may be unknown, but
+		// the disposition is historical fact and is conserved by the
+		// transition.
+		if err := checkLifecycleTransition(item, opts.Lifecycle, true); err != nil {
+			return err
+		}
 		if opts.Summary != "" {
 			item.Summary = opts.Summary
 		}
@@ -152,6 +163,16 @@ func (s *Service) Accept(txID string, opts AcceptOptions) (domain.WorkItem, erro
 		if !authority.Admissible {
 			return fmt.Errorf("%w: %s: %s",
 				ErrAcceptanceRejected, opts.ScopedID.String(), authority.Reason)
+		}
+		// FRESHNESS BOUNDARY. The acceptance boundary revalidates the
+		// SUPPORTING artifacts of this work item: an artifact whose bytes
+		// changed after its verification no longer establishes the
+		// acceptance. The revalidation is bounded to the artifacts this
+		// decision relies on: an ordinary read never triggers a full
+		// historical artifact scan.
+		if err := s.revalidateSupportingArtifacts(l, item); err != nil {
+			return fmt.Errorf("%w: %s: %s",
+				ErrAcceptanceRejected, opts.ScopedID.String(), err.Error())
 		}
 		if opts.EvidenceQuality != "" {
 			item.Quality = opts.EvidenceQuality

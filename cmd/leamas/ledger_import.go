@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/s1onique/leamas/internal/ledger/boardmd"
 	"github.com/s1onique/leamas/internal/ledger/importer"
 	"github.com/s1onique/leamas/internal/ledger/store"
 )
@@ -170,6 +171,128 @@ func runLedgerImportOriginal(args []string) int {
 	printOriginalInventory(inventory)
 	fmt.Printf("delta: %s\n", delta.Describe())
 	return 0
+}
+
+// runLedgerMigrateBoard performs the SHADOW MIGRATION of the actual
+// historical board into a ledger root.
+//
+// The command is a dry run by default: it extracts the historical board,
+// builds the deterministic migration plan, reports the complete accounting
+// and persists NOTHING. The applied migration requires the explicit
+// --apply flag.
+//
+// The command NEVER touches the legacy board: the historical board remains
+// authoritative until an operator cuts over explicitly.
+func runLedgerMigrateBoard(args []string) int {
+	fs := flag.NewFlagSet("migrate-board", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	root := fs.String("root", store.DefaultRoot, "ledger root directory")
+	sourceRoot := fs.String("source-root", ".", "root of the source repository that holds the historical board")
+	repository := fs.String("repository", "", "source repository identity")
+	head := fs.String("source-head", "", "source HEAD the migration is taken at")
+	apply := fs.Bool("apply", false, "apply the migration (default is a dry run)")
+	jsonOut := fs.Bool("json", false, "output JSON")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	extraction, err := boardmd.Extract(*sourceRoot, *repository, *head)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return 1
+	}
+
+	st := store.New(*root)
+	existing, err := st.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return 1
+	}
+	plan := importer.BuildPlan(extraction.Board, existing)
+
+	if !*apply {
+		if *jsonOut {
+			emitJSON(map[string]any{
+				"ok": true, "dry_run": true,
+				"source":      extraction.Source,
+				"inventory":   extraction.Inventory,
+				"sections":    extraction.Sections,
+				"acts":        extraction.ACTs,
+				"plan":        plan,
+				"unavailable": extraction.Unavailable,
+				"adapter":     boardmd.AdapterVersion,
+			})
+			return 0
+		}
+		fmt.Print("dry run — no records written\n")
+		printBoardInventory(extraction)
+		fmt.Print(plan.Summary())
+		for _, rec := range plan.Reconciliations {
+			fmt.Printf("reconciliation: %s: %s: %s\n", rec.ScopedID, rec.Outcome, rec.Detail)
+		}
+		for _, u := range plan.Unresolved {
+			fmt.Printf("unresolved: %s: %s (%s)\n", u.SourceID, u.Ref, u.Kind)
+		}
+		for _, u := range extraction.Unavailable {
+			fmt.Printf("unavailable: %s\n", u)
+		}
+		return 0
+	}
+
+	if _, err := importer.ApplyIsolated(st, plan, "ledger-migrate-board"); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return 1
+	}
+	persisted, err := st.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		return 1
+	}
+	// The receipt is computed against the ACTUAL PERSISTED state: a plan
+	// is not a conservation proof.
+	receipt := importer.BuildPersistedReceipt(existing, plan, persisted)
+	delta := importer.ComputeDelta(existing, persisted)
+	if *jsonOut {
+		emitJSON(map[string]any{
+			"ok": true, "dry_run": false,
+			"source":      extraction.Source,
+			"inventory":   extraction.Inventory,
+			"receipt":     receipt,
+			"delta":       delta,
+			"unavailable": extraction.Unavailable,
+			"adapter":     boardmd.AdapterVersion,
+		})
+		if !receipt.Conserved {
+			return 1
+		}
+		return 0
+	}
+	printBoardInventory(extraction)
+	fmt.Printf("delta: %s\n", delta.Describe())
+	fmt.Printf("conserved: %t\n", receipt.Conserved)
+	for _, d := range receipt.Discrepancies {
+		fmt.Printf("discrepancy: %s\n", d)
+	}
+	if !receipt.Conserved {
+		return 1
+	}
+	return 0
+}
+
+// printBoardInventory renders the observed inventory of the historical
+// board extraction.
+func printBoardInventory(ex boardmd.Extraction) {
+	fmt.Printf("adapter version: %d\n", boardmd.AdapterVersion)
+	fmt.Printf("source repository: %s\n", ex.Source.Repository)
+	fmt.Printf("source head: %s\n", ex.Source.Head)
+	fmt.Printf("source sections: %d\n", ex.Inventory.Sections)
+	fmt.Printf("epic scopes: %d\n", ex.Inventory.Epics)
+	fmt.Printf("work items: %d\n", ex.Inventory.WorkItems)
+	fmt.Printf("act executions: %d\n", ex.Inventory.ACTs)
+	fmt.Printf("exit criteria: %d\n", ex.Inventory.ExitCriteria)
+	fmt.Printf("unfinished records: %d\n", ex.Inventory.Unfinished)
+	fmt.Printf("unresolved records: %d\n", ex.Inventory.Unresolved)
+	fmt.Printf("duplicate representations: %d\n", ex.Inventory.DuplicateSections)
 }
 
 // printOriginalInventory renders the observed inventory of the original

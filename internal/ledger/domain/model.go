@@ -351,6 +351,14 @@ type Epic struct {
 	Provenance    *Provenance `json:"provenance,omitempty"`
 	Archived      bool        `json:"archived,omitempty"`
 	Revision      int         `json:"revision"`
+
+	// ExitCriteria are the epic-scoped exit criteria of the scope.
+	//
+	// A historical board may declare exit criteria that belong to the
+	// scope as a whole rather than to a single work item. They are
+	// conserved verbatim: their exact content survives normalization,
+	// planning, persistence and an independent reload.
+	ExitCriteria []string `json:"exit_criteria,omitempty"`
 }
 
 // ItemKind enumerates the kinds of work item.

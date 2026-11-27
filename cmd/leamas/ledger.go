@@ -65,6 +65,8 @@ func runLedger(args []string) int {
 		return runLedgerImport(args[1:])
 	case "import-original":
 		return runLedgerImportOriginal(args[1:])
+	case "migrate-board":
+		return runLedgerMigrateBoard(args[1:])
 	case "reconcile":
 		return runLedgerReconcile(args[1:])
 	case "recover":
@@ -107,6 +109,7 @@ func printLedgerUsage(w io.Writer) {
 	fmt.Fprintln(w, "  stats                Print the ledger statistics")
 	fmt.Fprintln(w, "  import               Import a source board (dry-run by default)")
 	fmt.Fprintln(w, "  import-original      Import the original IECR board fixture (dry-run by default)")
+	fmt.Fprintln(w, "  migrate-board        Migrate the actual historical board (dry-run by default)")
 	fmt.Fprintln(w, "  reconcile            Report the import conservation receipt")
 	fmt.Fprintln(w, "  recover              Repair an interrupted transaction")
 	fmt.Fprintln(w)

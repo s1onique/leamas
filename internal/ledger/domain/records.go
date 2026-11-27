@@ -31,6 +31,30 @@ type WorkItem struct {
 	// ExitCriteria are the epic-scoped exit criteria owned by this item.
 	ExitCriteria []string `json:"exit_criteria,omitempty"`
 
+	// Workstream preserves the EXACT source workstream identity of the
+	// imported record.
+	//
+	// A historical board may group its work items under a parent epic and
+	// a narrower workstream. The canonical epic scope keeps the parent
+	// identity, so the workstream identity would be lost without this
+	// explicit field. It is conserved verbatim: it is never derived from
+	// the item identity.
+	Workstream string `json:"workstream,omitempty"`
+
+	// SourceFingerprint is the immutable normalized fingerprint of the
+	// SOURCE record the work item was imported from.
+	//
+	// It covers the normalized source content, INCLUDING the normalized
+	// source relationship graph. It is never rewritten by a legitimate
+	// canonical evolution: the fingerprint describes the source, not the
+	// canonical record.
+	//
+	// It is what lets an import distinguish an exact historical replay
+	// from a changed historical source without comparing the canonical
+	// record: a canonical evolution does not change the fingerprint, a
+	// changed source does.
+	SourceFingerprint string `json:"source_fingerprint,omitempty"`
+
 	Dependencies []Dependency      `json:"dependencies,omitempty"`
 	Evidence     []EvidenceRef     `json:"evidence,omitempty"`
 	Successors   []ScopedItemID    `json:"successors,omitempty"`
@@ -191,6 +215,37 @@ type Knowledge struct {
 	Provenance    *Provenance  `json:"provenance,omitempty"`
 }
 
+// MigrationRecord is a durable migration reconciliation record.
+//
+// It is the PERSISTED form of an unresolved reconciliation: a source
+// record that could not be accounted for during the migration.
+//
+// A reconciliation record is durable MIGRATION STATE, never a console
+// warning. An operator that finds it later can see exactly which source
+// record could not be reconciled and why.
+type MigrationRecord struct {
+	SchemaVersion int    `json:"schema_version"`
+	MigrationID   string `json:"migration_id"`
+	// SourceRepository is the source repository the migration read.
+	SourceRepository string `json:"source_repository,omitempty"`
+	// SourceHead is the source HEAD the migration was taken at.
+	SourceHead string `json:"source_head,omitempty"`
+	// SourcePath is the repository-relative path of the source record.
+	SourcePath string `json:"source_path,omitempty"`
+	// SourceLine is the source line of the record.
+	SourceLine int `json:"source_line,omitempty"`
+	// SourceDigest is the content digest of the source record.
+	SourceDigest string `json:"source_digest,omitempty"`
+	// ScopedID is the canonical identity the record concerns.
+	ScopedID string `json:"scoped_id,omitempty"`
+	// Outcome is the reconciliation outcome.
+	Outcome string `json:"outcome"`
+	// Detail explains the reconciliation.
+	Detail string `json:"detail"`
+	// Revision is the record revision.
+	Revision int `json:"revision"`
+}
+
 // Ledger is the full canonical state of one repository ledger.
 type Ledger struct {
 	SchemaVersion int                 `json:"schema_version"`
@@ -200,6 +255,11 @@ type Ledger struct {
 	Evidence      []EvidenceRefRecord `json:"evidence,omitempty"`
 	Decisions     []Decision          `json:"decisions,omitempty"`
 	Knowledge     []Knowledge         `json:"knowledge,omitempty"`
+	// Migrations are the durable migration reconciliation records.
+	//
+	// They are the persisted evidence that an unresolved source record
+	// was NOT silently dropped.
+	Migrations []MigrationRecord `json:"migrations,omitempty"`
 }
 
 // ItemByScoped returns the work item with the given scoped identity.

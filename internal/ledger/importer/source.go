@@ -107,6 +107,12 @@ type SourceItem struct {
 	SourceID string `json:"source_id"`
 	// EpicID is the source workstream the record belongs to.
 	EpicID string `json:"epic_id"`
+	// Workstream is the exact source workstream identity of the record.
+	//
+	// It is conserved verbatim. A board may group its records under a
+	// parent epic and a narrower workstream: the epic scope alone would
+	// lose the workstream identity.
+	Workstream string `json:"workstream,omitempty"`
 	// Title is the source title.
 	Title string `json:"title"`
 	// Status is the observed source status. It is conserved.
@@ -143,6 +149,13 @@ type SourceBoard struct {
 	// ExitCriteria are the board-scoped exit criteria that are not owned by
 	// a single work item. They are conserved as well.
 	ExitCriteria []string `json:"exit_criteria,omitempty"`
+	// EpicExitCriteria maps an epic scope to the exit criteria that belong
+	// to that scope.
+	//
+	// A board may declare exit criteria per epic scope. They are conserved
+	// verbatim on the canonical epic record: their exact content survives
+	// normalization, planning, persistence and an independent reload.
+	EpicExitCriteria map[string][]string `json:"epic_exit_criteria,omitempty"`
 }
 
 // Ambiguity is an unresolved source ambiguity.
@@ -159,6 +172,11 @@ type Ambiguity struct {
 type UnresolvedReference struct {
 	// SourceID is the source record carrying the reference.
 	SourceID string `json:"source_id"`
+	// ScopedID is the canonical scoped identity of the source record.
+	//
+	// It is recorded explicitly: the durable migration state must name
+	// the canonical identity, not only the local source identity.
+	ScopedID string `json:"scoped_id,omitempty"`
 	// Ref is the unresolved reference.
 	Ref string `json:"ref"`
 	// Kind classifies the reference.

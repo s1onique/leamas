@@ -130,6 +130,73 @@ func HistoryView(l domain.Ledger) string {
 	return b.String()
 }
 
+// WorkstreamView renders the workstream-scoped view.
+//
+// A workstream is a NARROWER scope than an epic: the historical board
+// groups its work under a parent epic and a narrower workstream. The
+// workstream view is the operational projection of that narrower scope.
+func WorkstreamView(l domain.Ledger, workstream string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "# Workstream %s\n\n", workstream)
+	items := []domain.WorkItem{}
+	for _, it := range l.Items {
+		if it.Archived {
+			continue
+		}
+		if it.Workstream != workstream {
+			continue
+		}
+		items = append(items, it)
+	}
+	domain.SortItems(items)
+	if len(items) == 0 {
+		b.WriteString("_no work items_\n")
+		return b.String()
+	}
+	for _, it := range items {
+		fmt.Fprintf(&b, "## `%s` %s\n\n", it.Scoped(), it.Title)
+		fmt.Fprintf(&b, "- epic: %s\n", it.EpicID)
+		fmt.Fprintf(&b, "- kind: %s\n", it.Kind)
+		fmt.Fprintf(&b, "- lifecycle: %s\n", it.Lifecycle)
+		fmt.Fprintf(&b, "- acceptance: %s\n", it.Acceptance)
+		fmt.Fprintf(&b, "- priority: %s\n", it.Priority)
+		fmt.Fprintf(&b, "- evidence quality: %s\n", it.Quality)
+		for _, c := range it.AcceptanceCriteria {
+			fmt.Fprintf(&b, "- criterion: %s\n", c)
+		}
+		for _, d := range it.Dependencies {
+			fmt.Fprintf(&b, "- depends (%s): %s\n", d.Kind, d.Ref)
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// AuthorityWarningsView renders the acceptance-authority warnings.
+//
+// It reports every accepted work item whose acceptance is NOT backed by
+// currently admissible evidence. The historical acceptance is preserved:
+// the warning is a REPORT, never a retraction.
+func AuthorityWarningsView(l domain.Ledger) string {
+	var b strings.Builder
+	b.WriteString("# Acceptance Authority Warnings\n\n")
+	res := domain.ValidateLedger(l)
+	warnings := []domain.Finding{}
+	for _, advisory := range res.Advisories {
+		if advisory.Code == domain.CodeAcceptanceAuthorityInvalid {
+			warnings = append(warnings, advisory)
+		}
+	}
+	if len(warnings) == 0 {
+		b.WriteString("_no acceptance authority warnings_\n")
+		return b.String()
+	}
+	for _, warning := range warnings {
+		fmt.Fprintf(&b, "- %s: %s\n", warning.Path, warning.Message)
+	}
+	return b.String()
+}
+
 // StatsView renders the ledger statistics.
 func StatsView(l domain.Ledger) string {
 	stats := domain.Stats(l)

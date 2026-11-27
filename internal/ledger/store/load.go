@@ -149,3 +149,20 @@ func loadKnowledge(dir string) ([]domain.Knowledge, error) {
 	sort.Slice(out, func(i, j int) bool { return out[i].KnowledgeID < out[j].KnowledgeID })
 	return out, nil
 }
+
+func loadMigrations(dir string) ([]domain.MigrationRecord, error) {
+	names, err := listJSONFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	var out []domain.MigrationRecord
+	for _, name := range names {
+		var rec domain.MigrationRecord
+		if err := readJSONFile(filepath.Join(dir, name), &rec); err != nil {
+			return nil, err
+		}
+		out = append(out, rec)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].MigrationID < out[j].MigrationID })
+	return out, nil
+}

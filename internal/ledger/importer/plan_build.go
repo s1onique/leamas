@@ -2,7 +2,6 @@ package importer
 
 import (
 	"sort"
-	"strings"
 
 	"github.com/s1onique/leamas/internal/ledger/domain"
 )
@@ -142,6 +141,18 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 			// The epic already exists. Its canonical metadata is not
 			// silently overwritten.
 			p.SkippedEpics = append(p.SkippedEpics, id)
+			// The exit criteria of an EXISTING epic are never lost
+			// silently: a scope that declares criteria the canonical
+			// epic does not carry is reported explicitly.
+			criteria := epicExitCriteriaOf(source, id)
+			if len(criteria) > 0 && !epicCarriesCriteria(existing, domain.EpicID(id), criteria) {
+				p.Ambiguities = append(p.Ambiguities, Ambiguity{
+					SourceID: id,
+					Kind:     "epic_exit_criteria_not_applied",
+					Detail: "the canonical epic does not carry the source exit criteria; " +
+						"they require an explicit reconciliation",
+				})
+			}
 			continue
 		}
 		title := source.EpicTitles[id]
@@ -154,6 +165,10 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 			Title:         title,
 			Priority:      domain.PriorityP2,
 			Revision:      1,
+			// The epic-scoped exit criteria are conserved verbatim:
+			// their exact content survives normalization, planning,
+			// persistence and an independent reload.
+			ExitCriteria: epicExitCriteriaOf(source, id),
 			Provenance: &domain.Provenance{
 				Source:     sourceName,
 				Confidence: string(domain.ProvenanceImported),
@@ -212,6 +227,12 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 			SourceStatusInvestigate, SourceStatusHypothesis,
 			SourceStatusLiveWitness, SourceStatusFinalPreflight:
 			lifecycle = domain.LifecycleOpen
+		case SourceStatusOpen:
+			// An OPEN source record is ACTIVE WORK: it is unfinished
+			// and it is EXECUTABLE. It must not fall through to the
+			// unknown-status branch: an open obligation is exactly the
+			// work the ledger exists to make visible.
+			lifecycle = domain.LifecycleOpen
 		default:
 			// An UNKNOWN source status remains explicitly unresolved. It
 			// is never coerced into a known lifecycle state: the record
@@ -232,10 +253,17 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 		}
 
 		record := domain.WorkItem{
-			SchemaVersion:      domain.LedgerSchemaVersion,
-			EpicID:             domain.EpicID(item.EpicID),
-			ItemID:             domain.ItemID(item.SourceID),
-			Title:              item.Title,
+			SchemaVersion: domain.LedgerSchemaVersion,
+			EpicID:        domain.EpicID(item.EpicID),
+			ItemID:        domain.ItemID(item.SourceID),
+			Title:         item.Title,
+			// The exact source workstream identity is conserved
+			// verbatim. It is never derived from the item identity.
+			Workstream: item.Workstream,
+			// The immutable normalized source fingerprint covers the
+			// source content AND the normalized source relationship
+			// graph. It is never rewritten by a canonical evolution.
+			SourceFingerprint:  sourceFingerprint(item),
 			Kind:               domain.ItemKindTask,
 			Lifecycle:          lifecycle,
 			Acceptance:         acceptance,
@@ -312,13 +340,7 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 		p.Items = append(p.Items, record)
 	}
 
-	// Resolve dependencies against the imported identity set.
-	//
-	// Every resolved dependency becomes a canonical typed edge on the
-	// importing work item. Every UNRESOLVED blocking dependency becomes a
-	// durable blocker: it is recorded as a typed edge that points at an
-	// identity that does not exist yet, so the importing item can never
-	// become executable while the blocker is outstanding.
+	// Resolve the dependencies against the imported identity set.
 	imported := map[string]bool{}
 	for _, item := range p.Items {
 		imported[item.Scoped().String()] = true
@@ -327,50 +349,7 @@ func BuildPlan(source SourceBoard, existing domain.Ledger) Plan {
 	for i, item := range p.Items {
 		itemIndex[item.Scoped().String()] = i
 	}
-
-	for _, item := range source.Items {
-		if item.SourceID == "" || item.EpicID == "" {
-			continue
-		}
-		if conflicting[scopedKey(item)] {
-			continue
-		}
-		scoped := domain.NewScopedItemID(domain.EpicID(item.EpicID), domain.ItemID(item.SourceID))
-		idx, ok := itemIndex[scoped.String()]
-		if !ok {
-			continue
-		}
-		for _, ref := range item.DependsOn {
-			target := ref
-			if !strings.Contains(target, "/") && item.EpicID != "" {
-				target = item.EpicID + "/" + ref
-			}
-			if imported[target] || known[target] {
-				// The dependency resolved: it becomes a canonical typed
-				// edge. The edge is conserved, never dropped.
-				p.Items[idx].Dependencies = append(p.Items[idx].Dependencies,
-					domain.Dependency{
-						Kind: domain.DependencyRequires,
-						Ref:  domain.ScopedItemID(target),
-					})
-				continue
-			}
-			// The dependency did not resolve. It is a durable blocker:
-			// the typed edge is recorded so the item stays
-			// non-executable until the blocker is resolved.
-			p.Items[idx].Dependencies = append(p.Items[idx].Dependencies,
-				domain.Dependency{
-					Kind: domain.DependencyBlocker,
-					Ref:  domain.ScopedItemID(target),
-					Note: "unresolved source dependency",
-				})
-			p.Unresolved = append(p.Unresolved, UnresolvedReference{
-				SourceID: item.SourceID,
-				Ref:      ref,
-				Kind:     "dependency",
-			})
-		}
-	}
+	resolveDependencies(&p, source, imported, known, conflicting, itemIndex)
 
 	// Sort the dependency edges of every imported record deterministically.
 	for i := range p.Items {

@@ -290,6 +290,36 @@ type RevalidateEvidenceOptions struct {
 // quality: it never keeps a verified status it can no longer prove.
 //
 // A demoted evidence record can no longer support an acceptance.
+// revalidateSupportingArtifacts re-checks the artifact identity of the
+// evidence records that support the acceptance of the given work item.
+//
+// It is the freshness boundary of the acceptance operation: an artifact
+// whose bytes changed after its verification no longer establishes the
+// acceptance, so the acceptance is refused.
+//
+// The scan is BOUNDED to the artifacts this decision relies on. It is
+// never a full historical artifact scan: an ordinary read operation does
+// not revalidate the whole ledger.
+func (s *Service) revalidateSupportingArtifacts(l domain.Ledger, item domain.WorkItem) error {
+	repoRoot := s.RepoRoot()
+	for _, ref := range item.Evidence {
+		rec, ok := l.EvidenceByID(ref.EvidenceID)
+		if !ok {
+			continue
+		}
+		if !rec.Verified {
+			continue
+		}
+		validation := domain.RevalidateEvidence(repoRoot, rec)
+		if validation.Valid {
+			continue
+		}
+		return fmt.Errorf("evidence %q is stale: %s",
+			string(rec.EvidenceID), validation.Reason)
+	}
+	return nil
+}
+
 func (s *Service) RevalidateEvidence(txID string, opts RevalidateEvidenceOptions) ([]domain.EvidenceValidation, error) {
 	var out []domain.EvidenceValidation
 	err := s.mutate(txID, func(l domain.Ledger, m *store.Mutation) error {

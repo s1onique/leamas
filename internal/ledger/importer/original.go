@@ -193,8 +193,13 @@ func adaptOriginal(doc originalFixture) (SourceBoard, OriginalInventory) {
 			unfinished++
 		}
 		board.Items = append(board.Items, SourceItem{
-			SourceID:         it.LocalID,
-			EpicID:           it.Epic,
+			SourceID: it.LocalID,
+			EpicID:   it.Epic,
+			// The workstream identity is conserved VERBATIM. It is
+			// distinct from the parent epic identity: the original
+			// board groups its rows under one epic and eight
+			// workstreams.
+			Workstream:       it.Workstream,
 			Title:            it.Title,
 			Status:           SourceStatus(it.SourceStatus),
 			Priority:         it.SourcePriority,
@@ -259,11 +264,17 @@ func ImportOriginalFixture(s store.Store, data []byte, txID string) (OriginalImp
 	if _, err := Apply(s, plan, txID); err != nil {
 		return OriginalImport{}, err
 	}
+	// The receipt is computed against the ACTUAL PERSISTED state, not
+	// against the planned records: a plan is not a conservation proof.
+	persisted, err := s.Load()
+	if err != nil {
+		return OriginalImport{}, err
+	}
 	return OriginalImport{
 		Board:           board,
 		Inventory:       inventory,
 		Plan:            plan,
-		Receipt:         BuildReceipt(before, plan),
+		Receipt:         BuildPersistedReceipt(before, plan, persisted),
 		Reconciliations: plan.Reconciliations,
 		Unavailable:     UnavailableHistoricalInformation(),
 	}, nil

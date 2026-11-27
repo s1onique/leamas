@@ -344,39 +344,30 @@ The original fixture is **not** the full historical repository board. The
 missing historical information is reported explicitly and remains
 explicitly unavailable.
 
-## Command Surface
+## Operational Projections
 
-```text
-leamas ledger init
-leamas ledger prime
-leamas ledger list
-leamas ledger show
-leamas ledger next
-leamas ledger create
-leamas ledger update
-leamas ledger claim
-leamas ledger transfer
-leamas ledger link
-leamas ledger evidence add
-leamas ledger evidence lookup
-leamas ledger evidence revalidate
-leamas ledger checkpoint
-leamas ledger close
-leamas ledger accept
-leamas ledger reopen
-leamas ledger decision add
-leamas ledger decision show
-leamas ledger knowledge add
-leamas ledger knowledge show
-leamas ledger archive
-leamas ledger restore
-leamas ledger render
-leamas ledger validate
-leamas ledger stats
-leamas ledger import
-leamas ledger reconcile
-leamas ledger recover
-```
+The operational views are **projections**: identical canonical input
+produces byte-identical output. They are never a second source of truth.
+
+| View | Scope |
+| --- | --- |
+| `board` | the compact global operational board |
+| `epic` | one epic scope |
+| `workstream` | one workstream scope, narrower than the epic |
+| `ready` | the executable work |
+| `blockers` | the blocking reasons, with the same acceptance authority |
+| `history` | the terminal ACT verdicts |
+| `authority` | the acceptance-authority warnings |
+| `stats` | the ledger statistics |
+
+The default operational board prioritizes **current work**. The historical
+narrative stays in the source board, reachable through the source line
+locator of each record: the canonical ledger carries structured state and
+references, never a copy of the narrative.
+
+The `authority` view reports every accepted work item whose acceptance is
+not backed by currently admissible evidence. The historical acceptance is
+preserved: the warning is a **report**, never a retraction.
 
 ## Migration
 
@@ -388,8 +379,13 @@ primitive. Import:
 - is idempotent
 - never promotes a conversational claim into a repository-verified fact
 
+The historical board migration, the persisted conservation contract and the
+command surface are documented in
+[work-ledger-migration.md](./work-ledger-migration.md).
+
 ## References
 
 - `internal/ledger/` - implementation
 - `internal/ledger/domain/` - pure domain core
 - `docs/adr/0007-factory-work-ledger.md` - decision record
+- `docs/factory/work-ledger-migration.md` - historical migration contract

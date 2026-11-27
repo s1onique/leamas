@@ -26,6 +26,8 @@ func SameWorkItemContent(a, b WorkItem) bool {
 		a.SourceRow != b.SourceRow ||
 		a.SourceLine != b.SourceLine ||
 		a.SourceDetail != b.SourceDetail ||
+		a.Workstream != b.Workstream ||
+		a.SourceFingerprint != b.SourceFingerprint ||
 		a.EpicID != b.EpicID || a.ItemID != b.ItemID {
 		return false
 	}

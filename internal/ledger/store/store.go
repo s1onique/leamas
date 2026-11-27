@@ -106,6 +106,7 @@ func (s Store) recordDirs() []string {
 		filepath.Join(s.Root, "evidence"),
 		filepath.Join(s.Root, "decisions"),
 		filepath.Join(s.Root, "knowledge"),
+		filepath.Join(s.Root, "migrations"),
 	}
 }
 
@@ -185,6 +186,12 @@ func (s Store) loadUnlocked() (domain.Ledger, error) {
 		return l, err
 	}
 	l.Knowledge = knowledge
+
+	migrations, err := loadMigrations(filepath.Join(s.Root, "migrations"))
+	if err != nil {
+		return l, err
+	}
+	l.Migrations = migrations
 
 	return l, nil
 }

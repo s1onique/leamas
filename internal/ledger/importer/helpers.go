@@ -14,9 +14,16 @@ import (
 // Only a genuine disagreement is a conflict. Identical repetitions of the
 // same record are a benign duplication and do not quarantine the group.
 //
-// The comparison covers every conserved source field: the title, the exact
-// source status, the priority, the owner, the workstream, the criteria,
-// the dependencies, the preserved row provenance and the source confidence.
+// The comparison covers every conserved SEMANTIC field: the title, the
+// exact source status, the priority, the owner, the workstream, the
+// criteria, the dependencies and the source confidence.
+//
+// The source LOCATOR (the row text, the line number and the free-form
+// detail) is deliberately EXCLUDED: the same historical record may be
+// reported by several source sections, each with its own locator. A
+// difference of locator alone is a DUPLICATE REPRESENTATION, not a
+// conflict. Excluding the locator is what keeps a repeated historical
+// representation from being mistaken for a conflicting one.
 func groupConflicts(group []SourceItem) bool {
 	if len(group) < 2 {
 		return false
@@ -28,10 +35,8 @@ func groupConflicts(group []SourceItem) bool {
 			other.Status != first.Status ||
 			other.Priority != first.Priority ||
 			other.Owner != first.Owner ||
+			other.Workstream != first.Workstream ||
 			other.SourceConfidence != first.SourceConfidence ||
-			other.SourceRow != first.SourceRow ||
-			other.SourceLine != first.SourceLine ||
-			other.SourceDetail != first.SourceDetail ||
 			!equalStringSlices(other.AcceptanceCriteria, first.AcceptanceCriteria) ||
 			!equalStringSlices(other.ExitCriteria, first.ExitCriteria) ||
 			!equalStringSlices(other.DependsOn, first.DependsOn) {

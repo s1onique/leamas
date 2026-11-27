@@ -273,8 +273,9 @@ func runLedgerRender(args []string) int {
 	fs := flag.NewFlagSet("render", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	root := fs.String("root", store.DefaultRoot, "ledger root directory")
-	view := fs.String("view", "board", "view to render (board, epic, ready, blockers, history, stats)")
+	view := fs.String("view", "board", "view to render (board, epic, workstream, ready, blockers, history, authority, stats)")
 	epic := fs.String("epic", "", "epic scope for the 'epic' view")
+	workstream := fs.String("workstream", "", "workstream scope for the 'workstream' view")
 	jsonOut := fs.Bool("json", false, "output JSON")
 	if err := fs.Parse(args); err != nil {
 		return 1
@@ -290,12 +291,16 @@ func runLedgerRender(args []string) int {
 		text = render.Board(l)
 	case "epic":
 		text = render.EpicView(l, domain.EpicID(*epic))
+	case "workstream":
+		text = render.WorkstreamView(l, *workstream)
 	case "ready":
 		text = render.ReadyView(l, domain.ReadyOptions{})
 	case "blockers":
 		text = render.BlockersView(l)
 	case "history":
 		text = render.HistoryView(l)
+	case "authority":
+		text = render.AuthorityWarningsView(l)
 	case "stats":
 		text = render.StatsView(l)
 	default:
