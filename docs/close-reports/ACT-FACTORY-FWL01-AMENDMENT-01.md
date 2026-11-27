@@ -423,12 +423,16 @@ No push was performed and no tag was created.
 
 ```text
 SUBJECT_HEAD  cbce4495e822733834f846131fd3897786de0496
-FINAL_HEAD    cbce4495e822733834f846131fd3897786de0496
+              factory: complete the FWL01 amendment acceptance and transaction authority
+FINAL_HEAD    1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4
+              factory: record the verified baseline comparison of the FWL01 amendment
 parent        0b385166d97ed0835f9af7e5cd931914785868d4
-subject       factory: complete the FWL01 amendment acceptance and transaction authority
 staged paths  59 (every path is amendment-owned; no protected state)
-worktree      clean after the commit
+worktree      clean after each commit
 ```
+
+Three forward commits were produced. No history was rewritten and no force
+push occurred.
 
 `SUBJECT_HEAD` and `FINAL_HEAD` were discovered dynamically from the commit
 that the addendum produced.
@@ -444,17 +448,17 @@ The digest was produced with a Leamas binary built from the EXACT head:
 ```text
 CGO_ENABLED=0 go build -trimpath -o bin/leamas ./cmd/leamas
 ./bin/leamas --version
-  version:         0.1.0+dev.cbce4495e822.20261126T232018Z
+  version:         0.1.0+dev.1cc8d9b51eab.20261126T234849Z
   declared_version: dev
-  commit:          cbce4495e822733834f846131fd3897786de0496
+  commit:          1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4
 
 ./bin/leamas factory digest \
-  --range 0b385166d97ed0835f9af7e5cd931914785868d4..cbce4495e822733834f846131fd3897786de0496 \
+  --range 0b385166d97ed0835f9af7e5cd931914785868d4..1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4 \
   --output build/fwl01-amendment-01-digest.txt
-  digest: mode=range output=build/fwl01-amendment-01-digest.txt time=3.16s OK
+  digest: mode=range output=build/fwl01-amendment-01-digest.txt time=1.26s OK
 ```
 
-The digest records `LEAMAS_COMMIT: cbce4495e822733834f846131fd3897786de0496`
+The digest records `LEAMAS_COMMIT: 1cc8d9b51eab9f3fa80e2f186cdfb2da2a57d2c4`
 and covers the complete authority-sensitive source change set:
 
 ```text
