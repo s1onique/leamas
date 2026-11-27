@@ -1,67 +1,28 @@
 package store
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 	"testing"
 	"time"
 )
 
-// crashHelperSource is the helper program of the process-termination
-// witness.
+// buildFixture compiles a tracked helper fixture into a unique temporary
+// directory.
 //
-// It publishes the FIRST record of a two-record transaction, signals that
-// it did so and then waits forever, so the parent can terminate it.
-const crashHelperSource = `package main
-
-import (
-	"os"
-	"time"
-
-	"github.com/s1onique/leamas/internal/ledger/store"
-)
-
-func main() {
-	root := os.Args[1]
-	ready := os.Args[2]
-	s := store.New(root)
-	txn, err := s.Begin("tx-crash")
-	if err != nil {
-		os.Exit(3)
-	}
-	txn.Write("items/EPIC-A__ITEM-A.json", []byte("{\"partial\":true}\n"))
-	txn.Write("items/EPIC-A__ITEM-B.json", []byte("{\"created\":true}\n"))
-	if err := txn.PublishPartial(); err != nil {
-		os.Exit(4)
-	}
-	if err := os.WriteFile(ready, []byte("ready"), 0o644); err != nil {
-		os.Exit(5)
-	}
-	for {
-		time.Sleep(time.Second)
-	}
-}
-`
-
-// buildCrashHelper builds the helper program of the process-termination
-// witness.
-func buildCrashHelper(t *testing.T) string {
+// The fixture source lives under testdata/ and is compiled by an explicit
+// package-relative source path, so no Go source is ever generated inside the
+// repository.
+func buildFixture(t *testing.T, name string) string {
 	t.Helper()
-	pkgDir := filepath.Join("internal", "ledger", "store", "crashtesthelper")
-	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-		t.Fatalf("mkdir helper pkg: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(pkgDir) })
-	if err := os.WriteFile(filepath.Join(pkgDir, "main.go"), []byte(crashHelperSource), 0o644); err != nil {
-		t.Fatalf("write helper: %v", err)
-	}
-	bin := filepath.Join(t.TempDir(), "crashhelper")
-	build := exec.Command("go", "build", "-o", bin, "./internal/ledger/store/crashtesthelper")
-	build.Dir = "."
+	bin := filepath.Join(t.TempDir(), name)
+	src := filepath.Join("testdata", name, "main.go")
+	build := exec.Command("go", "build", "-o", bin, src)
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build helper: %v\n%s", err, out)
+		t.Fatalf("build fixture %s: %v\n%s", name, err, out)
 	}
 	return bin
 }
@@ -97,34 +58,55 @@ func TestWitnessConcurrentSubprocessWritersAreMutuallyExclusive(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 
-	bin := buildWriterHelper(t)
-	defer os.RemoveAll(filepath.Dir(bin))
+	bin := buildFixture(t, "writertesthelper")
 
-	// The two helpers start at the same time. Each publishes one
-	// conflicting update of the same record.
-	start := filepath.Join(t.TempDir(), "go")
-	var wg sync.WaitGroup
-	results := make([]string, 2)
-	codes := make([]int, 2)
-	for i, title := range []string{"writer-a", "writer-b"} {
-		wg.Add(1)
-		go func(i int, title string) {
-			defer wg.Done()
-			cmd := exec.Command(bin, root, title, start)
-			out, err := cmd.CombinedOutput()
-			results[i] = string(out)
-			if err != nil {
-				if ee, ok := err.(*exec.ExitError); ok {
-					codes[i] = ee.ExitCode()
-					return
-				}
-				codes[i] = -1
-				return
-			}
-			codes[i] = 0
-		}(i, title)
+	// The two helpers contend for the exclusive lock at the same moment.
+	//
+	// The barrier is explicit: each helper publishes its own readiness
+	// marker, the parent waits for BOTH markers and only then publishes the
+	// shared start marker. A helper that never observes the start marker
+	// fails explicitly instead of proceeding silently.
+	dir := t.TempDir()
+	start := filepath.Join(dir, "go")
+	ready := []string{filepath.Join(dir, "ready-a"), filepath.Join(dir, "ready-b")}
+	titles := []string{"writer-a", "writer-b"}
+	cmds := make([]*exec.Cmd, len(titles))
+	for i := range titles {
+		cmd := exec.Command(bin, root, titles[i], ready[i], start)
+		if err := cmd.Start(); err != nil {
+			t.Fatalf("start helper %s: %v", titles[i], err)
+		}
+		cmds[i] = cmd
 	}
-	wg.Wait()
+	for i := range ready {
+		waitForFile(t, ready[i], 30*time.Second)
+	}
+	if err := os.WriteFile(start, []byte("go"), 0o644); err != nil {
+		t.Fatalf("publish the start marker: %v", err)
+	}
+
+	results := make([]string, len(cmds))
+	codes := make([]int, len(cmds))
+	for i := range cmds {
+		var buf bytes.Buffer
+		cmds[i].Stdout = &buf
+		cmds[i].Stderr = &buf
+		err := cmds[i].Wait()
+		results[i] = buf.String()
+		switch {
+		case err == nil:
+			codes[i] = 0
+		case errors.As(err, new(*exec.ExitError)):
+			codes[i] = err.(*exec.ExitError).ExitCode()
+		default:
+			codes[i] = -1
+		}
+	}
+	for i := range codes {
+		if codes[i] == 7 {
+			t.Fatalf("helper %s never observed the start marker: %q", titles[i], results[i])
+		}
+	}
 
 	committed := 0
 	for i := range results {
@@ -146,79 +128,4 @@ func TestWitnessConcurrentSubprocessWritersAreMutuallyExclusive(t *testing.T) {
 	if item.Title != "writer-a" && item.Title != "writer-b" {
 		t.Fatalf("the published state is not a single writer's update: %q", item.Title)
 	}
-}
-
-// writerHelperSource is the helper program of the concurrent-subprocess
-// witness.
-//
-// It waits for the shared start marker, so both helpers contend for the
-// exclusive lock at the same moment.
-const writerHelperSource = `package main
-
-import (
-	"fmt"
-	"os"
-	"time"
-
-	"github.com/s1onique/leamas/internal/ledger/domain"
-	"github.com/s1onique/leamas/internal/ledger/store"
-)
-
-func main() {
-	root := os.Args[1]
-	title := os.Args[2]
-	start := os.Args[3]
-	for i := 0; i < 2000; i++ {
-		if _, err := os.Stat(start); err == nil {
-			break
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-	s := store.New(root)
-	txn, err := s.BeginMutation("tx-" + title)
-	if err != nil {
-		fmt.Println("BEGIN-ERR", err)
-		os.Exit(3)
-	}
-	it := domain.WorkItem{
-		SchemaVersion: domain.LedgerSchemaVersion,
-		EpicID:        domain.EpicID("EPIC-A"),
-		ItemID:        domain.ItemID("ITEM-1"),
-		Title:         title,
-		Kind:          domain.ItemKindTask,
-		Lifecycle:     domain.LifecycleOpen,
-		Acceptance:    domain.AcceptancePending,
-		Revision:      2,
-	}
-	if err := txn.PutItem(it); err != nil {
-		fmt.Println("PUT-ERR", err)
-		os.Exit(4)
-	}
-	if err := txn.Commit(); err != nil {
-		fmt.Println("COMMIT-ERR", err)
-		os.Exit(5)
-	}
-	fmt.Println("COMMITTED", title)
-}
-`
-
-// buildWriterHelper builds the helper program of the concurrent-subprocess
-// witness.
-func buildWriterHelper(t *testing.T) string {
-	t.Helper()
-	pkgDir := filepath.Join("internal", "ledger", "store", "writertesthelper")
-	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-		t.Fatalf("mkdir helper pkg: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(pkgDir) })
-	if err := os.WriteFile(filepath.Join(pkgDir, "main.go"), []byte(writerHelperSource), 0o644); err != nil {
-		t.Fatalf("write helper: %v", err)
-	}
-	bin := filepath.Join(t.TempDir(), "writerhelper")
-	build := exec.Command("go", "build", "-o", bin, "./internal/ledger/store/writertesthelper")
-	build.Dir = "."
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build helper: %v\n%s", err, out)
-	}
-	return bin
 }

@@ -289,8 +289,7 @@ func TestWitnessProcessTerminationAfterPartialPublication(t *testing.T) {
 
 	// Build the helper process that publishes a partial transaction and
 	// then waits to be killed.
-	helper := buildCrashHelper(t)
-	defer os.RemoveAll(filepath.Dir(helper))
+	helper := buildFixture(t, "crashtesthelper")
 
 	// The helper publishes the first record and signals that it did so.
 	ready := filepath.Join(t.TempDir(), "ready")

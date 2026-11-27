@@ -1,7 +1,6 @@
 package store
 
 import (
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -31,71 +30,11 @@ func TestAmendmentConcurrentProcessesCannotBothPublish(t *testing.T) {
 
 	// The helper subprocess publishes one conflicting update. Both
 	// processes use the SAME expected revision.
-	script := `
-package main
-
-import (
-	"fmt"
-	"os"
-
-	"github.com/s1onique/leamas/internal/ledger/domain"
-	"github.com/s1onique/leamas/internal/ledger/store"
-)
-
-func main() {
-	root := os.Args[1]
-	title := os.Args[2]
-	s := store.New(root)
-	txn, err := s.BeginMutation("tx-" + title)
-	if err != nil {
-		fmt.Println("BEGIN-ERR", err)
-		os.Exit(3)
-	}
-	it := domain.WorkItem{
-		SchemaVersion: domain.LedgerSchemaVersion,
-		EpicID:        domain.EpicID("EPIC-A"),
-		ItemID:        domain.ItemID("ITEM-1"),
-		Title:         title,
-		Kind:          domain.ItemKindTask,
-		Lifecycle:     domain.LifecycleOpen,
-		Acceptance:    domain.AcceptancePending,
-		Revision:      2,
-	}
-	if err := txn.PutItem(it); err != nil {
-		fmt.Println("PUT-ERR", err)
-		os.Exit(4)
-	}
-	if err := txn.Commit(); err != nil {
-		fmt.Println("COMMIT-ERR", err)
-		os.Exit(5)
-	}
-	fmt.Println("COMMITTED", title)
-}
-`
-	dir := t.TempDir()
-	mainFile := filepath.Join(dir, "main.go")
-	if err := os.WriteFile(mainFile, []byte(script), 0o644); err != nil {
-		t.Fatalf("write helper: %v", err)
-	}
-	// The helper lives in a temporary package inside the module so it can
-	// import the ledger packages.
-	pkgDir := filepath.Join("internal", "ledger", "store", "testhelperproc")
-	if err := os.MkdirAll(pkgDir, 0o755); err != nil {
-		t.Fatalf("mkdir helper pkg: %v", err)
-	}
-	helperFile := filepath.Join(pkgDir, "main.go")
-	if err := os.WriteFile(helperFile, []byte(script), 0o644); err != nil {
-		t.Fatalf("write helper: %v", err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(pkgDir) })
-
-	buildDir := t.TempDir()
-	bin := filepath.Join(buildDir, "proc")
-	build := exec.Command("go", "build", "-o", bin, "./internal/ledger/store/testhelperproc")
-	build.Dir = "."
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build helper: %v\n%s", err, out)
-	}
+	//
+	// The helper source is a TRACKED fixture under testdata/. It is
+	// compiled into a temporary directory, so no Go source is generated
+	// inside the repository.
+	bin := buildFixture(t, "proctesthelper")
 
 	var wg sync.WaitGroup
 	results := make([]string, 2)
