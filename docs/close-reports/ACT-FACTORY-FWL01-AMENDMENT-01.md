@@ -368,13 +368,41 @@ is unrelated to this amendment, plus the dirty-worktree dogfood class:
 | `cmd/leamas` `TestClosureCLIV2VerifierMacHandoffCorrection01` | **PASS on the clean baseline** | DIRTY-WORKTREE dogfood precondition, same class. |
 | `cmd/leamas` `TestClosureCLIV2VerifierMacHandoff` | **PASS on the clean baseline** | DIRTY-WORKTREE dogfood precondition, same class. |
 | `internal/execution` `TestValidateRetainedPipeTopology` (2 subtests) | **FAIL on the clean baseline** | PRE-EXISTING, unrelated. A Linux pipe-topology contract running on macOS. Not repaired: the addendum forbids repairing unrelated packages. |
-| `cmd/leamas` `TestBoundedSubprocessV2_TimeoutWithPartialBoundedOutput` | **PASS on the clean baseline** | LOAD-SENSITIVE FLAKE. It failed only in runs that were concurrently executing several long jobs. Not caused by the amendment. |
+| `cmd/leamas` `TestBoundedSubprocessV2_TimeoutWithPartialBoundedOutput` | **PASS on the clean baseline** | LOAD-SENSITIVE FLAKE. It PASSES in isolation at this head (5.50s) and failed only in the saturated parallel gate run. Not caused by the amendment. |
 | `internal/factory/closure` (19 tests, e.g. `TestValidatePlanSemanticMatrixFull_Part1..4`, `TestContractAllMissingPolicyFieldsNamed`, `TestSourceStructureNoLongLines`) | **FAIL with the IDENTICAL test names on the clean baseline** | PRE-EXISTING, unrelated. The baseline worktree reproduces the same 19 failures. The `internal/factory/closure` package is NOT touched by this amendment. |
 | `cmd/leamas` `TestRuntimeSmokeCockpitHelp` | PRE-EXISTING, unrelated to the ledger. It is a cockpit process smoke test, outside the amendment scope. |
 
-The baseline comparison was executed, not assumed: the baseline was
-checked out into a detached worktree and the same packages were tested
-there.
+The baseline comparison was executed, not assumed. The baseline was
+checked out into a DETACHED WORKTREE and the FULL `make gate-fast` lane was
+executed there. The gate-fast lane FAILS at the pristine baseline with the
+SAME failure classes.
+
+The failure sets were then compared by test name:
+
+```text
+in HEAD but not in baseline   -> TestBoundedSubprocessV2_TimeoutWithPartialBoundedOutput
+                                  (the load-sensitive flake; PASSES in isolation)
+in baseline but not in HEAD   -> TestApprovalCensusExplicitOracleHashStable
+                                  TestApprovalCensusMatchesResolvedDeclarations
+                                  TestApprovalCensusRunSharedDupcodeBaselineIsPackageFunction
+                                  TestCanonicalProductionPolicyAndApprovalTruth
+                                  TestClosureBoundedExecutionMatrix
+                                  TestClosureCLIEndToEndSubprocess
+                                  TestExplicitApprovalInventoryPreservesOracleHash
+                                  TestExplicitApprovalRecordEquivalence
+                                  TestRootResolver_RepoRoot
+                                  TestRuntimeSmokeCockpitHelp
+```
+
+The head failure set is a STRICT SUBSET of the baseline failure set, apart
+from the one load-sensitive flake that passes in isolation. There are
+therefore ZERO regressions introduced by this amendment.
+
+The gate-fast lane is reported as FAILED, not as PASSED. The failure is a
+property of the pre-existing baseline breakage of the `internal/factory/closure`
+package (19 tests, identical names at the baseline) and the
+worktree-sensitive dogfood tests, not of this amendment. The gate-fast lane
+is NOT authorized to be reported as passing, and it is not.
 
 The four dogfood tests fail ONLY because the amendment is present and
 uncommitted. They pass on the clean committed source; this is verified
