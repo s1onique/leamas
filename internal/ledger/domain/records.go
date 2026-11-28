@@ -348,6 +348,23 @@ type MigrationRecord struct {
 	SourceRefs []SourceRef `json:"source_refs,omitempty"`
 	// ScopedID is the canonical identity the record concerns.
 	ScopedID string `json:"scoped_id,omitempty"`
+	// RelationshipKind classifies the UNRESOLVED RELATIONSHIP the record
+	// concerns.
+	//
+	// It is conserved: an unresolved relationship is never reduced to a
+	// bare target identity.
+	RelationshipKind string `json:"relationship_kind,omitempty"`
+	// RequiredOutcome states what the unresolved relationship required.
+	//
+	// It is conserved verbatim: an unresolved relationship keeps the
+	// obligation it carried.
+	RequiredOutcome string `json:"required_outcome,omitempty"`
+	// RelationshipSourceRefs are the byte-exact source locations of the
+	// unresolved relationship.
+	//
+	// They are the provenance OF THE RELATIONSHIP: the record-level source
+	// references above cite the record, these cite the edge.
+	RelationshipSourceRefs []SourceRef `json:"relationship_source_refs,omitempty"`
 	// Outcome is the reconciliation outcome.
 	Outcome string `json:"outcome"`
 	// Detail explains the reconciliation.

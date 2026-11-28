@@ -50,6 +50,9 @@ func BuildPersistedReceipt(before domain.Ledger, p Plan, persisted domain.Ledger
 	r.Discrepancies = append(r.Discrepancies, comparePersistedItems(before, p, persisted)...)
 	r.Discrepancies = append(r.Discrepancies, comparePersistedActs(before, p, persisted)...)
 	r.Discrepancies = append(r.Discrepancies, comparePersistedMigrations(before, p, persisted)...)
+	r.Discrepancies = append(r.Discrepancies, comparePersistedEvidence(before, persisted)...)
+	r.Discrepancies = append(r.Discrepancies, comparePersistedDecisions(before, persisted)...)
+	r.Discrepancies = append(r.Discrepancies, comparePersistedKnowledge(before, persisted)...)
 	if len(r.Discrepancies) > 0 {
 		r.Conserved = false
 	}

@@ -47,6 +47,18 @@ A persisted state that lost an obligation, a relationship, a criterion or a
 disposition reports `conserved: false`. The applied migration exits
 non-zero in that case.
 
+The comparison covers EVERY canonical record family, not only the families
+the import writes:
+
+- the epic scopes, the work items, the indexed historical ACT executions and
+  the durable migration reconciliation records are the families the import
+  creates;
+- the evidence records, the decision records and the knowledge references
+  are **not** modified by an import: the expected post-import state
+  preserves them exactly, so a persisted state that lost one of them, that
+  carries an unauthorized addition or that changed any field of one is
+  reported as a discrepancy.
+
 ### Source Fingerprints
 
 Every imported record carries an immutable **normalized source
@@ -68,6 +80,11 @@ The fingerprint is what lets an import distinguish three states:
 The unresolved reconciliation records are persisted under
 `.leamas/ledger/migrations/`. They are the durable evidence that an
 unresolved source record was not silently dropped.
+
+An unresolved RELATIONSHIP keeps its COMPLETE metadata in the durable
+record: the relationship kind, the outcome the relationship required and
+the byte-exact source locations of the edge. A durable record that carries
+only the target and a generic kind has lost the obligation.
 
 The identity of a migration record is derived from its **content**: the
 same source record always produces the same migration record, so a replay

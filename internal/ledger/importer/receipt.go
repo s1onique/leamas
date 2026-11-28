@@ -175,7 +175,30 @@ func (p Plan) MigrationRecords() []domain.MigrationRecord {
 		if scoped == "" {
 			scoped = unresolved.SourceID
 		}
-		add(scoped, "unresolved", unresolved.Kind+": "+unresolved.Ref)
+		// The COMPLETE unresolved relationship is conserved: the specific
+		// relationship kind, the outcome it required and the byte-exact
+		// source locations of the edge. A durable record that carries only
+		// the target and a generic kind loses the obligation.
+		detail := unresolved.Kind + ": " + unresolved.Ref
+		if unresolved.RelationshipKind != "" {
+			detail += " [" + unresolved.RelationshipKind + "]"
+		}
+		if unresolved.RequiredOutcome != "" {
+			detail += " requires: " + unresolved.RequiredOutcome
+		}
+		rec := domain.MigrationRecord{
+			SchemaVersion:    domain.LedgerSchemaVersion,
+			MigrationID:      migrationIDOf(scoped, "unresolved", detail),
+			ScopedID:         scoped,
+			Outcome:          "unresolved",
+			Detail:           detail,
+			RelationshipKind: unresolved.RelationshipKind,
+			RequiredOutcome:  unresolved.RequiredOutcome,
+			RelationshipSourceRefs: append(
+				[]domain.SourceRef{}, unresolved.SourceRefs...),
+			Revision: 1,
+		}
+		out = append(out, rec)
 	}
 	for _, quarantined := range p.Quarantined {
 		add(quarantined.SourceID, "quarantined", quarantined.Reason)
